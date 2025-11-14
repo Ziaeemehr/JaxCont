@@ -1,6 +1,13 @@
+
 # JaxCont
 
 A high-performance continuation and bifurcation analysis package implemented in JAX.
+
+[![Test](https://github.com/Ziaeemehr/JaxCont/actions/workflows/tests.yml/badge.svg)](https://github.com/Ziaeemehr/JaxCont/actions/workflows/tests.yml)
+<!-- [![Documentation Status](https://readthedocs.org/projects/jaxcont/badge/?version=latest)](https://jaxcont.readthedocs.io/latest/) -->
+<!-- [![DOI](https://zenodo.org/badge/681090816.svg)](https://doi.org/10.5281/zenodo.14795543) -->
+<!-- [![Docker Build](https://github.com/Ziaeemehr/JaxCont/actions/workflows/docker-image.yml/badge.svg)](https://github.com/Ziaeemehr/JaxCont/actions/workflows/docker-image.yml) -->
+<!-- [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Ziaeemehr/JaxCont/main?labpath=docs/examples/intro.ipynb) -->
 
 ## Overview
 
