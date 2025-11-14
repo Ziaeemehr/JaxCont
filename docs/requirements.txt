@@ -1,0 +1,18 @@
+# Documentation requirements
+# These are needed to build the documentation
+
+# Core Sphinx
+sphinx>=7.0.0
+sphinx-rtd-theme>=2.0.0
+sphinx-autobuild>=2021.3.14
+
+# Extensions
+nbsphinx>=0.9.0
+myst-parser>=3.0.0
+
+# For notebook execution
+ipykernel>=6.0.0
+jupyter>=1.0.0
+
+# Package itself
+-e .
