@@ -1,4 +1,6 @@
 """Test package imports."""
+import pytest
+
 
 def test_import_jaxcont():
     """Test that jaxcont can be imported."""
