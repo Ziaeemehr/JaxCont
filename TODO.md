@@ -7,7 +7,7 @@
 - [x] Test pseudo-arclength continuation
 - [x] Validate tangent vector computation
 - [x] Test adaptive step size control
-- [ ] Verify bordered Newton solver
+- [x] Verify bordered Newton solver
 - [ ] Add convergence diagnostics
 - [ ] Test with ill-conditioned problems
 
