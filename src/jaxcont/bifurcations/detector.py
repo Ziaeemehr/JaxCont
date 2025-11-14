@@ -2,13 +2,16 @@
 Bifurcation detection along continuation branches.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 import jax.numpy as jnp
 from jax import Array
 
 from jaxcont.core.continuation import ContinuationSolution
 from jaxcont.bifurcations.fold import FoldBifurcation
 from jaxcont.bifurcations.hopf import HopfBifurcation
+
+if TYPE_CHECKING:
+    from jaxcont.core.continuation import ContinuationProblem
 
 
 class BifurcationDetector:
@@ -140,6 +143,7 @@ class BifurcationDetector:
         index1: int,
         index2: int,
         bif_type: str,
+        problem: Optional['ContinuationProblem'] = None,
         max_iterations: int = 20,
         tolerance: float = 1e-8
     ) -> Dict[str, Any]:
@@ -154,6 +158,7 @@ class BifurcationDetector:
             index1: Index before bifurcation
             index2: Index after bifurcation
             bif_type: Type of bifurcation ('fold', 'hopf', etc.)
+            problem: Continuation problem (needed for accurate eigenvalue computation)
             max_iterations: Maximum bisection iterations
             tolerance: Convergence tolerance for parameter value
         
@@ -214,9 +219,9 @@ class BifurcationDetector:
             # For now, use linear interpolation of test function values
             
             # Get eigenvalues at endpoints
-            eigs_left = self._compute_eigenvalues_at_point(u_left, p_left, solution)
-            eigs_right = self._compute_eigenvalues_at_point(u_right, p_right, solution)
-            eigs_mid = self._compute_eigenvalues_at_point(u_mid, p_mid, solution)
+            eigs_left = self._compute_eigenvalues_at_point(u_left, p_left, solution, problem)
+            eigs_right = self._compute_eigenvalues_at_point(u_right, p_right, solution, problem)
+            eigs_mid = self._compute_eigenvalues_at_point(u_mid, p_mid, solution, problem)
             
             # Evaluate test functions
             test_left = test_func(eigs_left)
@@ -241,7 +246,7 @@ class BifurcationDetector:
         u_bif = (u_left + u_right) / 2
         
         # Compute final eigenvalues and test function value
-        eigs_bif = self._compute_eigenvalues_at_point(u_bif, p_bif, solution)
+        eigs_bif = self._compute_eigenvalues_at_point(u_bif, p_bif, solution, problem)
         residual = test_func(eigs_bif)
         
         return {
@@ -259,31 +264,55 @@ class BifurcationDetector:
         self,
         u: Array,
         p: float,
-        solution: ContinuationSolution
+        solution: ContinuationSolution,
+        problem: Optional['ContinuationProblem'] = None
     ) -> Array:
         """
         Compute eigenvalues at a given point.
         
-        Note: This requires access to the problem's RHS function.
-        For now, we estimate from nearby points in the solution.
+        If a problem is provided, computes eigenvalues by evaluating the Jacobian.
+        Otherwise, interpolates from nearby points in the solution.
         
         Args:
             u: State vector
             p: Parameter value
             solution: Continuation solution
+            problem: Optional continuation problem (needed for accurate computation)
         
         Returns:
-            Estimated eigenvalues
+            Eigenvalues at the given point
         """
-        # Find nearest points in solution
-        param_diff = jnp.abs(solution.parameters - p)
-        nearest_idx = jnp.argmin(param_diff)
+        # If problem is provided, compute eigenvalues directly
+        if problem is not None:
+            from jax import jacfwd
+            from jaxcont.stability.eigenvalue import compute_eigenvalues
+            
+            # Define function for Jacobian computation
+            def f_u(u_eval):
+                return problem.evaluate_rhs(u_eval, p)
+            
+            # Compute Jacobian
+            jac = jacfwd(f_u)(u)
+            
+            # Compute eigenvalues
+            eigenvalues = compute_eigenvalues(jac)
+            return eigenvalues
         
-        # If eigenvalues are stored in solution, interpolate
+        # Otherwise, interpolate from nearby points in solution
         if solution.eigenvalues is not None:
+            # Find two nearest points
+            param_diff = jnp.abs(solution.parameters - p)
+            nearest_idx = jnp.argmin(param_diff)
+            
+            # Simple approach: use nearest neighbor
             return solution.eigenvalues[nearest_idx]
         
-        # Otherwise return empty array (would need problem.rhs to compute)
+        # Cannot compute without problem or stored eigenvalues
+        import warnings
+        warnings.warn(
+            "Cannot compute eigenvalues: no problem provided and "
+            "no eigenvalues stored in solution. Returning empty array."
+        )
         return jnp.array([])
     
     def _evaluate_fold_test(self, eigenvalues: Array) -> float:
