@@ -45,37 +45,49 @@ def plot_continuation(
     
     # Plot based on stability if available
     if solution.stability is not None:
-        # Separate stable and unstable branches
+        # Plot continuous segments to avoid connecting separated regions
         stable_mask = solution.stability
         
-        # Plot stable points
-        ax.plot(
-            params[stable_mask],
-            states[stable_mask],
-            'o-',
-            color=stable_color,
-            label='Stable',
-            markersize=3,
-            **kwargs
-        )
+        # Find continuous segments
+        def plot_segments(mask, color, linestyle, label):
+            """Plot continuous segments where mask is True."""
+            if not jnp.any(mask):
+                return
+            
+            # Find transitions
+            mask_int = mask.astype(int)
+            transitions = jnp.diff(jnp.concatenate([jnp.array([0]), mask_int, jnp.array([0])]))
+            starts = jnp.where(transitions == 1)[0]
+            ends = jnp.where(transitions == -1)[0]
+            
+            # Plot each continuous segment
+            label_used = False
+            for start, end in zip(starts, ends):
+                segment_label = label if not label_used else None
+                ax.plot(
+                    params[start:end],
+                    states[start:end],
+                    'o-',
+                    color=color,
+                    linestyle=linestyle,
+                    label=segment_label,
+                    markersize=3,
+                    **kwargs
+                )
+                label_used = True
         
-        # Plot unstable points
-        if jnp.any(~stable_mask):
-            ax.plot(
-                params[~stable_mask],
-                states[~stable_mask],
-                'o--',
-                color=unstable_color,
-                label='Unstable',
-                markersize=3,
-                **kwargs
-            )
+        # Plot stable and unstable segments
+        plot_segments(stable_mask, stable_color, '-', 'Stable')
+        plot_segments(~stable_mask, unstable_color, '--', 'Unstable')
     else:
         # Just plot the branch
         ax.plot(params, states, 'o-', markersize=3, **kwargs)
     
     # Mark bifurcations
     if show_bifurcations and solution.bifurcations:
+        # Track which bifurcation types have been labeled
+        labeled_types = set()
+        
         for bif in solution.bifurcations:
             bif_type = bif.get("type", "unknown")
             param = bif.get("parameter")
@@ -99,7 +111,12 @@ def plot_continuation(
                 "branch-point": ("D", "purple", "BP"),
             }
             
-            marker, color, label = markers.get(bif_type, ("x", "black", bif_type))
+            marker, color, label_text = markers.get(bif_type, ("x", "black", bif_type))
+            
+            # Only add label for the first occurrence of each bifurcation type
+            label = label_text if bif_type not in labeled_types else None
+            labeled_types.add(bif_type)
+            
             ax.plot(param, state_val, marker, color=color, markersize=10, 
                    label=label, markeredgecolor='black', markeredgewidth=1)
     
