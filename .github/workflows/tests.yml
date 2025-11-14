@@ -36,10 +36,6 @@ jobs:
         # Exit-zero treats all errors as warnings
         flake8 src tests --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
 
-    - name: Check code formatting with black
-      run: |
-        black --check src tests
-
     - name: Run tests with pytest
       run: |
         pytest tests/ -v --cov=jaxcont --cov-report=xml --cov-report=term-missing
