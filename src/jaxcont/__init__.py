@@ -6,7 +6,8 @@ of dynamical systems, leveraging JAX's automatic differentiation and JIT
 compilation for exceptional performance.
 """
 
-__version__ = "0.1.0"
+from jaxcont._version import __version__
+
 __author__ = "Your Name"
 __license__ = "MIT"
 
