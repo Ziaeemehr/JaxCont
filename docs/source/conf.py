@@ -7,14 +7,17 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('../../src'))
 
+# Import version from the package
+from jaxcont._version import __version__
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'JaxCont'
 copyright = '2025, JaxCont Contributors'
 author = 'JaxCont Contributors'
-release = '0.1.0'
-version = '0.1.0'
+release = __version__
+version = __version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
