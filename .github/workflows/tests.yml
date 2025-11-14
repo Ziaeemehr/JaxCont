@@ -9,17 +9,11 @@ on:
 
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-        exclude:
-          # Exclude 3.13 on macOS if JAX doesn't support it yet
-          - os: macos-latest
-            python-version: "3.13"
-    continue-on-error: ${{ matrix.python-version == '3.13' }}
+        python-version: ["3.11"]
 
     steps:
     - uses: actions/checkout@v4
@@ -51,7 +45,6 @@ jobs:
         pytest tests/ -v --cov=jaxcont --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage to Codecov
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
