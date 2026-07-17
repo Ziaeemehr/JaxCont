@@ -12,7 +12,8 @@
 - [ ] Test with ill-conditioned problems
 
 ### Phase 2: Complete Bifurcation Detection (Week 2-3)
-- [ ] Implement precise bifurcation location (bisection)
+- [x] Implement precise bifurcation location (bisection)
+- [x] Implement test function evaluation (_evaluate_fold_test, _evaluate_hopf_test)
 - [ ] Complete fold bifurcation normal form
 - [ ] Complete Hopf bifurcation first Lyapunov coefficient
 - [ ] Add branch point detection
