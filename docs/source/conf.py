@@ -171,6 +171,11 @@ latex_elements = {
 # inputenc, which is an unbounded whack-a-mole; XeLaTeX renders Unicode
 # natively through the system font stack instead.
 latex_engine = 'xelatex'
+# Sphinx defaults to `xindy` for the index when using xelatex/lualatex, but
+# xindy's LATIN9 language module isn't available in every TeX distribution
+# (including the one this was tested against) -- fall back to the classic,
+# more portable `makeindex`.
+latex_use_xindy = False
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto, manual, or own class]).
