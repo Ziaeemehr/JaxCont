@@ -1,62 +1,47 @@
 """
-Lorenz84 equilibrium continuation
-==================================
+Lorenz-84 equilibrium continuation
+===================================
 
-Extended Lorenz model with 4 variables and rich bifurcation structure
+A 4-dimensional example: the extended Lorenz-84 model of atmospheric
+circulation. This demonstrates continuation of a higher-dimensional system
+with a richer bifurcation structure than the 1-D examples, and reproduces a
+case from BifurcationKit.jl.
 
-This example demonstrates:
-- Multi-dimensional system continuation
-- Automatic bifurcation detection
-- Both-sided continuation (forward and backward)
-- BifurcationKit-style output and plotting
+.. math::
+
+    \\dot{X} &= -Y^2 - Z^2 - \\alpha X + \\alpha F - \\gamma U^2 \\\\
+    \\dot{Y} &= XY - \\beta XZ - Y + G \\\\
+    \\dot{Z} &= \\beta XY + XZ - Z \\\\
+    \\dot{U} &= -\\delta U + \\gamma UX + T
+
+Reference: Lorenz, E. N. (1984). *Irregularity: a fundamental property of
+the atmosphere.*
 """
 
+# %%
+# Setup
+
 import os
+
 import jax.numpy as jnp
-from jaxcont import ContinuationProblem, equilibrium_continuation
 import matplotlib.pyplot as plt
 from jax import jit
 
-path = "images"
-os.makedirs(path, exist_ok=True)
+from jaxcont import ContinuationProblem, equilibrium_continuation
 
-LABELSIZE = 13
-plt.rc("axes", labelsize=LABELSIZE)
-plt.rc("axes", titlesize=LABELSIZE)
-plt.rc("figure", titlesize=LABELSIZE)
-plt.rc("legend", fontsize=LABELSIZE)
-plt.rc("xtick", labelsize=LABELSIZE)
-plt.rc("ytick", labelsize=LABELSIZE)
-plt.rc("legend", fontsize=10)
+os.makedirs("images", exist_ok=True)
+
+# %%
+# Define the system
+# ------------------
+# :math:`F` (external forcing / longitude) is the continuation parameter;
+# the rest are fixed physical constants.
 
 
 @jit
 def lorenz84_rhs(state, params):
-    """
-    Lorenz84 system (extended Lorenz model).
-
-    This is a low-order model of atmospheric circulation with 4 variables.
-
-    Equations:
-        dX/dt = -Y^2 - Z^2 - α*X + α*F - γ*U^2
-        dY/dt = X*Y - β*X*Z - Y + G
-        dZ/dt = β*X*Y + X*Z - Z
-        dU/dt = -δ*U + γ*U*X + T
-
-    Parameters:
-        α (alpha): Dissipation coefficient
-        β (beta): Rotation parameter
-        γ (gamma): Coupling coefficient
-        δ (delta): Damping coefficient
-        G: External forcing (latitude)
-        F: External forcing (longitude) - continuation parameter
-        T: Temperature forcing
-
-    Reference: Lorenz, E. N. (1984). Irregularity: a fundamental property of the atmosphere.
-    """
     X, Y, Z, U = state
 
-    # Extract parameters
     alpha = params["alpha"]
     beta = params["beta"]
     gamma = params["gamma"]
@@ -65,7 +50,6 @@ def lorenz84_rhs(state, params):
     F = params["F"]
     T = params["T"]
 
-    # System equations
     dX = -(Y**2) - Z**2 - alpha * X + alpha * F - gamma * U**2
     dY = X * Y - beta * X * Z - Y + G
     dZ = beta * X * Y + X * Z - Z
@@ -74,151 +58,102 @@ def lorenz84_rhs(state, params):
     return jnp.array([dX, dY, dZ, dU])
 
 
-def run_lorenz84_example():
-    """
-    Run Lorenz84 system equilibrium continuation.
-    System: Extended Lorenz model with 4 variables (X, Y, Z, U)
-    Continuing equilibria in parameter F (external forcing)
-    """
-    # Parameters
-    # parlor = (α = 1/4, β = 1., G = .25, δ = 1.04, γ = 0.987, F = 1.7620532879639, T = .0001265)
-    params = {
-        "alpha": 0.25,          # α = 1/4
-        "beta": 1.0,            # β = 1.0
-        "gamma": 0.987,         # γ = 0.987
-        "delta": 1.04,          # δ = 1.04
-        "G": 0.25,              # External forcing (latitude)
-        "F": 1.7620532879639,   # External forcing (longitude) - continuation parameter
-        # "T": 0.0001265,  # Temperature forcing
-        "T": 0.04, 
-    }
+# %%
+# Set up the problem
+# --------------------
+# Parameters and the starting equilibrium below match the BifurcationKit.jl
+# reference case so the two can be compared directly.
 
-    # Initial state 
-    u0 = jnp.array(
-        [2.9787004394953343, 
-         -0.03868302503393752, 
-         0.058232737694740085, 
-         -0.02105288273117459]
-    )
+params = {
+    "alpha": 0.25,
+    "beta": 1.0,
+    "gamma": 0.987,
+    "delta": 1.04,
+    "G": 0.25,
+    "F": 1.7620532879639,
+    "T": 0.04,
+}
 
-    # Define problem
-    problem = ContinuationProblem(
-        rhs=lorenz84_rhs, u0=u0, params=params, continuation_param="F", problem_type="equilibrium"
-    )
+u0 = jnp.array(
+    [2.9787004394953343, -0.03868302503393752, 0.058232737694740085, -0.02105288273117459]
+)
 
-    # Run continuation with automatic bifurcation detection
-    # p_min = -1.5, p_max = 3.0, ds = 0.002, dsmax = 0.05, bothside = true
-    print("\nRunning continuation from F=-1.5 to F=3.0 (both directions)...")
-    print("(Bifurcation detection enabled automatically)\n")
+problem = ContinuationProblem(
+    rhs=lorenz84_rhs, u0=u0, params=params, continuation_param="F", problem_type="equilibrium"
+)
 
-    solution = equilibrium_continuation(
-        problem,
-        param_range=(-1.5, 3.0),
-        ds=0.01,  # Initial step size
-        ds_max=0.05,  # Maximum step size
-        max_steps=200,
-        detect_bifurcations=True,  # Enable automatic detection
-        compute_stability=True,  # Compute stability along branch
-        verbose=True,  # Print bifurcation info
-        # bifurcation_tolerance=1e-4,
-        # newton_tol=1e-12,  # High precision
-    )
+# %%
+# Run the continuation
+# -----------------------
+# Bifurcation detection and stability are both enabled; the branch is swept
+# from :math:`F=-1.5` to :math:`F=3.0`.
 
-    print(f"\n{'─'*70}")
-    print(f"Continuation completed: {solution.n_points} points computed")
-    print(f"{'─'*70}")
+solution = equilibrium_continuation(
+    problem,
+    param_range=(-1.5, 3.0),
+    ds=0.01,
+    ds_max=0.05,
+    max_steps=200,
+    detect_bifurcations=True,
+    compute_stability=True,
+    verbose=True,
+)
 
-    # Print bifurcation summary
-    if solution.bifurcations:
-        print(f"\nDetected {len(solution.bifurcations)} bifurcation(s):")
-        print(f"{'─'*70}")
-        for i, bif in enumerate(solution.bifurcations, 1):
-            param = bif["parameter"]
-            bif_type = bif.get("type", "unknown")
-            print(f"  #{i}: {bif_type.capitalize()} at F = {param:.6f}")
-        print()
+print(f"Continuation completed: {solution.n_points} points computed")
 
-    # Plot bifurcation diagram
-    print(f"{'─'*70}")
-    print("Plotting bifurcation diagram...")
-    fig = plot_lorenz84_diagram(solution)
-    plt.savefig(f"{path}/lorenz84_bifurcation.png", dpi=150, bbox_inches="tight")
-    print(f"Saved to: {path}/lorenz84_bifurcation.png")
-    print(f"{'═'*70}\n")
+# %%
+# Inspect the detected bifurcations
 
-    return solution
+for i, bif in enumerate(solution.bifurcations, 1):
+    print(f"  #{i}: {bif.get('type', 'unknown').capitalize()} at F = {bif['parameter']:.6f}")
+
+# %%
+# Plot the bifurcation diagram (X variable)
+# --------------------------------------------
+# With a 4-D state we pick one variable (X) to plot against the parameter;
+# detected bifurcations are annotated on the branch.
 
 
 def plot_lorenz84_diagram(solution):
-    """Plot bifurcation diagram for Lorenz84 system - X variable only (BifurcationKit style)."""
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    # Extract data for X variable (index 0)
-    params = solution.parameters
+    params_arr = solution.parameters
     X_states = solution.states[:, 0]
 
-    # Plot the X branch
-    ax.plot(params, X_states, 'b-', linewidth=2, alpha=0.7, label='X(F)')
-    ax.plot(params, X_states, 'b.', markersize=4, alpha=0.5)
+    ax.plot(params_arr, X_states, "b-", linewidth=2, alpha=0.7, label="X(F)")
+    ax.plot(params_arr, X_states, "b.", markersize=4, alpha=0.5)
 
-    # Mark bifurcations
-    if solution.bifurcations:
-        for bif in solution.bifurcations:
-            param = bif["parameter"]
-            state_X = bif["state"][0]  # X component
-            bif_type = bif.get("type", "unknown")
+    for bif in solution.bifurcations:
+        param = bif["parameter"]
+        state_X = bif["state"][0]
+        bif_type = bif.get("type", "unknown")
+        marker, mcolor, label = {
+            "fold": ("s", "red", "Fold"),
+            "hopf": ("^", "magenta", "Hopf"),
+        }.get(bif_type, ("o", "orange", bif_type))
 
-            # Choose marker based on type
-            if bif_type == "fold":
-                marker, mcolor, label = "s", "red", "Fold"
-            elif bif_type == "hopf":
-                marker, mcolor, label = "^", "magenta", "Hopf"
-            else:
-                marker, mcolor, label = "o", "orange", bif_type
+        ax.plot(
+            param, state_X, marker, color=mcolor, markersize=12, markeredgewidth=2,
+            markerfacecolor=mcolor, markeredgecolor="darkred", label=label, zorder=10,
+        )
+        ax.annotate(
+            f"{label}\nF={param:.3f}\nX={state_X:.3f}",
+            xy=(param, state_X), xytext=(15, 15), textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.7),
+            arrowprops=dict(arrowstyle="->", color="red", lw=1.5), fontsize=9,
+        )
 
-            ax.plot(
-                param,
-                state_X,
-                marker,
-                color=mcolor,
-                markersize=12,
-                markeredgewidth=2,
-                markerfacecolor=mcolor,
-                markeredgecolor="darkred",
-                label=label,
-                zorder=10,
-            )
-
-            # Add annotation
-            ax.annotate(
-                f"{label}\nF={param:.3f}\nX={state_X:.3f}",
-                xy=(param, state_X),
-                xytext=(15, 15),
-                textcoords="offset points",
-                bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.7),
-                arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=0", color="red", lw=1.5),
-                fontsize=9,
-                ha="left",
-            )
-
-    # Styling
-    ax.set_xlabel("Parameter F (External Forcing)", fontsize=14, fontweight="bold")
-    ax.set_ylabel("X", fontsize=14, fontweight="bold")
-    ax.set_title("Lorenz84 System: Bifurcation Diagram (X variable)", fontsize=15, fontweight="bold", pad=15)
-    ax.grid(True, alpha=0.3, linestyle="--", linewidth=0.7)
-    ax.axhline(y=0, color="k", linestyle="-", linewidth=0.5, alpha=0.3)
-    ax.axvline(x=0, color="k", linestyle="-", linewidth=0.5, alpha=0.3)
-    
-    # Legend without duplicates
+    ax.set_xlabel("Parameter F (External Forcing)", fontweight="bold")
+    ax.set_ylabel("X", fontweight="bold")
+    ax.set_title("Lorenz-84 System: Bifurcation Diagram (X variable)", fontweight="bold")
+    ax.grid(True, alpha=0.3, linestyle="--")
     handles, labels = ax.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(), loc="best", framealpha=0.9, fontsize=11)
-    
-    ax.tick_params(labelsize=12)
+    ax.legend(by_label.values(), by_label.keys(), loc="best")
     plt.tight_layout()
     return fig
 
 
-if __name__ == "__main__":
-    solution = run_lorenz84_example()
-    plt.show()
+fig = plot_lorenz84_diagram(solution)
+plt.savefig("images/lorenz84_bifurcation.png", dpi=150, bbox_inches="tight")
+plt.show()

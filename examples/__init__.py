@@ -1,16 +1,8 @@
 """
 JaxCont Examples
 
-Collection of examples demonstrating continuation and bifurcation analysis.
+A collection of runnable, Sphinx-Gallery-style scripts demonstrating
+continuation and bifurcation analysis with JaxCont. Each ``example_NN_*.py``
+file is meant to be run directly (``python examples/example_01_pitchfork.py``)
+or browsed as a rendered gallery page in the documentation.
 """
-
-# Import examples for easy access
-from examples.example_01_pitchfork import run_pitchfork_example
-from examples.example_02_lorenz import run_lorenz_example
-from examples.example_03_van_der_pol import run_van_der_pol_example
-
-__all__ = [
-    "run_pitchfork_example",
-    "run_lorenz_example",
-    "run_van_der_pol_example",
-]

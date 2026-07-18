@@ -272,8 +272,12 @@ class PredictorCorrector(ABC):
             ds_new = self.adapt_stepsize(abs(ds), newton_iters, converged)
             ds = ds_new * direction
             
-            # Check minimum step size
-            if abs(ds) < self.ds_min and not converged:
+            # Check minimum step size. Note the "<=": adapt_stepsize clamps a
+            # shrinking ds to exactly self.ds_min (via max(ds*0.5, ds_min)), so
+            # a strict "<" here would never fire once ds saturates at the
+            # floor -- if the corrector keeps failing at ds_min, ds stays
+            # pinned there and the loop would spin forever.
+            if abs(ds) <= self.ds_min and not converged:
                 print(f"Warning: Step size below minimum ({self.ds_min}), stopping.")
                 break
         

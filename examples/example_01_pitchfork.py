@@ -2,87 +2,101 @@
 Equilibrium continuation of a cubic normal form
 ================================================
 
-Modified system: dx/dt = r + x - x^3/3
+A minimal walk-through of JaxCont's core workflow: define a system, continue
+its equilibria in a parameter, and let automatic bifurcation detection find
+the fold points.
 
-This example demonstrates:
-- Automatic bifurcation detection during continuation
-- Branch points (fold bifurcations) at r ≈ ±2/3
-- Plotting the bifurcation diagram and marking detected bifurcations
+We use a modified pitchfork normal form
+
+.. math::
+
+    \\dot{x} = r + x - \\frac{x^3}{3}
+
+which has two fold (turning-point) bifurcations at :math:`r = \\pm 2/3`,
+where the branch of equilibria folds back on itself.
 """
 
+# %%
+# Setup
+# -----
+# ``ContinuationProblem`` bundles the right-hand side, an initial guess, and
+# the parameter to continue. ``equilibrium_continuation`` runs the
+# predictor-corrector loop and returns a :class:`ContinuationSolution`.
+
 import os
+
 import jax.numpy as jnp
-from jaxcont import ContinuationProblem, equilibrium_continuation
-from jaxcont.utils.plotting import plot_continuation
 import matplotlib.pyplot as plt
 
-path = "images"
-os.makedirs(path, exist_ok=True)
+from jaxcont import ContinuationProblem, equilibrium_continuation
+from jaxcont.utils.plotting import plot_continuation
 
-LABELSIZE = 13
-plt.rc("axes", labelsize=LABELSIZE)
-plt.rc("axes", titlesize=LABELSIZE)
-plt.rc("figure", titlesize=LABELSIZE)
-plt.rc("legend", fontsize=LABELSIZE)
-plt.rc("xtick", labelsize=LABELSIZE)
-plt.rc("ytick", labelsize=LABELSIZE)
-plt.rc("legend", fontsize=10)
+os.makedirs("images", exist_ok=True)
+
+# %%
+# Define the system
+# ------------------
+# The right-hand side takes the state and a *dict* of parameters, and returns
+# the residual :math:`f(x, r)`. The continuation parameter (``r`` here) is
+# looked up from that dict at every step.
 
 
 def pitchfork_rhs(state, params):
-    """
-    Modified ODE system.
-
-    dx/dt = r + x - x^3/3
-
-    This is a modified form with additive parameter r.
-    """
-    x = state[0] if len(state.shape) == 1 and state.shape[0] > 1 else state
+    x = state[0]
     r = params["r"]
-
-    dxdt = r + x - x**3 / 3
-    return jnp.array([dxdt]) if isinstance(dxdt, (int, float)) else dxdt
+    return jnp.array([r + x - x**3 / 3])
 
 
-def run_pitchfork_example():
-    """Run pitchfork bifurcation example with automatic bifurcation detection."""
-    print("=" * 70)
-    print("Example 1: Modified ODE System")
-    print("=" * 70)
-    print("\nSystem: dx/dt = r + x - x^3/3")
-    print("Continuing equilibria in parameter r")
-    print("\nTheoretical branch points at r = ±2/3 ≈ ±0.6667")
-    print("(where dx/dr at equilibrium has a singularity)")
+# %%
+# Set up the problem
+# -------------------
+# We start from ``r = -1`` on the lower branch, where the only equilibrium is
+# a single stable point.
 
-    # Define problem
-    problem = ContinuationProblem(
-        rhs=pitchfork_rhs,
-        u0=jnp.array([-2.0]),
-        params={"r": -1.0},
-        continuation_param="r",
-        problem_type="equilibrium",
-    )
+problem = ContinuationProblem(
+    rhs=pitchfork_rhs,
+    u0=jnp.array([-2.0]),
+    params={"r": -1.0},
+    continuation_param="r",
+    problem_type="equilibrium",
+)
 
-    # Run continuation with automatic bifurcation detection
-    print("\nRunning continuation from r=-1 to r=1...")
+# %%
+# Run the continuation
+# ----------------------
+# ``detect_bifurcations=True`` turns on fold/Hopf detection along the branch;
+# ``compute_stability=True`` computes the sign of the Jacobian's eigenvalues
+# at every point so the plot can color stable/unstable segments.
 
-    solution = equilibrium_continuation(
-        problem,
-        param_range=(-1.0, 1.0),
-        ds=0.01,  # Smaller step size for better accuracy
-        max_steps=300,
-        detect_bifurcations=True,  # Enable automatic detection
-        compute_stability=True,  # Compute stability along branch
-        verbose=True,  # Print bifurcation info
-        bifurcation_tolerance=1e-4,
-    )
+solution = equilibrium_continuation(
+    problem,
+    param_range=(-1.0, 1.0),
+    ds=0.01,
+    max_steps=300,
+    detect_bifurcations=True,
+    compute_stability=True,
+    verbose=True,
+    bifurcation_tolerance=1e-4,
+)
 
-    print(f"{'─'*70}")
-    print(f"Continuation completed: {solution.n_points} points computed")
-    print(f"{'─'*70}")
-    
-    plot_continuation(solution)
+print(f"Continuation completed: {solution.n_points} points computed")
 
-if __name__ == "__main__":
-    solution = run_pitchfork_example()
-    plt.show()
+# %%
+# Inspect the detected bifurcations
+# ------------------------------------
+# The theoretical fold locations for this normal form are at
+# :math:`r = \pm 2/3 \approx \pm 0.6667`, where :math:`dx/dr` at the
+# equilibrium diverges.
+
+for bif in solution.bifurcations:
+    print(f"  {bif['type']} at r = {bif['parameter']:.4f}")
+
+# %%
+# Plot the bifurcation diagram
+# --------------------------------
+# Stable and unstable segments are colored automatically, and detected fold
+# points are marked.
+
+fig = plot_continuation(solution)
+plt.savefig("images/pitchfork_bifurcation.png", dpi=150, bbox_inches="tight")
+plt.show()
