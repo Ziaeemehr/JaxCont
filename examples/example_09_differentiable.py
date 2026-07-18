@@ -5,95 +5,67 @@ The capability that Julia/MATLAB continuation tools don't offer natively
 (notes/ARCHITECTURE.md §3.2): because everything is JAX, we can *differentiate*
 through the analysis and use gradients for inverse design and sensitivity.
 
-Two honest demonstrations of what works today:
-
-  Part A — Reverse-mode `jax.grad` for INVERSE DESIGN.
-    The proper mechanism for differentiating a bifurcation quantity is the
-    implicit function theorem: define the equilibrium implicitly by f(u,θ)=0,
-    solve it with a (differentiable) Newton iteration, then differentiate a
-    property of that equilibrium w.r.t. the design parameter θ. Here we tune θ
-    so the equilibrium sits a *target distance from a fold* — gradient descent
-    on a stability margin.
+  Part A — Reverse-mode `jax.grad` of a FOLD LOCATION (`jc.fold_parameter`).
+    A fold is solved as an extended system G(u,p,v;θ)=0 and wrapped in
+    `custom_vjp` (implicit function theorem), so the fold parameter p*(θ) is an
+    exact, reverse-mode-differentiable function of the design parameters θ. We
+    verify the gradient against the analytic value, then run gradient descent to
+    *place the fold at a target parameter value* (inverse design).
 
   Part B — Forward-mode `jacfwd` sensitivity THROUGH the continuation engine.
-    The whole-loop engine uses `lax.while_loop`, which supports forward-mode
-    autodiff (but not reverse-mode). So `jacfwd` gives the sensitivity of a
-    computed branch to a parameter directly. (Reverse-mode through the full
-    sweep needs the implicit-diff / `custom_root` formulation — ROADMAP §3.2.)
+    The whole-loop engine uses `lax.while_loop` (forward-mode AD only), so
+    `jacfwd` gives the sensitivity of a computed branch to a parameter directly.
 """
 
 import jax
 import jax.numpy as jnp
 
+import jaxcont as jc
 from jaxcont.core.scan_continuation import pseudo_arclength_scan
 
 
 # =========================================================================
-# Part A — reverse-mode grad + inverse design on a differentiable equilibrium
+# Part A — reverse-mode grad of a fold location + inverse design
 # =========================================================================
 #
-# Normal form with a saddle-node (fold): f(u, θ) = θ - u + u^3/3.
-#   equilibria:  θ = u - u^3/3
-#   Jacobian:    f_u = -1 + u^2   (stable, <0, for |u|<1; fold at u=±1, θ=±2/3)
-#   stability margin:  m(θ) = -f_u(u*(θ)) = 1 - u*(θ)^2   (0 at the fold)
+# f(u, p; θ) = u^2 - θ*u + p
+#   fold at u = θ/2,  p*(θ) = θ^2/4    ->    dp*/dθ = θ/2   (analytic check)
 
-def f_scalar(u, theta):
-    return theta - u + u**3 / 3.0
+def f_fold(u, p, theta):
+    return jnp.array([u[0] ** 2 - theta * u[0] + p])
 
 
-def newton_equilibrium(theta, u_init=0.0, n_steps=25):
-    """Differentiable equilibrium solve on the stable inner branch (|u|<1)."""
-    fu = jax.grad(f_scalar, argnums=0)
-
-    def step(u, _):
-        u = u - f_scalar(u, theta) / fu(u, theta)
-        return u, None
-
-    u_star, _ = jax.lax.scan(step, u_init, None, length=n_steps)
-    return u_star
-
-
-def stability_margin(theta):
-    """m(θ) = 1 - u*(θ)^2 — distance of the equilibrium from the fold."""
-    u_star = newton_equilibrium(theta)
-    fu = jax.grad(f_scalar, argnums=0)(u_star, theta)
-    return -fu  # = 1 - u*^2
+def fold_p(theta):
+    """Fold parameter as a differentiable function of θ."""
+    return jc.fold_parameter(f_fold, jnp.array([0.4]), jnp.array(0.2), theta)
 
 
 def part_a():
     print("=" * 72)
-    print("Part A — reverse-mode jax.grad + inverse design")
+    print("Part A — reverse-mode jax.grad of a fold location + inverse design")
     print("=" * 72)
 
-    theta0 = jnp.array(0.2)
-    m = stability_margin(theta0)
-    # reverse-mode gradient through the (unrolled Newton) equilibrium solve
-    dm = jax.grad(stability_margin)(theta0)
-    # finite-difference cross-check
-    h = 1e-4
-    fd = (stability_margin(theta0 + h) - stability_margin(theta0 - h)) / (2 * h)
-    print(f"\n  at θ={float(theta0):.3f}:  margin m={float(m):.4f}")
-    print(f"  dm/dθ  (jax.grad)      = {float(dm):+.4f}")
-    print(f"  dm/dθ  (finite diff)   = {float(fd):+.4f}   [cross-check]")
+    theta0 = jnp.array(1.0)
+    u, p, v = jc.fold_point(f_fold, jnp.array([0.4]), jnp.array(0.2), theta0)
+    print(f"\n  fold at θ={float(theta0):.2f}:  u*={float(u[0]):.4f}  p*={float(p):.4f}"
+          f"   (analytic u=θ/2={float(theta0)/2:.4f}, p=θ²/4={float(theta0)**2/4:.4f})")
 
-    # Inverse design: gradient-descent θ so the margin hits a target (move the
-    # stable equilibrium closer to the fold, but not onto it). We take a
-    # *projected* step, clipping θ safely below the fold (θ_fold = 2/3) so the
-    # inner equilibrium — and thus the differentiable solve — stays well defined.
-    target = 0.60
+    g = jax.grad(fold_p)(theta0)
+    print(f"  dp*/dθ  (jax.grad)  = {float(g):.5f}    "
+          f"(analytic θ/2 = {float(theta0)/2:.5f})")
+
+    # Inverse design: choose θ so the fold sits at a target parameter value.
+    target_p = 1.00                     # want p*(θ) = 1  ->  θ = 2
     theta = theta0
-    lr = 0.15
-    theta_max = 0.62  # < θ_fold = 2/3
-    loss_grad = jax.grad(lambda th: (stability_margin(th) - target) ** 2)
-    print(f"\n  inverse design: drive margin -> {target}  (projected, θ<{theta_max})")
-    for it in range(30):
-        loss = (stability_margin(theta) - target) ** 2
-        theta = jnp.clip(theta - lr * loss_grad(theta), 0.0, theta_max)
-        if it % 6 == 0 or it == 29:
-            print(f"    it {it:2d}:  θ={float(theta):+.4f}  "
-                  f"margin={float(stability_margin(theta)):.4f}  loss={float(loss):.2e}")
-    print(f"\n  final θ={float(theta):+.4f}  margin={float(stability_margin(theta)):.4f} "
-          f"(target {target})")
+    lr = 0.6
+    loss_grad = jax.grad(lambda th: (fold_p(th) - target_p) ** 2)
+    print(f"\n  inverse design: place fold at p* -> {target_p}")
+    for it in range(20):
+        theta = theta - lr * loss_grad(theta)
+        if it % 4 == 0 or it == 19:
+            print(f"    it {it:2d}:  θ={float(theta):.4f}  p*={float(fold_p(theta)):.4f}")
+    print(f"\n  final θ={float(theta):.4f}  p*={float(fold_p(theta)):.4f} "
+          f"(target {target_p};  analytic θ=√(4·target)={ (4*target_p)**0.5:.4f})")
 
 
 # =========================================================================
@@ -122,8 +94,8 @@ def part_b():
     fd = (branch_observable(b0 + h) - branch_observable(b0 - h)) / (2 * h)
     print(f"\n  d(branch state)/db  (jacfwd)      = {float(d_fwd):+.5f}")
     print(f"  d(branch state)/db  (finite diff) = {float(fd):+.5f}   [cross-check]")
-    print("\n  (reverse-mode grad through the full sweep needs implicit diff —")
-    print("   see ARCHITECTURE.md §3.2; forward-mode is available today.)")
+    print("\n  (reverse-mode grad through the *sweep* is unsupported by lax.while_loop;")
+    print("   use jc.fold_parameter / implicit diff for reverse-mode — see Part A.)")
 
 
 def main():

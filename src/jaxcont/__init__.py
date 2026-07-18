@@ -44,6 +44,9 @@ from jaxcont.problems.equilibrium import EquilibriumProblem
 from jaxcont.problems.periodic import PeriodicOrbitProblem
 from jaxcont.problems.bvp import BoundaryValueProblem
 
+# Differentiable fold solver (reverse-mode grad of a fold location; ARCHITECTURE §3.2)
+from jaxcont.bifurcations.fold_solve import fold_point, fold_parameter
+
 # Bifurcation detection
 from jaxcont.bifurcations.detector import BifurcationDetector
 from jaxcont.bifurcations.fold import FoldBifurcation
@@ -77,6 +80,8 @@ __all__ = [
     "EventHit",
     "Branch",
     "ContinuationResult",
+    "fold_point",
+    "fold_parameter",
     # Core
     "ContinuationProblem",
     "ContinuationSolution",

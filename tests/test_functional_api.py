@@ -115,6 +115,41 @@ class TestFolds:
 
 # --- scan engine: vmap + boundedness -------------------------------------
 
+class TestDifferentiableFold:
+    # f(u, p; theta) = u^2 - theta*u + p
+    #   fold at u = theta/2, p* = theta^2/4  ->  dp*/dtheta = theta/2
+    @staticmethod
+    def _f(u, p, theta):
+        return jnp.array([u[0] ** 2 - theta * u[0] + p])
+
+    def test_fold_location(self):
+        u, p, v = jc.fold_point(self._f, jnp.array([0.4]), jnp.array(0.2),
+                                jnp.array(1.0))
+        assert float(u[0]) == pytest.approx(0.5, abs=1e-4)
+        assert float(p) == pytest.approx(0.25, abs=1e-4)
+        assert abs(float(v[0])) == pytest.approx(1.0, abs=1e-4)
+
+    def test_reverse_mode_grad_matches_analytic(self):
+        pstar = lambda th: jc.fold_parameter(self._f, jnp.array([0.4]),
+                                             jnp.array(0.2), th)
+        for theta in (1.0, 2.5):
+            g = jax.grad(pstar)(jnp.array(theta))
+            assert float(g) == pytest.approx(theta / 2.0, abs=1e-4)
+
+    def test_vector_parameter_jacobian(self):
+        # f(u,p;a,b) = u^2 - a u + b p  ->  p* = a^2/(4b)
+        def f2(u, p, ab):
+            return jnp.array([u[0] ** 2 - ab[0] * u[0] + ab[1] * p])
+
+        ab = jnp.array([1.0, 2.0])
+        J = jax.jacobian(
+            lambda x: jc.fold_parameter(f2, jnp.array([0.4]), jnp.array(0.2), x)
+        )(ab)
+        # d/da = a/(2b) = 0.25 ; d/db = -a^2/(4b^2) = -0.0625
+        assert float(J[0]) == pytest.approx(0.25, abs=1e-4)
+        assert float(J[1]) == pytest.approx(-0.0625, abs=1e-4)
+
+
 class TestScanEngine:
     def test_vmap_batch(self):
         f = lambda u, p: pitchfork(u, p, None)
