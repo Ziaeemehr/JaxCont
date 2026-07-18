@@ -30,7 +30,6 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.mathjax',
     'sphinx.ext.githubpages',
-    'sphinx_rtd_theme',
     'myst_parser',
     'sphinx_gallery.gen_gallery',
 ]
@@ -115,31 +114,23 @@ master_doc = 'index'
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'sphinx_book_theme'
 html_static_path = ['_static', '../../examples/images']
 
-# Theme options
+# Theme options (matches the sibling lyapax project's docs style)
 html_theme_options = {
-    'logo_only': False,
-    'prev_next_buttons_location': 'bottom',
-    'style_external_links': False,
-    'style_nav_header_background': '#2980B9',
-    # Toc options
-    'collapse_navigation': False,
-    'sticky_navigation': True,
-    'navigation_depth': 4,
-    'includehidden': True,
-    'titles_only': False
+    'repository_url': 'https://github.com/Ziaeemehr/JaxCont',
+    'use_repository_button': True,
+    'show_toc_level': 2,
+    'navigation_with_keys': True,
 }
-
-# Add custom CSS
-html_css_files = [
-    'custom.css',
-]
+html_context = {
+    'default_mode': 'light',
+}
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-# html_logo = '_static/logo.png'
+# html_logo = '_static/jaxcont_logo.png'
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
