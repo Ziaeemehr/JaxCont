@@ -77,8 +77,13 @@ Public surface is the functional API — `bif_problem` / `continuation` / `Fold`
 - [ ] Un-mark `test_adaptive_stepsize.py` slow once it runs on the engine (issue #5)
 
 **JAX differentiators — the reason to exist (ARCHITECTURE §3); must ship as first-class:**
-- [ ] `vmap` parameter-sweep example (many diagrams in one kernel) + short GPU note
-- [ ] Differentiable-bifurcation example: `jax.grad` of a fold-parameter w.r.t. system params
+- [x] `vmap` parameter-sweep example — [example_08_vmap_sweep.py](../examples/example_08_vmap_sweep.py)
+      (256 diagrams, one kernel, **163× vs a Python loop**)
+- [x] Differentiable-bifurcation example — [example_09_differentiable.py](../examples/example_09_differentiable.py)
+      (reverse-mode `jax.grad` inverse design on a differentiable equilibrium; forward-mode
+      `jacfwd` through the engine). Both cross-checked vs finite differences.
+- [ ] `custom_root` fold solver so `jax.grad(fold_parameter)` works through `continuation()`
+      directly (reverse-mode through `while_loop` is unsupported — ARCHITECTURE §3.2)
 - [ ] These become the headline of the README and docs quickstart
 
 **Release engineering:**

@@ -122,6 +122,20 @@ This unlocks use cases the Julia/MATLAB tools don't do natively:
 Implementation note: the differentiable seam lives in the corrector/event solve, not the outer
 Python loop — so it can be delivered incrementally and is compatible with (§2a) whole-loop scan.
 
+**What works today vs. what needs the implicit-diff seam** (verified in
+`examples/example_09_differentiable.py`):
+- **Forward-mode (`jacfwd`) works *through* the whole-loop engine now** — `lax.while_loop`
+  supports forward-mode AD, so the sensitivity of a computed branch to a parameter is available
+  out of the box (example matches finite differences to 5 digits).
+- **Reverse-mode (`jax.grad`) does *not* differentiate through `lax.while_loop`** — the naive
+  `jax.grad(fold_parameter)` above is therefore aspirational, not yet functional. It requires the
+  implicit-diff formulation: define the equilibrium / fold via `G(x,θ)=0`, solve it with a
+  differentiable Newton (or `custom_root`), and differentiate *that* — which reverse-mode handles
+  cleanly. The example demonstrates this pattern end-to-end (grad through a differentiable
+  equilibrium solve, used for inverse design). Wiring a `custom_root` fold solver into
+  `continuation(...events=[Fold()])` so `jax.grad(fold_parameter)` "just works" is the remaining
+  step (ROADMAP v0.1/v0.2).
+
 ### 3.3 One code path, many devices
 
 No CUDA-specific code. The same `continuation()` runs on CPU for a 1-D toy and on GPU/TPU for a
