@@ -88,8 +88,11 @@ print(f"Continuation completed: {solution.n_points} points computed")
 # :math:`r = \pm 2/3 \approx \pm 0.6667`, where :math:`dx/dr` at the
 # equilibrium diverges.
 
+theoretical_r = 2.0 / 3.0
 for bif in solution.bifurcations:
-    print(f"  {bif['type']} at r = {bif['parameter']:.4f}")
+    error = abs(abs(bif["parameter"]) - theoretical_r)
+    print(f"  {bif['type']} at r = {bif['parameter']:.6f}  "
+          f"(theory: r = ±{theoretical_r:.6f}, error = {error:.2e})")
 
 # %%
 # Plot the bifurcation diagram

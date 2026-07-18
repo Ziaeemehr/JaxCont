@@ -53,6 +53,29 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provision
    cleanly instead of hanging — verified: 0.30 s, clean stop. The `slow`-marked
    `tests/test_adaptive_stepsize.py` can rejoin the fast suite once the engine is wired in and the
    tests are pointed at it.
+6. ✅ **`ds_min` break condition off-by-boundary.** *(fixed 2026-07-18)* `predictor_corrector.py`'s
+   stall check used `abs(ds) < self.ds_min`, but `adapt_stepsize` clamps a shrinking `ds` to
+   *exactly* `ds_min` on failure — so once pinned there the loop never satisfied the strict `<`
+   and could spin forever if the corrector kept failing at the floor step size. Changed to `<=`.
+   Found while cross-validating `examples/example_05_neural_mass.py` against BifurcationKit.jl.
+7. ⚠️ **Bifurcation detector produces duplicate/spurious fold-vs-Hopf flags near closely-spaced
+   or lower-quality crossings.** *(found 2026-07-18, cross-validating `example_02_lorenz.py` and
+   `example_05_neural_mass.py` against real BifurcationKit.jl v0.5.2 runs on the identical
+   equations)* Where detections land close to a true bifurcation (within ~0.005 in the parameter,
+   about one continuation step), the *locations* JaxCont finds are accurate — but the detector
+   sometimes (a) flags the same true Hopf point twice, once correctly as `hopf` and once
+   mislabeled as `fold`, and (b) emits one clearly spurious `fold` with no BifurcationKit.jl
+   counterpart at all (`example_05`, E0≈-1.550). Both examples now print an explicit comparison
+   table against hardcoded BifurcationKit.jl reference values so this is visible rather than
+   hidden. → needs a real fix in `bifurcations/detector.py` (likely: de-duplicate near-coincident
+   fold/Hopf flags, and tighten the fold test function to reduce false positives) before the
+   detector can be trusted unsupervised; not done here, flagged for v0.1.0 hardening.
+8. ℹ️ **`run()` only continues in one direction per call.** BifurcationKit.jl's `bothside=true`
+   explores both directions from the initial point in one call; JaxCont's `run()` picks a single
+   direction from `param_range` vs. the starting parameter. Not a bug — pseudo-arclength still
+   passes folds and can reach the region of interest with a well-chosen range (see
+   `example_02_lorenz.py`) — but it's a real ergonomics gap vs. BifurcationKit.jl worth a
+   `bothside` option in the functional API (`ContinuationPar` or `continuation()`) later.
 
 ---
 
