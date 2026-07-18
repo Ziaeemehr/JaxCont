@@ -129,12 +129,17 @@ normal forms, codim-2, branch switching, two-parameter continuation.
    ([api.py](../src/jaxcont/api.py)); OO classes kept as internal shim.
 6. ✅ **Whole-loop engine** — done & validated: [scan_continuation.py](../src/jaxcont/core/scan_continuation.py)
    (~340× warmed, vmap-batches, no hang). Proves the performance/vmap/grad thesis.
-7. **Wire the engine into `continuation()`** and port Fold/Hopf detection + vectorized stability
-   onto it; then un-slow `test_adaptive_stepsize.py`. ← **NEXT**
-8. **Ship the differentiators as examples** (`vmap` sweep, `grad` of a fold parameter) — these are
-   the headline, not an afterthought (ARCHITECTURE §3).
-9. **Trim `__init__.py`** to the equilibrium spine (hide periodic/BVP/Floquet stubs).
-10. Then: docs (README led by vmap/grad) + packaging → ship v0.1.0.
+7. ✅ **Wire the engine into `continuation()`** — done: opt-in `PseudoArclength(engine="scan")`,
+   detection + vectorized stability reused ([api.py](../src/jaxcont/api.py)). Remaining: port
+   Fold/Hopf refinement onto it and re-point `test_adaptive_stepsize.py`, then un-slow it.
+8. ✅ **Ship the differentiators as examples** — done: [example_08](../examples/example_08_vmap_sweep.py)
+   (`vmap`, 163×) + [example_09](../examples/example_09_differentiable.py) (`grad` of a fold via
+   [fold_solve.py](../src/jaxcont/bifurcations/fold_solve.py), + forward-mode `jacfwd`).
+9. ✅ **Trim `__init__.py`** — done: top-level surface is the equilibrium spine; periodic/BVP/
+   Floquet/period-doubling stubs are importable only from their submodules.
+10. **Docs + packaging → ship v0.1.0.** ← **NEXT** README led by the vmap/grad story; Sphinx
+    quickstart on the functional API; make `engine="scan"` the default once refinement is ported;
+    fix `Your Name`/placeholders (issue #4); wheel → TestPyPI → PyPI → Zenodo DOI.
 
 ---
 

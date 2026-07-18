@@ -33,7 +33,6 @@ from jaxcont.core.continuation import (
     ContinuationProblem,
     ContinuationSolution,
     equilibrium_continuation,
-    periodic_continuation,
 )
 from jaxcont.core.predictor_corrector import PredictorCorrector
 from jaxcont.core.natural_continuation import NaturalContinuation
@@ -41,8 +40,6 @@ from jaxcont.core.pseudo_arclength import PseudoArclengthContinuation
 
 # Problem definitions
 from jaxcont.problems.equilibrium import EquilibriumProblem
-from jaxcont.problems.periodic import PeriodicOrbitProblem
-from jaxcont.problems.bvp import BoundaryValueProblem
 
 # Differentiable fold solver (reverse-mode grad of a fold location; ARCHITECTURE §3.2)
 from jaxcont.bifurcations.fold_solve import fold_point, fold_parameter
@@ -51,7 +48,6 @@ from jaxcont.bifurcations.fold_solve import fold_point, fold_parameter
 from jaxcont.bifurcations.detector import BifurcationDetector
 from jaxcont.bifurcations.fold import FoldBifurcation
 from jaxcont.bifurcations.hopf import HopfBifurcation
-from jaxcont.bifurcations.period_doubling import PeriodDoublingBifurcation
 
 # Solvers
 from jaxcont.solvers.newton import NewtonSolver
@@ -59,7 +55,13 @@ from jaxcont.solvers.corrector import Corrector
 
 # Stability analysis
 from jaxcont.stability.eigenvalue import compute_eigenvalues, analyze_stability
-from jaxcont.stability.floquet import compute_floquet_multipliers
+
+# NOTE: v0.1.0 ships equilibria only. Periodic-orbit / Floquet / BVP / period-
+# doubling APIs are experimental stubs and are intentionally NOT exported at the
+# top level (see notes/ROADMAP.md, notes/ARCHITECTURE.md §8). They remain
+# importable from their submodules for development, e.g.:
+#     from jaxcont.problems.periodic import PeriodicOrbitProblem
+#     from jaxcont.stability.floquet import compute_floquet_multipliers
 
 # Utilities
 from jaxcont.utils.config import Config
@@ -86,26 +88,21 @@ __all__ = [
     "ContinuationProblem",
     "ContinuationSolution",
     "equilibrium_continuation",
-    "periodic_continuation",
     "PredictorCorrector",
     "NaturalContinuation",
     "PseudoArclengthContinuation",
     # Problems
     "EquilibriumProblem",
-    "PeriodicOrbitProblem",
-    "BoundaryValueProblem",
     # Bifurcations
     "BifurcationDetector",
     "FoldBifurcation",
     "HopfBifurcation",
-    "PeriodDoublingBifurcation",
     # Solvers
     "NewtonSolver",
     "Corrector",
     # Stability
     "compute_eigenvalues",
     "analyze_stability",
-    "compute_floquet_multipliers",
     # Utilities
     "Config",
     "plot_bifurcation_diagram",

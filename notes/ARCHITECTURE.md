@@ -362,10 +362,11 @@ The already-completed corrector rewrite is API-agnostic and carries over unchang
 
 ## 8. Immediate reconciliation (do alongside v0.1.0)
 
-- **`__init__.py` currently exports stubs** (`PeriodicOrbitProblem`, `BoundaryValueProblem`,
-  `compute_floquet_multipliers`, `PeriodDoublingBifurcation`, `periodic_continuation`) that the
-  roadmap says to hide. Trim the public surface to the equilibrium spine; keep stubs importable
-  only from private submodules until their version ships.
+- ✅ **`__init__.py` trimmed to the equilibrium spine** (2026-07-18). The stubs
+  (`PeriodicOrbitProblem`, `BoundaryValueProblem`, `compute_floquet_multipliers`,
+  `PeriodDoublingBifurcation`, `periodic_continuation`) are no longer exported at top level; they
+  remain importable from their submodules (e.g. `jaxcont.problems.periodic`) until their version
+  ships. Top-level `__all__` is now the 32-name equilibrium surface.
 - Introduce `BifProblem` + `continuation()` as the blessed surface; keep the OO class as a
   deprecated thin wrapper for one release to avoid breaking the examples.
 
