@@ -153,7 +153,20 @@ class ContinuationAlgorithm:
 
 @dataclass(frozen=True)
 class PseudoArclength(ContinuationAlgorithm):
-    """Pseudo-arclength continuation (default; passes fold points)."""
+    """
+    Pseudo-arclength continuation (default; passes fold points).
+
+    ``engine`` selects the implementation:
+    - ``"legacy"`` (default): the class-based Python outer loop. Battle-tested,
+      supports the full detection/refinement path.
+    - ``"scan"``: the fully JIT-compiled whole-loop engine
+      (``core/scan_continuation.py``) — ~100s× faster warmed, ``vmap``-able, and
+      hang-proof (ARCHITECTURE §2, §3). Detection/stability are computed as a
+      vectorized post-pass and fed to the same detector. Will become the default
+      once it has feature parity + coverage on the engine path (ROADMAP).
+    """
+
+    engine: Literal["legacy", "scan"] = "legacy"
 
 
 @dataclass(frozen=True)
@@ -268,6 +281,86 @@ def _to_legacy_problem(problem: BifProblem) -> ContinuationProblem:
     )
 
 
+def _run_scan(
+    problem: BifProblem,
+    p_span: Tuple[float, float],
+    settings: ContinuationPar,
+    events: Sequence[Event],
+    verbose: bool,
+) -> ContinuationResult:
+    """
+    Run the fully-JIT scan engine and reassemble a legacy-shaped
+    :class:`ContinuationSolution` so detection/plotting reuse existing code.
+    """
+    from jaxcont.core.scan_continuation import (
+        pseudo_arclength_scan,
+        branch_eigenvalues,
+    )
+
+    args = problem.args
+    rhs2 = lambda u, p: problem.f(u, p, args)
+
+    p_start, p_end = p_span
+    u0 = jnp.asarray(problem.u0)
+    dtype = u0.dtype
+
+    res = pseudo_arclength_scan(
+        rhs2,
+        u0,
+        jnp.asarray(p_start, dtype),
+        jnp.asarray(p_end, dtype),
+        jnp.asarray(settings.ds, dtype),
+        jnp.asarray(settings.ds_min, dtype),
+        jnp.asarray(settings.ds_max, dtype),
+        jnp.asarray(settings.newton_tol, dtype),
+        int(settings.max_steps),
+        jnp.asarray(settings.newton_max_iter),
+    )
+
+    n = int(res.n_valid)
+    states = res.states[:n]
+    params = res.params[:n]
+    tangents = res.tangents[:n]
+
+    eigenvalues = None
+    stability = None
+    want_eigs = settings.compute_stability or len(events) > 0
+    if want_eigs and states.shape[0] > 0:
+        eigenvalues = branch_eigenvalues(rhs2, states, params)
+        stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
+
+    convergence_info = [
+        {"step": i, "converged": bool(res.converged[i]), "newton_iters": 0}
+        for i in range(n)
+    ]
+
+    sol = ContinuationSolution(
+        states=states,
+        parameters=params,
+        tangent_vectors=tangents,
+        eigenvalues=eigenvalues,
+        stability=stability,
+        convergence_info=convergence_info,
+    )
+
+    # Reuse the existing detector on the reassembled solution.
+    if len(events) > 0 and eigenvalues is not None:
+        from jaxcont.bifurcations.detector import BifurcationDetector
+
+        detector = BifurcationDetector(
+            detect_fold=True, detect_hopf=True, tolerance=1e-4
+        )
+        sol.bifurcations = detector.detect_along_branch(
+            sol, eigenvalues, refine_location=False
+        )
+
+    result = _to_result(sol)
+    requested = {e._kind for e in events if getattr(e, "_kind", "")}
+    if requested:
+        result.events = [h for h in result.events if h.kind in requested]
+    return result
+
+
 def _to_result(sol: ContinuationSolution) -> ContinuationResult:
     branch = Branch(
         params=sol.parameters,
@@ -324,6 +417,10 @@ def continuation(
     Returns:
         :class:`ContinuationResult` with ``.branch`` and ``.events``.
     """
+    # Fast path: the fully-JIT whole-loop engine.
+    if isinstance(alg, PseudoArclength) and alg.engine == "scan":
+        return _run_scan(problem, p_span, settings, events, verbose)
+
     if isinstance(alg, Natural):
         runner_cls = NaturalContinuation
     elif isinstance(alg, PseudoArclength):

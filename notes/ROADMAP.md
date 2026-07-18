@@ -38,40 +38,53 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provision
    inverts a matrix that is singular at folds. The dead `try/except` is gone.
 2. ✅ **Finite-difference `df/dp`.** *(fixed 2026-07-18)* Replaced with `jacfwd(f, argnums=1)`
    in both `correct()` and `compute_tangent()`.
-3. ⚠️ **JIT on the hot loop.** *(partial 2026-07-18)* The corrector inner loop is now a JIT'd
-   `lax.while_loop` (`_correct_jit`). **But profiling showed ~no speedup** (~21 ms/point before
-   and after, n=1 and n=3): the cost is the *Python outer loop* (per-step dispatch for tangent +
-   eigenvalues, host syncs, bookkeeping), not the corrector. The "high-performance JAX" claim
-   needs **whole-loop JIT (`lax.scan`)** and/or **`vmap` batching** — see
-   [ARCHITECTURE.md §2](ARCHITECTURE.md). This is now an API-design-dependent task, not a
-   local fix.
+3. ✅ **JIT on the hot loop.** *(solved 2026-07-18 — engine validated, wiring pending)* First
+   attempt (JIT the corrector alone) gave ~no speedup — the cost was the Python outer loop.
+   The real fix is the **whole-loop `lax.while_loop`** engine in
+   [`core/scan_continuation.py`](../src/jaxcont/core/scan_continuation.py): the entire sweep is
+   one compiled program over fixed-size buffers. Validated on pitchfork: residual 5e-8, **0.74 ms
+   warmed vs ~250 ms** for the Python loop (~340×), `vmap`-batches 64 runs in one kernel, and runs
+   through `jax.grad`. Remaining: wire it in behind `continuation()` and port detection.
 4. **README placeholders.** `Your Name`, `yourusername`, stub citation/DOI.
-5. ⚠️ **Interim corrector hangs on saturating branches.** *(found 2026-07-18)* The new JIT
-   bordered corrector stalls when a branch runs into a degenerate-Jacobian regime — e.g.
-   `smooth_rhs = r − tanh(x)` pushed to `x ≳ 8`, where `sech²(x)` underflows and the bordered
-   system degenerates. The *original* block-elimination corrector happened to sidestep this. The
-   new functional API (`jc.continuation`) calls the same corrector, so it inherits the gap.
-   → fix during the `lax.scan` whole-loop rewrite (issue #3): NaN/inf guard + early termination
-   in the Newton `while_loop`, and detect the degenerate step to shrink `ds` instead of stalling.
-   The tests that expose it (`tests/test_adaptive_stepsize.py`) are marked `slow` and excluded
-   from the default `make test` run, **not deleted** — they are the canary for this fix.
+5. ✅ **Saturating-branch hang.** *(fixed 2026-07-18 by the scan engine)* The whole-loop engine is
+   structurally bounded (≤ `max_steps` × ≤ `max_iter` iterations) with an explicit `isfinite`
+   guard in the Newton loop, so degenerate branches (`r − tanh(x)` into saturation) terminate
+   cleanly instead of hanging — verified: 0.30 s, clean stop. The `slow`-marked
+   `tests/test_adaptive_stepsize.py` can rejoin the fast suite once the engine is wired in and the
+   tests are pointed at it.
 
 ---
 
 ## v0.1.0 — "Equilibria, done well" (target: next release)
 
-**In scope (public API):**
+Public surface is the functional API — `bif_problem` / `continuation` / `Fold`/`Hopf` — per
+[ARCHITECTURE.md](ARCHITECTURE.md). The OO classes remain as a deprecated internal shim.
+
+**Core — done:**
 - [x] Natural + pseudo-arclength equilibrium continuation
-- [x] Fold + Hopf detection with refinement
+- [x] Fold + Hopf detection with refinement (legacy detector; port to `Event` protocol)
 - [x] Stability along the branch
 - [x] Bifurcation-diagram plotting
 - [x] Examples: pitchfork, Lorenz, neural-mass
-- [ ] **JIT'd Newton/corrector inner loop** (issue #3)
-- [ ] Fix singular-solve bug (issue #1)
-- [ ] Autodiff `df/dp` (issue #2)
-- [ ] Core modules (`core/`, `solvers/`, `stability/eigenvalue.py`) >85% coverage
+- [x] Autodiff `df/dp` (issue #2)
+- [x] Robust bordered solve — no singular-`df/du` inversion (issue #1)
+- [x] Functional spine: `BifProblem` + `continuation()` over the loop ([api.py](../src/jaxcont/api.py))
+- [x] Whole-loop `lax.while_loop` engine — validated (issue #3, [scan_continuation.py](../src/jaxcont/core/scan_continuation.py))
+
+**Core — remaining:**
+- [ ] Wire the scan engine in behind `continuation()`; port Fold/Hopf detection into it
+- [ ] Port stability to the vectorized `branch_eigenvalues` post-pass
+- [ ] Un-mark `test_adaptive_stepsize.py` slow once it runs on the engine (issue #5)
+
+**JAX differentiators — the reason to exist (ARCHITECTURE §3); must ship as first-class:**
+- [ ] `vmap` parameter-sweep example (many diagrams in one kernel) + short GPU note
+- [ ] Differentiable-bifurcation example: `jax.grad` of a fold-parameter w.r.t. system params
+- [ ] These become the headline of the README and docs quickstart
+
+**Release engineering:**
+- [ ] Core modules (`core/`, `stability/eigenvalue.py`) >85% coverage (on the engine path)
 - [ ] GPU smoke test
-- [ ] Honest README with stated scope + fixed placeholders
+- [ ] Honest README led by the vmap/grad story + stated scope + fixed placeholders
 - [ ] Sphinx docs: install, quickstart, one tutorial, API reference
 - [ ] Clean wheel build; TestPyPI → PyPI; Zenodo DOI
 
@@ -106,11 +119,16 @@ normal forms, codim-2, branch switching, two-parameter continuation.
 3. ✅ **Fix the two correctness bugs** (issues #1, #2) — done (bordered solve + autodiff `df/dp`).
 4. ✅ **Commit the API design** — done: functional `continuation(...)` surface, see
    [ARCHITECTURE.md](ARCHITECTURE.md).
-5. **Implement the functional spine** (`BifProblem`, `continuation()`, `Event`, solver protocols)
-   over the existing loop; keep the OO class as a deprecated wrapper for one release.
-6. **Whole-loop `lax.scan`** behind the new API → makes the performance claim real; re-profile.
-7. **Trim `__init__.py`** to the equilibrium spine (hide periodic/BVP/Floquet stubs).
-8. Then: docs + packaging → ship v0.1.0.
+5. ✅ **Implement the functional spine** — done: `BifProblem` + `continuation()` over the loop
+   ([api.py](../src/jaxcont/api.py)); OO classes kept as internal shim.
+6. ✅ **Whole-loop engine** — done & validated: [scan_continuation.py](../src/jaxcont/core/scan_continuation.py)
+   (~340× warmed, vmap-batches, no hang). Proves the performance/vmap/grad thesis.
+7. **Wire the engine into `continuation()`** and port Fold/Hopf detection + vectorized stability
+   onto it; then un-slow `test_adaptive_stepsize.py`. ← **NEXT**
+8. **Ship the differentiators as examples** (`vmap` sweep, `grad` of a fold parameter) — these are
+   the headline, not an afterthought (ARCHITECTURE §3).
+9. **Trim `__init__.py`** to the equilibrium spine (hide periodic/BVP/Floquet stubs).
+10. Then: docs (README led by vmap/grad) + packaging → ship v0.1.0.
 
 ---
 
