@@ -165,6 +165,13 @@ latex_elements = {
     ''',
 }
 
+# The docs and docstrings use Unicode math/Greek symbols and box-drawing
+# characters freely (theta, tau, alpha, arrows, box-drawing banners, etc.).
+# The classical pdfLaTeX engine needs each such glyph registered by hand via
+# inputenc, which is an unbounded whack-a-mole; XeLaTeX renders Unicode
+# natively through the system font stack instead.
+latex_engine = 'xelatex'
+
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto, manual, or own class]).
 latex_documents = [
