@@ -372,9 +372,9 @@ class PredictorCorrector(ABC):
         Args:
             bifurcations: List of bifurcation dictionaries
         """
-        print(f"\n{'═'*70}")
+        print(f"\n{'='*70}")
         print(f"{'BIFURCATION ANALYSIS':^70}")
-        print(f"{'═'*70}")
+        print(f"{'='*70}")
         print(f"Detected {len(bifurcations)} bifurcation point(s) during continuation:\n")
         
         for i, bif in enumerate(bifurcations, 1):
@@ -411,4 +411,4 @@ class PredictorCorrector(ABC):
             
             print()
         
-        print(f"{'═'*70}\n")
+        print(f"{'='*70}\n")

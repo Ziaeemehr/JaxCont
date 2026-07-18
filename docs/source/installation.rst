@@ -6,11 +6,11 @@ Requirements
 
 JaxCont requires:
 
-- Python ≥ 3.9
-- JAX ≥ 0.3.0
-- NumPy ≥ 1.21.0
-- SciPy ≥ 1.7.0
-- Matplotlib ≥ 3.5.0
+- Python >= 3.9
+- JAX >= 0.3.0
+- NumPy >= 1.21.0
+- SciPy >= 1.7.0
+- Matplotlib >= 3.5.0
 
 Installing from PyPI
 --------------------
