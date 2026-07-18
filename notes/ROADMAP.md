@@ -82,8 +82,9 @@ Public surface is the functional API — `bif_problem` / `continuation` / `Fold`
 - [x] Differentiable-bifurcation example — [example_09_differentiable.py](../examples/example_09_differentiable.py)
       (reverse-mode `jax.grad` inverse design on a differentiable equilibrium; forward-mode
       `jacfwd` through the engine). Both cross-checked vs finite differences.
-- [ ] `custom_root` fold solver so `jax.grad(fold_parameter)` works through `continuation()`
-      directly (reverse-mode through `while_loop` is unsupported — ARCHITECTURE §3.2)
+- [x] Reverse-mode `jax.grad` of a fold location — [fold_solve.py](../src/jaxcont/bifurcations/fold_solve.py)
+      (`jc.fold_parameter`/`fold_point`: extended system + `custom_vjp` implicit diff; exact to
+      analytic incl. vector-θ Jacobians). Hopf/codim-2 extended-system solvers are follow-ups.
 - [ ] These become the headline of the README and docs quickstart
 
 **Release engineering:**

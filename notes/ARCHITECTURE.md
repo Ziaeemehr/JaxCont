@@ -122,19 +122,30 @@ This unlocks use cases the Julia/MATLAB tools don't do natively:
 Implementation note: the differentiable seam lives in the corrector/event solve, not the outer
 Python loop — so it can be delivered incrementally and is compatible with (§2a) whole-loop scan.
 
-**What works today vs. what needs the implicit-diff seam** (verified in
-`examples/example_09_differentiable.py`):
-- **Forward-mode (`jacfwd`) works *through* the whole-loop engine now** — `lax.while_loop`
-  supports forward-mode AD, so the sensitivity of a computed branch to a parameter is available
-  out of the box (example matches finite differences to 5 digits).
-- **Reverse-mode (`jax.grad`) does *not* differentiate through `lax.while_loop`** — the naive
-  `jax.grad(fold_parameter)` above is therefore aspirational, not yet functional. It requires the
-  implicit-diff formulation: define the equilibrium / fold via `G(x,θ)=0`, solve it with a
-  differentiable Newton (or `custom_root`), and differentiate *that* — which reverse-mode handles
-  cleanly. The example demonstrates this pattern end-to-end (grad through a differentiable
-  equilibrium solve, used for inverse design). Wiring a `custom_root` fold solver into
-  `continuation(...events=[Fold()])` so `jax.grad(fold_parameter)` "just works" is the remaining
-  step (ROADMAP v0.1/v0.2).
+**What works today** (verified in `examples/example_09_differentiable.py`, tests in
+`tests/test_functional_api.py::TestDifferentiableFold`):
+- **Reverse-mode `jax.grad` of a fold location — DONE** via `jc.fold_parameter` /
+  `jc.fold_point` ([bifurcations/fold_solve.py](../src/jaxcont/bifurcations/fold_solve.py)). The
+  fold is the extended system `G(u,p,v;θ)=0` (`f=0`, `f_u·v=0`, `‖v‖=1`), solved by Newton and
+  wrapped in `jax.custom_vjp` implementing the implicit function theorem — so the inner
+  `while_loop` is irrelevant to the gradient. Exact to analytic on `f=u²−θu+p`
+  (`dp*/dθ = θ/2`), including full Jacobians w.r.t. vector-valued `θ`:
+
+  ```python
+  fold_p = lambda theta: jc.fold_parameter(f, u_guess, p_guess, theta)
+  jax.grad(fold_p)(theta0)        # exact sensitivity of the fold location
+  ```
+
+  Note this differentiates the *isolated fold solve*, not a `continuation()` call. The naive
+  `jax.grad` over a whole `continuation(...events=[Fold()])` run still won't work (see below);
+  the supported path is: continue to find/seed the fold, then refine + differentiate with
+  `fold_point`. Analogous Hopf/codim-2 extended-system solvers are the natural follow-ups.
+- **Forward-mode `jacfwd` works *through* the whole-loop engine** — `lax.while_loop` supports
+  forward-mode AD, so the sensitivity of a computed branch to a parameter is available out of the
+  box (example matches finite differences to 5 digits).
+- **Reverse-mode `jax.grad` does *not* differentiate through `lax.while_loop`** — so reverse-mode
+  over the full continuation *sweep* is unsupported; use the implicit-diff solvers above for
+  reverse-mode gradients of bifurcation quantities.
 
 ### 3.3 One code path, many devices
 
