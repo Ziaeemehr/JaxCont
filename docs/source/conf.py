@@ -115,7 +115,12 @@ master_doc = 'index'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_book_theme'
-html_static_path = ['_static', '../../examples/images']
+# NOTE: do not add '../../examples/images' here -- it's a runtime-generated,
+# git-untracked directory (created only after the example scripts have been
+# run locally). Referencing it works on a dev machine that happens to have
+# run the examples, but breaks fail_on_warning builds on a fresh checkout
+# (e.g. Read the Docs' `git clone --depth 1`), where it never exists.
+html_static_path = ['_static']
 
 # Theme options (matches the sibling lyapax project's docs style)
 html_theme_options = {
