@@ -42,7 +42,7 @@ from jaxcont.core.pseudo_arclength import PseudoArclengthContinuation
 from jaxcont.problems.equilibrium import EquilibriumProblem
 
 # Differentiable fold solver (reverse-mode grad of a fold location via the
-# implicit function theorem -- see examples/example_09_differentiable.py)
+# implicit function theorem -- see examples/example_07_differentiable.py)
 from jaxcont.bifurcations.fold_solve import fold_point, fold_parameter
 
 # Bifurcation detection

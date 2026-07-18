@@ -80,8 +80,8 @@ the compatibility implementation.
 
 See the [quickstart](https://jaxcont.readthedocs.io/en/latest/quickstart.html),
 [Sphinx-Gallery examples](https://jaxcont.readthedocs.io/en/latest/auto_examples/index.html),
-[`example_08_vmap_sweep.py`](examples/example_08_vmap_sweep.py), and
-[`example_09_differentiable.py`](examples/example_09_differentiable.py) for the
+[`example_06_vmap_sweep.py`](examples/example_06_vmap_sweep.py), and
+[`example_07_differentiable.py`](examples/example_07_differentiable.py) for the
 full `vmap`, `jacfwd`, and inverse-design stories.
 
 ## Development

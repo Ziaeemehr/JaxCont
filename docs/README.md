@@ -94,7 +94,7 @@ Run the relevant source example directly before rebuilding:
 
 .. code-block:: bash
 
-   python ../examples/example_08_vmap_sweep.py
+   python ../examples/example_06_vmap_sweep.py
 
 Deployment
 ----------
