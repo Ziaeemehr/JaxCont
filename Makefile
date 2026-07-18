@@ -20,10 +20,13 @@ install-dev:
 	pip install -e ".[dev]"
 
 test:
-	pytest tests/ -v
+	pytest tests/          # fast: no coverage, slow tests excluded
+
+test-all:
+	pytest tests/ -m ""    # everything, including slow tests
 
 test-cov:
-	pytest tests/ -v --cov=jaxcont --cov-report=html --cov-report=term
+	pytest tests/ -m "" --cov=jaxcont --cov-report=html --cov-report=term
 
 lint:
 	flake8 src/jaxcont

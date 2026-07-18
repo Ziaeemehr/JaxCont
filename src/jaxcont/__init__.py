@@ -11,6 +11,23 @@ from jaxcont._version import __version__
 __author__ = "Your Name"
 __license__ = "MIT"
 
+# Functional API (the blessed "Sketch A" surface; see notes/ARCHITECTURE.md)
+from jaxcont.api import (
+    BifProblem,
+    bif_problem,
+    continuation,
+    ContinuationPar,
+    ContinuationAlgorithm,
+    PseudoArclength,
+    Natural,
+    Event,
+    Fold,
+    Hopf,
+    EventHit,
+    Branch,
+    ContinuationResult,
+)
+
 # Core imports
 from jaxcont.core.continuation import (
     ContinuationProblem,
@@ -46,6 +63,20 @@ from jaxcont.utils.config import Config
 from jaxcont.utils.plotting import plot_bifurcation_diagram, plot_continuation
 
 __all__ = [
+    # Functional API (blessed surface)
+    "BifProblem",
+    "bif_problem",
+    "continuation",
+    "ContinuationPar",
+    "ContinuationAlgorithm",
+    "PseudoArclength",
+    "Natural",
+    "Event",
+    "Fold",
+    "Hopf",
+    "EventHit",
+    "Branch",
+    "ContinuationResult",
     # Core
     "ContinuationProblem",
     "ContinuationSolution",

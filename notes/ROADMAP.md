@@ -46,6 +46,15 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provision
    [ARCHITECTURE.md §2](ARCHITECTURE.md). This is now an API-design-dependent task, not a
    local fix.
 4. **README placeholders.** `Your Name`, `yourusername`, stub citation/DOI.
+5. ⚠️ **Interim corrector hangs on saturating branches.** *(found 2026-07-18)* The new JIT
+   bordered corrector stalls when a branch runs into a degenerate-Jacobian regime — e.g.
+   `smooth_rhs = r − tanh(x)` pushed to `x ≳ 8`, where `sech²(x)` underflows and the bordered
+   system degenerates. The *original* block-elimination corrector happened to sidestep this. The
+   new functional API (`jc.continuation`) calls the same corrector, so it inherits the gap.
+   → fix during the `lax.scan` whole-loop rewrite (issue #3): NaN/inf guard + early termination
+   in the Newton `while_loop`, and detect the degenerate step to shrink `ds` instead of stalling.
+   The tests that expose it (`tests/test_adaptive_stepsize.py`) are marked `slow` and excluded
+   from the default `make test` run, **not deleted** — they are the canary for this fix.
 
 ---
 
