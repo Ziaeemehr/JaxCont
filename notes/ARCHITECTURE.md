@@ -122,7 +122,7 @@ This unlocks use cases the Julia/MATLAB tools don't do natively:
 Implementation note: the differentiable seam lives in the corrector/event solve, not the outer
 Python loop — so it can be delivered incrementally and is compatible with (§2a) whole-loop scan.
 
-**What works today** (verified in `examples/example_09_differentiable.py`, tests in
+**What works today** (verified in `examples/example_07_differentiable.py`, tests in
 `tests/test_functional_api.py::TestDifferentiableFold`):
 - **Reverse-mode `jax.grad` of a fold location — DONE** via `jc.fold_parameter` /
   `jc.fold_point` ([bifurcations/fold_solve.py](../src/jaxcont/bifurcations/fold_solve.py)). The

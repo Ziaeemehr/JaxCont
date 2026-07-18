@@ -76,6 +76,15 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provision
    passes folds and can reach the region of interest with a well-chosen range (see
    `example_02_lorenz.py`) — but it's a real ergonomics gap vs. BifurcationKit.jl worth a
    `bothside` option in the functional API (`ContinuationPar` or `continuation()`) later.
+9. ⚠️ **Recurring pattern: `newton_tol`/`NewtonSolver(tol=...)` set below float32 machine epsilon
+   (~1.2×10⁻⁷) silently reports `converged=False` forever, even at points where the true residual
+   is already at the numeric floor.** Found independently three times this session — issue #5/#6
+   (`example_05`, triggered the `ds_min` hang), and again in the (now-removed) old
+   `example_04`/`example_06`, where `newton_tol=1e-8`/`1e-10` caused most steps to silently report
+   non-convergence despite a correct numeric answer (only visible because the printed error stayed
+   ~0 regardless — the convergence *flag* was wrong, not the computed value). → worth either (a) a
+   one-line doc note on `newton_tol`'s float32 floor, or (b) `NewtonSolver`/the correctors warning
+   when constructed with `tol < ~1e-6` in float32. All shipped examples now use `tol >= 1e-6`.
 
 ---
 
@@ -89,7 +98,12 @@ Public surface is the functional API — `bif_problem` / `continuation` / `Fold`
 - [x] Fold + Hopf detection with refinement (legacy detector; port to `Event` protocol)
 - [x] Stability along the branch
 - [x] Bifurcation-diagram plotting
-- [x] Examples: pitchfork, Lorenz, neural-mass
+- [x] Examples: 7 curated gallery scripts (pitchfork, Lorenz-84, Van der Pol, natural-vs-
+      pseudo-arclength, neural-mass, `vmap` sweep, differentiable fold). Pitchfork, Lorenz-84,
+      Van der Pol, and neural-mass are cross-validated against BifurcationKit.jl v0.5.2
+      (independent Julia runs, offline); the rest are self-verified against closed-form theory.
+      Consolidated from 9 files: dropped one redundant plotting demo and merged two overlapping
+      manual-stepping tutorials into one that actually demonstrates the fold-passing contrast.
 - [x] Autodiff `df/dp` (issue #2)
 - [x] Robust bordered solve — no singular-`df/du` inversion (issue #1)
 - [x] Functional spine: `BifProblem` + `continuation()` over the loop ([api.py](../src/jaxcont/api.py))
@@ -101,9 +115,9 @@ Public surface is the functional API — `bif_problem` / `continuation` / `Fold`
 - [x] Stability computed by the vectorized `branch_eigenvalues` post-pass
 
 **JAX differentiators — the reason to exist (ARCHITECTURE §3); must ship as first-class:**
-- [x] `vmap` parameter-sweep example — [example_08_vmap_sweep.py](../examples/example_08_vmap_sweep.py)
+- [x] `vmap` parameter-sweep example — [example_06_vmap_sweep.py](../examples/example_06_vmap_sweep.py)
       (256 diagrams, one kernel, **163× vs a Python loop**)
-- [x] Differentiable-bifurcation example — [example_09_differentiable.py](../examples/example_09_differentiable.py)
+- [x] Differentiable-bifurcation example — [example_07_differentiable.py](../examples/example_07_differentiable.py)
       (reverse-mode `jax.grad` inverse design on a differentiable equilibrium; forward-mode
       `jacfwd` through the engine). Both cross-checked vs finite differences.
 - [x] Reverse-mode `jax.grad` of a fold location — [fold_solve.py](../src/jaxcont/bifurcations/fold_solve.py)
@@ -156,8 +170,8 @@ normal forms, codim-2, branch switching, two-parameter continuation.
    (~340× warmed, vmap-batches, no hang). Proves the performance/vmap/grad thesis.
 7. ✅ **Wire the engine into `continuation()`** — done: `PseudoArclength(engine="scan")` is the
    default; detection, refinement, and vectorized stability are reused ([api.py](../src/jaxcont/api.py)).
-8. ✅ **Ship the differentiators as examples** — done: [example_08](../examples/example_08_vmap_sweep.py)
-   (`vmap`, 163×) + [example_09](../examples/example_09_differentiable.py) (`grad` of a fold via
+8. ✅ **Ship the differentiators as examples** — done: [example_06](../examples/example_06_vmap_sweep.py)
+   (`vmap`, 163×) + [example_07](../examples/example_07_differentiable.py) (`grad` of a fold via
    [fold_solve.py](../src/jaxcont/bifurcations/fold_solve.py), + forward-mode `jacfwd`).
 9. ✅ **Trim `__init__.py`** — done: top-level surface is the equilibrium spine; periodic/BVP/
    Floquet/period-doubling stubs are importable only from their submodules.

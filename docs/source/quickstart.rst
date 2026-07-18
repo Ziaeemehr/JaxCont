@@ -74,7 +74,7 @@ The fixed-shape scan result can be transformed directly. Here each value of
    print(branches.states.shape)  # (256, 121, 1)
 
 ``n_valid`` records how many slots are valid for each fixed-size result. See
-:doc:`auto_examples/example_08_vmap_sweep` for timing and plotting.
+:doc:`auto_examples/example_06_vmap_sweep` for timing and plotting.
 
 Differentiate a fold location
 -----------------------------
@@ -101,7 +101,7 @@ differentiation, so its output supports reverse-mode AD:
 
 Use ``jax.jacfwd`` for sensitivities through the whole-loop scan itself;
 reverse-mode differentiation through JAX's dynamic ``lax.while_loop`` is not
-supported. :doc:`auto_examples/example_09_differentiable` demonstrates both
+supported. :doc:`auto_examples/example_07_differentiable` demonstrates both
 paths and a gradient-based inverse-design loop.
 
 Next steps
