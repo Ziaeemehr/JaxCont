@@ -1,5 +1,8 @@
 """
-Simple test to debug pseudo-arclength continuation.
+Pseudo-arclength continuation on a linear system
+================================================
+
+Inspect the tangent and correction steps on ``dx/dt = r - x``.
 """
 
 import jax.numpy as jnp

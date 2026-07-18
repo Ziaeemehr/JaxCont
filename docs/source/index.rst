@@ -1,101 +1,48 @@
-JaxCont Documentation
+JaxCont documentation
 =====================
 
-.. image:: https://img.shields.io/badge/python-3.8%2B-blue.svg
-   :target: https://www.python.org/downloads/
-   :alt: Python Version
+**Vectorize continuation sweeps with** ``jax.vmap`` **and differentiate fold
+locations with** ``jax.grad``.
 
-.. image:: https://img.shields.io/badge/license-MIT-green.svg
-   :target: https://github.com/yourusername/JaxCont/blob/main/LICENSE
-   :alt: License
+JaxCont is an equilibrium continuation and bifurcation-analysis library whose
+default pseudo-arclength engine runs the whole continuation loop as a compiled
+JAX computation. It supports natural and pseudo-arclength continuation, fold
+and Hopf detection with refinement, equilibrium stability, and bifurcation
+diagrams.
 
-**JaxCont** is a high-performance continuation and bifurcation analysis package implemented in JAX, 
-designed for analyzing dynamical systems with automatic differentiation and GPU acceleration.
+The v0.1 API intentionally excludes periodic orbits, Floquet multipliers,
+boundary-value problems, branch switching, and two-parameter continuation.
 
-Features
---------
+Start here
+----------
 
-- **High Performance**: Leverages JAX's JIT compilation and automatic differentiation
-- **Robust Continuation**: Pseudo-arclength continuation for passing fold bifurcations
-- **Bifurcation Detection**: Automatic detection of fold, Hopf, and period-doubling bifurcations
-- **Stability Analysis**: Eigenvalue and Floquet multiplier computation
-- **GPU Ready**: Seamless GPU acceleration through JAX
-- **Modern API**: Clean, intuitive Python interface
-- **Extensible**: Modular design for easy customization
-
-Quick Start
------------
-
-Installation:
+Install from PyPI:
 
 .. code-block:: bash
 
    pip install jaxcont
 
-Basic usage:
-
-.. code-block:: python
-
-   import jax.numpy as jnp
-   from jaxcont import ContinuationProblem, equilibrium_continuation
-
-   # Define system: dx/dt = r*x - x^3
-   def pitchfork(state, params):
-       x = state[0]
-       r = params['r']
-       return jnp.array([r * x - x**3])
-
-   # Setup and run continuation
-   problem = ContinuationProblem(
-       rhs=pitchfork,
-       u0=jnp.array([0.1]),
-       params={'r': -1.0},
-       continuation_param='r'
-   )
-   
-   solution = equilibrium_continuation(problem, param_range=(-1.0, 2.0))
-   solution.plot()
+Then follow the :doc:`quickstart` for the functional API, batched sweeps, and
+differentiable fold locations.
 
 .. toctree::
    :maxdepth: 2
-   :caption: User Guide
+   :caption: Using JaxCont
 
    installation
    quickstart
-   user_guide/index
-   tutorials/index
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Examples
-
-   examples/index
-
-.. toctree::
-   :maxdepth: 2
-   :caption: API Reference
-
+   auto_examples/index
    api/index
 
 .. toctree::
    :maxdepth: 1
-   :caption: Developer Guide
+   :caption: Project
 
    contributing
-   development
-   roadmap
    changelog
 
-.. toctree::
-   :maxdepth: 1
-   :caption: Theory
-
-   theory/continuation
-   theory/bifurcations
-   theory/stability
-
-Indices and tables
-==================
+Indices
+-------
 
 * :ref:`genindex`
 * :ref:`modindex`

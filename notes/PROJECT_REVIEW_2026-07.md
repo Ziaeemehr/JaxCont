@@ -90,7 +90,8 @@ BORDERED_NEWTON_VERIFIED.md         IMPLEMENTATION_STATUS.md PROFILING_RESULTS.m
 - Archive the rest into `notes/archive/` (don't delete — they have real profiling data worth keeping).
 - User-facing docs live in `docs/` (Sphinx), not `notes/`.
 
-Also: the root README still has placeholders — `author = {Your Name}`, `github.com/yourusername/JaxCont`, and the citation/DOI are stubs. Those must be fixed before any release.
+Also: at review time the root README still had placeholder author, repository,
+and citation metadata. These were fixed during the v0.1.0 release preparation.
 
 ---
 

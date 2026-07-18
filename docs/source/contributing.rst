@@ -22,7 +22,7 @@ Getting Started
 
    .. code-block:: bash
 
-      git clone https://github.com/yourusername/JaxCont.git
+      git clone https://github.com/Ziaeemehr/JaxCont.git
       cd JaxCont
 
 3. Create a development environment:

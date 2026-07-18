@@ -8,7 +8,7 @@ compilation for exceptional performance.
 
 from jaxcont._version import __version__
 
-__author__ = "Your Name"
+__author__ = "Abolfazl Ziaeemehr"
 __license__ = "MIT"
 
 # Functional API (the blessed "Sketch A" surface; see notes/ARCHITECTURE.md)

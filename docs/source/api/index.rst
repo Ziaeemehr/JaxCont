@@ -1,67 +1,57 @@
-API Reference
+API reference
 =============
 
-This section provides detailed API documentation for all modules in JaxCont.
+The functional equilibrium API is the supported v0.1 surface.
 
-.. toctree::
-   :maxdepth: 2
+Problem and continuation
+------------------------
 
-   core
-   problems
-   bifurcations
-   solvers
-   stability
-   utils
+.. autofunction:: jaxcont.bif_problem
 
-Core Module
------------
+.. autofunction:: jaxcont.continuation
 
-.. automodule:: jaxcont.core
+.. autoclass:: jaxcont.BifProblem
    :members:
-   :undoc-members:
-   :show-inheritance:
 
-.. toctree::
-   :hidden:
-
-   core
-
-Problems Module
----------------
-
-.. automodule:: jaxcont.problems
+.. autoclass:: jaxcont.ContinuationPar
    :members:
-   :undoc-members:
-   :show-inheritance:
 
-Bifurcations Module
--------------------
+Algorithms and events
+---------------------
 
-.. automodule:: jaxcont.bifurcations
+.. autoclass:: jaxcont.PseudoArclength
+
+.. autoclass:: jaxcont.Natural
+
+.. autoclass:: jaxcont.Fold
+
+.. autoclass:: jaxcont.Hopf
+
+Results
+-------
+
+.. autoclass:: jaxcont.ContinuationResult
    :members:
-   :undoc-members:
-   :show-inheritance:
 
-Solvers Module
---------------
-
-.. automodule:: jaxcont.solvers
+.. autoclass:: jaxcont.Branch
    :members:
-   :undoc-members:
-   :show-inheritance:
 
-Stability Module
-----------------
-
-.. automodule:: jaxcont.stability
+.. autoclass:: jaxcont.EventHit
    :members:
-   :undoc-members:
-   :show-inheritance:
 
-Utils Module
-------------
+Differentiable fold solver
+--------------------------
 
-.. automodule:: jaxcont.utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autofunction:: jaxcont.fold_point
+
+.. autofunction:: jaxcont.fold_parameter
+
+Low-level scan engine
+---------------------
+
+The fixed-shape low-level result is useful when applying ``jax.vmap`` or
+``jax.jacfwd`` to an entire sweep.
+
+.. autofunction:: jaxcont.core.scan_continuation.pseudo_arclength_scan
+
+.. autofunction:: jaxcont.core.scan_continuation.branch_eigenvalues

@@ -156,17 +156,17 @@ class PseudoArclength(ContinuationAlgorithm):
     """
     Pseudo-arclength continuation (default; passes fold points).
 
-    ``engine`` selects the implementation:
-    - ``"legacy"`` (default): the class-based Python outer loop. Battle-tested,
-      supports the full detection/refinement path.
-    - ``"scan"``: the fully JIT-compiled whole-loop engine
-      (``core/scan_continuation.py``) — ~100s× faster warmed, ``vmap``-able, and
-      hang-proof (ARCHITECTURE §2, §3). Detection/stability are computed as a
-      vectorized post-pass and fed to the same detector. Will become the default
-      once it has feature parity + coverage on the engine path (ROADMAP).
+    ``engine`` selects the implementation.
+
+    * ``"scan"`` (default) is the fully JIT-compiled whole-loop engine
+      (``core/scan_continuation.py``): it is ``vmap``-able and structurally
+      bounded. Detection/stability are computed as a vectorized post-pass and
+      refined with the same detector.
+    * ``"legacy"`` is the class-based Python outer loop, retained for
+      compatibility.
     """
 
-    engine: Literal["legacy", "scan"] = "legacy"
+    engine: Literal["legacy", "scan"] = "scan"
 
 
 @dataclass(frozen=True)
@@ -347,11 +347,18 @@ def _run_scan(
     if len(events) > 0 and eigenvalues is not None:
         from jaxcont.bifurcations.detector import BifurcationDetector
 
+        requested = {e._kind for e in events if getattr(e, "_kind", "")}
         detector = BifurcationDetector(
-            detect_fold=True, detect_hopf=True, tolerance=1e-4
+            detect_fold="fold" in requested,
+            detect_hopf="hopf" in requested,
+            tolerance=1e-6,
         )
         sol.bifurcations = detector.detect_along_branch(
-            sol, eigenvalues, refine_location=False
+            sol,
+            eigenvalues,
+            refine_location=True,
+            problem=_to_legacy_problem(problem),
+            fold_extended_system=True,
         )
 
     result = _to_result(sol)

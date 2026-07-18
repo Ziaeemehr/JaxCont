@@ -27,7 +27,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provision
 | BVP (collocation/shooting) | ❌ NotImplementedError | Hidden from v0.1.0 |
 | Normal forms / Lyapunov coeff | ❌ Returns placeholders | Hidden from v0.1.0 |
 
-**Test suite:** 49 passed, 4 skipped, ~60% coverage (run in `~/envs/jaxcont`).
+**Test suite:** 52 passed in the default fast suite (18 slow tests deselected).
 
 ---
 
@@ -45,7 +45,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provision
    one compiled program over fixed-size buffers. Validated on pitchfork: residual 5e-8, **0.74 ms
    warmed vs ~250 ms** for the Python loop (~340×), `vmap`-batches 64 runs in one kernel, and runs
    through `jax.grad`. Remaining: wire it in behind `continuation()` and port detection.
-4. **README placeholders.** `Your Name`, `yourusername`, stub citation/DOI.
+4. ✅ **README placeholders.** *(fixed 2026-07-18)* Author, repository, and
+   citation metadata are now real; DOI text explicitly waits for the Zenodo archive.
 5. ✅ **Saturating-branch hang.** *(fixed 2026-07-18 by the scan engine)* The whole-loop engine is
    structurally bounded (≤ `max_steps` × ≤ `max_iter` iterations) with an explicit `isfinite`
    guard in the Newton loop, so degenerate branches (`r − tanh(x)` into saturation) terminate
@@ -71,10 +72,10 @@ Public surface is the functional API — `bif_problem` / `continuation` / `Fold`
 - [x] Functional spine: `BifProblem` + `continuation()` over the loop ([api.py](../src/jaxcont/api.py))
 - [x] Whole-loop `lax.while_loop` engine — validated (issue #3, [scan_continuation.py](../src/jaxcont/core/scan_continuation.py))
 
-**Core — remaining:**
-- [ ] Wire the scan engine in behind `continuation()`; port Fold/Hopf detection into it
-- [ ] Port stability to the vectorized `branch_eigenvalues` post-pass
-- [ ] Un-mark `test_adaptive_stepsize.py` slow once it runs on the engine (issue #5)
+**Core — done (scan path):**
+- [x] Scan engine wired behind `continuation()` and made the default
+- [x] Fold/Hopf events detected and refined on scan results
+- [x] Stability computed by the vectorized `branch_eigenvalues` post-pass
 
 **JAX differentiators — the reason to exist (ARCHITECTURE §3); must ship as first-class:**
 - [x] `vmap` parameter-sweep example — [example_08_vmap_sweep.py](../examples/example_08_vmap_sweep.py)
@@ -85,14 +86,15 @@ Public surface is the functional API — `bif_problem` / `continuation` / `Fold`
 - [x] Reverse-mode `jax.grad` of a fold location — [fold_solve.py](../src/jaxcont/bifurcations/fold_solve.py)
       (`jc.fold_parameter`/`fold_point`: extended system + `custom_vjp` implicit diff; exact to
       analytic incl. vector-θ Jacobians). Hopf/codim-2 extended-system solvers are follow-ups.
-- [ ] These become the headline of the README and docs quickstart
+- [x] These are the headline of the README and docs quickstart
 
 **Release engineering:**
 - [ ] Core modules (`core/`, `stability/eigenvalue.py`) >85% coverage (on the engine path)
 - [ ] GPU smoke test
-- [ ] Honest README led by the vmap/grad story + stated scope + fixed placeholders
-- [ ] Sphinx docs: install, quickstart, one tutorial, API reference
-- [ ] Clean wheel build; TestPyPI → PyPI; Zenodo DOI
+- [x] Honest README led by the vmap/grad story + stated scope + fixed placeholders
+- [x] Sphinx docs: install, quickstart, Sphinx-Gallery examples, API reference
+- [x] Clean sdist/wheel build + Twine metadata validation
+- [ ] TestPyPI → PyPI → GitHub release/Zenodo DOI
 
 **Out of scope (hidden / marked experimental):** periodic orbits, Floquet, BVP,
 normal forms, codim-2, branch switching, two-parameter continuation.
@@ -129,17 +131,17 @@ normal forms, codim-2, branch switching, two-parameter continuation.
    ([api.py](../src/jaxcont/api.py)); OO classes kept as internal shim.
 6. ✅ **Whole-loop engine** — done & validated: [scan_continuation.py](../src/jaxcont/core/scan_continuation.py)
    (~340× warmed, vmap-batches, no hang). Proves the performance/vmap/grad thesis.
-7. ✅ **Wire the engine into `continuation()`** — done: opt-in `PseudoArclength(engine="scan")`,
-   detection + vectorized stability reused ([api.py](../src/jaxcont/api.py)). Remaining: port
-   Fold/Hopf refinement onto it and re-point `test_adaptive_stepsize.py`, then un-slow it.
+7. ✅ **Wire the engine into `continuation()`** — done: `PseudoArclength(engine="scan")` is the
+   default; detection, refinement, and vectorized stability are reused ([api.py](../src/jaxcont/api.py)).
 8. ✅ **Ship the differentiators as examples** — done: [example_08](../examples/example_08_vmap_sweep.py)
    (`vmap`, 163×) + [example_09](../examples/example_09_differentiable.py) (`grad` of a fold via
    [fold_solve.py](../src/jaxcont/bifurcations/fold_solve.py), + forward-mode `jacfwd`).
 9. ✅ **Trim `__init__.py`** — done: top-level surface is the equilibrium spine; periodic/BVP/
    Floquet/period-doubling stubs are importable only from their submodules.
-10. **Docs + packaging → ship v0.1.0.** ← **NEXT** README led by the vmap/grad story; Sphinx
-    quickstart on the functional API; make `engine="scan"` the default once refinement is ported;
-    fix `Your Name`/placeholders (issue #4); wheel → TestPyPI → PyPI → Zenodo DOI.
+10. **Docs + packaging → ship v0.1.0.** ← **IN PROGRESS** README and Sphinx quickstart now lead
+    with the `vmap`/gradient story; scan is the default with fold/Hopf refinement; author and
+    citation placeholders are fixed. Remaining external release sequence: TestPyPI → PyPI →
+    GitHub release/Zenodo DOI.
 
 ---
 

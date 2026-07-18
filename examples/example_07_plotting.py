@@ -1,5 +1,6 @@
 """
-Test the plotting fixes for stability and bifurcation labels.
+Plot stability and bifurcation labels
+=====================================
 """
 
 import os

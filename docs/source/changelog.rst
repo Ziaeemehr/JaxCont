@@ -6,27 +6,16 @@ All notable changes to JaxCont will be documented in this file.
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_,
 and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
-[Unreleased]
-------------
-
-Added
-^^^^^
-- Documentation system with Sphinx
-- Comprehensive API documentation
-- Tutorial notebooks
-- Example gallery
-
-Changed
-^^^^^^^
-- Improved error messages
-- Better plot aesthetics
-
-[0.1.0] - 2025-11-13
+[0.1.0] - Unreleased
 --------------------
 
 Added
 ^^^^^
-- Initial release of JaxCont
+- Initial supported release of JaxCont's equilibrium-continuation API
+- Functional ``bif_problem`` / ``continuation`` interface
+- Whole-loop compiled pseudo-arclength engine, used by default
+- Batched continuation sweeps with ``jax.vmap``
+- Differentiable fold locations with implicit reverse-mode gradients
 - Core continuation framework
   
   - Natural parameter continuation
@@ -37,8 +26,6 @@ Added
 - Problem definitions
   
   - Equilibrium problems
-  - Periodic orbit problem framework
-  - Boundary value problem framework
 
 - Numerical solvers
   
@@ -49,14 +36,12 @@ Added
   
   - Fold bifurcation detector
   - Hopf bifurcation detector
-  - Period-doubling detector
   - Bifurcation point framework
 
 - Stability analysis
   
   - Eigenvalue computation
   - Stability classification
-  - Floquet multiplier framework
 
 - Utilities
   
@@ -68,7 +53,9 @@ Added
   
   - Pitchfork bifurcation
   - Lorenz system
-  - Van der Pol oscillator
+  - Neural-mass model
+  - Batched imperfect-pitchfork sweep
+  - Differentiable fold inverse design
 
 - Testing
   
@@ -86,10 +73,9 @@ Added
 
 Known Issues
 ^^^^^^^^^^^^
-- Bifurcation location needs refinement
-- Normal form computation incomplete
-- Limited periodic orbit support
-- No two-parameter continuation yet
+- Periodic orbits, Floquet multipliers, boundary-value problems, normal forms,
+  branch switching, and two-parameter continuation are outside the supported
+  v0.1 scope.
 
 [0.0.1] - 2025-11-10
 --------------------

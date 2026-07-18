@@ -1,5 +1,7 @@
 """
-Example 1: Equilibrium continuation of a simple ODE
+Equilibrium continuation of a cubic normal form
+================================================
+
 Modified system: dx/dt = r + x - x^3/3
 
 This example demonstrates:

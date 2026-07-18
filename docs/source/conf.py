@@ -5,6 +5,7 @@
 
 import os
 import sys
+
 sys.path.insert(0, os.path.abspath('../../src'))
 
 # Import version from the package
@@ -14,7 +15,7 @@ from jaxcont._version import __version__
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'JaxCont'
-copyright = '2025, JaxCont Contributors'
+copyright = '2026, Abolfazl Ziaeemehr and JaxCont Contributors'
 author = 'JaxCont Contributors'
 release = __version__
 version = __version__
@@ -27,14 +28,29 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.napoleon',
     'sphinx.ext.viewcode',
-    'sphinx.ext.intersphinx',
     'sphinx.ext.mathjax',
-    'sphinx.ext.todo',
-    'sphinx.ext.coverage',
     'sphinx.ext.githubpages',
     'sphinx_rtd_theme',
     'myst_parser',
+    'sphinx_gallery.gen_gallery',
 ]
+
+# -- Sphinx-Gallery ----------------------------------------------------------
+# Parse every numbered example into downloadable Python/notebook forms. Gallery
+# execution is opt-in because compilation timings and accelerator availability
+# make it unsuitable for deterministic documentation builds.
+sphinx_gallery_conf = {
+    'examples_dirs': '../../examples',
+    'gallery_dirs': 'auto_examples',
+    'ignore_pattern': (
+        r'(__init__|check_installation|demo_jit_speedup|profile_continuation)\.py'
+    ),
+    'filename_pattern': r'/example_',
+    'within_subsection_order': 'FileNameSortKey',
+    'plot_gallery': os.environ.get('JAXCONT_DOCS_EXECUTE_GALLERY', '0') == '1',
+    'abort_on_example_error': True,
+    'download_all_examples': True,
+}
 
 # Napoleon settings for Google/NumPy style docstrings
 napoleon_google_docstring = True
@@ -56,18 +72,6 @@ napoleon_attr_annotations = True
 autosummary_generate = True
 autosummary_imported_members = True
 
-# Todo extension
-todo_include_todos = True
-
-# Intersphinx mapping
-intersphinx_mapping = {
-    'python': ('https://docs.python.org/3', None),
-    'numpy': ('https://numpy.org/doc/stable/', None),
-    'scipy': ('https://docs.scipy.org/doc/scipy/', None),
-    'matplotlib': ('https://matplotlib.org/stable/', None),
-    'jax': ('https://jax.readthedocs.io/en/latest/', None),
-}
-
 # MyST parser settings
 myst_enable_extensions = [
     "dollarmath",
@@ -81,20 +85,23 @@ myst_enable_extensions = [
     "replacements",
 ]
 
-# nbsphinx settings
-nbsphinx_execute = 'auto'  # Execute notebooks automatically
-nbsphinx_allow_errors = False  # Stop on errors
-nbsphinx_timeout = 300  # Timeout in seconds
-
-# Add notebook kernel
-nbsphinx_kernel_name = 'python3'
-
 # Templates path
 templates_path = ['_templates']
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '**.ipynb_checkpoints']
+exclude_patterns = [
+    '_build',
+    'Thumbs.db',
+    '.DS_Store',
+    '**.ipynb_checkpoints',
+    'api/core.rst',
+    'development.rst',
+    'roadmap.rst',
+    'tutorials/index.rst',
+    'user_guide/index.rst',
+    'examples/index.rst',
+]
 
 # The suffix(es) of source filenames.
 source_suffix = {
@@ -114,7 +121,6 @@ html_static_path = ['_static', '../../examples/images']
 # Theme options
 html_theme_options = {
     'logo_only': False,
-    'display_version': True,
     'prev_next_buttons_location': 'bottom',
     'style_external_links': False,
     'style_nav_header_background': '#2980B9',

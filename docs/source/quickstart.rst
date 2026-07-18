@@ -1,187 +1,110 @@
-Quick Start Guide
-=================
+Quickstart
+==========
 
-This guide will get you started with JaxCont in minutes.
+Functional continuation
+-----------------------
 
-Basic Continuation
-------------------
-
-Here's a simple example using a pitchfork bifurcation:
+The public API separates the problem, algorithm, numerical settings, and
+events. This example follows a saddle-node branch through its fold:
 
 .. code-block:: python
 
    import jax.numpy as jnp
-   from jaxcont import ContinuationProblem, equilibrium_continuation
+   import jaxcont as jc
 
-   # Define the system: dx/dt = r*x - x^3
-   def pitchfork(state, params):
-       x = state[0]
-       r = params['r']
-       return jnp.array([r * x - x**3])
+   def saddle_node(u, p, args):
+       return u**2 + p
 
-   # Create the continuation problem
-   problem = ContinuationProblem(
-       rhs=pitchfork,
-       u0=jnp.array([0.1]),
-       params={'r': -1.0},
-       continuation_param='r',
-       problem_type='equilibrium'
-   )
-
-   # Run continuation from r=-1 to r=2
-   solution = equilibrium_continuation(
+   problem = jc.bif_problem(saddle_node, u0=jnp.array([1.0]), p0=-1.0)
+   result = jc.continuation(
        problem,
-       param_range=(-1.0, 2.0),
-       ds=0.05,
-       max_steps=200
+       p_span=(-1.0, 0.2),
+       settings=jc.ContinuationPar(ds=0.03, max_steps=200),
+       events=[jc.Fold()],
    )
 
-   # Plot the bifurcation diagram
-   solution.plot()
+   print(result.branch.states)
+   print(result.branch.params)
+   print([(event.kind, event.p) for event in result.events])
 
-Multi-dimensional System
-------------------------
-
-For systems with multiple state variables:
+The default is ``PseudoArclength(engine="scan")``. It passes folds, runs the
+whole bounded continuation loop as a compiled JAX computation, computes
+stability in a vectorized post-pass, and refines requested fold/Hopf events.
+Select another algorithm explicitly when needed:
 
 .. code-block:: python
 
-   def lorenz(state, params):
-       x, y, z = state
-       sigma = params['sigma']
-       rho = params['rho']
-       beta = params['beta']
-       
-       dx = sigma * (y - x)
-       dy = x * (rho - z) - y
-       dz = x * y - beta * z
-       
-       return jnp.array([dx, dy, dz])
-
-   problem = ContinuationProblem(
-       rhs=lorenz,
-       u0=jnp.array([0.0, 0.0, 0.0]),
-       params={'sigma': 10.0, 'rho': 1.0, 'beta': 8/3},
-       continuation_param='rho'
+   jc.continuation(problem, jc.Natural(), p_span=(-1.0, -0.1))
+   jc.continuation(
+       problem,
+       jc.PseudoArclength(engine="legacy"),
+       p_span=(-1.0, 0.2),
    )
 
-   solution = equilibrium_continuation(problem, param_range=(1.0, 30.0))
+Many diagrams in one kernel with vmap
+-------------------------------------
 
-Continuation Methods
---------------------
-
-JaxCont supports different continuation methods:
-
-Natural Continuation
-^^^^^^^^^^^^^^^^^^^^
+The fixed-shape scan result can be transformed directly. Here each value of
+``b`` produces one imperfect-pitchfork branch:
 
 .. code-block:: python
 
-   from jaxcont import NaturalContinuation
+   import jax
+   from jaxcont.core.scan_continuation import pseudo_arclength_scan
 
-   continuation = NaturalContinuation(ds=0.01, max_steps=500)
-   solution = continuation.run(problem, param_range=(0.0, 5.0))
+   def run_branch(b):
+       def rhs(u, p):
+           return jnp.array([p * u[0] - u[0] ** 3 + b])
 
-Pseudo-arclength Continuation (Recommended)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       return pseudo_arclength_scan(
+           rhs,
+           jnp.array([0.05]),
+           jnp.array(-1.0),
+           jnp.array(2.0),
+           jnp.array(0.05),
+           jnp.array(1e-5),
+           jnp.array(0.2),
+           jnp.array(1e-6),
+           120,
+           jnp.array(20),
+       )
 
-.. code-block:: python
+   bs = jnp.linspace(-0.4, 0.4, 256)
+   branches = jax.vmap(run_branch)(bs)
+   print(branches.states.shape)  # (256, 121, 1)
 
-   from jaxcont import PseudoArclengthContinuation
+``n_valid`` records how many slots are valid for each fixed-size result. See
+:doc:`auto_examples/example_08_vmap_sweep` for timing and plotting.
 
-   continuation = PseudoArclengthContinuation(
-       ds=0.01,
-       ds_min=1e-5,
-       ds_max=0.1,
-       adaptive_stepsize=True
-   )
-   solution = continuation.run(problem, param_range=(0.0, 5.0))
+Differentiate a fold location
+-----------------------------
 
-Bifurcation Detection
-----------------------
-
-Enable bifurcation detection:
-
-.. code-block:: python
-
-   from jaxcont import BifurcationDetector
-
-   detector = BifurcationDetector(
-       detect_fold=True,
-       detect_hopf=True,
-       detect_branch_point=False
-   )
-
-   bifurcations = detector.detect_along_branch(solution)
-   
-   for bif in bifurcations:
-       print(f"Found {bif['type']} bifurcation at parameter = {bif['parameter']}")
-
-Stability Analysis
-------------------
-
-Compute eigenvalues along the branch:
+``fold_parameter`` solves the fold extended system and uses implicit
+differentiation, so its output supports reverse-mode AD:
 
 .. code-block:: python
 
-   from jaxcont.stability import compute_eigenvalues_along_branch
+   def fold_system(u, p, theta):
+       return jnp.array([u[0] ** 2 - theta * u[0] + p])
 
-   eigenvalues = compute_eigenvalues_along_branch(problem, solution)
-   
-   # Plot eigenvalue trajectories
-   from jaxcont.utils.plotting import plot_eigenvalues
-   plot_eigenvalues(solution)
+   def fold_p(theta):
+       return jc.fold_parameter(
+           fold_system,
+           u_guess=jnp.array([0.4]),
+           p_guess=jnp.array(0.2),
+           args=theta,
+       )
 
-Customizing Plots
------------------
+   theta = jnp.array(1.0)
+   print(fold_p(theta))             # 0.25
+   print(jax.grad(fold_p)(theta))   # 0.5
 
-Control plot appearance:
+Use ``jax.jacfwd`` for sensitivities through the whole-loop scan itself;
+reverse-mode differentiation through JAX's dynamic ``lax.while_loop`` is not
+supported. :doc:`auto_examples/example_09_differentiable` demonstrates both
+paths and a gradient-based inverse-design loop.
 
-.. code-block:: python
-
-   import matplotlib.pyplot as plt
-
-   fig, ax = plt.subplots(figsize=(10, 6))
-   
-   solution.plot(
-       state_index=0,
-       ax=ax,
-       show_bifurcations=True,
-       stable_color='blue',
-       unstable_color='red'
-   )
-   
-   ax.set_title('My Bifurcation Diagram')
-   ax.set_xlabel('Parameter')
-   ax.set_ylabel('State')
-   plt.savefig('bifurcation.png', dpi=300)
-
-Configuration
--------------
-
-Set global configuration:
-
-.. code-block:: python
-
-   from jaxcont.utils import Config, set_config
-
-   # Use a fast configuration
-   config = Config.fast()
-   set_config(config)
-
-   # Or customize
-   custom_config = Config(
-       use_jit=True,
-       default_ds=0.05,
-       default_tolerance=1e-6,
-       compute_stability=True
-   )
-   set_config(custom_config)
-
-Next Steps
+Next steps
 ----------
 
-- Check out the :doc:`tutorials/index` for detailed examples
-- Read the :doc:`user_guide/index` for in-depth explanations
-- Explore the :doc:`api/index` for complete API documentation
-- See :doc:`examples/index` for more complex use cases
+Browse the generated :doc:`auto_examples/index` and :doc:`api/index`.

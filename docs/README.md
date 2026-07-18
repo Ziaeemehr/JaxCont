@@ -8,13 +8,13 @@ Install documentation dependencies:
 
 .. code-block:: bash
 
-   pip install -e ".[dev]"
+   pip install -e ".[docs]"
 
 Or manually:
 
 .. code-block:: bash
 
-   pip install sphinx sphinx-rtd-theme nbsphinx myst-parser sphinx-autobuild
+   pip install sphinx sphinx-rtd-theme sphinx-gallery myst-parser sphinx-autobuild
 
 Building HTML
 -------------
@@ -58,21 +58,16 @@ Remove all build artifacts:
    cd docs
    make clean
 
-Building Notebooks
-------------------
+Building the Example Gallery
+----------------------------
 
-To execute notebooks during build:
+Sphinx-Gallery always generates downloadable Python scripts and notebooks.
+Example execution is disabled for deterministic default builds. To execute the
+gallery and capture plots/output:
 
-.. code-block:: python
+.. code-block:: bash
 
-   # In conf.py
-   nbsphinx_execute = 'always'
-
-To skip notebook execution:
-
-.. code-block:: python
-
-   nbsphinx_execute = 'never'
+   JAXCONT_DOCS_EXECUTE_GALLERY=1 make html
 
 Troubleshooting
 ---------------
@@ -91,15 +86,15 @@ Install missing Sphinx extensions:
 
 .. code-block:: bash
 
-   pip install <missing-extension>
+   pip install -e ".[docs]"
 
-**Notebook Errors**
+**Gallery Errors**
 
-Check notebook execution with:
+Run the relevant source example directly before rebuilding:
 
 .. code-block:: bash
 
-   jupyter nbconvert --to notebook --execute notebook.ipynb
+   python ../examples/example_08_vmap_sweep.py
 
 Deployment
 ----------

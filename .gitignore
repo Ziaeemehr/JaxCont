@@ -82,6 +82,8 @@ dmypy.json
 
 # Documentation
 docs/_build/
+docs/source/auto_examples/
+docs/source/sg_execution_times.rst
 docs/_static/
 docs/_templates/
 

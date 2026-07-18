@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use JaxCont in your research, please cite the archived release."
+title: "JaxCont: Differentiable Continuation and Bifurcation Analysis in JAX"
+type: software
+authors:
+  - family-names: Ziaeemehr
+    given-names: Abolfazl
+repository-code: "https://github.com/Ziaeemehr/JaxCont"
+url: "https://jaxcont.readthedocs.io"
+license: MIT
+version: 0.1.0

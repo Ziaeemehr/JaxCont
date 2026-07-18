@@ -6,7 +6,7 @@ Thank you for your interest in contributing to JaxCont! This document provides g
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/JaxCont.git
+git clone https://github.com/Ziaeemehr/JaxCont.git
 cd JaxCont
 ```
 

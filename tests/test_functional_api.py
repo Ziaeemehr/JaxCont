@@ -24,6 +24,11 @@ def saddle_node(u, p, args):
     return u**2 + p
 
 
+def hopf_normal_form(u, p, args):
+    # Linearization at u=0 has eigenvalues p ± i.
+    return jnp.array([p * u[0] - u[1], u[0] + p * u[1]])
+
+
 def _max_residual(f, states, params, args=None, skip_first=True):
     start = 1 if skip_first else 0  # slot 0 is the uncorrected initial guess
     vals = [jnp.abs(f(states[i], params[i], args)).max() for i in range(start, states.shape[0])]
@@ -67,6 +72,9 @@ class TestBifProblem:
 # --- continuation() (both engines) ---------------------------------------
 
 class TestContinuation:
+    def test_scan_is_default(self):
+        assert jc.PseudoArclength().engine == "scan"
+
     @pytest.mark.parametrize("engine", ["legacy", "scan"])
     def test_pitchfork_basic(self, engine):
         prob = jc.bif_problem(pitchfork, u0=jnp.array([0.1]), p0=0.5)
@@ -110,7 +118,23 @@ class TestFolds:
         assert float(sol.branch.params.max()) < 0.05
         folds = [e for e in sol.events if e.kind == "fold"]
         assert len(folds) >= 1
-        assert abs(folds[0].p) < 0.1  # true fold at p = 0
+        assert abs(folds[0].p) < 1e-3  # true fold at p = 0
+        assert folds[0].info["method"] == "extended_system"
+
+
+class TestHopf:
+    def test_scan_detects_and_refines_hopf(self):
+        prob = jc.bif_problem(hopf_normal_form, u0=jnp.zeros(2), p0=-1.0)
+        sol = jc.continuation(
+            prob,
+            p_span=(-1.0, 1.0),
+            settings=jc.ContinuationPar(ds=0.05, max_steps=80, newton_tol=1e-6),
+            events=[jc.Hopf()],
+        )
+        hopf = [event for event in sol.events if event.kind == "hopf"]
+        assert len(hopf) == 1
+        assert abs(hopf[0].p) < 1e-4
+        assert hopf[0].info["method"] == "bisection"
 
 
 # --- scan engine: vmap + boundedness -------------------------------------

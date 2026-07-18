@@ -1,5 +1,6 @@
 """
-Test natural continuation with simple examples.
+Natural-parameter continuation
+==============================
 
 This script tests the natural parameter continuation method on several
 simple ODE systems to validate the implementation.

@@ -1,126 +1,115 @@
-
 # JaxCont
 
-A high-performance continuation and bifurcation analysis package implemented in JAX.
+**Vectorize whole continuation sweeps with `jax.vmap`, and differentiate
+bifurcation locations with `jax.grad`.**
 
 [![Test](https://github.com/Ziaeemehr/JaxCont/actions/workflows/tests.yml/badge.svg)](https://github.com/Ziaeemehr/JaxCont/actions/workflows/tests.yml)
-<!-- [![Documentation Status](https://readthedocs.org/projects/jaxcont/badge/?version=latest)](https://jaxcont.readthedocs.io/latest/) -->
-<!-- [![DOI](https://zenodo.org/badge/681090816.svg)](https://doi.org/10.5281/zenodo.14795543) -->
-<!-- [![Docker Build](https://github.com/Ziaeemehr/JaxCont/actions/workflows/docker-image.yml/badge.svg)](https://github.com/Ziaeemehr/JaxCont/actions/workflows/docker-image.yml) -->
-<!-- [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Ziaeemehr/JaxCont/main?labpath=docs/examples/intro.ipynb) -->
+[![Documentation Status](https://readthedocs.org/projects/jaxcont/badge/?version=latest)](https://jaxcont.readthedocs.io/latest/)
+[![PyPI version](https://img.shields.io/pypi/v/jaxcont.svg)](https://pypi.org/project/jaxcont/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## Overview
+JaxCont is an equilibrium continuation and bifurcation-analysis library built
+around JAX transformations. Its whole-loop pseudo-arclength engine is a pure,
+compiled computation: use `vmap` to compute ensembles of branches in one
+batched kernel, `jacfwd` to differentiate through a sweep, or the implicit
+`fold_parameter` solver for reverse-mode gradients of a fold location.
 
-JaxCont is a modern Python package for numerical continuation and bifurcation analysis of dynamical systems, leveraging JAX's automatic differentiation and JIT compilation for exceptional performance. Inspired by MATCONT, PyDSTool, and Julia's BifurcationKit, JaxCont aims to provide a user-friendly interface for analyzing:
+```python
+# One compiled kernel computes a branch for every design value.
+branches = jax.vmap(run_branch)(design_values)
 
-- Equilibrium points and their stability
-- Periodic orbits
-- Bifurcations (fold, Hopf, period-doubling, etc.)
-- Two-parameter continuation
-- Boundary value problems
+# A fold location can participate in gradient-based inverse design.
+dp_dtheta = jax.grad(
+    lambda theta: jc.fold_parameter(f, u_guess, p_guess, theta)
+)(theta)
+```
 
-## Key Features
-
-- **High Performance**: Leverages JAX's JIT compilation and automatic differentiation
-- **GPU Support**: Seamless GPU acceleration through JAX
-- **Modern API**: Clean, intuitive Python interface
-- **Extensible**: Modular design for easy customization
-- **Well-tested**: Comprehensive test suite with classical examples
+The v0.1 series deliberately focuses on equilibria: natural and
+pseudo-arclength continuation, fold and Hopf detection with refinement,
+linear stability, and bifurcation diagrams. Periodic orbits, Floquet
+multipliers, boundary-value problems, branch switching, and two-parameter
+continuation are not part of the supported v0.1 API.
 
 ## Installation
+
+JaxCont requires Python 3.9 or newer.
 
 ```bash
 pip install jaxcont
 ```
 
-For development:
+For a development checkout:
+
 ```bash
-git clone https://github.com/yourusername/JaxCont.git
+git clone https://github.com/Ziaeemehr/JaxCont.git
 cd JaxCont
-pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
 ```
 
-## Quick Start
+JAX's platform-specific accelerator installation is documented in the
+[JAX installation guide](https://docs.jax.dev/en/latest/installation.html).
+
+## Quick start
+
+Continue the positive branch of `u² + p = 0` through its fold at `p = 0`:
 
 ```python
 import jax.numpy as jnp
-from jaxcont import ContinuationProblem, equilibrium_continuation
+import jaxcont as jc
 
-# Define your dynamical system
-def lorenz(state, params):
-    x, y, z = state
-    sigma, rho, beta = params['sigma'], params['rho'], params['beta']
-    dx = sigma * (y - x)
-    dy = x * (rho - z) - y
-    dz = x * y - beta * z
-    return jnp.array([dx, dy, dz])
+def saddle_node(u, p, args):
+    return u**2 + p
 
-# Setup continuation problem
-problem = ContinuationProblem(
-    rhs=lorenz,
-    u0=jnp.array([1.0, 1.0, 1.0]),
-    params={'sigma': 10.0, 'rho': 28.0, 'beta': 8/3},
-    continuation_param='rho'
+problem = jc.bif_problem(saddle_node, u0=jnp.array([1.0]), p0=-1.0)
+result = jc.continuation(
+    problem,
+    p_span=(-1.0, 0.2),
+    settings=jc.ContinuationPar(ds=0.03, max_steps=200),
+    events=[jc.Fold()],
 )
 
-# Run continuation
-solution = equilibrium_continuation(problem, param_range=(0.0, 40.0))
-
-# Plot results
-solution.plot()
+print(result.branch.params)
+print([(event.kind, event.p) for event in result.events])
 ```
 
-## Project Structure
+`PseudoArclength(engine="scan")` is the default algorithm. It uses the
+whole-loop compiled engine, computes stability in a vectorized post-pass, and
+refines requested fold/Hopf events. Use `jc.Natural()` for natural-parameter
+continuation or `jc.PseudoArclength(engine="legacy")` only when comparing with
+the compatibility implementation.
 
+See the [quickstart](https://jaxcont.readthedocs.io/en/latest/quickstart.html),
+[Sphinx-Gallery examples](https://jaxcont.readthedocs.io/en/latest/auto_examples/index.html),
+[`example_08_vmap_sweep.py`](examples/example_08_vmap_sweep.py), and
+[`example_09_differentiable.py`](examples/example_09_differentiable.py) for the
+full `vmap`, `jacfwd`, and inverse-design stories.
+
+## Development
+
+```bash
+python -m pytest
+make docs
+python -m build
+python -m twine check dist/*
 ```
-jaxcont/
-├── core/           # Core continuation algorithms
-├── problems/       # Problem definitions and BVP solvers
-├── bifurcations/   # Bifurcation detection and analysis
-├── solvers/        # Numerical solvers (Newton, predictor-corrector)
-├── stability/      # Stability analysis tools
-├── examples/       # Classical examples and tutorials
-└── utils/          # Utilities and helpers
-```
 
-## Roadmap
-
-- [x] Project skeleton
-- [ ] Core continuation engine (pseudo-arclength)
-- [ ] Equilibrium continuation
-- [ ] Fold bifurcation detection
-- [ ] Hopf bifurcation detection
-- [ ] Periodic orbit continuation (shooting/collocation)
-- [ ] Period-doubling bifurcation detection
-- [ ] Two-parameter continuation
-- [ ] Stability analysis (Floquet multipliers)
-- [ ] Interactive visualization tools
-- [ ] Comprehensive documentation
-
-## Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## References
-
-- MATCONT: Continuation toolbox for MATLAB
-- PyDSTool: Python Dynamical Systems Toolbox
-- BifurcationKit.jl: Julia package for bifurcation analysis
-- AUTO: Classical continuation software
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). The project
+roadmap and supported scope live in [notes/ROADMAP.md](notes/ROADMAP.md).
 
 ## Citation
 
-If you use JaxCont in your research, please cite:
+If JaxCont supports your research, cite the archived release using the DOI in
+the GitHub/Zenodo release record. Citation metadata is also provided in
+[`CITATION.cff`](CITATION.cff). Until the first archive is minted:
 
 ```bibtex
-@software{jaxcont,
-  title = {JaxCont: High-Performance Continuation and Bifurcation Analysis in JAX},
-  author = {Your Name},
-  year = {2025},
-  url = {https://github.com/yourusername/JaxCont}
+@software{ziaeemehr_jaxcont_2026,
+  author  = {Ziaeemehr, Abolfazl},
+  title   = {JaxCont: Differentiable Continuation and Bifurcation Analysis in JAX},
+  year    = {2026},
+  version = {0.1.0},
+  url     = {https://github.com/Ziaeemehr/JaxCont}
 }
 ```
+
+JaxCont is distributed under the [MIT License](LICENSE).

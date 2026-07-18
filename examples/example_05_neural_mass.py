@@ -1,5 +1,7 @@
 """
-Example 5: Neural Mass Model - Equilibrium Continuation
+Neural-mass equilibrium continuation
+=====================================
+
 Translated from BifurcationKit.jl example
 
 This example demonstrates:
@@ -8,22 +10,7 @@ This example demonstrates:
 - Automatic bifurcation detection (Hopf bifurcations expected)
 - Comparison with BifurcationKit.jl results
 
-PROBLEM TYPES IN JAXCONT:
-========================
-- equilibrium_continuation(): Finds steady states (du/dt = 0)
-  * Use when: Tracking fixed points as parameters change
-  * Example: Neural equilibrium states, steady flows
-  
-- periodic_continuation(): Finds periodic orbits (limit cycles)  
-  * Use when: Tracking oscillatory solutions
-  * Example: Heartbeat rhythms, neural oscillations
-  
-- bvp_continuation(): Boundary value problems
-  * Use when: Solutions between specific boundary conditions
-  * Example: Connecting orbits, homoclinic solutions
-
-For this neural model, we use equilibrium_continuation because we want
-to track how the steady neural activity changes with external input.
+This example tracks how steady neural activity changes with external input.
 """
 
 import os
@@ -259,4 +246,3 @@ def plot_neural_mass_diagram(solution):
 if __name__ == "__main__":
     solution = run_neural_mass_example()
     plt.show()
-    

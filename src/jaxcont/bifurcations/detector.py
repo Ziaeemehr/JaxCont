@@ -51,7 +51,9 @@ class BifurcationDetector:
         self,
         solution: ContinuationSolution,
         eigenvalues: Optional[Array] = None,
-        refine_location: bool = True
+        refine_location: bool = True,
+        problem: Optional['ContinuationProblem'] = None,
+        fold_extended_system: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Detect all bifurcations along a continuation branch.
@@ -65,6 +67,10 @@ class BifurcationDetector:
             solution: Continuation solution
             eigenvalues: Eigenvalues at each point (uses solution.eigenvalues if None)
             refine_location: Whether to refine bifurcation locations with bisection
+            problem: Continuation problem used to evaluate the Jacobian during
+                refinement. If omitted, refinement falls back to stored eigenvalues.
+            fold_extended_system: Refine folds by solving the equilibrium/null-vector
+                extended system. The compatibility default retains bisection.
         
         Returns:
             List of detected bifurcations with detailed information
@@ -96,6 +102,8 @@ class BifurcationDetector:
                     idx1, idx2 = fold['index']
                     refined = self.locate_bifurcation(
                         solution, idx1, idx2, 'fold',
+                        problem=problem,
+                        fold_extended_system=fold_extended_system,
                         tolerance=self.tolerance
                     )
                     # Merge original detection info with refined info
@@ -119,6 +127,7 @@ class BifurcationDetector:
                     idx1, idx2 = hopf['index']
                     refined = self.locate_bifurcation(
                         solution, idx1, idx2, 'hopf',
+                        problem=problem,
                         tolerance=self.tolerance
                     )
                     # Preserve frequency and other Hopf-specific info
@@ -145,7 +154,8 @@ class BifurcationDetector:
         bif_type: str,
         problem: Optional['ContinuationProblem'] = None,
         max_iterations: int = 20,
-        tolerance: float = 1e-8
+        tolerance: float = 1e-8,
+        fold_extended_system: bool = False,
     ) -> Dict[str, Any]:
         """
         Precisely locate a bifurcation point between two continuation points.
@@ -201,6 +211,42 @@ class BifurcationDetector:
         p_right = p2
         u_left = u1
         u_right = u2
+
+        # A fold is most accurately refined by solving its extended system.
+        # Interpolating the state along the chord between two arclength samples
+        # can find the null eigenvector while leaving p off the equilibrium
+        # branch (most visibly near a sharply turning saddle-node).
+        if bif_type == 'fold' and problem is not None and fold_extended_system:
+            from jaxcont.bifurcations.fold_solve import fold_point
+
+            u_guess = (u_left + u_right) / 2
+            p_guess = (p_left + p_right) / 2
+
+            def rhs(u_eval, p_eval, _args):
+                return problem.evaluate_rhs(u_eval, p_eval)
+
+            u_bif, p_bif, null_vector = fold_point(
+                rhs,
+                u_guess,
+                p_guess,
+                tol=tolerance,
+                max_iter=max_iterations,
+            )
+            eigs_bif = self._compute_eigenvalues_at_point(
+                u_bif, p_bif, solution, problem
+            )
+            residual = jnp.linalg.norm(problem.evaluate_rhs(u_bif, p_bif))
+            return {
+                "type": bif_type,
+                "parameter": float(p_bif),
+                "state": u_bif,
+                "index": (index1, index2),
+                "iterations": max_iterations,
+                "residual": float(residual),
+                "eigenvalues": eigs_bif,
+                "null_vector": null_vector,
+                "method": "extended_system",
+            }
         
         for iteration in range(max_iterations):
             # Check convergence

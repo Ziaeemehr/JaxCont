@@ -6,7 +6,7 @@ Requirements
 
 JaxCont requires:
 
-- Python ≥ 3.8
+- Python ≥ 3.9
 - JAX ≥ 0.3.0
 - NumPy ≥ 1.21.0
 - SciPy ≥ 1.7.0
@@ -28,7 +28,7 @@ For development or to get the latest features:
 
 .. code-block:: bash
 
-   git clone https://github.com/yourusername/JaxCont.git
+   git clone https://github.com/Ziaeemehr/JaxCont.git
    cd JaxCont
    pip install -e ".[dev]"
 
@@ -41,13 +41,10 @@ To use GPU acceleration, install JAX with CUDA support:
 
 .. code-block:: bash
 
-   # For CUDA 11.x
-   pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-   
-   # For CUDA 12.x
-   pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+   pip install --upgrade "jax[cuda12]"
 
-See the `JAX installation guide <https://github.com/google/jax#installation>`_ for more details.
+See the `JAX installation guide <https://docs.jax.dev/en/latest/installation.html>`_
+for current platform-specific commands.
 
 Verifying Installation
 ----------------------
@@ -89,7 +86,7 @@ For building documentation:
 
 .. code-block:: bash
 
-   pip install sphinx sphinx-rtd-theme nbsphinx myst-parser
+   pip install -e ".[docs]"
 
 Troubleshooting
 ---------------

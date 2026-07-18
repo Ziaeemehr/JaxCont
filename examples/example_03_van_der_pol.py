@@ -1,6 +1,9 @@
 """
-Example 3: Van der Pol oscillator
-Demonstrates limit cycle continuation and period-doubling
+Van der Pol equilibrium branch
+==============================
+
+Continue the equilibrium at the origin as the nonlinear damping parameter
+changes. Periodic-orbit continuation is outside JaxCont's supported v0.1 API.
 """
 
 import jax.numpy as jnp

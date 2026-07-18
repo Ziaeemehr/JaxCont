@@ -1,5 +1,7 @@
 """
-Example 2: Lorenz84 system - equilibrium continuation
+Lorenz84 equilibrium continuation
+==================================
+
 Extended Lorenz model with 4 variables and rich bifurcation structure
 
 This example demonstrates:

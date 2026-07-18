@@ -1,5 +1,6 @@
 """
-Example 08 — Batched continuation with `vmap` (the JAX flagship).
+Batched continuation with ``jax.vmap``
+======================================
 
 The single capability that most sets JaxCont apart from BifurcationKit.jl / MATCONT
 (see notes/ARCHITECTURE.md §3.1): because the whole-loop engine is a pure function

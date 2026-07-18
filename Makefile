@@ -1,6 +1,6 @@
 # Makefile for JaxCont
 
-.PHONY: help install install-dev test test-cov lint format clean docs
+.PHONY: help install install-dev test test-all test-cov lint format clean docs dist examples
 
 help:
 	@echo "JaxCont Development Commands:"
@@ -12,6 +12,8 @@ help:
 	@echo "  make format       - Format code"
 	@echo "  make clean        - Clean build artifacts"
 	@echo "  make examples     - Run all examples"
+	@echo "  make docs         - Build Sphinx documentation"
+	@echo "  make dist         - Build and validate sdist/wheel"
 
 install:
 	pip install -e .
@@ -55,5 +57,8 @@ examples:
 	python examples/example_03_van_der_pol.py
 
 docs:
-	@echo "Documentation generation not yet implemented"
-	@echo "TODO: Add Sphinx documentation"
+	$(MAKE) -C docs html SPHINXOPTS="-W --keep-going"
+
+dist:
+	python -m build
+	python -m twine check dist/*

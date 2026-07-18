@@ -1,5 +1,8 @@
 """
-Example 09 — Differentiable bifurcation analysis (`jax.grad` / `jacfwd`).
+Differentiable bifurcation analysis
+===================================
+
+Use ``jax.grad`` and ``jax.jacfwd`` for inverse design and sensitivity.
 
 The capability that Julia/MATLAB continuation tools don't offer natively
 (notes/ARCHITECTURE.md §3.2): because everything is JAX, we can *differentiate*

@@ -126,7 +126,7 @@ def test_bifurcation_detection_in_continuation():
     print("Test completed!")
     print("="*80)
     
-    return solution
+    assert solution.n_points > 0
 
 
 def test_with_and_without_refinement():
