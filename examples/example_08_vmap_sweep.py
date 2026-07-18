@@ -2,9 +2,9 @@
 Batched continuation with ``vmap``
 ======================================
 
-The capability that most sets JaxCont apart from BifurcationKit.jl / MATCONT
-(see ``notes/ARCHITECTURE.md`` §3.1): because the whole-loop engine is a pure
-function of its inputs, an entire *family* of bifurcation diagrams computes
+The capability that most sets JaxCont apart from BifurcationKit.jl / MATCONT:
+because the whole-loop engine is a pure function of its inputs, an entire
+*family* of bifurcation diagrams computes
 as ONE compiled, vectorized kernel via ``jax.vmap`` -- ideal for GPUs,
 parameter scans, ensembles, and multistart.
 
@@ -36,9 +36,10 @@ MAX_STEPS = 120
 # Define the system and a single-run helper
 # ---------------------------------------------
 # ``run_one`` continues one branch for a given imperfection ``b``, using the
-# fully JIT-compiled whole-loop engine (see ``example_09_differentiable`` and
-# ``notes/ARCHITECTURE.md`` §2 for why the *whole loop* being one compiled
-# program is what makes ``vmap`` batching possible).
+# fully JIT-compiled whole-loop engine -- it's the *whole loop* being one
+# compiled program (rather than many small dispatched ops) that makes
+# ``vmap`` batching possible. The companion differentiable-analysis example
+# looks at what this same engine can and can't be differentiated through.
 
 
 def make_rhs(b):

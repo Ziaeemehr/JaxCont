@@ -2,10 +2,9 @@
 Differentiable bifurcation analysis
 =======================================
 
-The capability that Julia/MATLAB continuation tools don't offer natively
-(see ``notes/ARCHITECTURE.md`` §3.2): because everything is JAX, we can
-*differentiate* through the analysis and use gradients for inverse design
-and sensitivity.
+The capability that Julia/MATLAB continuation tools don't offer natively:
+because everything is JAX, we can *differentiate* through the analysis and
+use gradients for inverse design and sensitivity.
 
 Two demonstrations of what works today:
 
@@ -112,4 +111,4 @@ print(f"d(branch state)/db (finite diff) = {float(fd):+.5f}  (cross-check)")
 # Reverse-mode ``jax.grad`` does *not* work through the full continuation
 # *sweep* (``lax.while_loop`` blocks it) -- that's exactly why Part A
 # differentiates the isolated extended-system fold solve instead of a full
-# ``continuation()`` run. See ``notes/ARCHITECTURE.md`` §3.2 for the details.
+# ``continuation()`` run.

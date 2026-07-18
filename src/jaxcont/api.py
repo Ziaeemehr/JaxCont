@@ -6,11 +6,11 @@ This is the blessed surface going forward:
     prob = jaxcont.bif_problem(f, u0, p0)
     sol  = jaxcont.continuation(prob, p_span=(0.0, 1.0), events=[jaxcont.Fold()])
 
-For now it is a thin adapter over the existing predictor-corrector loop
-(`core/pseudo_arclength.py`, `core/natural_continuation.py`); the numerics are
-unchanged. Later versions migrate the loop internals to `lax.scan` and expose
-`vmap`/`grad` end-to-end (see notes/ARCHITECTURE.md §2, §3) without changing
-these signatures.
+The default algorithm (`PseudoArclength(engine="scan")`) runs on the fully
+JIT-compiled whole-loop engine in `core/scan_continuation.py`, which is what
+makes `vmap`-batched continuation and `jax.grad`/`jax.jacfwd` through the
+analysis possible; `engine="legacy"` and `NaturalContinuation` fall back to
+the class-based Python outer loop for compatibility.
 """
 
 from __future__ import annotations

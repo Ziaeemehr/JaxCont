@@ -11,7 +11,7 @@ from jaxcont._version import __version__
 __author__ = "Abolfazl Ziaeemehr"
 __license__ = "MIT"
 
-# Functional API (the blessed "Sketch A" surface; see notes/ARCHITECTURE.md)
+# Functional API -- the blessed public surface: bif_problem() + continuation()
 from jaxcont.api import (
     BifProblem,
     bif_problem,
@@ -41,7 +41,8 @@ from jaxcont.core.pseudo_arclength import PseudoArclengthContinuation
 # Problem definitions
 from jaxcont.problems.equilibrium import EquilibriumProblem
 
-# Differentiable fold solver (reverse-mode grad of a fold location; ARCHITECTURE §3.2)
+# Differentiable fold solver (reverse-mode grad of a fold location via the
+# implicit function theorem -- see examples/example_09_differentiable.py)
 from jaxcont.bifurcations.fold_solve import fold_point, fold_parameter
 
 # Bifurcation detection
@@ -57,9 +58,9 @@ from jaxcont.solvers.corrector import Corrector
 from jaxcont.stability.eigenvalue import compute_eigenvalues, analyze_stability
 
 # NOTE: v0.1.0 ships equilibria only. Periodic-orbit / Floquet / BVP / period-
-# doubling APIs are experimental stubs and are intentionally NOT exported at the
-# top level (see notes/ROADMAP.md, notes/ARCHITECTURE.md §8). They remain
-# importable from their submodules for development, e.g.:
+# doubling APIs are experimental stubs and are intentionally NOT exported at
+# the top level (see the project roadmap). They remain importable from their
+# submodules for development, e.g.:
 #     from jaxcont.problems.periodic import PeriodicOrbitProblem
 #     from jaxcont.stability.floquet import compute_floquet_multipliers
 

@@ -66,9 +66,10 @@ residual_norm = jnp.linalg.norm(TMvf(z0_guess, params))
 print(f"Residual at initial guess: {residual_norm:.2e}")
 
 if residual_norm > 1e-6:
-    # tol=1e-6: below float32 machine epsilon (~1.2e-7) the residual can
-    # oscillate at the precision floor without ever reporting converged=True.
-    solver = NewtonSolver(tol=1e-6, max_iter=100)
+    # tol=1e-5: comfortably above the float32 precision floor for this
+    # (fairly stiff, tau=0.013) system -- tighter tolerances like 1e-6 sit
+    # close enough to the noise floor that convergence becomes unreliable.
+    solver = NewtonSolver(tol=1e-5, max_iter=100)
     z0, converged, n_iter = solver.solve(lambda s: TMvf(s, params), z0_guess)
     print(f"Refined equilibrium in {n_iter} Newton iterations "
           f"(converged={converged}): E={z0[0]:.6f}, x={z0[1]:.6f}, u={z0[2]:.6f}")
@@ -92,7 +93,7 @@ solution = equilibrium_continuation(
     compute_stability=True,
     verbose=True,
     bifurcation_tolerance=1e-4,
-    newton_tol=1e-6,  # float32-reachable; 1e-8 sits below machine epsilon
+    newton_tol=1e-5,  # float32-reachable; 1e-8 sits below machine epsilon
 )
 
 print(f"Continuation completed: {solution.n_points} points computed")

@@ -4,15 +4,15 @@ Fully JIT-compiled pseudo-arclength continuation (whole-loop).
 Unlike the class-based predictor-corrector (`pseudo_arclength.py`), which runs a
 Python outer loop dispatching many small JAX ops per step, this expresses the
 *entire* continuation sweep as a single ``lax.while_loop`` over fixed-size
-buffers. Consequences (see notes/ARCHITECTURE.md §2, §3):
+buffers. Consequences:
 
 - **One dispatched program per run** — no per-step Python/host-sync overhead.
 - **`vmap`-able** — a batch of continuations (parameter sweeps, multistart,
   ensembles) compiles to one kernel; ideal for GPU.
 - **Bounded and hang-proof** — the loop runs at most ``max_steps`` iterations,
   each with at most ``max_iter`` Newton iterations, with an explicit finiteness
-  guard. This structurally removes the interim corrector's saturating-branch
-  hang (ROADMAP issue #5).
+  guard, so a degenerate/saturating branch terminates cleanly instead of
+  stalling.
 
 Everything operates on a pure ``f(u, p, args) -> residual``. The continuation
 parameter is the explicit scalar ``p``; ``args`` is a static PyTree closed over.
