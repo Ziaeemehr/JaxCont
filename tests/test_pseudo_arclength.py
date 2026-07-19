@@ -94,7 +94,7 @@ class TestPseudoArclengthBasic:
             problem_type="equilibrium",
         )
         
-        cont = PseudoArclengthContinuation(newton_tol=1e-8, newton_max_iter=50)
+        cont = PseudoArclengthContinuation(newton_tol=1e-6, newton_max_iter=50)
         
         # Continue forward
         u = problem.u0
@@ -272,7 +272,7 @@ class TestPseudoArclengthFoldBifurcation:
             problem_type="equilibrium",
         )
         
-        cont = PseudoArclengthContinuation(newton_tol=1e-8, newton_max_iter=50)
+        cont = PseudoArclengthContinuation(newton_tol=1e-6, newton_max_iter=50)
         
         # Continue forward
         u = problem.u0
@@ -342,7 +342,7 @@ class TestPseudoArclengthStepControl:
         results = {}
         
         for ds in [0.05, 0.1, 0.2]:
-            cont = PseudoArclengthContinuation(newton_tol=1e-8, newton_max_iter=50)
+            cont = PseudoArclengthContinuation(newton_tol=1e-6, newton_max_iter=50)
             
             u = problem.u0
             param = problem.params[problem.continuation_param]
@@ -367,9 +367,18 @@ class TestPseudoArclengthStepControl:
         # All should converge to approximately the same region
         final_params = [p for _, p in results.values()]
         param_range = max(final_params) - min(final_params)
-        
-        # With different step sizes, we expect some variation but should be bounded
-        assert param_range < 0.5, f"Parameter range {param_range} too large"
+
+        # With different step sizes, we expect some variation but should be bounded.
+        # For this linear system (rhs = r - x), the tangent is (1, 1)/sqrt(2), so
+        # 5 pseudo-arclength steps of size ds advance the parameter by
+        # ~5*ds/sqrt(2); across ds in [0.05, 0.2] that range is ~0.53 once every
+        # step actually converges. The previous threshold of 0.5 only "passed"
+        # because `newton_tol=1e-8` (below float32 machine epsilon, see
+        # ROADMAP.md issue #9) silently made some steps at larger ds
+        # non-convergent, truncating the run early -- fixing that tolerance
+        # (now 1e-6) exposed that this bound was tighter than the correct,
+        # fully-converged answer, not that anything is actually wrong.
+        assert param_range < 0.6, f"Parameter range {param_range} too large"
     
     def test_tangent_consistency(self):
         """Test that tangent vectors remain consistent along the branch."""
@@ -385,7 +394,7 @@ class TestPseudoArclengthStepControl:
             continuation_param="r",
         )
         
-        cont = PseudoArclengthContinuation(newton_tol=1e-8, newton_max_iter=50)
+        cont = PseudoArclengthContinuation(newton_tol=1e-6, newton_max_iter=50)
         
         u = problem.u0
         param = problem.params[problem.continuation_param]
@@ -434,7 +443,7 @@ class TestPseudoArclengthVsNatural:
         )
         
         # Test pseudo-arclength
-        cont_pa = PseudoArclengthContinuation(newton_tol=1e-8, newton_max_iter=50)
+        cont_pa = PseudoArclengthContinuation(newton_tol=1e-6, newton_max_iter=50)
         
         u = problem.u0
         param = problem.params[problem.continuation_param]

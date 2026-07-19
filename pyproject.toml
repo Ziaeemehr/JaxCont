@@ -75,9 +75,12 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-# Fast by default: no coverage instrumentation, and slow tests excluded.
-# Run everything with `make test-all`; coverage with `make test-cov`.
-addopts = "-q -m 'not slow'"
+# Fast by default: no coverage instrumentation, slow tests excluded, and GPU
+# tests excluded (they self-skip on CPU-only runners anyway, but excluding
+# them here keeps `pytest` quiet-by-default on GPU dev machines too -- see
+# tests/test_gpu_smoke.py). Run everything with `make test-all`; coverage
+# with `make test-cov`; GPU smoke tests explicitly with `pytest -m gpu`.
+addopts = "-q -m 'not slow and not gpu'"
 
 [tool.black]
 line-length = 100

@@ -29,19 +29,23 @@ cannot offer at all. See below for the reasoning.
 | Natural-parameter continuation | ✅ Works, tested | |
 | Newton solver (autodiff) | ✅ Works, 100% cov | Not yet JIT'd on hot loop |
 | Fold + Hopf detection | ✅ Works, tested | With bisection refinement |
-| Stability (eigenvalues) | ✅ Works | |
+| Stability (eigenvalues) | ✅ Works, 98% cov | Fixed 2026-07-19 (was 51%) |
+| Naming/abbreviation reference | ✅ Works, tested | [bifurcations/taxonomy.py](../src/jaxcont/bifurcations/taxonomy.py) |
 | Plotting | ⚠️ Works, 9% cov | Under-tested |
 | Periodic orbits | ⚠️ Stub | Untested, hidden from v0.1.0 |
 | Floquet multipliers | ❌ Stub, 22% cov | Hidden from v0.1.0 |
 | BVP (collocation/shooting) | ❌ NotImplementedError | Hidden from v0.1.0 |
 | Normal forms / Lyapunov coeff | ❌ Returns placeholders | Hidden from v0.1.0 |
 
-**Test suite (re-verified 2026-07-19, CPU):** 52 passed, 18 deselected (`-m "not slow"`), 0 failed.
-**Coverage (re-verified 2026-07-19):** 71% overall. Engine-path files are already ≥85%:
-`scan_continuation.py` 100%, `newton.py` 100%, `fold_solve.py` 100%, `pseudo_arclength.py` 97%,
-`api.py` 95%, `hopf.py` 93%, `fold.py` 91%, `detector.py` 87%. The real gap against the roadmap's
-own ">85% on core" target is **`stability/eigenvalue.py` at 51%** — see "Remaining v0.1.0 work"
-below.
+**Test suite (re-verified 2026-07-19, after this session's fixes, CPU):** 68 passed, 21
+deselected (18 `slow` + 3 `gpu`), 0 failed. **Same 68, real GPU backend (no `JAX_PLATFORMS`
+override):** also 68 passed, 0 failed (verified 4+ repeated runs — see issues #11/#14).
+**GPU-marked suite** (`pytest -m gpu`, real GPU only): 3 passed — [tests/test_gpu_smoke.py](../tests/test_gpu_smoke.py).
+**Coverage (re-verified 2026-07-19):** 73% overall. Engine-path files are ≥85%:
+`scan_continuation.py`/`newton.py`/`fold_solve.py` 100%, `pseudo_arclength.py` 97%, `api.py` 95%,
+`hopf.py` 93%, `fold.py` 91%, `taxonomy.py` 86%, `detector.py` 87%. **`stability/eigenvalue.py` is
+now 98%** (was 51% — the one gap the roadmap named explicitly; fixed this session, see
+"Remaining v0.1.0 work" below, now essentially closed).
 
 ---
 
@@ -103,16 +107,18 @@ below.
    path, not the default engine, and is exercised only by
    `examples/example_04_continuation_methods.py`), but worth fixing or deleting before v0.2 adds
    more algorithm variants on top of this pattern — see "Engineering recommendations" below.
-11. ℹ️ **Local dev-machine GPU is not currently usable for testing.** *(found 2026-07-19)* This
-   machine has a real GPU (`nvidia-smi` reports an RTX A5000, driver 535.183) and `jax.devices()`
-   correctly lists a `CudaDevice`, but the installed jaxlib's bundled cuDNN refuses to initialize
-   against that driver version (`CUDNN_STATUS_NOT_INITIALIZED`), which is exactly what makes
-   `tests/test_pseudo_arclength.py::test_quadratic_system` flake under `pytest` with no
-   `JAX_PLATFORMS` override — it silently falls back to a broken GPU path. Forcing
-   `JAX_PLATFORMS=cpu` (or `CUDA_VISIBLE_DEVICES=`) makes the full suite pass cleanly (52/52).
-   Not a JaxCont bug, but it means **there is currently no environment, local or CI, where the GPU
-   story is actually exercised** — sharpens the "GPU smoke test" item below from "nice to have" to
-   "the differentiator is literally untested."
+11. ℹ️ **Local dev-machine GPU: usable, but cuDNN is broken and noisy — verified, not just
+   suspected, 2026-07-19.** *(revised after actually running real GPU workloads — see the v0.1.0
+   GPU-smoke-test entry below)* This machine has a real GPU (`nvidia-smi`: RTX A5000, driver
+   535.183); `jax.devices()` lists a `CudaDevice`, and the installed jaxlib's bundled cuDNN
+   refuses to initialize against that driver (`CUDNN_STATUS_NOT_INITIALIZED`, logged repeatedly).
+   **However**, cuDNN is only needed for convolution-style ops JaxCont never uses — a battery of
+   real GPU tests (`tests/test_gpu_smoke.py`: a dense linear solve, a full `jc.continuation()`
+   run, and a `vmap`-batched sweep) all **pass correctly on this GPU**, cuDNN noise
+   notwithstanding. The one thing that *did* fail under the real GPU backend was a pre-existing
+   test bug, not a GPU/driver issue — see issue #14. `JAX_PLATFORMS=cpu` is still worth knowing as
+   a way to silence the cuDNN log noise, but "no environment exercises the GPU story" (the
+   original, hastier version of this note) was wrong — corrected here rather than left standing.
 12. ⚠️ **Recurring pattern: `newton_tol`/`NewtonSolver(tol=...)` set below float32 machine epsilon
    (~1.2×10⁻⁷) silently reports `converged=False` forever, even at points where the true residual
    is already at the numeric floor.** Found independently three times this session — issue #5/#6
@@ -121,7 +127,41 @@ below.
    non-convergence despite a correct numeric answer (only visible because the printed error stayed
    ~0 regardless — the convergence *flag* was wrong, not the computed value). → worth either (a) a
    one-line doc note on `newton_tol`'s float32 floor, or (b) `NewtonSolver`/the correctors warning
-   when constructed with `tol < ~1e-6` in float32. All shipped examples now use `tol >= 1e-6`.
+   when constructed with `tol < ~1e-6` in float32. All shipped examples now use `tol >= 1e-6`; as
+   of issue #14, `tests/test_pseudo_arclength.py` does too.
+13. 🔴 **`jc.continuation()` (the public, "blessed" API) is not `vmap`-safe — only the lower-level
+   `pseudo_arclength_scan` engine it wraps is.** *(found 2026-07-19, while writing a GPU `vmap`
+   smoke test)* `api.py`'s `_run_scan()` does `n = int(res.n_valid)` to trim the fixed-size
+   buffer to a Python-level ragged length before building the legacy `ContinuationSolution`. That
+   bare `int()` on a traced value raises `jax.errors.ConcretizationTypeError` the moment
+   `jc.continuation(...)` is called inside `jax.vmap(...)` — confirmed by direct reproduction (a
+   plain call succeeds; wrapping the identical call in `jax.vmap` fails on that exact line). This
+   is why `examples/example_06_vmap_sweep.py` calls `pseudo_arclength_scan` directly instead of
+   `jc.continuation()` — it has to, silently, and doesn't say why. **This matters more than a
+   normal bug**: `vmap`-batched continuation is the flagship capability (ARCHITECTURE.md §3.1,
+   the README's headline), and the public entry point that's supposed to deliver it doesn't. Not
+   a quick patch — trimming to `n_valid` happens because downstream event-detection/stability
+   code (`BifurcationDetector`, Python `for i in range(n)` loops) also assumes concrete shapes, so
+   a real fix means making that whole downstream path trace-safe, not just the one `int()` call.
+   → tracked as the top item under "Engineering recommendations for v0.2" (item 1, engine
+   consolidation) rather than patched piecemeal here. `tests/test_gpu_smoke.py`'s `vmap` test
+   exercises `pseudo_arclength_scan` directly and documents this exact issue inline, so the smoke
+   test passes for an honest reason rather than masking the gap.
+14. ✅ **Two latent test flakes from the issue #9 pattern, found and fixed 2026-07-19 while running
+   the suite on a real GPU backend (not `JAX_PLATFORMS=cpu`).** `tests/test_pseudo_arclength.py`
+   had five separate `PseudoArclengthContinuation(newton_tol=1e-8, ...)` instantiations — below
+   the float32 epsilon floor issue #9 already documents. On CPU these happened to still pass
+   (CPU/GPU XLA reductions aren't bit-identical, so which side of the epsilon floor a residual
+   lands on isn't backend-invariant); on GPU, `test_quadratic_system` failed outright
+   (`assert step >= 1` — zero steps because Newton never reported convergence). Fixed by raising
+   all five to `newton_tol=1e-6` (now consistent with the shipped examples). That fix then
+   uncovered a *second*, independent bug: `test_different_step_sizes`'s
+   `assert param_range < 0.5` was only ever passing because the sub-epsilon tolerance was
+   truncating some runs early; for this test's actual linear system (`rhs = r - x`, tangent
+   `(1,1)/√2`), 5 fully-converged pseudo-arclength steps at `ds ∈ {0.05, 0.1, 0.2}` genuinely
+   produce a parameter range of `≈0.53` — the bound itself was simply tighter than the correct
+   converged answer. Loosened to `< 0.6` with the derivation left as a comment. Both fixes verified
+   stable across 4+ repeated runs on the real GPU backend (previously: reliably failing).
 
 ---
 
@@ -163,47 +203,57 @@ Public surface is the functional API — `bif_problem` / `continuation` / `Fold`
 - [x] These are the headline of the README and docs quickstart
 
 **Release engineering:**
-- [~] Core modules >85% coverage (on the engine path) — **verified 2026-07-19: already true**
-  for the files that matter (`scan_continuation.py`/`newton.py`/`fold_solve.py` 100%,
-  `pseudo_arclength.py` 97%, `api.py` 95%, `hopf.py` 93%, `fold.py` 91%, `detector.py` 87%). The
-  one file the roadmap names explicitly and that is *not* there yet: **`stability/eigenvalue.py`
-  at 51%** (missing: several branches in `compute_eigenvalues`/`analyze_stability`, lines
-  61-68/98-117/131-138). This is the single concrete blocker for checking this box.
-- [ ] GPU smoke test — **still literally does not exist anywhere** (no GPU runner in
-  `.github/workflows/tests.yml`, which is `ubuntu-latest` CPU-only; and per issue #11 above, this
-  dev machine's GPU can't currently run JAX either, so it hasn't even been exercised manually).
-  Minimum bar: one CI job (or a documented manual command) that asserts
-  `jax.devices()[0].platform == "gpu"` and runs `continuation()` + the `vmap` example on it.
+- [x] Core modules >85% coverage (on the engine path) — **done 2026-07-19.** Was already true for
+  `scan_continuation.py`/`newton.py`/`fold_solve.py` (100%), `pseudo_arclength.py` (97%), `api.py`
+  (95%), `hopf.py` (93%), `fold.py` (91%), `detector.py` (87%). The one gap the roadmap named
+  explicitly, `stability/eigenvalue.py`, was raised **51% → 98%** by adding tests for the unstable-
+  node/unstable-focus/center classification branches and for
+  `compute_eigenvalues_along_branch`/`compute_stability_along_branch` (previously entirely
+  untested) — see `tests/test_stability.py`. Box checked.
+- [x] GPU smoke test — **done 2026-07-19.** [tests/test_gpu_smoke.py](../tests/test_gpu_smoke.py)
+  (marked `gpu`, excluded from the default run via `pyproject.toml`'s `addopts`, run explicitly
+  with `pytest -m gpu`) asserts a GPU device is present and usable, then runs a real
+  `jc.continuation()` call and a `vmap`-batched sweep on it — passing on this project's own dev
+  GPU (RTX A5000). Writing this test is also what surfaced issue #13 (`jc.continuation()` isn't
+  actually `vmap`-safe) and issue #14 (two latent test flakes) — real value beyond "checks a box".
+  No GPU runner exists in CI yet (`.github/workflows/tests.yml` is `ubuntu-latest` CPU-only), so
+  this only runs when someone with GPU hardware runs `pytest -m gpu` manually; a CI job is a
+  follow-up, not a blocker, now that the test itself is real and passing.
 - [x] Honest README led by the vmap/grad story + stated scope + fixed placeholders
 - [x] Sphinx docs: install, quickstart, Sphinx-Gallery examples, API reference
 - [x] Clean sdist/wheel build + Twine metadata validation
 - [ ] TestPyPI → PyPI → GitHub release/Zenodo DOI — **verified 2026-07-19: `publish.yml` exists
   and is correctly wired** (`workflow_dispatch` → build/twine-check → trusted-publish to
   TestPyPI or PyPI), **but has never been triggered**: no git tags, no GitHub releases, package
-  has never been uploaded anywhere. This is a one-click action once the two boxes above are
-  checked, not more engineering.
+  has never been uploaded anywhere. **This is now the only item left before v0.1.0 can ship** —
+  and it's an irreversible, externally-visible action (a public PyPI upload can't be un-published),
+  so it needs an explicit go-ahead rather than being done automatically alongside the engineering
+  work above.
 
 **Out of scope (hidden / marked experimental):** periodic orbits, Floquet, BVP,
 normal forms, codim-2, branch switching, two-parameter continuation.
 
-### Remaining v0.1.0 work, concretely (verified 2026-07-19)
+### Remaining v0.1.0 work, concretely (updated 2026-07-19 — engineering items now done)
 
-Everything else in this section is already done. Three items stand between here and a tagged
-v0.1.0 release, in order:
+The two engineering items originally listed here are **done** (see "Release engineering" above):
+`stability/eigenvalue.py` coverage 51%→98%, and a real, passing `tests/test_gpu_smoke.py`. Along
+the way, that work also fixed two latent test flakes (issue #14) and surfaced one important new
+finding, issue #13 (`jc.continuation()` isn't actually `vmap`-safe — tracked under v0.2 engine
+consolidation, not a v0.1.0 blocker since the *underlying* `pseudo_arclength_scan` engine that
+`example_06` uses genuinely is `vmap`-safe, and that's what the shipped example/README claims).
 
-1. **Raise `stability/eigenvalue.py` to ≥85% coverage.** Add tests for the untested branches in
-   `compute_eigenvalues`/`analyze_stability` (complex-conjugate pairs, purely real spectra, the
-   per-branch helper). Small, mechanical, no design work.
-2. **Add a GPU CI job or a documented manual GPU smoke test.** Given issue #11, also worth a
-   one-line troubleshooting note in `CONTRIBUTING.md`/docs (`JAX_PLATFORMS=cpu` workaround) so the
-   next contributor doesn't lose time to the same cuDNN/driver mismatch.
-3. **Trigger the release sequence:** tag `v0.1.0` → run `publish.yml` against TestPyPI → smoke-test
+**One item is left before a tagged v0.1.0 release, and it's deliberately not done automatically:**
+
+1. **Trigger the release sequence:** tag `v0.1.0` → run `publish.yml` against TestPyPI → smoke-test
    `pip install` from TestPyPI → run against PyPI → cut a GitHub release → archive on Zenodo for
-   the DOI (`CITATION.cff` already has the repo/author metadata ready for this).
+   the DOI (`CITATION.cff` already has the repo/author metadata ready for this). This is an
+   irreversible, externally-visible action (creates a public git tag/GitHub release and uploads a
+   package that can't be un-published from PyPI) — needs an explicit go-ahead before running, not
+   something to do opportunistically alongside engineering work.
 
 Issues #10 (legacy natural-continuation FD/bare-except) and #8/#9 (bothside, sub-epsilon tol) are
 real but non-blocking for v0.1.0 — they don't affect the default `scan`/`PseudoArclength` path.
-Fix opportunistically or fold into the v0.2 engine consolidation (see below).
+Fix opportunistically or fold into the v0.2 engine consolidation (see below), alongside issue #13.
 
 ## v0.2.0 — Periodic orbits
 - [ ] Periodic-orbit continuation (collocation preferred over shooting)
@@ -353,21 +403,23 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
    [fold_solve.py](../src/jaxcont/bifurcations/fold_solve.py), + forward-mode `jacfwd`).
 9. ✅ **Trim `__init__.py`** — done: top-level surface is the equilibrium spine; periodic/BVP/
    Floquet/period-doubling stubs are importable only from their submodules.
-10. **Docs + packaging → ship v0.1.0.** ← **IN PROGRESS, verified 2026-07-19.** README and Sphinx
-    quickstart lead with the `vmap`/gradient story; scan is the default with fold/Hopf refinement;
-    author and citation placeholders are fixed. Concretely blocking a tag, in order (see
-    "Remaining v0.1.0 work" above for detail): (a) `stability/eigenvalue.py` coverage 51% → 85%,
-    (b) a GPU CI job or documented manual smoke test (currently none exist — issue #11), (c)
-    trigger `publish.yml` → TestPyPI → PyPI → GitHub release → Zenodo DOI (workflow ready, never
-    run; no tags exist yet).
+10. **Docs + packaging → ship v0.1.0.** ← **Engineering done 2026-07-19; one action left.** README
+    and Sphinx quickstart lead with the `vmap`/gradient story; scan is the default with fold/Hopf
+    refinement; author and citation placeholders are fixed; `stability/eigenvalue.py` coverage is
+    51%→98%; a real, passing GPU smoke test exists (`tests/test_gpu_smoke.py`). **Only remaining
+    step:** trigger `publish.yml` → TestPyPI → PyPI → GitHub release → Zenodo DOI (workflow ready,
+    never run; no tags exist yet) — held for an explicit go-ahead since it's irreversible and
+    externally visible (see "Remaining v0.1.0 work" above).
 11. **v0.2 kickoff — do the engineering cleanup *before* the periodic-orbit feature work**, per
     "Engineering / architecture recommendations for v0.2" above, in this order: (i) consolidate
-    the three continuation-engine implementations onto the scan engine; (ii) decide `equinox` for
-    the new periodic-orbit types; (iii) extract `fold_solve.py`'s differentiable-root pattern into
-    a reusable primitive; (iv) replace `BifurcationDetector` with real `Event` implementations,
-    fixing issue #7 as part of the rewrite; (v) introduce `LinearSolver`/`EigenSolver` as real
-    (if currently single-implementation) protocols. Then build periodic-orbit collocation with a
-    static (non-traced) `ntst`/`ncol` mesh on top of the cleaned-up spine, matching MatCont's own
+    the three continuation-engine implementations onto the scan engine **and make the result
+    actually `vmap`-safe** (issue #13 — the `int(res.n_valid)` concretization in `_run_scan` is the
+    same kind of fix as (i), so do them together); (ii) decide `equinox` for the new periodic-orbit
+    types; (iii) extract `fold_solve.py`'s differentiable-root pattern into a reusable primitive;
+    (iv) replace `BifurcationDetector` with real `Event` implementations, fixing issue #7 as part
+    of the rewrite; (v) introduce `LinearSolver`/`EigenSolver` as real (if currently
+    single-implementation) protocols. Then build periodic-orbit collocation with a static
+    (non-traced) `ntst`/`ncol` mesh on top of the cleaned-up spine, matching MatCont's own
     `ntst`/`ncol` discretization discipline (manual §7.2) and the fixed-shape-buffer requirement
     the whole-loop-JIT/`vmap` story already depends on (ARCHITECTURE.md §3.1, §4.3).
 

@@ -193,7 +193,14 @@ class ContinuationPar:
 # ---------------------------------------------------------------------------
 
 class Event:
-    """Marker base for a bifurcation/event detector."""
+    """Marker base for a bifurcation/event detector.
+
+    Naming follows the standard abbreviations used throughout the
+    bifurcation-theory literature (see
+    ``jaxcont.bifurcations.taxonomy.BIFURCATION_TYPES``) rather than
+    inventing new names -- e.g. a fold is ``jc.Fold`` (abbreviation **LP**)
+    and a Hopf point is ``jc.Hopf`` (abbreviation **H**).
+    """
 
     #: legacy detector key this event maps onto ("fold" | "hopf")
     _kind: str = ""
@@ -201,11 +208,21 @@ class Event:
 
 @dataclass(frozen=True)
 class Fold(Event):
+    """A limit point / fold bifurcation of equilibria.
+
+    Abbreviation: **LP** -- ``jaxcont.bifurcations.taxonomy.describe("LP")``.
+    """
+
     _kind: str = "fold"
 
 
 @dataclass(frozen=True)
 class Hopf(Event):
+    """A Hopf bifurcation of equilibria.
+
+    Abbreviation: **H** -- ``jaxcont.bifurcations.taxonomy.describe("H")``.
+    """
+
     _kind: str = "hopf"
 
 
