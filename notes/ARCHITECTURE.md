@@ -167,9 +167,18 @@ designed up front. Everything in §6 is deferred.
 > **Note on `eqx.Module`:** used below as shorthand for "an immutable, JAX-registered PyTree".
 > Concretely this can be a `jax.tree_util.register_pytree_node`-decorated frozen dataclass (zero
 > new deps) or [equinox](https://github.com/patrick-kidger/equinox)'s `Module` (adds a dep, but
-> is the diffrax-native choice and removes boilerplate). **Open decision** — pick before
-> implementing §4. Whichever we choose, the requirement is the same: problems, algorithms, and
-> results must be PyTrees so they can cross `jit`/`vmap` boundaries.
+> is the diffrax-native choice and removes boilerplate). Whichever we choose, the requirement is
+> the same: problems, algorithms, and results must be PyTrees so they can cross `jit`/`vmap`
+> boundaries.
+>
+> **Decision (2026-07-19):** stay with hand-rolled `register_pytree_node` dataclasses for the v0.1
+> equilibrium types (`BifProblem`, `Branch`, `ContinuationResult`) — they shipped, are tested, and
+> are flat enough not to need more. **Adopt `equinox` starting with the v0.2 periodic-orbit types**
+> (mesh, `ntst`/`ncol`, phase condition, static-vs-traced fields) and the growing set of pluggable
+> protocol implementations (`Collocation` predictor, `PeriodDoubling`/`LPC`/`NS` events, solver
+> variants) — that is exactly the case `Module`/`field(static=...)` exists for, and by then the
+> extra dependency pays for itself. Do not churn the already-working v0.1 types to match. See
+> [ROADMAP.md "Engineering recommendations for v0.2"](ROADMAP.md) for the full rationale.
 
 ### 4.1 Problem — ONE type
 
