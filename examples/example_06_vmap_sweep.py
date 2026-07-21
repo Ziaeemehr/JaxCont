@@ -16,7 +16,9 @@ imperfect pitchfork
     f(u, p; b) = p u - u^3 + b
 
 and compute one branch per :math:`b` value, comparing a single ``vmap`` call
-against a Python loop over the same engine.
+against a Python loop, using the public ``jc.continuation()`` API directly --
+no need to drop to the lower-level ``pseudo_arclength_scan`` engine, since
+``jc.continuation()`` is itself ``vmap``-safe for the branch/stability data.
 """
 
 # %%
@@ -28,36 +30,37 @@ import time
 import jax
 import jax.numpy as jnp
 
-from jaxcont.core.scan_continuation import pseudo_arclength_scan
+import jaxcont as jc
 
 MAX_STEPS = 120
 
 # %%
 # Define the system and a single-run helper
 # ---------------------------------------------
-# ``run_one`` continues one branch for a given imperfection ``b``, using the
-# fully JIT-compiled whole-loop engine -- it's the *whole loop* being one
-# compiled program (rather than many small dispatched ops) that makes
-# ``vmap`` batching possible. The companion differentiable-analysis example
-# looks at what this same engine can and can't be differentiated through.
+# ``run_one`` continues one branch for a given imperfection ``b`` via
+# ``jc.continuation()``. Under the hood this still runs the fully
+# JIT-compiled whole-loop engine -- it's the *whole loop* being one compiled
+# program (rather than many small dispatched ops) that makes ``vmap``
+# batching possible. The companion differentiable-analysis example looks at
+# what this same engine can and can't be differentiated through.
 
 
-def make_rhs(b):
-    return lambda u, p: jnp.array([p * u[0] - u[0] ** 3 + b])
+def imperfect_pitchfork(u, p, b):
+    return jnp.array([p * u[0] - u[0] ** 3 + b])
 
 
 def run_one(b):
-    return pseudo_arclength_scan(
-        make_rhs(b),
-        jnp.array([0.05]),   # u0
-        jnp.array(-1.0),     # p0
-        jnp.array(2.0),      # p_end
-        jnp.array(0.05),     # ds
-        jnp.array(1e-5),     # ds_min
-        jnp.array(0.2),      # ds_max
-        jnp.array(1e-6),     # tol (float32-reachable)
-        MAX_STEPS,           # max_steps (static)
-        jnp.array(20),       # newton_max_iter
+    prob = jc.bif_problem(imperfect_pitchfork, u0=jnp.array([0.05]), p0=-1.0, args=b)
+    return jc.continuation(
+        prob,
+        p_span=(-1.0, 2.0),
+        settings=jc.ContinuationPar(
+            ds=0.05, ds_min=1e-5, ds_max=0.2,
+            max_steps=MAX_STEPS, newton_tol=1e-6, newton_max_iter=20,
+        ),
+        # events=[...] is not yet supported inside jax.vmap -- see
+        # notes/ROADMAP.md issue #13. Omitting `events` gives the
+        # vmap-safe branch/stability data used below.
     )
 
 
@@ -80,11 +83,11 @@ t_vmap = time.perf_counter() - t0
 print(f"vmap (one kernel): {t_vmap * 1e3:.2f} ms for {n_diagrams} diagrams")
 
 # %%
-# Compare against a sequential Python loop over the same engine
+# Compare against a sequential Python loop over the same call
 # -------------------------------------------------------------------
-# Same computation, same JIT-compiled ``run_one`` -- the only difference is
-# whether JAX batches the calls into one kernel or dispatches them one at a
-# time.
+# Same computation, same JIT-compiled engine underneath -- the only
+# difference is whether JAX batches the calls into one kernel or dispatches
+# them one at a time.
 
 _ = run_one(bs[0])  # compile once, outside the timed loop
 
@@ -100,12 +103,18 @@ print(f"speedup: {t_loop / t_vmap:.1f}x")
 # %%
 # Inspect the batched result
 # -------------------------------
-# ``res.params``/``res.states`` are stacked across the batch dimension;
-# ``n_valid`` tells you how many of the fixed-size buffer entries are real
-# points for each diagram.
+# ``res.branch.params``/``res.branch.states`` are stacked across the batch
+# dimension at the engine's fixed buffer size (``MAX_STEPS + 1``);
+# ``res.branch.valid`` is a boolean mask (and ``res.stats["n_valid"]`` the
+# equivalent count) telling you which of those fixed-size entries are real
+# points for each diagram -- since ``vmap`` requires uniform output shapes,
+# trimming to the true (ragged) branch length only happens after the trace
+# exits, per diagram, exactly as below.
 
-print(f"result shapes: params {tuple(res.params.shape)}, states {tuple(res.states.shape)}")
-print(f"points per diagram (n_valid): min={int(res.n_valid.min())} max={int(res.n_valid.max())}")
+print(f"result shapes: params {tuple(res.branch.params.shape)}, "
+      f"states {tuple(res.branch.states.shape)}")
+n_valid = res.stats["n_valid"]
+print(f"points per diagram (n_valid): min={int(n_valid.min())} max={int(n_valid.max())}")
 
 # %%
 # Plot a sample of the batched diagrams
@@ -118,8 +127,9 @@ os.makedirs("images", exist_ok=True)
 fig, ax = plt.subplots(figsize=(7, 5))
 idx = jnp.linspace(0, n_diagrams - 1, 9).astype(int)
 for i in idx:
-    n = int(res.n_valid[i])
-    ax.plot(res.params[i, :n], res.states[i, :n, 0], lw=1.2, label=f"b={float(bs[i]):+.2f}")
+    mask = res.branch.valid[i]
+    ax.plot(res.branch.params[i][mask], res.branch.states[i, :, 0][mask],
+            lw=1.2, label=f"b={float(bs[i]):+.2f}")
 
 ax.set_xlabel("parameter p")
 ax.set_ylabel("state u")
