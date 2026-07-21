@@ -19,16 +19,16 @@ where the branch of equilibria folds back on itself.
 # %%
 # Setup
 # -----
-# ``ContinuationProblem`` bundles the right-hand side, an initial guess, and
-# the parameter to continue. ``equilibrium_continuation`` runs the
-# predictor-corrector loop and returns a :class:`ContinuationSolution`.
+# ``jc.bif_problem`` bundles the right-hand side, an initial guess, and the
+# starting parameter value. ``jc.continuation`` runs the predictor-corrector
+# loop and returns a :class:`ContinuationResult`.
 
 import os
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-from jaxcont import ContinuationProblem, equilibrium_continuation
+import jaxcont as jc
 from jaxcont.utils.plotting import plot_continuation
 
 os.makedirs("images", exist_ok=True)
@@ -41,10 +41,9 @@ os.makedirs("images", exist_ok=True)
 # looked up from that dict at every step.
 
 
-def pitchfork_rhs(state, params):
-    x = state[0]
-    r = params["r"]
-    return jnp.array([r + x - x**3 / 3])
+def pitchfork_rhs(u, p, args):
+    x = u[0]
+    return jnp.array([p + x - x**3 / 3])
 
 
 # %%
@@ -53,31 +52,22 @@ def pitchfork_rhs(state, params):
 # We start from ``r = -1`` on the lower branch, where the only equilibrium is
 # a single stable point.
 
-problem = ContinuationProblem(
-    rhs=pitchfork_rhs,
-    u0=jnp.array([-2.0]),
-    params={"r": -1.0},
-    continuation_param="r",
-    problem_type="equilibrium",
-)
+prob = jc.bif_problem(pitchfork_rhs, u0=jnp.array([-2.0]), p0=-1.0)
 
 # %%
 # Run the continuation
 # ----------------------
-# ``detect_bifurcations=True`` turns on fold/Hopf detection along the branch;
-# ``compute_stability=True`` computes the sign of the Jacobian's eigenvalues
-# at every point so the plot can color stable/unstable segments.
+# ``events=[jc.Fold(), jc.Hopf()]`` turns on fold/Hopf detection along the
+# branch; ``compute_stability=True`` computes the sign of the Jacobian's
+# eigenvalues at every point so the plot can color stable/unstable segments.
 
-solution = equilibrium_continuation(
-    problem,
-    param_range=(-1.0, 1.0),
-    ds=0.01,
-    max_steps=300,
-    detect_bifurcations=True,
-    compute_stability=True,
+result = jc.continuation(
+    prob, jc.PseudoArclength(), p_span=(-1.0, 1.0),
+    settings=jc.ContinuationPar(ds=0.01, max_steps=300, newton_tol=1e-6, compute_stability=True),
+    events=[jc.Fold(), jc.Hopf()],
     verbose=True,
-    bifurcation_tolerance=1e-4,
 )
+solution = result._solution
 
 print(f"Continuation completed: {solution.n_points} points computed")
 
