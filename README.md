@@ -95,6 +95,9 @@ python -m twine check dist/*
 
 Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). The project
 roadmap and supported scope live in [notes/ROADMAP.md](notes/ROADMAP.md).
+The version-gated MatCont/BifurcationKit cross-validation plan and initial
+MATLAB producers live in
+[validation/VALIDATION_EXAMPLES.md](validation/VALIDATION_EXAMPLES.md).
 
 ## Citation
 
