@@ -240,3 +240,17 @@ class TestScanEngine:
         )
         # n_valid is a concrete int and never exceeds the buffer -> it terminated
         assert 0 < int(res.n_valid) <= 201
+
+    def test_ds_buffer_records_stepsize_per_point(self):
+        f = lambda u, p: pitchfork(u, p, None)
+
+        res = pseudo_arclength_scan(
+            f, jnp.array([0.1]), jnp.array(0.5), jnp.array(1.5),
+            jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
+            jnp.array(1e-6), 60, jnp.array(20),
+        )
+        n = int(res.n_valid)
+        assert res.ds.shape == (61,)
+        assert float(res.ds[0]) == pytest.approx(0.05)  # slot 0 = initial ds0
+        assert bool(jnp.all(res.ds[:n] >= 1e-5 - 1e-9))
+        assert bool(jnp.all(res.ds[:n] <= 0.2 + 1e-9))

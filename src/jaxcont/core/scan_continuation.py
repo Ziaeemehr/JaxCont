@@ -43,6 +43,7 @@ class ScanResult(NamedTuple):
     states: Array        # (max_steps + 1, n)
     tangents: Array      # (max_steps + 1, n + 1)
     converged: Array     # (max_steps + 1,) bool  (step accepted)
+    ds: Array            # (max_steps + 1,) step size used to reach each point
     n_valid: Array       # scalar int; entries [:n_valid] are real points
 
 
@@ -186,6 +187,7 @@ def pseudo_arclength_scan(
     C = jnp.zeros((max_steps + 1,), dtype=bool).at[0].set(True)
 
     ds_mag0 = jnp.asarray(ds0, dtype)
+    D = jnp.zeros((max_steps + 1,), dtype).at[0].set(ds_mag0)
 
     class Carry(NamedTuple):
         u: Array
@@ -198,6 +200,7 @@ def pseudo_arclength_scan(
         Q: Array
         T: Array
         C: Array
+        D: Array
 
     def cond_fun(c: Carry):
         return jnp.logical_and(c.idx < max_steps, jnp.logical_not(c.stop))
@@ -221,6 +224,7 @@ def pseudo_arclength_scan(
         Q = c.Q.at[write].set(jnp.where(converged, p_new, c.Q[write]))
         T = c.T.at[write].set(jnp.where(converged, tan_new, c.T[write]))
         C = c.C.at[write].set(converged)
+        D = c.D.at[write].set(jnp.where(converged, c.ds, c.D[write]))
 
         # Accept -> advance state; reject -> stay put (and ds already shrinks).
         u = jnp.where(converged, u_new, c.u)
@@ -239,12 +243,12 @@ def pseudo_arclength_scan(
         nonfinite = jnp.logical_not(jnp.all(jnp.isfinite(u)))
         stop = jnp.logical_or(reached, jnp.logical_or(stalled, nonfinite))
 
-        return Carry(u, p, tan, ds, idx, stop, P, Q, T, C)
+        return Carry(u, p, tan, ds, idx, stop, P, Q, T, C, D)
 
     init = Carry(
         u=u0, p=p0, tan=tan0, ds=ds_mag0,
         idx=jnp.array(0, jnp.int32), stop=jnp.array(False),
-        P=P, Q=Q, T=T, C=C,
+        P=P, Q=Q, T=T, C=C, D=D,
     )
     final = lax.while_loop(cond_fun, body, init)
 
@@ -253,6 +257,7 @@ def pseudo_arclength_scan(
         states=final.P,
         tangents=final.T,
         converged=final.C,
+        ds=final.D,
         n_valid=final.idx + 1,   # +1 for the initial point in slot 0
     )
 
