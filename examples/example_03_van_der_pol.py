@@ -23,15 +23,15 @@ equilibrium branch and note where it goes unstable.
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-from jaxcont import ContinuationProblem, equilibrium_continuation
+import jaxcont as jc
 from jaxcont.utils.plotting import plot_phase_portrait
 
 # %%
 # Define the system
 
-def van_der_pol_rhs(state, params):
-    x, y = state
-    mu = params["mu"]
+def van_der_pol_rhs(u, p, args):
+    x, y = u
+    mu = p
     return jnp.array([y, mu * (1.0 - x**2) * y - x])
 
 
@@ -41,15 +41,13 @@ def van_der_pol_rhs(state, params):
 # We start exactly at the origin (an equilibrium for every :math:`\mu`) and
 # sweep :math:`\mu` from 0 to 5.
 
-problem = ContinuationProblem(
-    rhs=van_der_pol_rhs,
-    u0=jnp.array([0.0, 0.0]),
-    params={"mu": 0.0},
-    continuation_param="mu",
-    problem_type="equilibrium",
-)
+prob = jc.bif_problem(van_der_pol_rhs, u0=jnp.array([0.0, 0.0]), p0=0.0)
 
-solution = equilibrium_continuation(problem, param_range=(0.0, 5.0), ds=0.05, max_steps=200)
+result = jc.continuation(
+    prob, jc.PseudoArclength(), p_span=(0.0, 5.0),
+    settings=jc.ContinuationPar(ds=0.05, max_steps=200),
+)
+solution = result._solution
 
 print(f"Continuation completed: {solution.n_points} points computed")
 print("Note: the origin is already unstable throughout mu > 0 (real part of the")
