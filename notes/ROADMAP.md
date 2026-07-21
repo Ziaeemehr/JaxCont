@@ -1,7 +1,9 @@
 # JaxCont Roadmap — Single Source of Truth
 
-**Last updated:** 2026-07-19
-**Current version:** 0.1.0-dev (unreleased)
+**Last updated:** 2026-07-21
+**Current version:** 0.1.0 — **published to PyPI** (https://pypi.org/project/jaxcont/), tagged
+`v0.1.0`. Zenodo DOI archival deliberately deferred until a more mature release (not a v0.1.0
+blocker — `CITATION.cff` metadata is ready whenever it happens).
 **Scope decision:** Ship a focused **equilibrium continuation** library first. See [PROJECT_REVIEW_2026-07.md](PROJECT_REVIEW_2026-07.md) for the full rationale.
 **API design:** Committed to a functional, diffrax-style surface (`continuation(problem, alg, ...)`).
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provisional v0.2+ API.
@@ -222,13 +224,11 @@ Public surface is the functional API — `bif_problem` / `continuation` / `Fold`
 - [x] Honest README led by the vmap/grad story + stated scope + fixed placeholders
 - [x] Sphinx docs: install, quickstart, Sphinx-Gallery examples, API reference
 - [x] Clean sdist/wheel build + Twine metadata validation
-- [ ] TestPyPI → PyPI → GitHub release/Zenodo DOI — **verified 2026-07-19: `publish.yml` exists
-  and is correctly wired** (`workflow_dispatch` → build/twine-check → trusted-publish to
-  TestPyPI or PyPI), **but has never been triggered**: no git tags, no GitHub releases, package
-  has never been uploaded anywhere. **This is now the only item left before v0.1.0 can ship** —
-  and it's an irreversible, externally-visible action (a public PyPI upload can't be un-published),
-  so it needs an explicit go-ahead rather than being done automatically alongside the engineering
-  work above.
+- [x] TestPyPI → PyPI — **done 2026-07-21.** Tagged `v0.1.0`, published to PyPI
+  (https://pypi.org/project/jaxcont/) via `publish.yml`.
+- [ ] GitHub release — not yet confirmed created from the `v0.1.0` tag.
+- [ ] Zenodo DOI — **deliberately deferred**, by decision, until a more mature release with more
+  results; not a v0.1.0 blocker. `CITATION.cff` metadata is ready for whenever this happens.
 
 **Out of scope (hidden / marked experimental):** periodic orbits, Floquet, BVP,
 normal forms, codim-2, branch switching, two-parameter continuation.
@@ -242,14 +242,10 @@ finding, issue #13 (`jc.continuation()` isn't actually `vmap`-safe — tracked u
 consolidation, not a v0.1.0 blocker since the *underlying* `pseudo_arclength_scan` engine that
 `example_06` uses genuinely is `vmap`-safe, and that's what the shipped example/README claims).
 
-**One item is left before a tagged v0.1.0 release, and it's deliberately not done automatically:**
+**v0.1.0 is published.** Remaining loose ends, non-blocking:
 
-1. **Trigger the release sequence:** tag `v0.1.0` → run `publish.yml` against TestPyPI → smoke-test
-   `pip install` from TestPyPI → run against PyPI → cut a GitHub release → archive on Zenodo for
-   the DOI (`CITATION.cff` already has the repo/author metadata ready for this). This is an
-   irreversible, externally-visible action (creates a public git tag/GitHub release and uploads a
-   package that can't be un-published from PyPI) — needs an explicit go-ahead before running, not
-   something to do opportunistically alongside engineering work.
+1. Confirm/cut a GitHub release from the `v0.1.0` tag if not already done.
+2. Zenodo DOI archival — intentionally deferred until a more mature release with more results.
 
 Issues #10 (legacy natural-continuation FD/bare-except) and #8/#9 (bothside, sub-epsilon tol) are
 real but non-blocking for v0.1.0 — they don't affect the default `scan`/`PseudoArclength` path.
@@ -403,13 +399,9 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
    [fold_solve.py](../src/jaxcont/bifurcations/fold_solve.py), + forward-mode `jacfwd`).
 9. ✅ **Trim `__init__.py`** — done: top-level surface is the equilibrium spine; periodic/BVP/
    Floquet/period-doubling stubs are importable only from their submodules.
-10. **Docs + packaging → ship v0.1.0.** ← **Engineering done 2026-07-19; one action left.** README
-    and Sphinx quickstart lead with the `vmap`/gradient story; scan is the default with fold/Hopf
-    refinement; author and citation placeholders are fixed; `stability/eigenvalue.py` coverage is
-    51%→98%; a real, passing GPU smoke test exists (`tests/test_gpu_smoke.py`). **Only remaining
-    step:** trigger `publish.yml` → TestPyPI → PyPI → GitHub release → Zenodo DOI (workflow ready,
-    never run; no tags exist yet) — held for an explicit go-ahead since it's irreversible and
-    externally visible (see "Remaining v0.1.0 work" above).
+10. ✅ **Docs + packaging → ship v0.1.0.** — **done 2026-07-21.** Tagged and published to PyPI
+    (https://pypi.org/project/jaxcont/). GitHub release still to be confirmed; Zenodo DOI
+    deliberately deferred to a more mature release.
 11. **v0.2 kickoff — do the engineering cleanup *before* the periodic-orbit feature work**, per
     "Engineering / architecture recommendations for v0.2" above, in this order: (i) consolidate
     the three continuation-engine implementations onto the scan engine **and make the result
