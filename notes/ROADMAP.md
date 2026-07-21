@@ -131,24 +131,33 @@ now 98%** (was 51% — the one gap the roadmap named explicitly; fixed this sess
    one-line doc note on `newton_tol`'s float32 floor, or (b) `NewtonSolver`/the correctors warning
    when constructed with `tol < ~1e-6` in float32. All shipped examples now use `tol >= 1e-6`; as
    of issue #14, `tests/test_pseudo_arclength.py` does too.
-13. 🔴 **`jc.continuation()` (the public, "blessed" API) is not `vmap`-safe — only the lower-level
-   `pseudo_arclength_scan` engine it wraps is.** *(found 2026-07-19, while writing a GPU `vmap`
-   smoke test)* `api.py`'s `_run_scan()` does `n = int(res.n_valid)` to trim the fixed-size
-   buffer to a Python-level ragged length before building the legacy `ContinuationSolution`. That
-   bare `int()` on a traced value raises `jax.errors.ConcretizationTypeError` the moment
-   `jc.continuation(...)` is called inside `jax.vmap(...)` — confirmed by direct reproduction (a
-   plain call succeeds; wrapping the identical call in `jax.vmap` fails on that exact line). This
-   is why `examples/example_06_vmap_sweep.py` calls `pseudo_arclength_scan` directly instead of
-   `jc.continuation()` — it has to, silently, and doesn't say why. **This matters more than a
-   normal bug**: `vmap`-batched continuation is the flagship capability (ARCHITECTURE.md §3.1,
-   the README's headline), and the public entry point that's supposed to deliver it doesn't. Not
-   a quick patch — trimming to `n_valid` happens because downstream event-detection/stability
-   code (`BifurcationDetector`, Python `for i in range(n)` loops) also assumes concrete shapes, so
-   a real fix means making that whole downstream path trace-safe, not just the one `int()` call.
-   → tracked as the top item under "Engineering recommendations for v0.2" (item 1, engine
-   consolidation) rather than patched piecemeal here. `tests/test_gpu_smoke.py`'s `vmap` test
-   exercises `pseudo_arclength_scan` directly and documents this exact issue inline, so the smoke
-   test passes for an honest reason rather than masking the gap.
+13. ✅ **`jc.continuation()` branch/stability data is now `vmap`-safe.** *(found 2026-07-19, fixed
+   2026-07-21)* `api.py`'s `_run_scan()` did `n = int(res.n_valid)` to trim the fixed-size buffer
+   to a Python-level ragged length — a bare `int()` on a traced value, raising
+   `jax.errors.ConcretizationTypeError` under `jax.vmap`/`jax.jit`. **Fix:** `_run_scan()` now
+   catches that error and falls back to `_run_scan_traced()`, which returns the fixed-size engine
+   buffers as-is plus a new `Branch.valid` boolean mask (mirrors the existing
+   `examples/example_06_vmap_sweep.py` pattern: trim per-batch-element with `n_valid` after the
+   trace exits) instead of trying to concretely trim. Eager (non-traced) calls are byte-for-byte
+   unchanged. **A second, previously-undiscovered blocker surfaced and was fixed alongside this**:
+   `Branch`/`ContinuationResult` were never registered as JAX pytrees, so even with `n_valid`
+   fixed, returning either from a `jax.vmap`-traced function raised `TypeError: ... is not a
+   valid JAX type` — found by direct reproduction with a minimal dataclass, not mentioned in the
+   original issue. Both are now registered via `jax.tree_util.register_pytree_node`, matching
+   `BifProblem`'s existing registration.
+   **Scope, deliberately narrow:** event detection (`events=[Fold()]`/`Hopf()`) still isn't
+   traceable — `BifurcationDetector` is Python-level control flow (loops, `float()`,
+   `list.sort()`) with no fixed-size/trace-safe rewrite yet — so `_run_scan_traced()` raises a
+   clear `NotImplementedError` immediately if `events` is non-empty, rather than silently
+   dropping them or crashing confusingly. Making event detection itself trace-safe is unchanged
+   from before: still tracked under "Engineering recommendations for v0.2" item 4 (`Event`
+   protocol rewrite) — this fix is forward-compatible groundwork for that (the `valid` mask is
+   exactly what a trace-safe `Event` implementation would consume), not a competing design.
+   See `tests/test_functional_api.py::TestVmapSafety` for the new coverage (fixed-size buffers +
+   mask under `vmap`, the `NotImplementedError` on `events` under `vmap`, eager path unaffected).
+   `tests/test_gpu_smoke.py`'s `vmap` test still exercises `pseudo_arclength_scan` directly (that
+   test predates this fix and is still valid; a follow-up could switch it to `jc.continuation()`
+   now that the public API supports the same pattern).
 14. ✅ **Two latent test flakes from the issue #9 pattern, found and fixed 2026-07-19 while running
    the suite on a real GPU backend (not `JAX_PLATFORMS=cpu`).** `tests/test_pseudo_arclength.py`
    had five separate `PseudoArclengthContinuation(newton_tol=1e-8, ...)` instantiations — below
@@ -238,9 +247,9 @@ normal forms, codim-2, branch switching, two-parameter continuation.
 The two engineering items originally listed here are **done** (see "Release engineering" above):
 `stability/eigenvalue.py` coverage 51%→98%, and a real, passing `tests/test_gpu_smoke.py`. Along
 the way, that work also fixed two latent test flakes (issue #14) and surfaced one important new
-finding, issue #13 (`jc.continuation()` isn't actually `vmap`-safe — tracked under v0.2 engine
-consolidation, not a v0.1.0 blocker since the *underlying* `pseudo_arclength_scan` engine that
-`example_06` uses genuinely is `vmap`-safe, and that's what the shipped example/README claims).
+finding, issue #13 (`jc.continuation()` wasn't actually `vmap`-safe — **now fixed 2026-07-21**,
+see issue #13 above; event detection under `vmap` remains future work, tracked separately under
+v0.2 engineering recommendation #4).
 
 **v0.1.0 is published.** Remaining loose ends, non-blocking:
 
@@ -249,7 +258,7 @@ consolidation, not a v0.1.0 blocker since the *underlying* `pseudo_arclength_sca
 
 Issues #10 (legacy natural-continuation FD/bare-except) and #8/#9 (bothside, sub-epsilon tol) are
 real but non-blocking for v0.1.0 — they don't affect the default `scan`/`PseudoArclength` path.
-Fix opportunistically or fold into the v0.2 engine consolidation (see below), alongside issue #13.
+Fix opportunistically or fold into the v0.2 engine consolidation (see below).
 
 ## v0.2.0 — Periodic orbits
 - [ ] Periodic-orbit continuation (collocation preferred over shooting)
@@ -404,13 +413,15 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
     deliberately deferred to a more mature release.
 11. **v0.2 kickoff — do the engineering cleanup *before* the periodic-orbit feature work**, per
     "Engineering / architecture recommendations for v0.2" above, in this order: (i) consolidate
-    the three continuation-engine implementations onto the scan engine **and make the result
-    actually `vmap`-safe** (issue #13 — the `int(res.n_valid)` concretization in `_run_scan` is the
-    same kind of fix as (i), so do them together); (ii) decide `equinox` for the new periodic-orbit
-    types; (iii) extract `fold_solve.py`'s differentiable-root pattern into a reusable primitive;
-    (iv) replace `BifurcationDetector` with real `Event` implementations, fixing issue #7 as part
-    of the rewrite; (v) introduce `LinearSolver`/`EigenSolver` as real (if currently
-    single-implementation) protocols. Then build periodic-orbit collocation with a static
+    the three continuation-engine implementations onto the scan engine (`jc.continuation()`'s
+    branch/stability data is already `vmap`-safe as of issue #13's 2026-07-21 fix — this item is
+    now about removing the duplication itself, not vmap-safety); (ii) decide `equinox` for the new
+    periodic-orbit types; (iii) extract `fold_solve.py`'s differentiable-root pattern into a
+    reusable primitive; (iv) replace `BifurcationDetector` with real `Event` implementations,
+    fixing issue #7 **and making event detection itself `vmap`-safe** as part of the rewrite
+    (`Branch.valid` from issue #13 is the mask a trace-safe `Event` would consume); (v) introduce
+    `LinearSolver`/`EigenSolver` as real (if currently single-implementation) protocols. Then
+    build periodic-orbit collocation with a static
     (non-traced) `ntst`/`ncol` mesh on top of the cleaned-up spine, matching MatCont's own
     `ntst`/`ncol` discretization discipline (manual §7.2) and the fixed-shape-buffer requirement
     the whole-loop-JIT/`vmap` story already depends on (ARCHITECTURE.md §3.1, §4.3).

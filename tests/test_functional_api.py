@@ -174,6 +174,47 @@ class TestDifferentiableFold:
         assert float(J[1]) == pytest.approx(-0.0625, abs=1e-4)
 
 
+def imperfect_pitchfork(u, p, b):
+    return jnp.array([p * u[0] - u[0] ** 3 + b])
+
+
+class TestVmapSafety:
+    """Issue #13: jc.continuation() must not crash inside jax.vmap/jax.jit."""
+
+    def _run(self, b, *, events=()):
+        prob = jc.bif_problem(imperfect_pitchfork, u0=jnp.array([0.05]), p0=-1.0, args=b)
+        return jc.continuation(
+            prob, p_span=(-1.0, 1.0),
+            settings=jc.ContinuationPar(ds=0.05, max_steps=40, newton_tol=1e-6),
+            events=events,
+        )
+
+    def test_vmap_returns_fixed_size_buffers_with_valid_mask(self):
+        bs = jnp.linspace(-0.2, 0.2, 5)
+        res = jax.vmap(self._run)(bs)
+
+        buf = 41  # max_steps + 1
+        assert res.branch.params.shape == (5, buf)
+        assert res.branch.states.shape == (5, buf, 1)
+        assert res.branch.valid.shape == (5, buf)
+        assert res.branch.valid.dtype == jnp.bool_
+        assert bool(jnp.all(res.branch.valid[:, 0]))  # slot 0 is always the seed point
+        assert res.events == []
+        assert res.stats["n_valid"].shape == (5,)
+        assert jnp.all(res.stats["n_valid"] > 0)
+
+    def test_vmap_with_events_raises_clearly(self):
+        bs = jnp.linspace(-0.2, 0.2, 3)
+        with pytest.raises(NotImplementedError, match="events"):
+            jax.vmap(lambda b: self._run(b, events=[jc.Fold()]))(bs)
+
+    def test_eager_call_unaffected(self):
+        sol = self._run(0.1)
+        assert sol.branch.valid is None
+        assert sol.branch.n_valid > 0
+        assert sol.branch.params.shape == (sol.branch.n_valid,)
+
+
 class TestScanEngine:
     def test_vmap_batch(self):
         f = lambda u, p: pitchfork(u, p, None)

@@ -243,13 +243,24 @@ class EventHit:
 
 @dataclass
 class Branch:
-    """The computed solution branch (one connected curve)."""
+    """The computed solution branch (one connected curve).
 
-    params: Array           # (n_valid,)
-    states: Array           # (n_valid, state_dim)
+    Under a normal (eager) call, ``params``/``states``/... are already
+    trimmed to the ``n_valid`` real points and ``valid`` is ``None``. When
+    ``continuation()`` runs inside ``jax.vmap``/``jax.jit``, the true point
+    count can't be turned into a concrete trim length, so these arrays stay
+    the full fixed-size engine buffer and ``valid`` is a boolean mask over
+    that buffer's first axis (``True`` for real points) -- mirrors how
+    ``examples/example_06_vmap_sweep.py`` uses ``pseudo_arclength_scan``
+    directly and trims per-batch-element with ``n_valid`` after the trace.
+    """
+
+    params: Array           # (n_valid,) eager, (buffer_len,) traced
+    states: Array           # (n_valid, state_dim) eager, (buffer_len, state_dim) traced
     tangents: Optional[Array] = None
     eigenvalues: Optional[Array] = None
     stable: Optional[Array] = None
+    valid: Optional[Array] = None   # bool mask, only set when traced
 
     @property
     def n_valid(self) -> int:
@@ -259,6 +270,22 @@ class Branch:
         """Return the ``(param, state)`` on the branch closest to ``p``."""
         idx = int(jnp.argmin(jnp.abs(self.params - p)))
         return float(self.params[idx]), self.states[idx]
+
+
+def _branch_flatten(b: Branch):
+    children = (b.params, b.states, b.tangents, b.eigenvalues, b.stable, b.valid)
+    return children, None
+
+
+def _branch_unflatten(aux, children):
+    params, states, tangents, eigenvalues, stable, valid = children
+    return Branch(
+        params=params, states=states, tangents=tangents,
+        eigenvalues=eigenvalues, stable=stable, valid=valid,
+    )
+
+
+jax.tree_util.register_pytree_node(Branch, _branch_flatten, _branch_unflatten)
 
 
 @dataclass
@@ -275,6 +302,21 @@ class ContinuationResult:
         if self._solution is None:
             raise RuntimeError("No underlying solution to plot.")
         return self._solution.plot(**kwargs)
+
+
+def _continuation_result_flatten(r: ContinuationResult):
+    children = (r.branch, r.events, r.stats, r._solution)
+    return children, None
+
+
+def _continuation_result_unflatten(aux, children):
+    branch, events, stats, solution = children
+    return ContinuationResult(branch=branch, events=events, stats=stats, _solution=solution)
+
+
+jax.tree_util.register_pytree_node(
+    ContinuationResult, _continuation_result_flatten, _continuation_result_unflatten
+)
 
 
 # ---------------------------------------------------------------------------
@@ -334,7 +376,14 @@ def _run_scan(
         jnp.asarray(settings.newton_max_iter),
     )
 
-    n = int(res.n_valid)
+    try:
+        n = int(res.n_valid)
+    except jax.errors.ConcretizationTypeError:
+        # Traced call (jax.vmap/jax.jit over this problem/settings): n_valid
+        # can't become a concrete Python int, so there is no single trim
+        # length. Fall back to the fixed-size-buffer + mask representation.
+        return _run_scan_traced(res, rhs2, settings, events)
+
     states = res.states[:n]
     params = res.params[:n]
     tangents = res.tangents[:n]
@@ -383,6 +432,53 @@ def _run_scan(
     if requested:
         result.events = [h for h in result.events if h.kind in requested]
     return result
+
+
+def _run_scan_traced(
+    res,
+    rhs2: Callable[[Array, Array], Array],
+    settings: ContinuationPar,
+    events: Sequence[Event],
+) -> ContinuationResult:
+    """
+    ``_run_scan``'s path when ``res.n_valid`` is a tracer (called inside
+    ``jax.vmap``/``jax.jit``). No concrete trim length exists, so the fixed-
+    size engine buffers are returned as-is with a ``valid`` mask instead of
+    the legacy ``ContinuationSolution``/``BifurcationDetector`` machinery,
+    neither of which is traceable (Python loops, ``float()``, ``list.sort()``).
+    """
+    if len(events) > 0:
+        raise NotImplementedError(
+            "events=[...] is not supported when continuation() runs inside "
+            "jax.vmap/jax.jit: BifurcationDetector uses Python-level control "
+            "flow (loops, list.sort(), float()) that isn't traceable. Call "
+            "continuation() without events inside the trace -- e.g. inspect "
+            "branch.states/branch.params/branch.valid -- or run it eagerly "
+            "per point of interest outside the trace to get events."
+        )
+
+    from jaxcont.core.scan_continuation import branch_eigenvalues
+
+    states, params, tangents = res.states, res.params, res.tangents
+    valid = jnp.arange(states.shape[0]) < res.n_valid
+
+    eigenvalues = None
+    stability = None
+    if settings.compute_stability:
+        eigenvalues = branch_eigenvalues(rhs2, states, params)
+        stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
+
+    branch = Branch(
+        params=params,
+        states=states,
+        tangents=tangents,
+        eigenvalues=eigenvalues,
+        stable=stability,
+        valid=valid,
+    )
+    return ContinuationResult(
+        branch=branch, events=[], stats={"n_valid": res.n_valid}, _solution=None,
+    )
 
 
 def _to_result(sol: ContinuationSolution) -> ContinuationResult:
