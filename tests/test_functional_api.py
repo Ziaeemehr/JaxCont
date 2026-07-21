@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import pytest
 
 import jaxcont as jc
-from jaxcont.core.scan_continuation import pseudo_arclength_scan
+from jaxcont.core.scan_continuation import pseudo_arclength_scan, natural_scan
 
 
 # --- test systems ---------------------------------------------------------
@@ -254,3 +254,51 @@ class TestScanEngine:
         assert float(res.ds[0]) == pytest.approx(0.05)  # slot 0 = initial ds0
         assert bool(jnp.all(res.ds[:n] >= 1e-5 - 1e-9))
         assert bool(jnp.all(res.ds[:n] <= 0.2 + 1e-9))
+
+
+class TestNaturalScanEngine:
+    def test_tracks_linear_branch(self):
+        # f(u, p) = p - u  ->  equilibrium u = p exactly, no fold anywhere.
+        f = lambda u, p: jnp.array([p - u[0]])
+
+        res = natural_scan(
+            f, jnp.array([0.0]), jnp.array(0.0), jnp.array(1.0),
+            jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
+            jnp.array(1e-6), 40, jnp.array(20),
+        )
+        n = int(res.n_valid)
+        assert n > 5
+        assert bool(jnp.all(res.converged[:n]))
+        # accuracy: u should equal p at every accepted point
+        assert float(jnp.max(jnp.abs(res.states[:n, 0] - res.params[:n]))) < 1e-5
+
+    def test_stalls_at_fold(self):
+        # f(u, p) = p - u^2  ->  fold at p=0; natural continuation (fixed p,
+        # solve for u) cannot pass it -- the branch must stop short of p=0.
+        f = lambda u, p: jnp.array([p - u[0] ** 2])
+
+        res = natural_scan(
+            f, jnp.array([1.0]), jnp.array(1.0), jnp.array(-1.0),
+            jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
+            jnp.array(1e-6), 60, jnp.array(20),
+        )
+        n = int(res.n_valid)
+        last_p = float(res.params[n - 1])
+        assert last_p > 0.0, (
+            f"natural continuation should stall before reaching the fold at "
+            f"p=0, but reached p={last_p}"
+        )
+
+    def test_vmap_batch(self):
+        f = lambda u, p: jnp.array([p - u[0]])
+
+        def run(p0):
+            return natural_scan(
+                f, jnp.array([0.0]), p0, p0 + 1.0,
+                jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
+                jnp.array(1e-6), 40, jnp.array(20),
+            )
+
+        batch = jax.vmap(run)(jnp.linspace(0.0, 2.0, 8))
+        assert batch.params.shape == (8, 41)
+        assert batch.n_valid.shape == (8,)
