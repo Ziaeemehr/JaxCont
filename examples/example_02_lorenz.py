@@ -26,9 +26,8 @@ import os
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-from jax import jit
 
-from jaxcont import ContinuationProblem, equilibrium_continuation
+import jaxcont as jc
 
 os.makedirs("images", exist_ok=True)
 
@@ -39,17 +38,9 @@ os.makedirs("images", exist_ok=True)
 # the rest are fixed physical constants.
 
 
-@jit
-def lorenz84_rhs(state, params):
+def lorenz84_rhs(state, F, args):
     X, Y, Z, U = state
-
-    alpha = params["alpha"]
-    beta = params["beta"]
-    gamma = params["gamma"]
-    delta = params["delta"]
-    G = params["G"]
-    F = params["F"]
-    T = params["T"]
+    alpha, beta, gamma, delta, G, T = args
 
     dX = -(Y**2) - Z**2 - alpha * X + alpha * F - gamma * U**2
     dY = X * Y - beta * X * Z - Y + G
@@ -64,50 +55,42 @@ def lorenz84_rhs(state, params):
 # --------------------
 # ``u0`` below is a genuine equilibrium of the system at ``F=1.7620532879639``
 # (residual :math:`\sim 10^{-8}`), found by Newton refinement from an
-# approximate starting guess -- always check ``rhs(u0, params)`` is close to
+# approximate starting guess -- always check ``rhs(u0, F0, args)`` is close to
 # zero before continuing from a hand-copied initial condition.
 
-params = {
-    "alpha": 0.25,
-    "beta": 1.0,
-    "gamma": 0.987,
-    "delta": 1.04,
-    "G": 0.25,
-    "F": 1.7620532879639,
-    "T": 0.04,
-}
+F0 = 1.7620532879639
+args = (0.25, 1.0, 0.987, 1.04, 0.25, 0.04)  # alpha, beta, gamma, delta, G, T
 
 u0 = jnp.array(
     [1.6673192028567203, -0.05172586841139392, 0.12923880103788027, -0.0660453938041009]
 )
-print(f"residual at u0: {lorenz84_rhs(u0, params)}")
+print(f"residual at u0: {lorenz84_rhs(u0, F0, args)}")
 
-problem = ContinuationProblem(
-    rhs=lorenz84_rhs, u0=u0, params=params, continuation_param="F", problem_type="equilibrium"
-)
+prob = jc.bif_problem(lorenz84_rhs, u0=u0, p0=F0, args=args)
 
 # %%
 # Run the continuation
 # -----------------------
-# JaxCont's ``run()`` only explores *one* direction per call, toward whichever
-# end of ``param_range`` lies on the same side as the starting parameter (here
-# ``param_range=(1.0, 1.5)`` forces it downward from :math:`F=1.762`). This
-# branch happens to fold near :math:`F \approx 1.55`, and pseudo-arclength
-# continuation passes straight through that fold and carries on upward past
-# the starting point -- which is exactly where this system's Hopf
-# bifurcations live.
+# Unlike the fixed-``params`` dict of the pre-migration API, ``jc.continuation``
+# actually starts the scan at ``p_span[0]`` -- so, since ``u0`` is only a
+# genuine equilibrium at :math:`F=1.7620532879639`, ``p_span`` must start
+# there (not at the old ``param_range`` lower bound). ``p_span=(F0, 1.0)``
+# reproduces the original run: pseudo-arclength continuation heads downward
+# from :math:`F=1.762` first, folds near :math:`F \approx 1.55`, passes
+# straight through, and carries on upward past the starting point -- which is
+# exactly where this system's Hopf bifurcations live. ``1.0`` is never
+# actually reached (the branch turns upward at the fold), so it only sets the
+# initial direction, matching the pre-migration behavior.
 
-solution = equilibrium_continuation(
-    problem,
-    param_range=(1.0, 1.5),
-    ds=0.005,
-    ds_max=0.01,
-    max_steps=215,
-    detect_bifurcations=True,
-    compute_stability=True,
+result = jc.continuation(
+    prob, jc.PseudoArclength(), p_span=(F0, 1.0),
+    settings=jc.ContinuationPar(
+        ds=0.005, ds_max=0.01, max_steps=215, newton_tol=1e-6, compute_stability=True,
+    ),
+    events=[jc.Fold(), jc.Hopf()],
     verbose=True,
-    bifurcation_tolerance=1e-3,
 )
+solution = result._solution
 
 print(f"\nContinuation completed: {solution.n_points} points, "
       f"F in [{float(solution.parameters.min()):.4f}, {float(solution.parameters.max()):.4f}]")
