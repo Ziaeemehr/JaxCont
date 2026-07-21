@@ -32,11 +32,7 @@ from jaxcont.api import (
 from jaxcont.core.continuation import (
     ContinuationProblem,
     ContinuationSolution,
-    equilibrium_continuation,
 )
-from jaxcont.core.predictor_corrector import PredictorCorrector
-from jaxcont.core.natural_continuation import NaturalContinuation
-from jaxcont.core.pseudo_arclength import PseudoArclengthContinuation
 
 # Problem definitions
 from jaxcont.problems.equilibrium import EquilibriumProblem
@@ -88,10 +84,6 @@ __all__ = [
     # Core
     "ContinuationProblem",
     "ContinuationSolution",
-    "equilibrium_continuation",
-    "PredictorCorrector",
-    "NaturalContinuation",
-    "PseudoArclengthContinuation",
     # Problems
     "EquilibriumProblem",
     # Bifurcations
