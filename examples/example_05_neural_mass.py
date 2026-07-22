@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 
 import jaxcont as jc
 from jaxcont.solvers.newton import NewtonSolver
+from jaxcont.viz import plot_all_states
 
 os.makedirs("images", exist_ok=True)
 
@@ -84,7 +85,10 @@ else:
 # literal start). BifurcationKit.jl's reference solution reports Hopf
 # bifurcations somewhere in this range.
 
-prob = jc.bif_problem(TMvf, u0=z0, p0=E0_0, args=args)
+prob = jc.bif_problem(
+    TMvf, u0=z0, p0=E0_0, args=args,
+    state_names=["E", "x", "u"], param_name="E0",
+)
 
 result = jc.continuation(
     prob, jc.PseudoArclength(), p_span=(E0_0, -0.9),
@@ -144,22 +148,7 @@ for bif in solution.bifurcations:
 # Plot all three state variables against E0
 # ---------------------------------------------
 
-fig, axes = plt.subplots(3, 1, figsize=(10, 12))
-var_names = ["E", "x", "u"]
-var_labels = ["Neural Activity E", "Recovery Variable x", "Adaptation Variable u"]
-colors = ["blue", "green", "red"]
-
-for i, (ax, name, label, color) in enumerate(zip(axes, var_names, var_labels, colors)):
-    ax.plot(solution.parameters, solution.states[:, i], color=color, linewidth=2,
-            label=f"{name} equilibrium", alpha=0.7)
-    for bif in solution.bifurcations:
-        ax.plot(bif["parameter"], bif["state"][i], "rs", markersize=10,
-                markeredgewidth=2, markerfacecolor="red", markeredgecolor="darkred", zorder=10)
-    ax.set_ylabel(label)
-    ax.grid(True, alpha=0.3, linestyle="--")
-    ax.legend(loc="best")
-
-axes[-1].set_xlabel("External Input E0")
+fig = plot_all_states(solution)
 plt.suptitle("Neural Mass Model - Bifurcation Diagram")
 plt.tight_layout()
 plt.savefig("images/neural_mass_bifurcation.png", dpi=150, bbox_inches="tight")
