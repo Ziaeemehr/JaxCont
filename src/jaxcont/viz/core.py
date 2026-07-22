@@ -19,6 +19,7 @@ def plot_continuation(
     param_name: Optional[str] = None,
     ax: Optional[plt.Axes] = None,
     show_bifurcations: bool = True,
+    annotate: bool = False,
     stable_color: str = "blue",
     unstable_color: str = "red",
     **kwargs,
@@ -37,6 +38,8 @@ def plot_continuation(
             else ``"Parameter"``.
         ax: Matplotlib axes (creates new figure if None)
         show_bifurcations: Whether to mark bifurcation points
+        annotate: If True, draw a text-box + arrow label next to each
+            bifurcation marker showing its type and (parameter, state) value.
         stable_color: Color for stable branches
         unstable_color: Color for unstable branches
         **kwargs: Additional plotting options
@@ -118,6 +121,16 @@ def plot_continuation(
                 param, state_val, style.marker, color=style.color, markersize=10,
                 label=label, markeredgecolor='black', markeredgewidth=1,
             )
+
+            if annotate:
+                ax.annotate(
+                    f"{style.label or bif_type}\n"
+                    f"{param_name}={float(param):.3f}\n"
+                    f"{state_name}={float(state_val):.3f}",
+                    xy=(param, state_val), xytext=(15, 15), textcoords="offset points",
+                    bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.7),
+                    arrowprops=dict(arrowstyle="->", color="red", lw=1.5), fontsize=9,
+                )
 
     ax.set_xlabel(param_name, fontsize=12)
     ax.set_ylabel(state_name, fontsize=12)

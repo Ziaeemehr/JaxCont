@@ -74,3 +74,14 @@ def test_plot_continuation_marks_fold_with_shared_style():
 def test_plot_bifurcation_diagram_is_an_alias():
     fig = plot_bifurcation_diagram(_simple_solution())
     assert len(fig.axes) == 1
+
+
+def test_plot_continuation_annotate_false_by_default_no_text_boxes():
+    fig = plot_continuation(_simple_solution(with_bifurcation=True))
+    assert len(fig.axes[0].texts) == 0
+
+
+def test_plot_continuation_annotate_true_adds_one_box_per_bifurcation():
+    solution = _simple_solution(with_bifurcation=True)
+    fig = plot_continuation(solution, annotate=True)
+    assert len(fig.axes[0].texts) == len(solution.bifurcations)
