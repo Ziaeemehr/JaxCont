@@ -9,8 +9,15 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import pytest
 
+from jaxcont.api import Branch, ContinuationResult, EventHit
 from jaxcont.core.continuation import ContinuationSolution
 from jaxcont.viz.styles import BIFURCATION_STYLES, DEFAULT_STYLE, style_for
+
+
+@pytest.fixture(autouse=True)
+def _close_figures_after_test():
+    yield
+    plt.close("all")
 
 
 def test_bifurcation_styles_cover_detector_types():
@@ -197,7 +204,7 @@ def test_plot_all_states_single_state_keeps_its_xlabel():
     assert fig.axes[0].get_xlabel() != ""
 
 
-from jaxcont.viz.portraits import plot_eigenvalues, plot_phase_portrait
+from jaxcont.viz.portraits import EigenvalueReference, plot_eigenvalues, plot_phase_portrait
 
 
 def test_plot_phase_portrait_draws_onto_supplied_ax_not_a_new_figure():
@@ -252,11 +259,110 @@ def test_plot_eigenvalues_draws_onto_supplied_ax_not_a_new_figure():
     assert len(ax.lines) > 0
 
 
+def _eigenvalue_result():
+    parameters = jnp.array([-1.0, 0.0, 1.0])
+    eigenvalues = jnp.array(
+        [
+            [-0.5 + 1.0j, -0.5 - 1.0j],
+            [0.0 + 1.0j, 0.0 - 1.0j],
+            [0.5 + 1.0j, 0.5 - 1.0j],
+        ]
+    )
+    stable = jnp.array([True, False, False])
+    branch = Branch(
+        params=parameters,
+        states=jnp.zeros((3, 2)),
+        eigenvalues=eigenvalues,
+        stable=stable,
+    )
+    solution = ContinuationSolution(
+        states=branch.states,
+        parameters=parameters,
+        eigenvalues=eigenvalues,
+        stability=stable,
+        param_name="mu",
+    )
+    return ContinuationResult(
+        branch=branch,
+        events=[EventHit(kind="hopf", p=0.0, u=jnp.zeros(2))],
+        _solution=solution,
+    )
+
+
+def test_plot_eigenvalues_accepts_result_and_infers_metadata():
+    fig = plot_eigenvalues(_eigenvalue_result())
+
+    assert len(fig.axes) == 2
+    assert all(ax.get_xlabel() == "mu" for ax in fig.axes)
+    assert all("JaxCont H" in ax.get_legend_handles_labels()[1] for ax in fig.axes)
+
+
+def test_plot_eigenvalues_shades_stable_and_unstable_regions():
+    fig = plot_eigenvalues(_eigenvalue_result(), shade_stability=True)
+
+    for ax in fig.axes:
+        labels = ax.get_legend_handles_labels()[1]
+        assert "Stable" in labels
+        assert "Unstable" in labels
+        assert len(ax.patches) == 2
+
+
+def test_plot_eigenvalues_adds_external_references_to_both_panels():
+    reference = EigenvalueReference(0.0, "MatCont H: mu=0")
+    fig = plot_eigenvalues(_eigenvalue_result(), references=[reference])
+
+    for ax in fig.axes:
+        assert "MatCont H: mu=0" in ax.get_legend_handles_labels()[1]
+
+
+def test_plot_eigenvalues_accepts_raw_arrays_and_custom_labels():
+    eigenvalues = jnp.array(
+        [[-1.0 + 0.5j, -2.0], [-0.5 + 0.25j, -1.5]]
+    )
+    fig = plot_eigenvalues(
+        eigenvalues,
+        parameters=jnp.array([2.0, 3.0]),
+        param_name="gain",
+        labels=["critical", "secondary"],
+        titles=("Growth rates", "Frequencies"),
+    )
+
+    real, imag = fig.axes
+    assert real.get_xlabel() == "gain"
+    assert real.get_title() == "Growth rates"
+    assert imag.get_title() == "Frequencies"
+    assert {"critical", "secondary"} <= set(real.get_legend_handles_labels()[1])
+
+
+def test_plot_eigenvalues_accepts_pair_of_supplied_axes():
+    fig, axes = plt.subplots(2, 1)
+
+    returned = plot_eigenvalues(_eigenvalue_result(), ax=axes)
+
+    assert returned is fig
+    assert axes[0].get_title() == "Real Part of Eigenvalues"
+    assert axes[1].get_title() == "Imaginary Part of Eigenvalues"
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"parameters": jnp.array([0.0])}, "same number of points"),
+        ({"labels": ["only one"]}, "one label per eigenvalue"),
+    ],
+)
+def test_plot_eigenvalues_validates_generalized_inputs(kwargs, message):
+    eigenvalues = jnp.array([[1.0 + 1.0j, 2.0], [0.5 + 0.5j, 1.5]])
+
+    with pytest.raises(ValueError, match=message):
+        plot_eigenvalues(eigenvalues, **kwargs)
+
+
 def test_viz_package_exports_public_surface():
     import jaxcont.viz as viz
 
     for name in (
         "plot_continuation", "plot_bifurcation_diagram", "plot_all_states",
-        "plot_phase_portrait", "plot_eigenvalues",
+        "plot_phase_portrait", "plot_eigenvalues", "EigenvalueReference",
     ):
         assert hasattr(viz, name), f"jaxcont.viz missing {name}"
