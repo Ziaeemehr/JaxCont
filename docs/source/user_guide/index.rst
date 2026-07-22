@@ -46,9 +46,9 @@ Basic Workflow
 ^^^^^^^^^^^^^^
 
 1. Define your dynamical system
-2. Create a ContinuationProblem
-3. Choose a continuation method
-4. Run the continuation
+2. Create a problem with ``jc.bif_problem``
+3. Choose a continuation algorithm (``jc.PseudoArclength()`` or ``jc.Natural()``)
+4. Run the continuation with ``jc.continuation``
 5. Analyze results and bifurcations
 6. Visualize the bifurcation diagram
 
@@ -56,27 +56,29 @@ Example workflow:
 
 .. code-block:: python
 
-   # 1. Define system
-   def my_system(state, params):
+   import jaxcont as jc
+
+   # 1. Define system: f(state, param, args) -> residual
+   def my_system(u, p, args):
        # ... implement your RHS
        return f_value
-   
+
    # 2. Create problem
-   problem = ContinuationProblem(
-       rhs=my_system,
-       u0=initial_state,
-       params=parameters,
-       continuation_param='parameter_name'
-   )
-   
-   # 3. Run continuation
-   solution = equilibrium_continuation(
+   problem = jc.bif_problem(my_system, u0=initial_state, p0=p_min)
+
+   # 3-4. Run continuation
+   result = jc.continuation(
        problem,
-       param_range=(p_min, p_max)
+       jc.PseudoArclength(),
+       p_span=(p_min, p_max),
+       settings=jc.ContinuationPar(),
+       events=[jc.Fold(), jc.Hopf()],
    )
-   
-   # 4. Analyze
-   bifurcations = detect_bifurcations(solution)
-   
-   # 5. Visualize
-   solution.plot()
+
+   # 5. Analyze
+   solution = result._solution
+   bifurcations = solution.bifurcations
+
+   # 6. Visualize
+   from jaxcont.utils.plotting import plot_continuation
+   plot_continuation(solution)
