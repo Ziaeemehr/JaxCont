@@ -99,4 +99,4 @@ docs/_templates/
 *.svg
 !docs/images/*.png
 !docs/images/*.svg
-!notes/engine_consolidation_slides/engine_consolidation.pdf
+
