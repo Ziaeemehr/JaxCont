@@ -33,7 +33,7 @@ cannot offer at all. See below for the reasoning.
 | Fold + Hopf detection | ✅ Works, tested | With bisection refinement |
 | Stability (eigenvalues) | ✅ Works, 98% cov | Fixed 2026-07-19 (was 51%) |
 | Naming/abbreviation reference | ✅ Works, tested | [bifurcations/taxonomy.py](../src/jaxcont/bifurcations/taxonomy.py) |
-| Plotting | ⚠️ Works, 9% cov | Under-tested |
+| Plotting | ⚠️ Works, 9% cov | Under-tested — consolidation into `jaxcont/viz/` planned, see below |
 | Periodic orbits | ⚠️ Stub | Untested, hidden from v0.1.0 |
 | Floquet multipliers | ❌ Stub, 22% cov | Hidden from v0.1.0 |
 | BVP (collocation/shooting) | ❌ NotImplementedError | Hidden from v0.1.0 |
@@ -259,6 +259,34 @@ v0.2 engineering recommendation #4).
 Issues #10 (legacy natural-continuation FD/bare-except) and #8/#9 (bothside, sub-epsilon tol) are
 real but non-blocking for v0.1.0 — they don't affect the default `scan`/`PseudoArclength` path.
 Fix opportunistically or fold into the v0.2 engine consolidation (see below).
+
+## Visualization module consolidation (planned, 2026-07-22)
+
+Found while extending `example_01`'s plot labels: `plot_continuation()` (in the then-
+`jaxcont/utils/plotting.py`) only ever plots one state variable vs. the parameter, on one axis,
+with plain fold/Hopf markers. Two examples worked around this by hand-rolling their own plotting
+instead of extending the shared function: `example_02_lorenz.py` has a 40-line
+`plot_lorenz84_diagram()` for annotated (text-box+arrow) bifurcation labels, and
+`example_05_neural_mass.py` has a 20-line manual per-state-variable subplot loop. Both duplicate
+(and drift from) the marker/color styling already in `plot_continuation`.
+
+- [ ] Move `plot_continuation`/`plot_bifurcation_diagram`/`plot_phase_portrait`/`plot_eigenvalues`
+  into a new `jaxcont/viz/` subpackage (`core.py`/`styles.py`/`portraits.py`), delete
+  `jaxcont/utils/plotting.py` outright (matches this project's "remove, don't deprecate" pre-1.0
+  practice — see the engine-consolidation entry above). Top-level `jc.plot_continuation`/
+  `jc.plot_bifurcation_diagram` names are unaffected.
+- [ ] Add a single shared `BIFURCATION_STYLES` table (`viz/styles.py`), replacing the three
+  independently-hardcoded marker/color dicts in `plotting.py`, `example_02`, and `example_05`.
+- [ ] Add `annotate: bool = False` to `plot_continuation` (the `example_02` text-box+arrow style,
+  opt-in — existing plots unaffected by default) and a new `plot_all_states()` (the `example_05`
+  multi-panel style), both consuming the shared style table.
+- [ ] Migrate `example_02`/`example_05` onto the shared functions; `example_03` gets an import-path
+  update only.
+- [ ] Add `tests/test_viz.py` — closes part of the "Plotting ... Under-tested" gap above (currently
+  zero dedicated plotting tests exist).
+- [ ] Update this table's "Plotting" row once done.
+
+Design spec: [docs/superpowers/specs/2026-07-22-viz-module-design.md](../docs/superpowers/specs/2026-07-22-viz-module-design.md).
 
 ## v0.2.0 — Periodic orbits
 - [ ] Periodic-orbit continuation (collocation preferred over shooting)
