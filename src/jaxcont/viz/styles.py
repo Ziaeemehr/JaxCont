@@ -25,14 +25,14 @@ class BifStyle:
 #: same naming convention as the rest of the project: "fold" -> LP, "hopf" ->
 #: H, matching taxonomy.py's own comments (`# jc.Fold`, `# jc.Hopf`).
 BIFURCATION_STYLES: dict[str, BifStyle] = {
-    "fold": BifStyle("s", "green", "LP"),
-    "hopf": BifStyle("^", "magenta", "H"),
-    "period-doubling": BifStyle("v", "orange", "PD"),
-    "branch-point": BifStyle("D", "purple", "BP"),
+    "fold": BifStyle("s", "#009E73", "LP"),
+    "hopf": BifStyle("^", "#CC79A7", "H"),
+    "period-doubling": BifStyle("v", "#E69F00", "PD"),
+    "branch-point": BifStyle("D", "#7B61A8", "BP"),
 }
 
 #: Fallback for a bif_type with no entry above.
-DEFAULT_STYLE = BifStyle("x", "black", None)
+DEFAULT_STYLE = BifStyle("x", "#262626", None)
 
 
 def style_for(bif_type: str) -> BifStyle:

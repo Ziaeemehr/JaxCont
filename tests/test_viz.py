@@ -1,5 +1,7 @@
 """Tests for jaxcont.viz."""
 
+import warnings
+
 import matplotlib
 matplotlib.use("Agg")
 
@@ -87,6 +89,57 @@ def test_plot_continuation_annotate_true_adds_one_box_per_bifurcation():
     solution = _simple_solution(with_bifurcation=True)
     fig = plot_continuation(solution, annotate=True)
     assert len(fig.axes[0].texts) == len(solution.bifurcations)
+
+
+def test_plot_continuation_has_clean_publication_defaults():
+    fig = plot_continuation(_simple_solution(with_stability=True))
+    ax = fig.axes[0]
+
+    assert not ax.spines["top"].get_visible()
+    assert not ax.spines["right"].get_visible()
+    assert ax.get_axisbelow()
+    assert {line.get_label() for line in ax.lines} >= {"Stable", "Unstable"}
+
+
+def test_plot_continuation_style_kwargs_override_defaults_without_warning():
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        fig = plot_continuation(
+            _simple_solution(), marker="x", linestyle=":", linewidth=3.0,
+        )
+
+    assert not caught
+    line = fig.axes[0].lines[0]
+    assert line.get_marker() == "x"
+    assert line.get_linestyle() == ":"
+    assert line.get_linewidth() == 3.0
+
+
+def test_plot_continuation_uses_bifurcation_color_for_annotation():
+    fig = plot_continuation(_simple_solution(with_bifurcation=True), annotate=True)
+    annotation = fig.axes[0].texts[0]
+    expected = BIFURCATION_STYLES["fold"].color
+
+    assert annotation.arrow_patch.get_edgecolor() == matplotlib.colors.to_rgba(expected)
+
+
+def test_plot_continuation_deduplicates_coincident_bifurcations():
+    solution = _simple_solution(with_bifurcation=True)
+    solution.bifurcations.append(dict(solution.bifurcations[0]))
+
+    fig = plot_continuation(solution, annotate=True)
+    ax = fig.axes[0]
+
+    assert len(ax.texts) == 1
+    assert [text.get_text() for text in ax.get_legend().get_texts()].count("LP") == 1
+
+
+def test_plot_continuation_custom_title_uses_only_left_title_slot():
+    fig = plot_continuation(_simple_solution(), title="A custom title")
+    ax = fig.axes[0]
+
+    assert ax.get_title(loc="left") == "A custom title"
+    assert ax.get_title(loc="center") == ""
 
 
 from jaxcont.viz.core import plot_all_states

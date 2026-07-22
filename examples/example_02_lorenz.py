@@ -134,7 +134,10 @@ for bif in solution.bifurcations:
 # With a 4-D state we pick one variable (X) to plot against the parameter;
 # detected bifurcations are annotated on the branch.
 
-fig = plot_continuation(solution, annotate=True)
-fig.axes[0].set_title("Lorenz-84 System: Bifurcation Diagram (X variable)", fontweight="bold")
+fig = plot_continuation(
+    solution,
+    annotate=True,
+    title="Lorenz-84 System: Bifurcation Diagram (X variable)",
+)
 plt.savefig("images/lorenz84_bifurcation.png", dpi=150, bbox_inches="tight")
 plt.show()
