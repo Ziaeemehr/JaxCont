@@ -68,7 +68,9 @@ def test_plot_continuation_marks_fold_with_shared_style():
     fig = plot_continuation(_simple_solution(with_bifurcation=True))
     ax = fig.axes[0]
     labels = [t.get_text() for t in ax.get_legend().get_texts()]
-    assert "Fold" in labels
+    # "LP" (Limit Point), matching bifurcations/taxonomy.py's standard
+    # abbreviation for a fold bifurcation -- not the full word "Fold".
+    assert "LP" in labels
 
 
 def test_plot_bifurcation_diagram_is_an_alias():

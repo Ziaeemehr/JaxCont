@@ -20,11 +20,13 @@ class BifStyle:
 
 
 #: Keyed by the lowercase bif_type strings BifurcationDetector emits (see
-#: bifurcations/detector.py) -- NOT taxonomy.py's short codes ("LP"/"H"),
-#: which are a separate, human-facing vocabulary.
+#: bifurcations/detector.py). Labels use bifurcations/taxonomy.py's standard
+#: abbreviations (BIFURCATION_TYPES), not full words, so every plot uses the
+#: same naming convention as the rest of the project: "fold" -> LP, "hopf" ->
+#: H, matching taxonomy.py's own comments (`# jc.Fold`, `# jc.Hopf`).
 BIFURCATION_STYLES: dict[str, BifStyle] = {
-    "fold": BifStyle("s", "green", "Fold"),
-    "hopf": BifStyle("^", "magenta", "Hopf"),
+    "fold": BifStyle("s", "green", "LP"),
+    "hopf": BifStyle("^", "magenta", "H"),
     "period-doubling": BifStyle("v", "orange", "PD"),
     "branch-point": BifStyle("D", "purple", "BP"),
 }
