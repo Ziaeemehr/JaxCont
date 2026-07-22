@@ -13,6 +13,8 @@ from jaxcont.core.continuation import ContinuationSolution
 def plot_continuation(
     solution: ContinuationSolution,
     state_index: int = 0,
+    state_name: Optional[str] = None,
+    param_name: Optional[str] = None,
     ax: Optional[plt.Axes] = None,
     show_bifurcations: bool = True,
     stable_color: str = "blue",
@@ -21,16 +23,22 @@ def plot_continuation(
 ) -> plt.Figure:
     """
     Plot continuation diagram.
-    
+
     Args:
         solution: Continuation solution
         state_index: Which state variable to plot
+        state_name: Label for the plotted state variable. Defaults to
+            ``solution.state_names[state_index]`` if the problem defined one,
+            else ``"State[<index>]"``.
+        param_name: Label for the continuation parameter on the x-axis.
+            Defaults to ``solution.param_name`` if the problem defined one,
+            else ``"Parameter"``.
         ax: Matplotlib axes (creates new figure if None)
         show_bifurcations: Whether to mark bifurcation points
         stable_color: Color for stable branches
         unstable_color: Color for unstable branches
         **kwargs: Additional plotting options
-    
+
     Returns:
         Matplotlib figure
     """
@@ -38,7 +46,16 @@ def plot_continuation(
         fig, ax = plt.subplots(figsize=(10, 6))
     else:
         fig = ax.get_figure()
-    
+
+    if state_name is None:
+        state_names = getattr(solution, "state_names", None)
+        state_name = (
+            state_names[state_index] if state_names is not None
+            else f"State[{state_index}]"
+        )
+    if param_name is None:
+        param_name = getattr(solution, "param_name", None) or "Parameter"
+
     # Extract data
     params = solution.parameters
     states = solution.states[:, state_index] if solution.state_dim > 1 else solution.states
@@ -67,7 +84,7 @@ def plot_continuation(
                 ax.plot(
                     params[start:end],
                     states[start:end],
-                    'o-',
+                    marker='o',
                     color=color,
                     linestyle=linestyle,
                     label=segment_label,
@@ -120,8 +137,8 @@ def plot_continuation(
             ax.plot(param, state_val, marker, color=color, markersize=10, 
                    label=label, markeredgecolor='black', markeredgewidth=1)
     
-    ax.set_xlabel("Parameter", fontsize=12)
-    ax.set_ylabel(f"State[{state_index}]", fontsize=12)
+    ax.set_xlabel(param_name, fontsize=12)
+    ax.set_ylabel(state_name, fontsize=12)
     ax.set_title("Continuation Diagram", fontsize=14)
     ax.grid(True, alpha=0.3)
     ax.legend()

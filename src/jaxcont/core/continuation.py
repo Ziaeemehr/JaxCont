@@ -84,6 +84,8 @@ class ContinuationSolution:
         bifurcations: List of detected bifurcation points
         tangent_vectors: Tangent vectors along the branch
         convergence_info: Information about convergence at each step
+        state_names: Optional display names for each state component
+        param_name: Optional display name for the continuation parameter
     """
     states: Array
     parameters: Array
@@ -92,6 +94,8 @@ class ContinuationSolution:
     bifurcations: List[Dict[str, Any]] = field(default_factory=list)
     tangent_vectors: Optional[Array] = None
     convergence_info: Optional[List[Dict[str, Any]]] = None
+    state_names: Optional[Tuple[str, ...]] = None
+    param_name: Optional[str] = None
     
     @property
     def n_points(self) -> int:

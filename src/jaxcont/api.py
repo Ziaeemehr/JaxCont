@@ -63,10 +63,14 @@ class BifProblem:
     Extra parameters live in ``args`` (any PyTree) — this is the axis you
     ``vmap``/``grad`` over (a second parameter, a design vector, NN weights).
 
+    ``state_names``/``param_name`` are display labels only (e.g. for
+    ``plot_continuation``); they carry no numerical meaning.
+
     Registered as a JAX PyTree: ``u0``, ``p0``, ``args`` are dynamic leaves;
-    ``f`` and ``kind`` are static. This makes ``jax.vmap(..., in_axes=...)`` over
-    a batched problem structurally valid (full end-to-end vmap awaits the
-    lax.scan loop rewrite; see ARCHITECTURE.md §3.1).
+    ``f``, ``kind``, ``state_names`` and ``param_name`` are static. This makes
+    ``jax.vmap(..., in_axes=...)`` over a batched problem structurally valid
+    (full end-to-end vmap awaits the lax.scan loop rewrite; see
+    ARCHITECTURE.md §3.1).
     """
 
     f: Callable[[Array, Array, PyTree], Array]
@@ -74,6 +78,8 @@ class BifProblem:
     p0: Array
     args: PyTree = None
     kind: Literal["equilibrium", "periodic", "bvp"] = "equilibrium"
+    state_names: Optional[Tuple[str, ...]] = None
+    param_name: Optional[str] = None
 
     def at(
         self,
@@ -104,14 +110,17 @@ class BifProblem:
 
 def _bifproblem_flatten(prob: BifProblem):
     children = (prob.u0, prob.p0, prob.args)
-    aux = (prob.f, prob.kind)
+    aux = (prob.f, prob.kind, prob.state_names, prob.param_name)
     return children, aux
 
 
 def _bifproblem_unflatten(aux, children):
-    f, kind = aux
+    f, kind, state_names, param_name = aux
     u0, p0, args = children
-    return BifProblem(f=f, u0=u0, p0=p0, args=args, kind=kind)
+    return BifProblem(
+        f=f, u0=u0, p0=p0, args=args, kind=kind,
+        state_names=state_names, param_name=param_name,
+    )
 
 
 jax.tree_util.register_pytree_node(
@@ -126,17 +135,31 @@ def bif_problem(
     *,
     args: PyTree = None,
     kind: str = "equilibrium",
+    state_names: Optional[Sequence[str]] = None,
+    param_name: Optional[str] = None,
 ) -> BifProblem:
     """
     Front-door factory for a :class:`BifProblem` (mirrors lyapax's
     ``ode_problem``). Coerces ``u0``/``p0`` to JAX arrays.
+
+    ``state_names``/``param_name`` are optional display labels (used by
+    ``plot_continuation`` and friends) -- purely cosmetic, no effect on the
+    numerics.
     """
+    u0 = jnp.asarray(u0)
+    if state_names is not None and len(state_names) != len(u0):
+        raise ValueError(
+            f"state_names has {len(state_names)} entries but u0 has "
+            f"{len(u0)} components"
+        )
     return BifProblem(
         f=f,
-        u0=jnp.asarray(u0),
-        p0=jnp.asarray(p0, dtype=jnp.asarray(u0).dtype),
+        u0=u0,
+        p0=jnp.asarray(p0, dtype=u0.dtype),
         args=args,
         kind=kind,
+        state_names=tuple(state_names) if state_names is not None else None,
+        param_name=param_name,
     )
 
 
@@ -408,6 +431,8 @@ def _run_scan(
         eigenvalues=eigenvalues,
         stability=stability,
         convergence_info=convergence_info,
+        state_names=problem.state_names,
+        param_name=problem.param_name,
     )
 
     # Reuse the existing detector on the reassembled solution.

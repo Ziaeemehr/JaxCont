@@ -52,7 +52,10 @@ def pitchfork_rhs(u, p, args):
 # We start from ``r = -1`` on the lower branch, where the only equilibrium is
 # a single stable point.
 
-prob = jc.bif_problem(pitchfork_rhs, u0=jnp.array([-2.0]), p0=-1.0)
+prob = jc.bif_problem(
+    pitchfork_rhs, u0=jnp.array([-2.0]), p0=-1.0,
+    state_names=["x"], param_name="r",
+)
 
 # %%
 # Run the continuation
