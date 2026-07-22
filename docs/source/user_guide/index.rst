@@ -80,5 +80,5 @@ Example workflow:
    bifurcations = solution.bifurcations
 
    # 6. Visualize
-   from jaxcont.utils.plotting import plot_continuation
+   from jaxcont.viz import plot_continuation
    plot_continuation(solution)

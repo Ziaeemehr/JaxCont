@@ -152,7 +152,7 @@ class ContinuationSolution:
         Args:
             **kwargs: Additional plotting options
         """
-        from jaxcont.utils.plotting import plot_continuation
+        from jaxcont.viz import plot_continuation
         return plot_continuation(self, **kwargs)
     
     def save(self, filename: str):

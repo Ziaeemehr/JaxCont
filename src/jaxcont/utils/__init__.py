@@ -8,7 +8,7 @@ from jaxcont.utils.config import (
     print_package_import_test,
     run_installation_tests,
 )
-from jaxcont.utils.plotting import plot_bifurcation_diagram, plot_continuation
+from jaxcont.viz import plot_bifurcation_diagram, plot_continuation
 
 __all__ = [
     "Config",

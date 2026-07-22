@@ -62,7 +62,7 @@ from jaxcont.stability.eigenvalue import compute_eigenvalues, analyze_stability
 
 # Utilities
 from jaxcont.utils.config import Config
-from jaxcont.utils.plotting import plot_bifurcation_diagram, plot_continuation
+from jaxcont.viz import plot_bifurcation_diagram, plot_continuation
 
 __all__ = [
     # Functional API (blessed surface)
