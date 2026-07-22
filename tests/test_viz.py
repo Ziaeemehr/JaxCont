@@ -130,6 +130,20 @@ def test_plot_all_states_rejects_mismatched_state_names():
         plot_all_states(_two_state_solution(), state_names=["only-one-name"])
 
 
+def test_plot_all_states_single_state_keeps_its_xlabel():
+    """With state_dim == 1 there's only one subplot, so the "clear all but
+    the last subplot's xlabel" logic (`if i < n - 1: ax.set_xlabel("")`) must
+    never trigger -- the sole subplot should keep its x-axis label.
+    """
+    solution = _simple_solution()
+    assert solution.state_dim == 1
+
+    fig = plot_all_states(solution)
+
+    assert len(fig.axes) == 1
+    assert fig.axes[0].get_xlabel() != ""
+
+
 from jaxcont.viz.portraits import plot_eigenvalues, plot_phase_portrait
 
 
@@ -166,6 +180,23 @@ def test_plot_eigenvalues_plots_real_and_imag_parts():
     )
     fig = plot_eigenvalues(solution)
     assert len(fig.axes) == 2
+
+
+def test_plot_eigenvalues_draws_onto_supplied_ax_not_a_new_figure():
+    states = jnp.array([[0.0, 1.0], [0.5, 1.5]])
+    parameters = jnp.array([0.0, 1.0])
+    eigenvalues = jnp.array([[1.0 + 1.0j, -1.0 + 0.5j], [0.9 + 0.9j, -0.8 + 0.4j]])
+    solution = ContinuationSolution(
+        states=states, parameters=parameters, eigenvalues=eigenvalues,
+    )
+
+    fig, ax = plt.subplots()
+
+    returned_fig = plot_eigenvalues(solution, ax=ax)
+
+    assert returned_fig is fig
+    assert ax.get_title() == "Real Part of Eigenvalues"
+    assert len(ax.lines) > 0
 
 
 def test_viz_package_exports_public_surface():
