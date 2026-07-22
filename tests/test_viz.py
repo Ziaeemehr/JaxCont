@@ -166,3 +166,13 @@ def test_plot_eigenvalues_plots_real_and_imag_parts():
     )
     fig = plot_eigenvalues(solution)
     assert len(fig.axes) == 2
+
+
+def test_viz_package_exports_public_surface():
+    import jaxcont.viz as viz
+
+    for name in (
+        "plot_continuation", "plot_bifurcation_diagram", "plot_all_states",
+        "plot_phase_portrait", "plot_eigenvalues",
+    ):
+        assert hasattr(viz, name), f"jaxcont.viz missing {name}"
