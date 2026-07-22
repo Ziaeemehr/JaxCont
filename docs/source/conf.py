@@ -6,6 +6,13 @@
 import os
 import sys
 
+# Read the Docs builders are CPU-only. Force hosted documentation builds onto
+# the CPU backend before importing JaxCont/JAX so an installed CUDA plugin
+# cannot emit a no-device initialization traceback into Sphinx-Gallery output.
+# Local gallery builds retain JAX's normal device selection and can use a GPU.
+if os.environ.get('READTHEDOCS') == 'True':
+    os.environ.setdefault('JAX_PLATFORMS', 'cpu')
+
 sys.path.insert(0, os.path.abspath('../../src'))
 
 # Import version from the package
