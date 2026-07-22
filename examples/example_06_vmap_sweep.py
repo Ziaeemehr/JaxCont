@@ -65,10 +65,10 @@ def run_one(b):
 
 
 # %%
-# Run 256 diagrams with a single ``vmap`` call
+# Run 32 diagrams with a single ``vmap`` call
 # -------------------------------------------------
 
-n_diagrams = 256
+n_diagrams = 32
 bs = jnp.linspace(-0.4, 0.4, n_diagrams)
 
 batched = jax.vmap(run_one)
