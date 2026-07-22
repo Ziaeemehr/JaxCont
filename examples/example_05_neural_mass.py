@@ -27,7 +27,7 @@ import os
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-from jaxcont import ContinuationProblem, equilibrium_continuation
+import jaxcont as jc
 from jaxcont.solvers.newton import NewtonSolver
 
 os.makedirs("images", exist_ok=True)
@@ -35,10 +35,9 @@ os.makedirs("images", exist_ok=True)
 # %%
 # Define the system
 
-def TMvf(state, params):
+def TMvf(state, E0, args):
     E, x, u = state
-    J, alpha, E0 = params["J"], params["α"], params["E0"]
-    tau, tauD, tauF, U0 = params["τ"], params["τD"], params["τF"], params["U0"]
+    J, alpha, tau, tauD, tauF, U0 = args
 
     SS0 = J * u * x * E + E0
     SS1 = alpha * jnp.log(1 + jnp.exp(SS0 / alpha))
@@ -56,13 +55,11 @@ def TMvf(state, params):
 # guessing one, we refine an approximate initial guess with the plain Newton
 # solver until the residual is (near) zero.
 
-params = {
-    "α": 1.5, "τ": 0.013, "J": 3.07, "E0": -2.0,
-    "τD": 0.200, "U0": 0.3, "τF": 1.5, "τS": 0.007,
-}
+E0_0 = -2.0
+args = (3.07, 1.5, 0.013, 0.200, 1.5, 0.3)  # J, alpha, tau, tauD, tauF, U0
 z0_guess = jnp.array([0.238616, 0.982747, 0.367876])
 
-residual_norm = jnp.linalg.norm(TMvf(z0_guess, params))
+residual_norm = jnp.linalg.norm(TMvf(z0_guess, E0_0, args))
 print(f"Residual at initial guess: {residual_norm:.2e}")
 
 if residual_norm > 1e-6:
@@ -70,7 +67,7 @@ if residual_norm > 1e-6:
     # (fairly stiff, tau=0.013) system -- tighter tolerances like 1e-6 sit
     # close enough to the noise floor that convergence becomes unreliable.
     solver = NewtonSolver(tol=1e-5, max_iter=100)
-    z0, converged, n_iter = solver.solve(lambda s: TMvf(s, params), z0_guess)
+    z0, converged, n_iter = solver.solve(lambda s: TMvf(s, E0_0, args), z0_guess)
     print(f"Refined equilibrium in {n_iter} Newton iterations "
           f"(converged={converged}): E={z0[0]:.6f}, x={z0[1]:.6f}, u={z0[2]:.6f}")
 else:
@@ -79,22 +76,25 @@ else:
 # %%
 # Run the continuation
 # -----------------------
-# We continue in :math:`E_0` from -4.0 to -0.9. BifurcationKit.jl's reference
-# solution reports Hopf bifurcations somewhere in this range.
+# We continue in :math:`E_0` from -2.0 (the point ``z0`` is actually an
+# equilibrium at) to -0.9. ``jc.continuation()`` starts the scan literally at
+# ``p_span[0]`` -- not at any stored problem attribute -- so ``p_span`` must
+# begin at ``E0_0``, not at the old ``param_range`` lower bound of -4.0 (which
+# the deleted OO engine only used as a direction/stop-bound hint, never a
+# literal start). BifurcationKit.jl's reference solution reports Hopf
+# bifurcations somewhere in this range.
 
-problem = ContinuationProblem(rhs=TMvf, u0=z0, params=params, continuation_param="E0")
+prob = jc.bif_problem(TMvf, u0=z0, p0=E0_0, args=args)
 
-solution = equilibrium_continuation(
-    problem,
-    param_range=(-4.0, -0.9),
-    ds=0.02,
-    max_steps=400,
-    detect_bifurcations=True,
-    compute_stability=True,
+result = jc.continuation(
+    prob, jc.PseudoArclength(), p_span=(E0_0, -0.9),
+    settings=jc.ContinuationPar(
+        ds=0.02, max_steps=400, newton_tol=1e-5, compute_stability=True,
+    ),
+    events=[jc.Fold(), jc.Hopf()],
     verbose=True,
-    bifurcation_tolerance=1e-4,
-    newton_tol=1e-5,  # float32-reachable; 1e-8 sits below machine epsilon
 )
+solution = result._solution
 
 print(f"Continuation completed: {solution.n_points} points computed, "
       f"E0 in [{float(solution.parameters.min()):.4f}, {float(solution.parameters.max()):.4f}]")

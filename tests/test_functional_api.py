@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import pytest
 
 import jaxcont as jc
-from jaxcont.core.scan_continuation import pseudo_arclength_scan
+from jaxcont.core.scan_continuation import pseudo_arclength_scan, natural_scan
 
 
 # --- test systems ---------------------------------------------------------
@@ -72,45 +72,50 @@ class TestBifProblem:
 # --- continuation() (both engines) ---------------------------------------
 
 class TestContinuation:
-    def test_scan_is_default(self):
-        assert jc.PseudoArclength().engine == "scan"
-
-    @pytest.mark.parametrize("engine", ["legacy", "scan"])
-    def test_pitchfork_basic(self, engine):
+    def test_pitchfork_basic(self):
         prob = jc.bif_problem(pitchfork, u0=jnp.array([0.1]), p0=0.5)
         sol = jc.continuation(
-            prob, jc.PseudoArclength(engine=engine), p_span=(0.5, 1.5),
+            prob, jc.PseudoArclength(), p_span=(0.5, 1.5),
             settings=jc.ContinuationPar(ds=0.05, max_steps=60, newton_tol=1e-6),
         )
         assert sol.branch.n_valid > 5
         assert _max_residual(pitchfork, sol.branch.states, sol.branch.params) < 1e-5
 
-    def test_legacy_scan_parity(self):
-        prob = jc.bif_problem(pitchfork, u0=jnp.array([0.1]), p0=0.5)
-        kw = dict(p_span=(0.5, 1.5),
-                  settings=jc.ContinuationPar(ds=0.05, max_steps=60, newton_tol=1e-6))
-        legacy = jc.continuation(prob, jc.PseudoArclength(engine="legacy"), **kw)
-        scan = jc.continuation(prob, jc.PseudoArclength(engine="scan"), **kw)
-        # same terminal parameter to a few digits
-        assert float(scan.branch.params[-1]) == pytest.approx(
-            float(legacy.branch.params[-1]), abs=0.1
-        )
-
     def test_scan_computes_stability(self):
         prob = jc.bif_problem(pitchfork, u0=jnp.array([0.1]), p0=0.5)
         sol = jc.continuation(
-            prob, jc.PseudoArclength(engine="scan"), p_span=(0.5, 1.5),
+            prob, jc.PseudoArclength(), p_span=(0.5, 1.5),
             settings=jc.ContinuationPar(ds=0.05, max_steps=60),
         )
         assert sol.branch.stable is not None
         assert sol.branch.stable.shape[0] == sol.branch.n_valid
+
+    def test_natural_dispatches_to_scan_engine(self):
+        prob = jc.bif_problem(pitchfork, u0=jnp.array([0.1]), p0=0.5)
+        sol = jc.continuation(
+            prob, jc.Natural(), p_span=(0.5, 1.5),
+            settings=jc.ContinuationPar(ds=0.05, max_steps=60, newton_tol=1e-6),
+        )
+        assert sol.branch.n_valid > 5
+        assert _max_residual(pitchfork, sol.branch.states, sol.branch.params) < 1e-5
+
+    def test_pseudo_arclength_has_no_engine_field(self):
+        assert not hasattr(jc.PseudoArclength(), "engine")
+
+    def test_convergence_info_has_ds(self):
+        prob = jc.bif_problem(pitchfork, u0=jnp.array([0.1]), p0=0.5)
+        sol = jc.continuation(
+            prob, jc.PseudoArclength(), p_span=(0.5, 1.5),
+            settings=jc.ContinuationPar(ds=0.05, max_steps=60, newton_tol=1e-6),
+        )
+        assert sol._solution.convergence_info[0]["ds"] > 0
 
 
 class TestFolds:
     def test_scan_passes_and_detects_fold(self):
         prob = jc.bif_problem(saddle_node, u0=jnp.array([1.0]), p0=-1.0)
         sol = jc.continuation(
-            prob, jc.PseudoArclength(engine="scan"), p_span=(-1.0, 0.2),
+            prob, jc.PseudoArclength(), p_span=(-1.0, 0.2),
             settings=jc.ContinuationPar(ds=0.05, max_steps=200, newton_tol=1e-6),
             events=[jc.Fold()],
         )
@@ -240,3 +245,65 @@ class TestScanEngine:
         )
         # n_valid is a concrete int and never exceeds the buffer -> it terminated
         assert 0 < int(res.n_valid) <= 201
+
+    def test_ds_buffer_records_stepsize_per_point(self):
+        f = lambda u, p: pitchfork(u, p, None)
+
+        res = pseudo_arclength_scan(
+            f, jnp.array([0.1]), jnp.array(0.5), jnp.array(1.5),
+            jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
+            jnp.array(1e-6), 60, jnp.array(20),
+        )
+        n = int(res.n_valid)
+        assert res.ds.shape == (61,)
+        assert float(res.ds[0]) == pytest.approx(0.05)  # slot 0 = initial ds0
+        assert bool(jnp.all(res.ds[:n] >= 1e-5 - 1e-9))
+        assert bool(jnp.all(res.ds[:n] <= 0.2 + 1e-9))
+
+
+class TestNaturalScanEngine:
+    def test_tracks_linear_branch(self):
+        # f(u, p) = p - u  ->  equilibrium u = p exactly, no fold anywhere.
+        f = lambda u, p: jnp.array([p - u[0]])
+
+        res = natural_scan(
+            f, jnp.array([0.0]), jnp.array(0.0), jnp.array(1.0),
+            jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
+            jnp.array(1e-6), 40, jnp.array(20),
+        )
+        n = int(res.n_valid)
+        assert n > 5
+        assert bool(jnp.all(res.converged[:n]))
+        # accuracy: u should equal p at every accepted point
+        assert float(jnp.max(jnp.abs(res.states[:n, 0] - res.params[:n]))) < 1e-5
+
+    def test_stalls_at_fold(self):
+        # f(u, p) = p - u^2  ->  fold at p=0; natural continuation (fixed p,
+        # solve for u) cannot pass it -- the branch must stop short of p=0.
+        f = lambda u, p: jnp.array([p - u[0] ** 2])
+
+        res = natural_scan(
+            f, jnp.array([1.0]), jnp.array(1.0), jnp.array(-1.0),
+            jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
+            jnp.array(1e-6), 60, jnp.array(20),
+        )
+        n = int(res.n_valid)
+        last_p = float(res.params[n - 1])
+        assert last_p > 0.0, (
+            f"natural continuation should stall before reaching the fold at "
+            f"p=0, but reached p={last_p}"
+        )
+
+    def test_vmap_batch(self):
+        f = lambda u, p: jnp.array([p - u[0]])
+
+        def run(p0):
+            return natural_scan(
+                f, jnp.array([0.0]), p0, p0 + 1.0,
+                jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
+                jnp.array(1e-6), 40, jnp.array(20),
+            )
+
+        batch = jax.vmap(run)(jnp.linspace(0.0, 2.0, 8))
+        assert batch.params.shape == (8, 41)
+        assert batch.n_valid.shape == (8,)

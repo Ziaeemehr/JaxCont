@@ -27,19 +27,14 @@ events. This example follows a saddle-node branch through its fold:
    print(result.branch.params)
    print([(event.kind, event.p) for event in result.events])
 
-The default is ``PseudoArclength(engine="scan")``. It passes folds, runs the
-whole bounded continuation loop as a compiled JAX computation, computes
-stability in a vectorized post-pass, and refines requested fold/Hopf events.
-Select another algorithm explicitly when needed:
+The default is ``PseudoArclength()``. It passes folds, runs the whole
+bounded continuation loop as a compiled JAX computation, computes stability
+in a vectorized post-pass, and refines requested fold/Hopf events. Select
+another algorithm explicitly when needed:
 
 .. code-block:: python
 
    jc.continuation(problem, jc.Natural(), p_span=(-1.0, -0.1))
-   jc.continuation(
-       problem,
-       jc.PseudoArclength(engine="legacy"),
-       p_span=(-1.0, 0.2),
-   )
 
 Many diagrams in one kernel with vmap
 -------------------------------------

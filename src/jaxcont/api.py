@@ -6,11 +6,10 @@ This is the blessed surface going forward:
     prob = jaxcont.bif_problem(f, u0, p0)
     sol  = jaxcont.continuation(prob, p_span=(0.0, 1.0), events=[jaxcont.Fold()])
 
-The default algorithm (`PseudoArclength(engine="scan")`) runs on the fully
-JIT-compiled whole-loop engine in `core/scan_continuation.py`, which is what
-makes `vmap`-batched continuation and `jax.grad`/`jax.jacfwd` through the
-analysis possible; `engine="legacy"` and `NaturalContinuation` fall back to
-the class-based Python outer loop for compatibility.
+Both algorithms (`PseudoArclength()`, the default, and `Natural()`) run on
+the fully JIT-compiled whole-loop engines in `core/scan_continuation.py`,
+which is what makes `vmap`-batched continuation and `jax.grad`/`jax.jacfwd`
+through the analysis possible.
 """
 
 from __future__ import annotations
@@ -23,8 +22,6 @@ import jax.numpy as jnp
 from jax import Array
 
 from jaxcont.core.continuation import ContinuationProblem, ContinuationSolution
-from jaxcont.core.pseudo_arclength import PseudoArclengthContinuation
-from jaxcont.core.natural_continuation import NaturalContinuation
 
 __all__ = [
     "BifProblem",
@@ -156,22 +153,22 @@ class PseudoArclength(ContinuationAlgorithm):
     """
     Pseudo-arclength continuation (default; passes fold points).
 
-    ``engine`` selects the implementation.
-
-    * ``"scan"`` (default) is the fully JIT-compiled whole-loop engine
-      (``core/scan_continuation.py``): it is ``vmap``-able and structurally
-      bounded. Detection/stability are computed as a vectorized post-pass and
-      refined with the same detector.
-    * ``"legacy"`` is the class-based Python outer loop, retained for
-      compatibility.
+    Runs on the fully JIT-compiled whole-loop engine
+    (``core/scan_continuation.pseudo_arclength_scan``): it is ``vmap``-able
+    and structurally bounded. Detection/stability are computed as a
+    vectorized post-pass and refined with the same detector.
     """
-
-    engine: Literal["legacy", "scan"] = "scan"
 
 
 @dataclass(frozen=True)
 class Natural(ContinuationAlgorithm):
-    """Natural-parameter continuation (simple; stalls at folds)."""
+    """
+    Natural-parameter continuation (simple; stalls at folds).
+
+    Runs on ``core/scan_continuation.natural_scan`` -- the same whole-loop,
+    ``vmap``-safe engine design as :class:`PseudoArclength`, with the
+    fixed-parameter predictor/corrector instead of the bordered one.
+    """
 
 
 @dataclass(frozen=True)
@@ -341,6 +338,7 @@ def _to_legacy_problem(problem: BifProblem) -> ContinuationProblem:
 
 
 def _run_scan(
+    scan_fn,
     problem: BifProblem,
     p_span: Tuple[float, float],
     settings: ContinuationPar,
@@ -348,13 +346,11 @@ def _run_scan(
     verbose: bool,
 ) -> ContinuationResult:
     """
-    Run the fully-JIT scan engine and reassemble a legacy-shaped
-    :class:`ContinuationSolution` so detection/plotting reuse existing code.
+    Run ``scan_fn`` (``pseudo_arclength_scan`` or ``natural_scan``) and
+    reassemble a legacy-shaped :class:`ContinuationSolution` so
+    detection/plotting reuse existing code.
     """
-    from jaxcont.core.scan_continuation import (
-        pseudo_arclength_scan,
-        branch_eigenvalues,
-    )
+    from jaxcont.core.scan_continuation import branch_eigenvalues
 
     args = problem.args
     rhs2 = lambda u, p: problem.f(u, p, args)
@@ -363,7 +359,7 @@ def _run_scan(
     u0 = jnp.asarray(problem.u0)
     dtype = u0.dtype
 
-    res = pseudo_arclength_scan(
+    res = scan_fn(
         rhs2,
         u0,
         jnp.asarray(p_start, dtype),
@@ -396,7 +392,12 @@ def _run_scan(
         stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
 
     convergence_info = [
-        {"step": i, "converged": bool(res.converged[i]), "newton_iters": 0}
+        {
+            "step": i,
+            "converged": bool(res.converged[i]),
+            "newton_iters": 0,
+            "ds": float(res.ds[i]),
+        }
         for i in range(n)
     ]
 
@@ -537,38 +538,11 @@ def continuation(
     Returns:
         :class:`ContinuationResult` with ``.branch`` and ``.events``.
     """
-    # Fast path: the fully-JIT whole-loop engine.
-    if isinstance(alg, PseudoArclength) and alg.engine == "scan":
-        return _run_scan(problem, p_span, settings, events, verbose)
+    from jaxcont.core.scan_continuation import natural_scan, pseudo_arclength_scan
 
     if isinstance(alg, Natural):
-        runner_cls = NaturalContinuation
+        return _run_scan(natural_scan, problem, p_span, settings, events, verbose)
     elif isinstance(alg, PseudoArclength):
-        runner_cls = PseudoArclengthContinuation
+        return _run_scan(pseudo_arclength_scan, problem, p_span, settings, events, verbose)
     else:
         raise TypeError(f"Unknown continuation algorithm: {alg!r}")
-
-    detect = len(events) > 0
-    runner = runner_cls(
-        ds=settings.ds,
-        ds_min=settings.ds_min,
-        ds_max=settings.ds_max,
-        max_steps=settings.max_steps,
-        adaptive_stepsize=settings.adaptive,
-        newton_tol=settings.newton_tol,
-        newton_max_iter=settings.newton_max_iter,
-        detect_bifurcations=detect,
-        compute_stability=settings.compute_stability,
-        verbose=verbose,
-    )
-
-    legacy_problem = _to_legacy_problem(problem)
-    sol = runner.run(legacy_problem, param_range=p_span)
-    result = _to_result(sol)
-
-    # Filter detected events to those requested, if the user narrowed the set.
-    requested = {e._kind for e in events if getattr(e, "_kind", "")}
-    if requested:
-        result.events = [h for h in result.events if h.kind in requested]
-
-    return result

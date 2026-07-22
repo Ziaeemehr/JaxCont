@@ -43,6 +43,7 @@ class ScanResult(NamedTuple):
     states: Array        # (max_steps + 1, n)
     tangents: Array      # (max_steps + 1, n + 1)
     converged: Array     # (max_steps + 1,) bool  (step accepted)
+    ds: Array            # (max_steps + 1,) step size used to reach each point
     n_valid: Array       # scalar int; entries [:n_valid] are real points
 
 
@@ -186,6 +187,7 @@ def pseudo_arclength_scan(
     C = jnp.zeros((max_steps + 1,), dtype=bool).at[0].set(True)
 
     ds_mag0 = jnp.asarray(ds0, dtype)
+    D = jnp.zeros((max_steps + 1,), dtype).at[0].set(ds_mag0)
 
     class Carry(NamedTuple):
         u: Array
@@ -198,6 +200,7 @@ def pseudo_arclength_scan(
         Q: Array
         T: Array
         C: Array
+        D: Array
 
     def cond_fun(c: Carry):
         return jnp.logical_and(c.idx < max_steps, jnp.logical_not(c.stop))
@@ -221,6 +224,7 @@ def pseudo_arclength_scan(
         Q = c.Q.at[write].set(jnp.where(converged, p_new, c.Q[write]))
         T = c.T.at[write].set(jnp.where(converged, tan_new, c.T[write]))
         C = c.C.at[write].set(converged)
+        D = c.D.at[write].set(jnp.where(converged, c.ds, c.D[write]))
 
         # Accept -> advance state; reject -> stay put (and ds already shrinks).
         u = jnp.where(converged, u_new, c.u)
@@ -239,12 +243,12 @@ def pseudo_arclength_scan(
         nonfinite = jnp.logical_not(jnp.all(jnp.isfinite(u)))
         stop = jnp.logical_or(reached, jnp.logical_or(stalled, nonfinite))
 
-        return Carry(u, p, tan, ds, idx, stop, P, Q, T, C)
+        return Carry(u, p, tan, ds, idx, stop, P, Q, T, C, D)
 
     init = Carry(
         u=u0, p=p0, tan=tan0, ds=ds_mag0,
         idx=jnp.array(0, jnp.int32), stop=jnp.array(False),
-        P=P, Q=Q, T=T, C=C,
+        P=P, Q=Q, T=T, C=C, D=D,
     )
     final = lax.while_loop(cond_fun, body, init)
 
@@ -253,6 +257,7 @@ def pseudo_arclength_scan(
         states=final.P,
         tangents=final.T,
         converged=final.C,
+        ds=final.D,
         n_valid=final.idx + 1,   # +1 for the initial point in slot 0
     )
 
@@ -265,3 +270,134 @@ def branch_eigenvalues(f, states, params):
     def eig_at(u, p):
         return jnp.linalg.eigvals(jacfwd(f, argnums=0)(u, p))
     return jax.vmap(eig_at)(states, params)
+
+
+def _natural_correct(f, u_pred, p_fixed, tol, max_iter):
+    """
+    Plain Newton on ``f(u, p_fixed) = 0`` with ``p_fixed`` held constant --
+    no bordered system, no arclength constraint. This is natural
+    continuation's corrector: because it has no extra degree of freedom to
+    absorb an ill-conditioned ``df/du`` (unlike the bordered solve in
+    ``_newton_correct``), it necessarily fails to converge at a fold, where
+    ``df/du`` itself is singular -- by design, not a bug.
+    """
+
+    def cond_fun(carry):
+        _, it, done, _ = carry
+        return jnp.logical_and(jnp.logical_not(done), it < max_iter)
+
+    def body(carry):
+        u, it, _, _ = carry
+        f_val = f(u, p_fixed)
+        jac_u = jacfwd(f, argnums=0)(u, p_fixed)
+        delta = jnp.linalg.solve(jac_u, -f_val)
+        u_new = u + delta
+        f_new = f(u_new, p_fixed)
+        r_new = jnp.sqrt(jnp.sum(f_new ** 2))
+        converged = r_new < tol
+        blew_up = jnp.logical_not(jnp.isfinite(r_new))
+        done = jnp.logical_or(converged, blew_up)
+        return u_new, it + 1, done, r_new
+
+    f0 = f(u_pred, p_fixed)
+    r0 = jnp.sqrt(jnp.sum(f0 ** 2))
+    init = (u_pred, 0, r0 < tol, r0)
+    u_f, it_f, _, r_f = lax.while_loop(cond_fun, body, init)
+    converged = jnp.logical_and(r_f < tol, jnp.all(jnp.isfinite(u_f)))
+    return u_f, converged, it_f
+
+
+@partial(jax.jit, static_argnums=(0, 8))
+def natural_scan(
+    f: Callable[[Array, Array], Array],
+    u0: Array,
+    p0: Array,
+    p_end: Array,
+    ds0: Array,
+    ds_min: Array,
+    ds_max: Array,
+    tol: Array,
+    max_steps: int,
+    max_iter: Array,
+) -> ScanResult:
+    """
+    Continue ``f(u, p) = 0`` in ``p`` from ``(u0, p0)`` toward ``p_end``
+    using natural (fixed-parameter) continuation: predict by incrementing
+    ``p``, correct ``u`` via plain Newton with ``p`` held fixed. Cannot pass
+    fold points -- a rejected step there shrinks ``ds`` toward ``ds_min`` and
+    the loop terminates via the same ``stalled`` condition
+    ``pseudo_arclength_scan`` uses, rather than hanging.
+
+    Same fixed-size-buffer / jit / vmap contract as ``pseudo_arclength_scan``:
+    ``f`` and ``max_steps`` are static; buffers are ``(max_steps + 1, ...)``.
+    Returns the same :class:`ScanResult` shape -- ``tangents`` is zero-filled
+    (natural continuation has no tangent concept) so both engines share one
+    reassembly path in ``api.py``.
+    """
+    u0 = jnp.asarray(u0)
+    n = u0.shape[0]
+    dtype = u0.dtype
+    p0 = jnp.asarray(p0, dtype)
+    p_end = jnp.asarray(p_end, dtype)
+    direction = jnp.sign(p_end - p0)
+
+    P = jnp.zeros((max_steps + 1, n), dtype).at[0].set(u0)
+    Q = jnp.zeros((max_steps + 1,), dtype).at[0].set(p0)
+    T = jnp.zeros((max_steps + 1, n + 1), dtype)
+    C = jnp.zeros((max_steps + 1,), dtype=bool).at[0].set(True)
+    ds_mag0 = jnp.asarray(ds0, dtype)
+    D = jnp.zeros((max_steps + 1,), dtype).at[0].set(ds_mag0)
+
+    class Carry(NamedTuple):
+        u: Array
+        p: Array
+        ds: Array
+        idx: Array
+        stop: Array
+        P: Array
+        Q: Array
+        T: Array
+        C: Array
+        D: Array
+
+    def cond_fun(c: Carry):
+        return jnp.logical_and(c.idx < max_steps, jnp.logical_not(c.stop))
+
+    def body(c: Carry):
+        p_pred = c.p + direction * c.ds
+        u_new, converged, iters = _natural_correct(f, c.u, p_pred, tol, max_iter)
+
+        write = c.idx + 1
+        P = c.P.at[write].set(jnp.where(converged, u_new, c.P[write]))
+        Q = c.Q.at[write].set(jnp.where(converged, p_pred, c.Q[write]))
+        C = c.C.at[write].set(converged)
+        D = c.D.at[write].set(jnp.where(converged, c.ds, c.D[write]))
+
+        u = jnp.where(converged, u_new, c.u)
+        p = jnp.where(converged, p_pred, c.p)
+        idx = c.idx + converged.astype(c.idx.dtype)
+
+        ds = _adapt_ds(c.ds, iters, converged, ds_min, ds_max)
+
+        reached = jnp.where(direction >= 0, p >= p_end, p <= p_end)
+        stalled = jnp.logical_and(jnp.logical_not(converged), ds <= ds_min)
+        nonfinite = jnp.logical_not(jnp.all(jnp.isfinite(u)))
+        stop = jnp.logical_or(reached, jnp.logical_or(stalled, nonfinite))
+
+        return Carry(u, p, ds, idx, stop, P, Q, c.T, C, D)
+
+    init = Carry(
+        u=u0, p=p0, ds=ds_mag0,
+        idx=jnp.array(0, jnp.int32), stop=jnp.array(False),
+        P=P, Q=Q, T=T, C=C, D=D,
+    )
+    final = lax.while_loop(cond_fun, body, init)
+
+    return ScanResult(
+        params=final.Q,
+        states=final.P,
+        tangents=final.T,
+        converged=final.C,
+        ds=final.D,
+        n_valid=final.idx + 1,
+    )
