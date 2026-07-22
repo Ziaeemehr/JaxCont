@@ -2,9 +2,11 @@
 Configuration management for JaxCont.
 """
 
+import importlib
+import pkgutil
+import sys
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Tuple
-import sys
 
 
 @dataclass
@@ -210,45 +212,15 @@ def test_package_imports() -> Dict[str, Dict[str, any]]:
     """
     results = {}
     
-    # Define all modules to test
+    # Discover the installed package tree instead of maintaining a second,
+    # easily-stale list of modules here.  In particular, the old continuation
+    # classes were consolidated into core.scan_continuation in v0.2.
+    package = importlib.import_module("jaxcont")
     modules_to_test = [
-        # Main package
-        'jaxcont',
-        
-        # Core modules
-        'jaxcont.core',
-        'jaxcont.core.continuation',
-        'jaxcont.core.predictor_corrector',
-        'jaxcont.core.natural_continuation',
-        'jaxcont.core.pseudo_arclength',
-        
-        # Problems
-        'jaxcont.problems',
-        'jaxcont.problems.equilibrium',
-        'jaxcont.problems.periodic',
-        'jaxcont.problems.bvp',
-        
-        # Bifurcations
-        'jaxcont.bifurcations',
-        'jaxcont.bifurcations.detector',
-        'jaxcont.bifurcations.fold',
-        'jaxcont.bifurcations.hopf',
-        'jaxcont.bifurcations.period_doubling',
-        
-        # Solvers
-        'jaxcont.solvers',
-        'jaxcont.solvers.newton',
-        'jaxcont.solvers.corrector',
-        
-        # Stability
-        'jaxcont.stability',
-        'jaxcont.stability.eigenvalue',
-        'jaxcont.stability.floquet',
-        
-        # Utils
-        'jaxcont.utils',
-        'jaxcont.utils.config',
-        'jaxcont.utils.plotting',
+        package.__name__,
+        *(module.name for module in pkgutil.walk_packages(
+            package.__path__, prefix=f"{package.__name__}."
+        )),
     ]
     
     for module_name in modules_to_test:
@@ -259,7 +231,7 @@ def test_package_imports() -> Dict[str, Dict[str, any]]:
         }
         
         try:
-            module = __import__(module_name, fromlist=[''])
+            module = importlib.import_module(module_name)
             result['success'] = True
             
             # Get public attributes (not starting with _)
