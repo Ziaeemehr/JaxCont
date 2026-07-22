@@ -33,3 +33,44 @@ def test_style_for_unknown_type_falls_back_with_raw_label():
     assert style.marker == DEFAULT_STYLE.marker
     assert style.color == DEFAULT_STYLE.color
     assert style.label == "some-future-type"
+
+
+from jaxcont.viz.core import plot_bifurcation_diagram, plot_continuation
+
+
+def _simple_solution(with_stability=False, with_bifurcation=False):
+    states = jnp.array([[0.0], [0.5], [1.0], [0.5], [0.0]])
+    parameters = jnp.array([0.0, 0.5, 1.0, 1.5, 2.0])
+    stability = jnp.array([True, True, False, True, True]) if with_stability else None
+    bifurcations = (
+        [{"type": "fold", "parameter": 1.0, "state": jnp.array([1.0])}]
+        if with_bifurcation else []
+    )
+    return ContinuationSolution(
+        states=states, parameters=parameters, stability=stability,
+        bifurcations=bifurcations,
+    )
+
+
+def test_plot_continuation_returns_figure_with_one_axes():
+    fig = plot_continuation(_simple_solution())
+    assert len(fig.axes) == 1
+
+
+def test_plot_continuation_default_labels_are_generic():
+    fig = plot_continuation(_simple_solution())
+    ax = fig.axes[0]
+    assert ax.get_ylabel() == "State[0]"
+    assert ax.get_xlabel() == "Parameter"
+
+
+def test_plot_continuation_marks_fold_with_shared_style():
+    fig = plot_continuation(_simple_solution(with_bifurcation=True))
+    ax = fig.axes[0]
+    labels = [t.get_text() for t in ax.get_legend().get_texts()]
+    assert "Fold" in labels
+
+
+def test_plot_bifurcation_diagram_is_an_alias():
+    fig = plot_bifurcation_diagram(_simple_solution())
+    assert len(fig.axes) == 1
