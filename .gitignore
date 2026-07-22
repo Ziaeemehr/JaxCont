@@ -99,4 +99,5 @@ docs/_templates/
 *.svg
 !docs/images/*.png
 !docs/images/*.svg
+!docs/images/logo/*.svg
 
