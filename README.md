@@ -55,12 +55,19 @@ Continue the positive branch of `u² + p = 0` through its fold at `p = 0`:
 
 ```python
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
 import jaxcont as jc
 
 def saddle_node(u, p, args):
     return u**2 + p
 
-problem = jc.bif_problem(saddle_node, u0=jnp.array([1.0]), p0=-1.0)
+problem = jc.bif_problem(
+    saddle_node,
+    u0=jnp.array([1.0]),
+    p0=-1.0,
+    state_names=["u"],
+    param_name="p",
+)
 result = jc.continuation(
     problem,
     p_span=(-1.0, 0.2),
@@ -70,6 +77,9 @@ result = jc.continuation(
 
 print(result.branch.params)
 print([(event.kind, event.p) for event in result.events])
+
+result.plot(annotate=True, title="Saddle-node bifurcation")
+plt.show()
 ```
 
 `PseudoArclength(engine="scan")` is the default algorithm. It uses the
