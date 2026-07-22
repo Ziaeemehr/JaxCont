@@ -17,31 +17,28 @@ import pstats
 import io
 from functools import wraps
 
-from jaxcont import ContinuationProblem, PseudoArclengthContinuation
+import jaxcont as jc
 
 
 # ============================================================================
 # Test Problems
 # ============================================================================
 
-def pitchfork_rhs(u, params):
+def pitchfork_rhs(u, p, args):
     """Pitchfork bifurcation: du/dt = r*u - u^3"""
-    r = params['r']
-    return r * u - u**3
+    return p * u - u ** 3
 
 
-def lorenz_rhs(u, params):
+def lorenz_rhs(u, p, args):
     """Lorenz system"""
-    sigma = params.get('sigma', 10.0)
-    rho = params['rho']
-    beta = params.get('beta', 8.0/3.0)
-    
+    sigma, beta = args
+    rho = p
     x, y, z = u[0], u[1], u[2]
-    
+
     dx = sigma * (y - x)
     dy = x * (rho - z) - y
     dz = x * y - beta * z
-    
+
     return jnp.array([dx, dy, dz])
 
 
@@ -137,88 +134,70 @@ class ProfilingStats:
 
 def profile_simple_continuation():
     """Profile a simple 1D continuation problem."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("PROFILING: Simple 1D Pitchfork Bifurcation")
-    print("="*80)
-    
-    problem = ContinuationProblem(
-        rhs=pitchfork_rhs,
-        u0=jnp.array([0.1]),
-        params={'r': 0.5},
-        continuation_param='r'
+    print("=" * 80)
+
+    prob = jc.bif_problem(pitchfork_rhs, u0=jnp.array([0.1]), p0=0.5)
+    settings = jc.ContinuationPar(
+        ds=0.05, max_steps=100, adaptive=True, compute_stability=True,
     )
-    
-    cont = PseudoArclengthContinuation(
-        ds=0.05,
-        max_steps=100,
-        adaptive_stepsize=True,
-        detect_bifurcations=True,
-        compute_stability=True
-    )
-    
-    # Warm-up run to compile JAX functions
+
     print("Warming up JAX (first run compiles)...")
-    _ = cont.run(problem, param_range=(0.5, 1.0))
-    
-    # Actual profiled run
+    _ = jc.continuation(prob, jc.PseudoArclength(), p_span=(0.5, 1.0), settings=settings,
+                         events=[jc.Fold(), jc.Hopf()])
+
     print("Running profiled continuation...")
     start = time.perf_counter()
-    solution = cont.run(problem, param_range=(0.5, 1.5))
+    result = jc.continuation(prob, jc.PseudoArclength(), p_span=(0.5, 1.5), settings=settings,
+                              events=[jc.Fold(), jc.Hopf()])
     elapsed = time.perf_counter() - start
-    
+
+    n = result.branch.n_valid
     print(f"\nTotal continuation time: {elapsed:.4f} seconds")
-    print(f"Number of points computed: {solution.n_points}")
-    print(f"Time per point: {elapsed/solution.n_points*1000:.2f} ms")
-    
-    # Analyze convergence info
-    if solution.convergence_info:
-        newton_iters = [info['newton_iters'] for info in solution.convergence_info if info['converged']]
-        print(f"Average Newton iterations: {jnp.mean(jnp.array(newton_iters)):.2f}")
-    
-    return solution, elapsed
+    print(f"Number of points computed: {n}")
+    print(f"Time per point: {elapsed / n * 1000:.2f} ms")
+
+    # NOTE: the scan engine's convergence_info hardcodes newton_iters=0 (a
+    # pre-existing limitation -- per-point Newton iteration counts aren't
+    # tracked by pseudo_arclength_scan). This line is kept for structural
+    # parity with the pre-migration profiling report but will always print 0.
+    newton_iters = [info["newton_iters"] for info in result._solution.convergence_info[:n]]
+    print(f"Average Newton iterations: {jnp.mean(jnp.array(newton_iters)):.2f}")
+
+    return result, elapsed
 
 
 def profile_3d_continuation():
     """Profile a 3D Lorenz system continuation."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("PROFILING: 3D Lorenz System")
-    print("="*80)
-    
-    problem = ContinuationProblem(
-        rhs=lorenz_rhs,
-        u0=jnp.array([1.0, 1.0, 1.0]),
-        params={'rho': 20.0},
-        continuation_param='rho'
+    print("=" * 80)
+
+    prob = jc.bif_problem(
+        lorenz_rhs, u0=jnp.array([1.0, 1.0, 1.0]), p0=20.0, args=(10.0, 8.0 / 3.0),
     )
-    
-    cont = PseudoArclengthContinuation(
-        ds=0.1,
-        max_steps=50,
-        adaptive_stepsize=True,
-        detect_bifurcations=False,
-        compute_stability=True,
-        newton_max_iter=20
+    settings = jc.ContinuationPar(
+        ds=0.1, max_steps=50, adaptive=True, compute_stability=True, newton_max_iter=20,
     )
-    
-    # Warm-up
+
     print("Warming up JAX (first run compiles)...")
-    _ = cont.run(problem, param_range=(20.0, 22.0))
-    
-    # Profiled run
+    _ = jc.continuation(prob, jc.PseudoArclength(), p_span=(20.0, 22.0), settings=settings)
+
     print("Running profiled continuation...")
     start = time.perf_counter()
-    solution = cont.run(problem, param_range=(20.0, 25.0))
+    result = jc.continuation(prob, jc.PseudoArclength(), p_span=(20.0, 25.0), settings=settings)
     elapsed = time.perf_counter() - start
-    
+
+    n = result.branch.n_valid
     print(f"\nTotal continuation time: {elapsed:.4f} seconds")
-    print(f"Number of points computed: {solution.n_points}")
-    print(f"Time per point: {elapsed/solution.n_points*1000:.2f} ms")
-    
-    if solution.convergence_info:
-        newton_iters = [info['newton_iters'] for info in solution.convergence_info if info['converged']]
-        print(f"Average Newton iterations: {jnp.mean(jnp.array(newton_iters)):.2f}")
-    
-    return solution, elapsed
+    print(f"Number of points computed: {n}")
+    print(f"Time per point: {elapsed / n * 1000:.2f} ms")
+
+    newton_iters = [info["newton_iters"] for info in result._solution.convergence_info[:n]]
+    print(f"Average Newton iterations: {jnp.mean(jnp.array(newton_iters)):.2f}")
+
+    return result, elapsed
 
 
 def profile_with_cprofile(func, *args, **kwargs):
@@ -364,13 +343,12 @@ def check_jit_usage():
     print("JIT COMPILATION STATUS")
     print("="*80)
     
-    from jaxcont.core import pseudo_arclength, predictor_corrector
+    from jaxcont.core import scan_continuation
     from jaxcont.solvers import newton
     import inspect
-    
+
     modules_to_check = [
-        ('pseudo_arclength', pseudo_arclength),
-        ('predictor_corrector', predictor_corrector),
+        ('scan_continuation', scan_continuation),
         ('newton', newton),
     ]
     
@@ -437,26 +415,18 @@ def main():
     print("="*80)
     print("\nRunning 1D continuation with detailed profiling...")
     
-    problem = ContinuationProblem(
-        rhs=pitchfork_rhs,
-        u0=jnp.array([0.1]),
-        params={'r': 0.5},
-        continuation_param='r'
-    )
-    
-    cont = PseudoArclengthContinuation(
-        ds=0.05,
-        max_steps=100,
-        adaptive_stepsize=True,
-        detect_bifurcations=True,
-        compute_stability=True
-    )
-    
+    prob = jc.bif_problem(pitchfork_rhs, u0=jnp.array([0.1]), p0=0.5)
+    settings = jc.ContinuationPar(ds=0.05, max_steps=100, adaptive=True, compute_stability=True)
+
     # Warm up first
-    _ = cont.run(problem, param_range=(0.5, 1.0))
-    
+    _ = jc.continuation(prob, jc.PseudoArclength(), p_span=(0.5, 1.0), settings=settings,
+                         events=[jc.Fold(), jc.Hopf()])
+
     # Profile
-    profile_with_cprofile(cont.run, problem, param_range=(0.5, 1.5))
+    profile_with_cprofile(
+        jc.continuation, prob, jc.PseudoArclength(), p_span=(0.5, 1.5), settings=settings,
+        events=[jc.Fold(), jc.Hopf()],
+    )
     
     # Summary
     print("\n" + "="*80)
