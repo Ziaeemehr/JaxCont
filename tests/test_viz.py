@@ -126,3 +126,41 @@ def test_plot_all_states_only_one_legend_on_figure():
 def test_plot_all_states_rejects_mismatched_state_names():
     with pytest.raises(ValueError):
         plot_all_states(_two_state_solution(), state_names=["only-one-name"])
+
+
+from jaxcont.viz.portraits import plot_eigenvalues, plot_phase_portrait
+
+
+def test_plot_phase_portrait_draws_onto_supplied_ax_not_a_new_figure():
+    solution = _two_state_solution()
+
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.set_title("placeholder")
+
+    returned_fig = plot_phase_portrait(solution, ax=ax2)
+
+    assert returned_fig is fig
+    assert ax2.get_title() == "Phase Portrait"
+    assert ax1.get_title() == "placeholder"
+
+
+def test_plot_phase_portrait_creates_own_figure_when_no_ax_given():
+    fig = plot_phase_portrait(_two_state_solution())
+    assert len(fig.axes) == 1
+
+
+def test_plot_eigenvalues_raises_without_eigenvalues():
+    solution = _two_state_solution()
+    with pytest.raises(ValueError):
+        plot_eigenvalues(solution)
+
+
+def test_plot_eigenvalues_plots_real_and_imag_parts():
+    states = jnp.array([[0.0, 1.0], [0.5, 1.5]])
+    parameters = jnp.array([0.0, 1.0])
+    eigenvalues = jnp.array([[1.0 + 1.0j, -1.0 + 0.5j], [0.9 + 0.9j, -0.8 + 0.4j]])
+    solution = ContinuationSolution(
+        states=states, parameters=parameters, eigenvalues=eigenvalues,
+    )
+    fig = plot_eigenvalues(solution)
+    assert len(fig.axes) == 2
