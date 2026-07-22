@@ -29,7 +29,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 import jaxcont as jc
-from jaxcont.utils.plotting import plot_continuation
+from jaxcont.viz import plot_continuation
 
 os.makedirs("images", exist_ok=True)
 
