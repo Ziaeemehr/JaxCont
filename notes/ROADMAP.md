@@ -1,6 +1,6 @@
 # JaxCont Roadmap — Single Source of Truth
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-07-22
 **Current version:** 0.1.0 — **published to PyPI** (https://pypi.org/project/jaxcont/), tagged
 `v0.1.0`. Zenodo DOI archival deliberately deferred until a more mature release (not a v0.1.0
 blocker — `CITATION.cff` metadata is ready whenever it happens).
@@ -33,7 +33,7 @@ cannot offer at all. See below for the reasoning.
 | Fold + Hopf detection | ✅ Works, tested | With bisection refinement |
 | Stability (eigenvalues) | ✅ Works, 98% cov | Fixed 2026-07-19 (was 51%) |
 | Naming/abbreviation reference | ✅ Works, tested | [bifurcations/taxonomy.py](../src/jaxcont/bifurcations/taxonomy.py) |
-| Plotting | ⚠️ Works, 9% cov | Under-tested — consolidation into `jaxcont/viz/` planned, see below |
+| Plotting | ✅ Works, tested | Consolidated into `jaxcont/viz/` (2026-07-22) |
 | Periodic orbits | ⚠️ Stub | Untested, hidden from v0.1.0 |
 | Floquet multipliers | ❌ Stub, 22% cov | Hidden from v0.1.0 |
 | BVP (collocation/shooting) | ❌ NotImplementedError | Hidden from v0.1.0 |
@@ -260,7 +260,7 @@ Issues #10 (legacy natural-continuation FD/bare-except) and #8/#9 (bothside, sub
 real but non-blocking for v0.1.0 — they don't affect the default `scan`/`PseudoArclength` path.
 Fix opportunistically or fold into the v0.2 engine consolidation (see below).
 
-## Visualization module consolidation (planned, 2026-07-22)
+## Visualization module consolidation (done 2026-07-22)
 
 Found while extending `example_01`'s plot labels: `plot_continuation()` (in the then-
 `jaxcont/utils/plotting.py`) only ever plots one state variable vs. the parameter, on one axis,
@@ -270,23 +270,52 @@ instead of extending the shared function: `example_02_lorenz.py` has a 40-line
 `example_05_neural_mass.py` has a 20-line manual per-state-variable subplot loop. Both duplicate
 (and drift from) the marker/color styling already in `plot_continuation`.
 
-- [ ] Move `plot_continuation`/`plot_bifurcation_diagram`/`plot_phase_portrait`/`plot_eigenvalues`
+- [x] Move `plot_continuation`/`plot_bifurcation_diagram`/`plot_phase_portrait`/`plot_eigenvalues`
   into a new `jaxcont/viz/` subpackage (`core.py`/`styles.py`/`portraits.py`), delete
   `jaxcont/utils/plotting.py` outright (matches this project's "remove, don't deprecate" pre-1.0
   practice — see the engine-consolidation entry above). Top-level `jc.plot_continuation`/
   `jc.plot_bifurcation_diagram` names are unaffected.
-- [ ] Add a single shared `BIFURCATION_STYLES` table (`viz/styles.py`), replacing the three
+- [x] Add a single shared `BIFURCATION_STYLES` table (`viz/styles.py`), replacing the three
   independently-hardcoded marker/color dicts in `plotting.py`, `example_02`, and `example_05`.
-- [ ] Add `annotate: bool = False` to `plot_continuation` (the `example_02` text-box+arrow style,
+- [x] Add `annotate: bool = False` to `plot_continuation` (the `example_02` text-box+arrow style,
   opt-in — existing plots unaffected by default) and a new `plot_all_states()` (the `example_05`
   multi-panel style), both consuming the shared style table.
-- [ ] Migrate `example_02`/`example_05` onto the shared functions; `example_03` gets an import-path
+- [x] Migrate `example_02`/`example_05` onto the shared functions; `example_03` gets an import-path
   update only.
-- [ ] Add `tests/test_viz.py` — closes part of the "Plotting ... Under-tested" gap above (currently
-  zero dedicated plotting tests exist).
-- [ ] Update this table's "Plotting" row once done.
+- [x] Add `tests/test_viz.py` — closes part of the "Plotting ... Under-tested" gap above (currently
+  zero dedicated plotting tests exist). 19 new tests, full suite 95 passed / 15 deselected, 0 failed.
+- [x] Update this table's "Plotting" row once done.
+
+**Found along the way (2026-07-22):**
+- While moving `plot_phase_portrait` into `viz/portraits.py`: the original function had no `ax`
+  parameter, so `example_03_van_der_pol.py`'s `ax=ax2` call silently dropped into an unused
+  `**kwargs`, and the function always built its own standalone figure — meaning the script's
+  intended two-panel image (bifurcation diagram + phase portrait) never actually saved correctly;
+  only the phase-portrait panel did, because `plt.savefig()` grabs the most-recently-created
+  figure. Fixed alongside this consolidation — `viz/portraits.py` now has a real `ax` parameter.
+- Two further fixes landed as direct controller edits mid-plan (not formal plan tasks, so the
+  checkboxes above don't cover them):
+  - Between the shared-styles task and the example migrations, `BIFURCATION_STYLES`' fold/Hopf
+    labels were changed from the full words `"Fold"`/`"Hopf"` to
+    [`bifurcations/taxonomy.py`](../src/jaxcont/bifurcations/taxonomy.py)'s standard abbreviations
+    `"LP"`/`"H"`, matching the `"PD"`/`"BP"` entries that were already correct
+    (`597a762`, "fix: use taxonomy.py's LP/H acronyms for fold/hopf bifurcation labels") — a
+    user-requested consistency fix, not something the plan called for. Every bifurcation-diagram
+    legend now reads "LP"/"H" rather than "Fold"/"Hopf".
+  - The plan assumed `example_01_pitchfork.py` needed no import change (on the theory that it only
+    used the top-level `jc.plot_continuation`), but it actually had its own direct
+    `from jaxcont.utils.plotting import plot_continuation` import, which broke as soon as
+    `jaxcont/utils/plotting.py` was deleted. Fixed and re-verified by running the example
+    (`82acfae`, "fix: repoint example_01_pitchfork's plot_continuation import to jaxcont.viz").
+
+Verification (final sweep, 2026-07-22): full suite 95 passed / 15 deselected (`slow`), 0 failed;
+`example_01`/`02`/`03`/`05`/`06` all re-run headless (`MPLBACKEND=Agg`), all exit 0, and
+`example_02`/`05`'s BifurcationKit.jl comparison tables still match as before (data/detection
+unchanged — only presentation changed); grep sweep for `jaxcont.utils.plotting` across
+`src/`/`tests/`/`examples/`/`docs/source/` (excluding Sphinx-Gallery's `auto_examples/`) is empty.
 
 Design spec: [docs/superpowers/specs/2026-07-22-viz-module-design.md](../docs/superpowers/specs/2026-07-22-viz-module-design.md).
+Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/superpowers/plans/2026-07-22-viz-module.md).
 
 ## v0.2.0 — Periodic orbits
 - [ ] Periodic-orbit continuation (collocation preferred over shooting)
