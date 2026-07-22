@@ -7,14 +7,19 @@ Files:
 
 - `engine_consolidation.tex` — editable Beamer source.
 - `engine_consolidation.pdf` — compiled presentation.
+- `Makefile` — build and cleanup commands.
 - `SPEAKER_NOTES.md` — suggested explanations and a short/long presentation route.
 - `METHOD.md` — how the presentation was researched and constructed.
 
 Build from this directory with:
 
 ```bash
-latexmk -pdf -interaction=nonstopmode -halt-on-error engine_consolidation.tex
+make
 ```
+
+Use `make clean` to remove generated LaTeX intermediates while keeping the
+PDF, `make distclean` to remove the PDF as well, or `make rebuild` for a clean
+recompilation.
 
 The deck uses `\documentclass[aspectratio=169]{beamer}`. It intentionally uses
 standard Beamer/TikZ packages instead of external images, so every mathematical
