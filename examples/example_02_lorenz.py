@@ -28,6 +28,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 import jaxcont as jc
+from jaxcont.viz import plot_continuation
 
 os.makedirs("images", exist_ok=True)
 
@@ -66,7 +67,10 @@ u0 = jnp.array(
 )
 print(f"residual at u0: {lorenz84_rhs(u0, F0, args)}")
 
-prob = jc.bif_problem(lorenz84_rhs, u0=u0, p0=F0, args=args)
+prob = jc.bif_problem(
+    lorenz84_rhs, u0=u0, p0=F0, args=args,
+    state_names=["X", "Y", "Z", "U"], param_name="F",
+)
 
 # %%
 # Run the continuation
@@ -130,47 +134,7 @@ for bif in solution.bifurcations:
 # With a 4-D state we pick one variable (X) to plot against the parameter;
 # detected bifurcations are annotated on the branch.
 
-
-def plot_lorenz84_diagram(solution):
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    params_arr = solution.parameters
-    X_states = solution.states[:, 0]
-
-    ax.plot(params_arr, X_states, "b-", linewidth=2, alpha=0.7, label="X(F)")
-    ax.plot(params_arr, X_states, "b.", markersize=4, alpha=0.5)
-
-    for bif in solution.bifurcations:
-        param = bif["parameter"]
-        state_X = bif["state"][0]
-        bif_type = bif.get("type", "unknown")
-        marker, mcolor, label = {
-            "fold": ("s", "red", "Fold"),
-            "hopf": ("^", "magenta", "Hopf"),
-        }.get(bif_type, ("o", "orange", bif_type))
-
-        ax.plot(
-            param, state_X, marker, color=mcolor, markersize=12, markeredgewidth=2,
-            markerfacecolor=mcolor, markeredgecolor="darkred", label=label, zorder=10,
-        )
-        ax.annotate(
-            f"{label}\nF={param:.3f}\nX={state_X:.3f}",
-            xy=(param, state_X), xytext=(15, 15), textcoords="offset points",
-            bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.7),
-            arrowprops=dict(arrowstyle="->", color="red", lw=1.5), fontsize=9,
-        )
-
-    ax.set_xlabel("Parameter F (External Forcing)", fontweight="bold")
-    ax.set_ylabel("X", fontweight="bold")
-    ax.set_title("Lorenz-84 System: Bifurcation Diagram (X variable)", fontweight="bold")
-    ax.grid(True, alpha=0.3, linestyle="--")
-    handles, labels = ax.get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(), loc="best")
-    plt.tight_layout()
-    return fig
-
-
-fig = plot_lorenz84_diagram(solution)
+fig = plot_continuation(solution, annotate=True)
+fig.axes[0].set_title("Lorenz-84 System: Bifurcation Diagram (X variable)", fontweight="bold")
 plt.savefig("images/lorenz84_bifurcation.png", dpi=150, bbox_inches="tight")
 plt.show()
