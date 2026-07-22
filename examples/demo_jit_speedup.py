@@ -1,5 +1,6 @@
 """
-Demonstration of JIT compilation speedup potential for JaxCont.
+JIT compilation speedup
+=======================
 
 This script shows the performance difference between JIT and non-JIT versions
 of key operations used in continuation.

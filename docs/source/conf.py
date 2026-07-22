@@ -35,18 +35,24 @@ extensions = [
 ]
 
 # -- Sphinx-Gallery ----------------------------------------------------------
-# Parse every numbered example into downloadable Python/notebook forms. Gallery
-# execution is opt-in because compilation timings and accelerator availability
-# make it unsuitable for deterministic documentation builds.
+# Parse every user-facing example and demo into downloadable Python/notebook
+# forms. Read the Docs executes the gallery so the hosted documentation
+# includes figures and captured output. Local execution remains opt-in because
+# compilation timings make it unsuitable for every development build.
+execute_gallery = (
+    os.environ.get('READTHEDOCS') == 'True'
+    or os.environ.get('JAXCONT_DOCS_EXECUTE_GALLERY', '0') == '1'
+)
+
 sphinx_gallery_conf = {
     'examples_dirs': '../../examples',
     'gallery_dirs': 'auto_examples',
     'ignore_pattern': (
-        r'(__init__|check_installation|demo_jit_speedup|profile_continuation)\.py'
+        r'(__init__|check_installation|profile_continuation)\.py'
     ),
-    'filename_pattern': r'/example_',
+    'filename_pattern': r'/(example_|demo_)',
     'within_subsection_order': 'FileNameSortKey',
-    'plot_gallery': os.environ.get('JAXCONT_DOCS_EXECUTE_GALLERY', '0') == '1',
+    'plot_gallery': execute_gallery,
     'abort_on_example_error': True,
     'download_all_examples': True,
 }

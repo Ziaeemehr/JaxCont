@@ -62,8 +62,9 @@ Building the Example Gallery
 ----------------------------
 
 Sphinx-Gallery always generates downloadable Python scripts and notebooks.
-Example execution is disabled for deterministic default builds. To execute the
-gallery and capture plots/output:
+Read the Docs executes every gallery demo automatically, so the hosted pages
+include generated figures and captured output. Local execution is disabled by
+default; to reproduce the complete hosted gallery locally:
 
 .. code-block:: bash
 
