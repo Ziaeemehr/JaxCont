@@ -341,15 +341,31 @@ the `Event` protocol, fixed-shape `Branch` buffers). These five items are what t
 needs to actually get there cleanly, surfaced by re-reading the source while updating this file —
 worth resolving before, not during, the v0.2 periodic-orbit push:
 
-1. **Retire the three-implementations-of-one-algorithm pattern before adding a fourth (periodic
-   orbits).** `natural_continuation.py`, `pseudo_arclength.py`'s legacy OO class, and
-   `scan_continuation.py` all implement predictor-corrector continuation; issue #10 above is a
-   direct, observed consequence (a fix landed in one, not the others). Recommendation: make
-   `Natural`/`PseudoArclength` in the functional API (`api.py`) thin configuration objects that
-   *both* dispatch to the scan engine (predictor swapped, not a whole second code path), and
-   either delete the legacy OO classes or explicitly mark them `deprecated`/frozen-as-is in v0.1.0
-   docs. Do this before v0.2 adds `Collocation` as a third predictor/mesh strategy on top of the
-   current duplication.
+1. ✅ **Retire the three-implementations-of-one-algorithm pattern before adding a fourth (periodic
+   orbits).** *(done 2026-07-22 — see
+   [docs/superpowers/plans/2026-07-21-engine-consolidation.md](../docs/superpowers/plans/2026-07-21-engine-consolidation.md)
+   and its [design spec](../docs/superpowers/specs/2026-07-21-engine-consolidation-design.md))*
+   `natural_continuation.py`, `pseudo_arclength.py`'s legacy OO class, and `PredictorCorrector`
+   deleted outright (not deprecated — already-published v0.1.0 API, removed anyway per explicit
+   decision, since it's a pre-1.0 project). `equilibrium_continuation()`/`periodic_continuation()`
+   free functions removed too. `Natural`/`PseudoArclength` in `api.py` are now thin config objects
+   dispatching to `core/scan_continuation.py`'s two engines (`pseudo_arclength_scan`, and a new
+   `natural_scan()` built for this — same fixed-buffer/`ds`-tracking/jit/`vmap` contract, predictor
+   swapped). All 32 dependent tests (4 files) and all 6 non-`example_06`/`07` gallery examples
+   migrated onto `jc.continuation()` or the engines' private `_tangent`/`_newton_correct` directly.
+   Full suite green (75 passed + 12 `slow`-marked, 0 failures); all cross-validated BifurcationKit.jl
+   matches in `example_02`/`05` still hold.
+   **Found along the way, worth knowing:** `jc.continuation()`'s `p_span[0]` is the *literal*
+   starting parameter value (paired with `u0` directly) — not `problem.p0` — a pre-existing `api.py`
+   design point (predates this cleanup) that differs from the deleted OO engine's semantics (which
+   started at `problem.p0` and used its range argument only for direction/stop-bound). Every
+   migrated example needing a `p_span` fix for this is now commented in-file explaining why.
+   **Not fixed here, still open:** `docs/source/quickstart.rst` still shows the removed
+   `PseudoArclength(engine=...)` kwarg; `src/jaxcont/utils/config.py`'s `test_package_imports()`
+   still lists the 3 deleted module paths (caught by `except ImportError`, non-breaking, just
+   stale). `natural_scan`/`pseudo_arclength_scan` duplicate most of their `lax.while_loop` body
+   (predict/correct/write/adapt/stop) — a candidate for a shared helper once a third predictor
+   (periodic-orbit collocation) actually needs it, not before (YAGNI).
 2. **Resolve the `eqx.Module` "open decision" (ARCHITECTURE.md §4, line ~170) now, before periodic
    orbits land.** v0.1's `BifProblem`/`Branch` are flat enough that hand-rolled
    `register_pytree_node` dataclasses work fine (and that's what's shipped, zero new deps — good
