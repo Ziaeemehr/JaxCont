@@ -3,7 +3,7 @@ Core continuation-diagram plots for jaxcont.viz: plot_continuation (single
 state variable vs. the parameter) and plot_bifurcation_diagram (alias).
 """
 
-from typing import Optional
+from typing import Optional, Sequence, Tuple
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -159,3 +159,72 @@ def plot_bifurcation_diagram(
         Matplotlib figure
     """
     return plot_continuation(solution, state_index=state_index, **kwargs)
+
+
+def plot_all_states(
+    solution: ContinuationSolution,
+    param_name: Optional[str] = None,
+    state_names: Optional[Sequence[str]] = None,
+    show_bifurcations: bool = True,
+    stable_color: str = "blue",
+    unstable_color: str = "red",
+    figsize: Optional[Tuple[float, float]] = None,
+) -> plt.Figure:
+    """
+    Plot every state variable against the continuation parameter, one per
+    subplot (replaces hand-rolled per-example subplot loops), sharing a single
+    figure-level legend.
+
+    Args:
+        solution: Continuation solution
+        param_name: Label for the continuation parameter (x-axis of the
+            bottom subplot). Defaults to ``solution.param_name`` if set, else
+            "Parameter".
+        state_names: Per-state y-axis labels; length must equal
+            ``solution.state_dim``. Defaults to ``solution.state_names`` if
+            set, else ``"State[<index>]"`` for each.
+        show_bifurcations: Whether to mark bifurcation points on every subplot
+        stable_color: Color for stable branches
+        unstable_color: Color for unstable branches
+        figsize: Figure size; defaults to ``(8, 3 * state_dim)``
+
+    Returns:
+        Matplotlib figure with one subplot per state variable
+    """
+    n = solution.state_dim
+    if state_names is not None and len(state_names) != n:
+        raise ValueError(
+            f"state_names has {len(state_names)} entries but solution has "
+            f"state_dim={n}"
+        )
+
+    if figsize is None:
+        figsize = (8, 3 * n)
+    fig, axes = plt.subplots(n, 1, figsize=figsize, squeeze=False, sharex=True)
+    axes = axes[:, 0]
+
+    for i, ax in enumerate(axes):
+        name = state_names[i] if state_names is not None else None
+        plot_continuation(
+            solution,
+            state_index=i,
+            state_name=name,
+            param_name=param_name,
+            ax=ax,
+            show_bifurcations=show_bifurcations,
+            stable_color=stable_color,
+            unstable_color=unstable_color,
+        )
+        ax.set_title("")
+        legend = ax.get_legend()
+        if legend is not None:
+            legend.remove()
+        if i < n - 1:
+            ax.set_xlabel("")
+
+    handles, labels = axes[0].get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    fig.legend(by_label.values(), by_label.keys(), loc="upper right")
+
+    plt.tight_layout()
+    return fig

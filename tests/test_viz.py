@@ -85,3 +85,44 @@ def test_plot_continuation_annotate_true_adds_one_box_per_bifurcation():
     solution = _simple_solution(with_bifurcation=True)
     fig = plot_continuation(solution, annotate=True)
     assert len(fig.axes[0].texts) == len(solution.bifurcations)
+
+
+from jaxcont.viz.core import plot_all_states
+
+
+def _two_state_solution():
+    states = jnp.array([[0.0, 1.0], [0.5, 1.5], [1.0, 2.0]])
+    parameters = jnp.array([0.0, 0.5, 1.0])
+    return ContinuationSolution(
+        states=states, parameters=parameters,
+        state_names=("E", "x"), param_name="E0",
+    )
+
+
+def test_plot_all_states_one_subplot_per_state():
+    fig = plot_all_states(_two_state_solution())
+    assert len(fig.axes) == 2
+
+
+def test_plot_all_states_uses_problem_names_by_default():
+    fig = plot_all_states(_two_state_solution())
+    assert fig.axes[0].get_ylabel() == "E"
+    assert fig.axes[1].get_ylabel() == "x"
+
+
+def test_plot_all_states_only_bottom_subplot_has_xlabel():
+    fig = plot_all_states(_two_state_solution())
+    assert fig.axes[0].get_xlabel() == ""
+    assert fig.axes[1].get_xlabel() == "E0"
+
+
+def test_plot_all_states_only_one_legend_on_figure():
+    fig = plot_all_states(_two_state_solution())
+    per_axes_legends = [ax.get_legend() for ax in fig.axes]
+    assert all(legend is None for legend in per_axes_legends)
+    assert len(fig.legends) == 1
+
+
+def test_plot_all_states_rejects_mismatched_state_names():
+    with pytest.raises(ValueError):
+        plot_all_states(_two_state_solution(), state_names=["only-one-name"])
