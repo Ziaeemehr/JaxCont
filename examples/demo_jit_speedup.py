@@ -13,7 +13,7 @@ import time
 import numpy as np
 
 
-def benchmark(func, *args, n_runs=100, warmup=3, name="Function"):
+def benchmark(func, *args, n_runs=100, warmup=3):
     """Benchmark a function."""
     # Warmup
     for _ in range(warmup):
@@ -124,12 +124,6 @@ def eigenvalues_with_jit(jacobian):
 
 def tangent_no_jit(u, r):
     """Simplified tangent computation without JIT"""
-    # Compute Jacobian
-    def f(x):
-        return r * x - x**3
-    jac = jacfwd(f)(u)
-    
-    # Compute du/dr
     du_dr = u  # Simplified
     
     # Solve (J) * du/ds = [du_dr, 1]
@@ -141,12 +135,6 @@ def tangent_no_jit(u, r):
 @jit
 def tangent_with_jit(u, r):
     """Simplified tangent computation with JIT"""
-    # Compute Jacobian
-    def f(x):
-        return r * x - x**3
-    jac = jacfwd(f)(u)
-    
-    # Compute du/dr
     du_dr = u  # Simplified
     
     # Solve (J) * du/ds = [du_dr, 1]
@@ -159,94 +147,54 @@ def tangent_with_jit(u, r):
 # Run Benchmarks
 # ============================================================================
 
+def run_comparison(title, description, func_no_jit, func_jit, *args, n_runs=100):
+    """Print one benchmark section comparing a no-JIT/JIT function pair."""
+    print("-" * 80)
+    print(f"{title}: {description}")
+    print("-" * 80)
+
+    mean_no_jit, std_no_jit = benchmark(func_no_jit, *args, n_runs=n_runs)
+    mean_jit, std_jit = benchmark(func_jit, *args, n_runs=n_runs)
+
+    speedup = mean_no_jit / mean_jit
+    print(f"No JIT:   {mean_no_jit:.4f} ± {std_no_jit:.4f} ms")
+    print(f"With JIT: {mean_jit:.4f} ± {std_jit:.4f} ms")
+    print(f"Speedup:  {speedup:.2f}x")
+    print()
+
+
 def main():
     print("=" * 80)
     print(" JIT Compilation Speedup Demonstration")
     print("=" * 80)
     print()
-    
+
     # Test parameters
     u = jnp.array([0.5])
     r = 1.0
     target = 0.0
-    
+
     print("Testing with 1D system (u = [0.5], r = 1.0)")
     print()
-    
-    # Benchmark 1: RHS Evaluation
-    print("-" * 80)
-    print("1. RHS Evaluation: f(u) = r*u - u^3")
-    print("-" * 80)
-    
-    mean_no_jit, std_no_jit = benchmark(rhs_no_jit, u, r, name="RHS (no JIT)")
-    mean_jit, std_jit = benchmark(rhs_with_jit, u, r, name="RHS (with JIT)")
-    
-    speedup = mean_no_jit / mean_jit
-    print(f"No JIT:   {mean_no_jit:.4f} ± {std_no_jit:.4f} ms")
-    print(f"With JIT: {mean_jit:.4f} ± {std_jit:.4f} ms")
-    print(f"Speedup:  {speedup:.2f}x")
-    print()
-    
-    # Benchmark 2: Jacobian
-    print("-" * 80)
-    print("2. Jacobian Computation: df/du")
-    print("-" * 80)
-    
-    mean_no_jit, std_no_jit = benchmark(jacobian_no_jit, u, r, n_runs=50)
-    mean_jit, std_jit = benchmark(jacobian_with_jit, u, r, n_runs=50)
-    
-    speedup = mean_no_jit / mean_jit
-    print(f"No JIT:   {mean_no_jit:.4f} ± {std_no_jit:.4f} ms")
-    print(f"With JIT: {mean_jit:.4f} ± {std_jit:.4f} ms")
-    print(f"Speedup:  {speedup:.2f}x")
-    print()
-    
-    # Benchmark 3: Newton Step
-    print("-" * 80)
-    print("3. Newton Step: u_new = u - J^{-1} * F(u)")
-    print("-" * 80)
-    
-    mean_no_jit, std_no_jit = benchmark(newton_step_no_jit, u, r, target, n_runs=50)
-    mean_jit, std_jit = benchmark(newton_step_with_jit, u, r, target, n_runs=50)
-    
-    speedup = mean_no_jit / mean_jit
-    print(f"No JIT:   {mean_no_jit:.4f} ± {std_no_jit:.4f} ms")
-    print(f"With JIT: {mean_jit:.4f} ± {std_jit:.4f} ms")
-    print(f"Speedup:  {speedup:.2f}x")
-    print()
-    
-    # Benchmark 4: Eigenvalues (3D system)
-    print("-" * 80)
-    print("4. Eigenvalue Computation (3D system)")
-    print("-" * 80)
-    
-    jac_3d = jnp.array([[1.0, 0.5, 0.2], 
-                         [0.3, 2.0, 0.1],
-                         [0.1, 0.2, 1.5]])
-    
-    mean_no_jit, std_no_jit = benchmark(eigenvalues_no_jit, jac_3d, n_runs=100)
-    mean_jit, std_jit = benchmark(eigenvalues_with_jit, jac_3d, n_runs=100)
-    
-    speedup = mean_no_jit / mean_jit
-    print(f"No JIT:   {mean_no_jit:.4f} ± {std_no_jit:.4f} ms")
-    print(f"With JIT: {mean_jit:.4f} ± {std_jit:.4f} ms")
-    print(f"Speedup:  {speedup:.2f}x")
-    print()
-    
-    # Benchmark 5: Tangent Computation
-    print("-" * 80)
-    print("5. Tangent Vector Computation (simplified)")
-    print("-" * 80)
-    
-    mean_no_jit, std_no_jit = benchmark(tangent_no_jit, u, r, n_runs=50)
-    mean_jit, std_jit = benchmark(tangent_with_jit, u, r, n_runs=50)
-    
-    speedup = mean_no_jit / mean_jit
-    print(f"No JIT:   {mean_no_jit:.4f} ± {std_no_jit:.4f} ms")
-    print(f"With JIT: {mean_jit:.4f} ± {std_jit:.4f} ms")
-    print(f"Speedup:  {speedup:.2f}x")
-    print()
-    
+
+    run_comparison("1. RHS Evaluation", "f(u) = r*u - u^3",
+                    rhs_no_jit, rhs_with_jit, u, r)
+
+    run_comparison("2. Jacobian Computation", "df/du",
+                    jacobian_no_jit, jacobian_with_jit, u, r, n_runs=50)
+
+    run_comparison("3. Newton Step", "u_new = u - J^{-1} * F(u)",
+                    newton_step_no_jit, newton_step_with_jit, u, r, target, n_runs=50)
+
+    jac_3d = jnp.array([[1.0, 0.5, 0.2],
+                        [0.3, 2.0, 0.1],
+                        [0.1, 0.2, 1.5]])
+    run_comparison("4. Eigenvalue Computation", "3D system",
+                    eigenvalues_no_jit, eigenvalues_with_jit, jac_3d, n_runs=100)
+
+    run_comparison("5. Tangent Vector Computation", "simplified",
+                    tangent_no_jit, tangent_with_jit, u, r, n_runs=50)
+
     # Summary
     print("=" * 80)
     print(" Summary")
