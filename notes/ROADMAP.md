@@ -423,15 +423,17 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
    stale). `natural_scan`/`pseudo_arclength_scan` duplicate most of their `lax.while_loop` body
    (predict/correct/write/adapt/stop) — a candidate for a shared helper once a third predictor
    (periodic-orbit collocation) actually needs it, not before (YAGNI).
-2. **Resolve the `eqx.Module` "open decision" (ARCHITECTURE.md §4, line ~170) now, before periodic
-   orbits land.** v0.1's `BifProblem`/`Branch` are flat enough that hand-rolled
-   `register_pytree_node` dataclasses work fine (and that's what's shipped, zero new deps — good
-   call for v0.1). Periodic-orbit problems add real structure (mesh, `ntst`/`ncol`, a phase
-   condition, static vs. traced fields) and v0.2/v0.3 add several more pluggable protocol
-   implementations (`Collocation` predictor, `PeriodDoubling`/`LPC`/`NS` events, more solver
-   variants) — exactly the case equinox's `Module`/`field(static=...)` idiom exists for.
-   Recommendation: adopt `equinox` starting with the v0.2 periodic-orbit types, leave the already-
-   shipped v0.1 equilibrium types as-is (not worth churning a working, tested surface).
+2. ✅ **Resolve the `eqx.Module` "open decision" (ARCHITECTURE.md §4, line ~170) now, before
+   periodic orbits land.** *(done 2026-07-22 — see
+   [docs/superpowers/plans/2026-07-22-equinox-adoption.md](../docs/superpowers/plans/2026-07-22-equinox-adoption.md)
+   and its [design spec](../docs/superpowers/specs/2026-07-22-equinox-adoption-design.md))*
+   `equinox` is now a runtime dependency; a throwaway `CollocationMeshScaffold`
+   (`core/_periodic_eqx_scaffold.py`, not exported from `jaxcont.__init__`) proves the
+   static-vs-traced field split (`eqx.field(static=True)` for `ntst`/`ncol`, traced `mesh` array)
+   works end-to-end under `jit` and `vmap` — see `tests/test_equinox_scaffold.py`. The real
+   periodic-orbit types (`Collocation` predictor, `PeriodDoubling`/`LPC`/`NS` events) are still not
+   built; this only removes the open decision and gives that future work a proven pattern. v0.1's
+   `BifProblem`/`Branch` are untouched, per the original recommendation.
 3. **Generalize the `fold_solve.py` pattern into one reusable primitive before hand-writing it
    again for Hopf/LPC/PD/NS.** The genuinely novel piece of this project — Newton-in-
    `lax.while_loop` over an extended system `G(x,θ)=0`, wrapped in `jax.custom_vjp` implementing

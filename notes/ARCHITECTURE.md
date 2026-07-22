@@ -179,6 +179,14 @@ designed up front. Everything in §6 is deferred.
 > variants) — that is exactly the case `Module`/`field(static=...)` exists for, and by then the
 > extra dependency pays for itself. Do not churn the already-working v0.1 types to match. See
 > [ROADMAP.md "Engineering recommendations for v0.2"](ROADMAP.md) for the full rationale.
+>
+> **Resolved (2026-07-22):** `equinox` is now a runtime dependency and the static/traced field
+> split is proven end-to-end (jit + vmap) by a throwaway scaffold,
+> [`core/_periodic_eqx_scaffold.py`](../src/jaxcont/core/_periodic_eqx_scaffold.py) (not exported
+> from `jaxcont.__init__`). The real periodic-orbit types (`Collocation` predictor,
+> `PeriodDoubling`/`LPC`/`NS` events) still don't exist — this only removes the open decision and
+> gives them a proven pattern to build on. See
+> [docs/superpowers/specs/2026-07-22-equinox-adoption-design.md](../docs/superpowers/specs/2026-07-22-equinox-adoption-design.md).
 
 ### 4.1 Problem — ONE type
 
