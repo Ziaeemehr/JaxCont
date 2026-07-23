@@ -19,8 +19,8 @@ class BifStyle:
     label: str
 
 
-#: Keyed by the lowercase bif_type strings BifurcationDetector emits (see
-#: bifurcations/detector.py). Labels use bifurcations/taxonomy.py's standard
+#: Keyed by the lowercase bif_type strings detect_events emits (see
+#: bifurcations/events.py). Labels use bifurcations/taxonomy.py's standard
 #: abbreviations (BIFURCATION_TYPES), not full words, so every plot uses the
 #: same naming convention as the rest of the project: "fold" -> LP, "hopf" ->
 #: H, matching taxonomy.py's own comments (`# jc.Fold`, `# jc.Hopf`).

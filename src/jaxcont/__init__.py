@@ -41,11 +41,6 @@ from jaxcont.problems.equilibrium import EquilibriumProblem
 # implicit function theorem -- see examples/example_07_differentiable.py)
 from jaxcont.bifurcations.fold_solve import fold_point, fold_parameter
 
-# Bifurcation detection
-from jaxcont.bifurcations.detector import BifurcationDetector
-from jaxcont.bifurcations.fold import FoldBifurcation
-from jaxcont.bifurcations.hopf import HopfBifurcation
-
 # Solvers
 from jaxcont.solvers.newton import NewtonSolver
 from jaxcont.solvers.corrector import Corrector
@@ -86,10 +81,6 @@ __all__ = [
     "ContinuationSolution",
     # Problems
     "EquilibriumProblem",
-    # Bifurcations
-    "BifurcationDetector",
-    "FoldBifurcation",
-    "HopfBifurcation",
     # Solvers
     "NewtonSolver",
     "Corrector",

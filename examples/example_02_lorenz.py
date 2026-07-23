@@ -106,10 +106,9 @@ print(f"\nContinuation completed: {solution.n_points} points, "
 # (``PALC()``, ``bothside=true``) on the *identical* right-hand side and
 # parameters, independently, offline. JaxCont's detected fold/Hopf parameter
 # values agree with BifurcationKit.jl's to within about one continuation step
-# (:math:`\Delta F \lesssim 0.005`) -- close bifurcations occasionally produce
-# an extra/duplicate flag (visible below as an unmatched "fold" near the first
-# Hopf), which is a known precision limitation of the current detector, not a
-# location error.
+# (:math:`\Delta F \lesssim 0.005`) -- issue #7's duplicate/spurious flags are
+# fixed as of 2026-07-23 (see
+# docs/superpowers/plans/2026-07-23-event-protocol-rewrite.md).
 
 bk_reference = [
     ("bp/fold", 1.546648),

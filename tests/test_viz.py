@@ -20,14 +20,14 @@ def _close_figures_after_test():
     plt.close("all")
 
 
-def test_bifurcation_styles_cover_detector_types():
-    """Every bif_type string bifurcations/detector.py emits has a style entry.
+def test_bifurcation_styles_cover_event_types():
+    """Every bif_type string bifurcations/events.py emits has a style entry.
 
-    BifurcationDetector tags points with bif_type == 'fold' or 'hopf' (see
-    detector.py's detect_along_branch); both must resolve to a real
+    detect_events tags points with bif_type == 'fold' or 'hopf' (see
+    events.py's Fold/Hopf); both must resolve to a real
     BIFURCATION_STYLES entry, not silently fall through to DEFAULT_STYLE, so a
     marker/color change in one place can't accidentally stop applying to one
-    of the two shipped detectors.
+    of the two shipped event kinds.
     """
     for bif_type in ("fold", "hopf"):
         assert bif_type in BIFURCATION_STYLES

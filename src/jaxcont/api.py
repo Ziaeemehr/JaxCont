@@ -21,6 +21,7 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
+from jaxcont.bifurcations.events import Event, Fold, Hopf, EventHit, detect_events
 from jaxcont.core.continuation import ContinuationProblem, ContinuationSolution
 
 __all__ = [
@@ -209,52 +210,9 @@ class ContinuationPar:
 
 
 # ---------------------------------------------------------------------------
-# Events
+# Events -- Event, Fold, Hopf, EventHit are imported from
+# jaxcont.bifurcations.events (see top of file) and re-exported here.
 # ---------------------------------------------------------------------------
-
-class Event:
-    """Marker base for a bifurcation/event detector.
-
-    Naming follows the standard abbreviations used throughout the
-    bifurcation-theory literature (see
-    ``jaxcont.bifurcations.taxonomy.BIFURCATION_TYPES``) rather than
-    inventing new names -- e.g. a fold is ``jc.Fold`` (abbreviation **LP**)
-    and a Hopf point is ``jc.Hopf`` (abbreviation **H**).
-    """
-
-    #: legacy detector key this event maps onto ("fold" | "hopf")
-    _kind: str = ""
-
-
-@dataclass(frozen=True)
-class Fold(Event):
-    """A limit point / fold bifurcation of equilibria.
-
-    Abbreviation: **LP** -- ``jaxcont.bifurcations.taxonomy.describe("LP")``.
-    """
-
-    _kind: str = "fold"
-
-
-@dataclass(frozen=True)
-class Hopf(Event):
-    """A Hopf bifurcation of equilibria.
-
-    Abbreviation: **H** -- ``jaxcont.bifurcations.taxonomy.describe("H")``.
-    """
-
-    _kind: str = "hopf"
-
-
-@dataclass(frozen=True)
-class EventHit:
-    """A detected event along the branch."""
-
-    kind: str
-    p: float
-    u: Array
-    index: Optional[Tuple[int, int]] = None
-    info: dict = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -343,22 +301,6 @@ jax.tree_util.register_pytree_node(
 # Adapters (BifProblem <-> legacy ContinuationProblem/Solution)
 # ---------------------------------------------------------------------------
 
-def _to_legacy_problem(problem: BifProblem) -> ContinuationProblem:
-    """Wrap a BifProblem's ``f(u, p, args)`` as a legacy ``rhs(u, params)``."""
-    f = problem.f
-    args = problem.args
-
-    def rhs(u, params):
-        return f(u, params[_P_KEY], args)
-
-    return ContinuationProblem(
-        rhs=rhs,
-        u0=problem.u0,
-        params={_P_KEY: float(problem.p0)},
-        continuation_param=_P_KEY,
-        problem_type=problem.kind,
-    )
-
 
 def _run_scan(
     scan_fn,
@@ -435,29 +377,21 @@ def _run_scan(
         param_name=problem.param_name,
     )
 
-    # Reuse the existing detector on the reassembled solution.
+    # Detect events with the Event protocol (bifurcations/events.py).
     if len(events) > 0 and eigenvalues is not None:
-        from jaxcont.bifurcations.detector import BifurcationDetector
-
-        requested = {e._kind for e in events if getattr(e, "_kind", "")}
-        detector = BifurcationDetector(
-            detect_fold="fold" in requested,
-            detect_hopf="hopf" in requested,
-            tolerance=1e-6,
+        hits = detect_events(
+            events, params, states, tangents, eigenvalues, rhs2,
+            ds=float(settings.ds), tolerance=1e-6,
         )
-        sol.bifurcations = detector.detect_along_branch(
-            sol,
-            eigenvalues,
-            refine_location=True,
-            problem=_to_legacy_problem(problem),
-            fold_extended_system=True,
-        )
+        # sol.bifurcations stays dict-shaped: viz/core.py's plotting and
+        # ContinuationSolution.get_bifurcations_by_type both read
+        # bif.get("type")/bif.get("parameter")/bif.get("state") directly.
+        sol.bifurcations = [
+            {"type": h.kind, "parameter": h.p, "state": h.u, "index": h.index, **h.info}
+            for h in hits
+        ]
 
-    result = _to_result(sol)
-    requested = {e._kind for e in events if getattr(e, "_kind", "")}
-    if requested:
-        result.events = [h for h in result.events if h.kind in requested]
-    return result
+    return _to_result(sol)
 
 
 def _run_scan_traced(
@@ -470,13 +404,13 @@ def _run_scan_traced(
     ``_run_scan``'s path when ``res.n_valid`` is a tracer (called inside
     ``jax.vmap``/``jax.jit``). No concrete trim length exists, so the fixed-
     size engine buffers are returned as-is with a ``valid`` mask instead of
-    the legacy ``ContinuationSolution``/``BifurcationDetector`` machinery,
+    the legacy ``ContinuationSolution``/``detect_events`` machinery,
     neither of which is traceable (Python loops, ``float()``, ``list.sort()``).
     """
     if len(events) > 0:
         raise NotImplementedError(
             "events=[...] is not supported when continuation() runs inside "
-            "jax.vmap/jax.jit: BifurcationDetector uses Python-level control "
+            "jax.vmap/jax.jit: detect_events uses Python-level control "
             "flow (loops, list.sort(), float()) that isn't traceable. Call "
             "continuation() without events inside the trace -- e.g. inspect "
             "branch.states/branch.params/branch.valid -- or run it eagerly "
