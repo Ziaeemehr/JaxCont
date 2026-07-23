@@ -120,3 +120,47 @@ def test_pseudo_arclength_scan_matches_pre_protocol_baseline():
     ]
     assert res.params[:n].tolist() == expected_params
     assert res.states[:n, 0].tolist() == expected_states0
+
+
+def test_continuation_routes_through_custom_solvers_bundle():
+    # The spec-required proof that continuation() itself -- the public
+    # entry point, not just the lower-level scan functions -- actually
+    # routes through a user-supplied Solvers bundle.
+    import jaxcont as jc
+
+    linear_solver = _CountingLinearSolver()
+    eigen_solver = _CountingEigenSolver()
+
+    prob = jc.bif_problem(lambda u, p, args: pitchfork(u, p), u0=jnp.array([0.1]), p0=0.5)
+    result = jc.continuation(
+        prob, p_span=(0.5, 1.5),
+        solvers=jc.Solvers(linear=linear_solver, eigen=eigen_solver),
+    )
+
+    assert result.branch.n_valid > 1
+    assert len(linear_solver.calls) > 0
+    assert len(eigen_solver.calls) > 0
+
+
+def test_continuation_default_solvers_matches_prior_behavior():
+    # Exercises the default Solvers() end to end through continuation() --
+    # the public-API analogue of Task 2's pseudo_arclength_scan baseline
+    # test. Settings are pinned to match that captured baseline exactly
+    # (ds=0.05, ds_min=1e-5, ds_max=0.2, newton_tol=1e-6, max_steps=60,
+    # newton_max_iter=20) rather than ContinuationPar's defaults, so the
+    # same reference numbers apply.
+    import jaxcont as jc
+
+    prob = jc.bif_problem(lambda u, p, args: pitchfork(u, p), u0=jnp.array([0.1]), p0=0.5)
+    settings = jc.ContinuationPar(
+        ds=0.05, ds_min=1e-5, ds_max=0.2, max_steps=60,
+        newton_tol=1e-6, newton_max_iter=20,
+    )
+    result = jc.continuation(prob, p_span=(0.5, 1.5), settings=settings)
+
+    expected_params = [
+        0.5, 0.5298426151275635, 0.6048426032066345, 0.7173426151275635,
+        0.8860926032066345, 1.0860925912857056, 1.2860926389694214,
+        1.4860926866531372, 1.686092734336853,
+    ]
+    assert result.branch.params.tolist() == expected_params

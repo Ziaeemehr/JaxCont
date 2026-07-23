@@ -290,14 +290,17 @@ class ContinuationPar(eqx.Module):
 class LinearSolver(Protocol):
     def __call__(self, A, b) -> Array: ...     # Dense() default; GMRES()/BiCGStab() later
 class EigenSolver(Protocol):
-    def __call__(self, A) -> Array: ...        # Dense() default; Arnoldi()/shift-invert later
-class NewtonSolver(Protocol): ...
+    def __call__(self, A) -> Array: ...        # DenseEigen() default; Arnoldi()/shift-invert later
 
-class Solvers(eqx.Module):                     # bundle passed to continuation()
+@dataclass(frozen=True)                        # plain dataclass bundle, not eqx.Module --
+class Solvers:                                 # never crosses a jax.jit boundary itself
     linear: LinearSolver = Dense()
-    eigen: EigenSolver = Dense()
-    newton: NewtonSolver = BorderedNewton()
+    eigen: EigenSolver = DenseEigen()
 ```
+
+(`NewtonSolver`/`BorderedNewton` removed from this sketch — not implemented as
+part of the `Solvers` bundle; see `src/jaxcont/solvers/protocols.py` for the
+implemented `LinearSolver`/`EigenSolver`/`Dense`/`DenseEigen`.)
 
 ### 4.7 Events (unifies detection; replaces bespoke BifurcationDetector)
 

@@ -23,12 +23,14 @@ from jax import Array
 
 from jaxcont.bifurcations.events import Event, Fold, Hopf, EventHit, detect_events
 from jaxcont.core.continuation import ContinuationProblem, ContinuationSolution
+from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
 
 __all__ = [
     "BifProblem",
     "bif_problem",
     "continuation",
     "ContinuationPar",
+    "Solvers",
     "ContinuationAlgorithm",
     "PseudoArclength",
     "Natural",
@@ -209,6 +211,22 @@ class ContinuationPar:
     compute_stability: bool = True
 
 
+@dataclass(frozen=True)
+class Solvers:
+    """Pluggable linear-algebra bundle for continuation() (ARCHITECTURE.md §4.6).
+
+    Dense()/DenseEigen() are the only implementations today; the boundary
+    exists so a future GMRES()/Arnoldi() (large systems) or ChebyshevDDE()
+    (the DDE eigensolver seam, ARCHITECTURE.md §10.2) can swap in without
+    touching the continuation loop. Never itself crosses a jax.jit boundary
+    -- only its .linear/.eigen fields do, as static arguments to
+    pseudo_arclength_scan/natural_scan.
+    """
+
+    linear: LinearSolver = Dense()
+    eigen: EigenSolver = DenseEigen()
+
+
 # ---------------------------------------------------------------------------
 # Events -- Event, Fold, Hopf, EventHit are imported from
 # jaxcont.bifurcations.events (see top of file) and re-exported here.
@@ -308,6 +326,7 @@ def _run_scan(
     p_span: Tuple[float, float],
     settings: ContinuationPar,
     events: Sequence[Event],
+    solvers: Solvers,
     verbose: bool,
 ) -> ContinuationResult:
     """
@@ -335,6 +354,7 @@ def _run_scan(
         jnp.asarray(settings.newton_tol, dtype),
         int(settings.max_steps),
         jnp.asarray(settings.newton_max_iter),
+        solvers.linear,
     )
 
     try:
@@ -343,7 +363,7 @@ def _run_scan(
         # Traced call (jax.vmap/jax.jit over this problem/settings): n_valid
         # can't become a concrete Python int, so there is no single trim
         # length. Fall back to the fixed-size-buffer + mask representation.
-        return _run_scan_traced(res, rhs2, settings, events)
+        return _run_scan_traced(res, rhs2, settings, events, solvers)
 
     states = res.states[:n]
     params = res.params[:n]
@@ -353,7 +373,7 @@ def _run_scan(
     stability = None
     want_eigs = settings.compute_stability or len(events) > 0
     if want_eigs and states.shape[0] > 0:
-        eigenvalues = branch_eigenvalues(rhs2, states, params)
+        eigenvalues = branch_eigenvalues(rhs2, states, params, eigen_solver=solvers.eigen)
         stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
 
     convergence_info = [
@@ -399,6 +419,7 @@ def _run_scan_traced(
     rhs2: Callable[[Array, Array], Array],
     settings: ContinuationPar,
     events: Sequence[Event],
+    solvers: Solvers,
 ) -> ContinuationResult:
     """
     ``_run_scan``'s path when ``res.n_valid`` is a tracer (called inside
@@ -425,7 +446,7 @@ def _run_scan_traced(
     eigenvalues = None
     stability = None
     if settings.compute_stability:
-        eigenvalues = branch_eigenvalues(rhs2, states, params)
+        eigenvalues = branch_eigenvalues(rhs2, states, params, eigen_solver=solvers.eigen)
         stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
 
     branch = Branch(
@@ -480,6 +501,7 @@ def continuation(
     p_span: Tuple[float, float],
     settings: ContinuationPar = ContinuationPar(),
     events: Sequence[Event] = (),
+    solvers: Solvers = Solvers(),
     verbose: bool = False,
 ) -> ContinuationResult:
     """
@@ -492,6 +514,8 @@ def continuation(
         settings: numerical settings (:class:`ContinuationPar`).
         events: detectors to run along the branch (e.g. ``[Fold(), Hopf()]``).
             An empty list disables detection.
+        solvers: linear-algebra bundle (:class:`Solvers`); defaults to dense
+            direct solves (``Dense()``/``DenseEigen()``).
         verbose: print a bifurcation summary.
 
     Returns:
@@ -500,8 +524,8 @@ def continuation(
     from jaxcont.core.scan_continuation import natural_scan, pseudo_arclength_scan
 
     if isinstance(alg, Natural):
-        return _run_scan(natural_scan, problem, p_span, settings, events, verbose)
+        return _run_scan(natural_scan, problem, p_span, settings, events, solvers, verbose)
     elif isinstance(alg, PseudoArclength):
-        return _run_scan(pseudo_arclength_scan, problem, p_span, settings, events, verbose)
+        return _run_scan(pseudo_arclength_scan, problem, p_span, settings, events, solvers, verbose)
     else:
         raise TypeError(f"Unknown continuation algorithm: {alg!r}")

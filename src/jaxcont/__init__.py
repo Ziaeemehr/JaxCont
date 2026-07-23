@@ -17,6 +17,7 @@ from jaxcont.api import (
     bif_problem,
     continuation,
     ContinuationPar,
+    Solvers,
     ContinuationAlgorithm,
     PseudoArclength,
     Natural,
@@ -44,6 +45,7 @@ from jaxcont.bifurcations.fold_solve import fold_point, fold_parameter
 # Solvers
 from jaxcont.solvers.newton import NewtonSolver
 from jaxcont.solvers.corrector import Corrector
+from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
 
 # Stability analysis
 from jaxcont.stability.eigenvalue import compute_eigenvalues, analyze_stability
@@ -65,6 +67,7 @@ __all__ = [
     "bif_problem",
     "continuation",
     "ContinuationPar",
+    "Solvers",
     "ContinuationAlgorithm",
     "PseudoArclength",
     "Natural",
@@ -84,6 +87,10 @@ __all__ = [
     # Solvers
     "NewtonSolver",
     "Corrector",
+    "LinearSolver",
+    "EigenSolver",
+    "Dense",
+    "DenseEigen",
     # Stability
     "compute_eigenvalues",
     "analyze_stability",
