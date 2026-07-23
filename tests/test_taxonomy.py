@@ -46,8 +46,8 @@ def test_describe_raises_on_unknown_label():
 
 def test_fold_and_hopf_events_correspond_to_lp_and_h():
     """jc.Fold/jc.Hopf are the standard LP/H abbreviations, not ad hoc names."""
-    assert Fold()._kind == "fold"
-    assert Hopf()._kind == "hopf"
+    assert Fold().kind == "fold"
+    assert Hopf().kind == "hopf"
     assert LABELS["LP"].name.startswith("Limit Point (fold)")
     assert LABELS["H"].name == "Hopf bifurcation"
 

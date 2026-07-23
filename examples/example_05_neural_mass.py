@@ -118,14 +118,9 @@ for i, bif in enumerate(solution.bifurcations, 1):
 # --------------------------------------------
 # Reference values from running BifurcationKit.jl v0.5.2 (``PALC()``,
 # ``bothside=true``) independently, offline, on the identical equations and
-# parameters. The two solid fold matches below agree to within 0.0015 in E0.
-# The Hopf near E0=-1.85 is also found, but -- as with the Lorenz-84 example
-# -- the detector additionally flags a nearby spurious "fold" at the same
-# location, and one more spurious fold appears near E0=-1.55 with no
-# BifurcationKit.jl counterpart at all. This is an honest snapshot of the
-# current detector's precision, not a hidden failure: the *locations* it does
-# match are accurate; duplicate/spurious flags near closely-spaced or
-# lower-quality crossings are a known limitation to improve on.
+# parameters. All three reachable bifurcations match to within 0.0015 in E0
+# (issue #7's duplicate/spurious fold-vs-Hopf flags -- fixed 2026-07-23, see
+# docs/superpowers/plans/2026-07-23-event-protocol-rewrite.md).
 
 bk_reference = [
     ("fold", -1.865224),
