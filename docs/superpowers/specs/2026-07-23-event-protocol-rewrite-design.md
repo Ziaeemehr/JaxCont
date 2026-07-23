@@ -47,10 +47,22 @@ flow) and becomes its own future roadmap item instead of being bundled in.
    `solvers/implicit.py:differentiable_root` — see the 2026-07-23
    differentiable-root-primitive plan) instead of bisection.
 3. `Hopf`'s test function and bisection-based refinement are carried over
-   unchanged from today's `HopfBifurcation`.
-4. A dedup step: after refining all crossings from all requested events,
-   sort by parameter and drop any hit within `2 * abs(ds)` of the previous
-   kept hit, regardless of kind.
+   from today's `HopfBifurcation`, with one bug fix found during design (see
+   Design §3): the "no complex eigenvalues" sentinel changes from `inf` to
+   `nan`, because `inf` produces a false sign-change (and therefore a
+   spurious Hopf flag) at every point where the branch's eigenvalue
+   structure transitions from all-real to complex, regardless of whether
+   the resulting pair is anywhere near the imaginary axis.
+4. A dedup step: after refining all crossings, group by kind, sort each
+   group by parameter, and within a kind drop any hit within `2 * abs(ds)`
+   of the previous kept hit of the **same kind**. (Verified during design,
+   not cross-kind: `example_05_neural_mass.py`'s real fold at E0=-1.865224
+   and real Hopf at E0=-1.850125 are only 0.015 apart — both confirmed by
+   BifurcationKit.jl, well inside a naive `2*ds=0.04` window. A kind-agnostic
+   merge silently drops one of two genuinely distinct, independently-verified
+   bifurcations; restricting the merge to same-kind hits avoids that while
+   still collapsing same-kind duplicate detections, which is what's actually
+   observed today — see "Testing" below.)
 5. Delete `src/jaxcont/bifurcations/detector.py` (`BifurcationDetector`) and
    the detection logic in `fold.py`/`hopf.py` (`FoldBifurcation`,
    `HopfBifurcation`, including their non-functional
@@ -63,7 +75,10 @@ flow) and becomes its own future roadmap item instead of being bundled in.
    detection call site (`api.py:439-454`) calls `detect_events(...)` with
    the plain `rhs2` callable it already builds, instead of
    `BifurcationDetector(...).detect_along_branch(...)` via
-   `_to_legacy_problem`.
+   `_to_legacy_problem`. The `_kind` attribute is renamed to the public
+   `kind` (Design §1); `tests/test_taxonomy.py:49-50`, the one other place
+   in the tree reading `Fold()._kind`/`Hopf()._kind` directly, updates to
+   `.kind` alongside this.
 7. Tests: a synthetic ground-truth regression reproducing the exact old-bug
    mechanism (see "Testing" below); `tests/test_bifurcations.py` rewritten
    against the new `Fold`/`Hopf` classes (it currently unit-tests the
@@ -102,6 +117,9 @@ class BranchPoint:
     eigenvalues: Optional[Array]   # (n,) complex, or None
 
 
+@runtime_checkable  # lets isinstance(x, Event) work; verified this raises
+                    # TypeError without the decorator (Python's Protocol
+                    # default) during design
 class Event(Protocol):
     kind: str
 
@@ -182,7 +200,7 @@ class Hopf(Event):
         eigs = point.eigenvalues
         complex_mask = jnp.abs(jnp.imag(eigs)) > self.tolerance
         if not jnp.any(complex_mask):
-            return float("inf")
+            return float("nan")
         complex_eigs = eigs[complex_mask]
         idx = jnp.argmin(jnp.abs(jnp.real(complex_eigs)))
         return float(jnp.real(complex_eigs[idx]))
@@ -229,10 +247,27 @@ class Hopf(Event):
 makes today when a problem is available, extracted so both the orchestrator
 (building each `BranchPoint`'s `eigenvalues` from the branch's stored
 per-step values) and `Hopf.refine` (recomputing at bisection midpoints not
-on the original branch) share one implementation. Behavior carried over
-unchanged from today's `HopfBifurcation.test_function` +
-`BifurcationDetector.locate_bifurcation`'s bisection path — just relocated
-and re-scoped to one class.
+on the original branch) share one implementation.
+
+**`nan`, not `inf`, for "no complex eigenvalues" (found during design,
+verified against a real example):** `today's HopfBifurcation.test_function`
+returns `float("inf")` when no eigenvalue is complex. Feeding that into a
+naive `test_vals[i] * test_vals[i+1] < 0` sign-change scan is a bug:
+`inf * (any negative finite number) = -inf < 0`, so the scan reports a
+"crossing" at every bracket where the eigenvalue *structure* switches from
+all-real to complex — even when the resulting pair's real part is nowhere
+near zero. Reproduced directly on `example_05_neural_mass.py`: at the branch
+point just past index 11, eigenvalues go from three real values
+`(-0.33, -13.03, -9.72)` to a genuine complex pair `-9.455 ± 4.56i` (a real,
+non-noise imaginary part) plus one real value. `inf` (no complex pair) times
+`-9.455` (that pair's real part, far from the imaginary axis) is negative,
+so the old sentinel logic flags a phantom Hopf at that bracket. `nan`
+doesn't have this problem: `nan * anything` is `nan`, and `nan < 0` is
+`False` in IEEE 754, so the scan skips these transitions for free, with no
+change needed to `detect_events`'s generic scanning loop. Confirmed this
+was the exact source of the one remaining spurious detection in
+`example_05_neural_mass.py`'s comparison table (see "Testing" below) —
+switching the sentinel removed it entirely, with no other code changes.
 
 ### 4. `detect_events` orchestrator
 
@@ -271,12 +306,21 @@ def detect_events(
     hits.sort(key=lambda h: h.p)
     merge_window = 2.0 * abs(ds)
     deduped: List[EventHit] = []
+    last_p_by_kind: dict = {}
     for hit in hits:
-        if deduped and abs(hit.p - deduped[-1].p) < merge_window:
+        prev_p = last_p_by_kind.get(hit.kind)
+        if prev_p is not None and abs(hit.p - prev_p) < merge_window:
             continue
+        last_p_by_kind[hit.kind] = hit.p
         deduped.append(hit)
     return deduped
 ```
+
+Dedup is **same-kind only** (`last_p_by_kind`, not a single running
+"previous hit" across all kinds) — see the note under "In scope" item 4
+above for why a kind-agnostic merge was tried and found to silently drop
+real, independently-verified bifurcations that just happen to sit close
+together in parameter space.
 
 This is a direct, eager Python-loop implementation — the same style
 `BifurcationDetector` already used, just reorganized into per-kind
@@ -331,12 +375,24 @@ owns instead of `BifurcationDetector`.
    zero at `p=0` (as expected), `Fold().test_function` (tangent-based) does
    **not** spuriously cross there, and end-to-end `detect_events` on this
    system returns exactly one `hopf` hit and no `fold` hit near `p=0`.
-2. **Real cross-validated examples:** re-run `example_02_lorenz.py` and
-   `example_05_neural_mass.py`, confirm the true fold/Hopf locations still
-   match their hardcoded BifurcationKit.jl v0.5.2 reference values (same
-   precision as before), the documented duplicate flag (a true Hopf also
-   mislabeled as fold) is gone, and the documented spurious fold with no
-   BifurcationKit.jl counterpart (`example_05`, `E0≈-1.550`) is gone.
+2. **Real cross-validated examples, verified during design (not just
+   asserted):** re-running `example_02_lorenz.py` and
+   `example_05_neural_mass.py` against this design's actual code (fold
+   tangent test + same-kind dedup + `nan` Hopf sentinel, all three fixes
+   together) produces, currently on `main`: `example_05` goes from 5 raw
+   detections (2 exact-duplicate folds at E0=-1.865224, 1 hopf, 2
+   exact-duplicate folds at E0=-1.463027 — the actual current bug shape,
+   which has drifted from the 2026-07-18 issue #7 write-up's description of
+   *mislabeled*/*spurious-with-no-counterpart* flags, likely because
+   subsequent commits like the engine consolidation changed exactly how the
+   detector receives branch data) down to exactly 3 clean detections, all
+   matching BifurcationKit.jl to the same precision as today
+   (fold=-1.865224, hopf=-1.850125≈-1.849986, fold=-1.463027). `example_02`
+   goes from 6 raw detections (the F=1.546648 fold alone appearing 3 times)
+   down to exactly 4, matching all four `bk_reference` entries. Zero
+   unmatched/spurious rows in either comparison table. The plan captures
+   these exact verified counts as its acceptance numbers instead of the
+   original issue write-up's now-stale description.
 3. **`tests/test_bifurcations.py` rewritten** against `Fold`/`Hopf`'s
    `test_function` (replacing its current direct tests of the deleted
    `FoldBifurcation`/`HopfBifurcation`), covering: fold test function on a
