@@ -434,15 +434,20 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
    periodic-orbit types (`Collocation` predictor, `PeriodDoubling`/`LPC`/`NS` events) are still not
    built; this only removes the open decision and gives that future work a proven pattern. v0.1's
    `BifProblem`/`Branch` are untouched, per the original recommendation.
-3. **Generalize the `fold_solve.py` pattern into one reusable primitive before hand-writing it
-   again for Hopf/LPC/PD/NS.** The genuinely novel piece of this project — Newton-in-
-   `lax.while_loop` over an extended system `G(x,θ)=0`, wrapped in `jax.custom_vjp` implementing
-   the implicit function theorem so `jax.grad` skips the iteration — is currently bespoke to folds.
-   ARCHITECTURE.md §3.2 already calls Hopf/codim-2 versions "natural follow-ups"; before writing
-   the second one, extract the shared scaffolding (e.g.
-   `solvers/implicit.py: differentiable_root(G, x0, theta) -> (x*, custom_vjp)`) so each new
-   differentiable event (Hopf, then LPC/PD/NS in v0.2/v0.3) is just a new `G`, not a new custom_vjp
-   implementation. This is the highest-leverage single refactor for the strategic direction above.
+3. ✅ **Generalize the `fold_solve.py` pattern into one reusable primitive before hand-writing it
+   again for Hopf/LPC/PD/NS.** *(done 2026-07-23 — see
+   [docs/superpowers/plans/2026-07-23-differentiable-root-primitive.md](../docs/superpowers/plans/2026-07-23-differentiable-root-primitive.md)
+   and its [design spec](../docs/superpowers/specs/2026-07-23-differentiable-root-primitive-design.md))*
+   The genuinely novel piece of this project — Newton-in-`lax.while_loop` over an extended system
+   `G(x,θ)=0`, wrapped in `jax.custom_vjp` implementing the implicit function theorem so `jax.grad`
+   skips the iteration — was bespoke to folds; it's now `solvers/implicit.py: differentiable_root(G,
+   x0, theta) -> x*`, and `fold_solve.py` delegates to it. Each new differentiable event (Hopf, then
+   LPC/PD/NS in v0.2/v0.3) can now be just a new `G`, not a new `custom_vjp` implementation.
+   **Found along the way, worth knowing:** `x0` (the Newton seed) must be passed as a callable
+   `theta -> Array`, not a precomputed `Array`, whenever the seed genuinely depends on `theta` (as
+   fold's SVD-based null-vector guess does) — a precomputed theta-dependent seed closed over from
+   outside leaks a JAX tracer under `jax.grad`. `differentiable_root` supports both forms; the
+   callable form resolves the seed inside the traced primal instead.
 4. **Replace `BifurcationDetector` with the sketched `Event` protocol (ARCHITECTURE.md §4.7) as
    part of fixing issue #7 (duplicate/spurious fold-vs-Hopf flags), not instead of it.** The
    current detector is one class doing sign-change scanning, bisection, and dedup for multiple
