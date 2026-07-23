@@ -33,6 +33,8 @@ import jax
 import jax.numpy as jnp
 from jax import Array, jacfwd, lax
 
+from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
+
 PyTree = Any
 
 
@@ -59,7 +61,7 @@ def _bordered_matrix(jac_u: Array, df_dp: Array, last_row: Array) -> Array:
     return jnp.concatenate([top, bottom], axis=0)
 
 
-def _tangent(f, u, p, prev_tangent):
+def _tangent(f, u, p, prev_tangent, linear_solver: LinearSolver = Dense()):
     """
     Keller tangent: the null vector of ``[df/du | df/dp]`` aligned with the
     previous tangent, normalized. Solving the bordered system with ``prev`` as
@@ -71,14 +73,17 @@ def _tangent(f, u, p, prev_tangent):
     df_dp = jacfwd(f, argnums=1)(u, p)          # (n,)
     M = _bordered_matrix(jac_u, df_dp, prev_tangent)
     rhs = jnp.zeros(u.shape[0] + 1).at[-1].set(1.0)
-    t = jnp.linalg.solve(M, rhs)
+    t = linear_solver(M, rhs)
     t = t / jnp.linalg.norm(t)
     # keep continuous orientation
     t = jnp.where(jnp.dot(t, prev_tangent) < 0.0, -t, t)
     return t
 
 
-def _newton_correct(f, u_pred, p_pred, u_prev, p_prev, du0, dp0, ds, tol, max_iter):
+def _newton_correct(
+    f, u_pred, p_pred, u_prev, p_prev, du0, dp0, ds, tol, max_iter,
+    linear_solver: LinearSolver = Dense(),
+):
     """
     Bordered Newton corrector for the pseudo-arclength system
 
@@ -109,7 +114,7 @@ def _newton_correct(f, u_pred, p_pred, u_prev, p_prev, du0, dp0, ds, tol, max_it
         df_dp = jacfwd(f, argnums=1)(u, p)
         M = _bordered_matrix(jac_u, df_dp, jnp.concatenate([du0, dp0.reshape(1)]))
         rhs = -jnp.concatenate([f_val, g_val.reshape(1)])
-        delta = jnp.linalg.solve(M, rhs)
+        delta = linear_solver(M, rhs)
         u_new = u + delta[:-1]
         p_new = p + delta[-1]
         f_new, g_new = residual(u_new, p_new)
@@ -148,7 +153,7 @@ def _adapt_ds(ds_mag, iters, converged, ds_min, ds_max):
 # Whole-loop continuation
 # ---------------------------------------------------------------------------
 
-@partial(jax.jit, static_argnums=(0, 8))
+@partial(jax.jit, static_argnums=(0, 8, 10))
 def pseudo_arclength_scan(
     f: Callable[[Array, Array], Array],
     u0: Array,
@@ -160,13 +165,15 @@ def pseudo_arclength_scan(
     tol: Array,
     max_steps: int,
     max_iter: Array,
+    linear_solver: LinearSolver = Dense(),
 ) -> ScanResult:
     """
     Continue ``f(u, p) = 0`` in ``p`` from ``(u0, p0)`` toward ``p_end``.
 
     ``f`` and ``max_steps`` are static (they set the compiled program & buffer
     sizes); everything else may be a traced array, so this whole function is
-    ``jit``/``vmap``/``grad``-friendly.
+    ``jit``/``vmap``/``grad``-friendly. ``linear_solver`` is also static (a
+    strategy object, not a traced value) -- see ``solvers/protocols.py``.
     """
     u0 = jnp.asarray(u0)
     n = u0.shape[0]
@@ -178,7 +185,7 @@ def pseudo_arclength_scan(
     # Initial tangent: seed prev with the parameter axis pointing in `direction`,
     # so the branch is traversed toward p_end.
     seed = jnp.zeros(n + 1, dtype).at[-1].set(direction)
-    tan0 = _tangent(f, u0, p0, seed)
+    tan0 = _tangent(f, u0, p0, seed, linear_solver)
 
     # Fixed-size output buffers; slot 0 is the initial point.
     P = jnp.zeros((max_steps + 1, n), dtype).at[0].set(u0)
@@ -213,11 +220,11 @@ def pseudo_arclength_scan(
         u_pred = c.u + c.ds * du0
         p_pred = c.p + c.ds * dp0
         u_new, p_new, converged, iters = _newton_correct(
-            f, u_pred, p_pred, c.u, c.p, du0, dp0, c.ds, tol, max_iter
+            f, u_pred, p_pred, c.u, c.p, du0, dp0, c.ds, tol, max_iter, linear_solver
         )
 
         # New tangent only meaningful if we accept; compute anyway (branch-free).
-        tan_new = _tangent(f, u_new, p_new, c.tan)
+        tan_new = _tangent(f, u_new, p_new, c.tan, linear_solver)
 
         write = c.idx + 1  # slot for the next accepted point
         P = c.P.at[write].set(jnp.where(converged, u_new, c.P[write]))
@@ -262,17 +269,17 @@ def pseudo_arclength_scan(
     )
 
 
-def branch_eigenvalues(f, states, params):
+def branch_eigenvalues(f, states, params, eigen_solver: EigenSolver = DenseEigen()):
     """
     Vectorized (vmap) eigenvalues of df/du along a stored branch. Kept out of the
     continuation loop so the loop stays simple; this is itself one batched kernel.
     """
     def eig_at(u, p):
-        return jnp.linalg.eigvals(jacfwd(f, argnums=0)(u, p))
+        return eigen_solver(jacfwd(f, argnums=0)(u, p))
     return jax.vmap(eig_at)(states, params)
 
 
-def _natural_correct(f, u_pred, p_fixed, tol, max_iter):
+def _natural_correct(f, u_pred, p_fixed, tol, max_iter, linear_solver: LinearSolver = Dense()):
     """
     Plain Newton on ``f(u, p_fixed) = 0`` with ``p_fixed`` held constant --
     no bordered system, no arclength constraint. This is natural
@@ -290,7 +297,7 @@ def _natural_correct(f, u_pred, p_fixed, tol, max_iter):
         u, it, _, _ = carry
         f_val = f(u, p_fixed)
         jac_u = jacfwd(f, argnums=0)(u, p_fixed)
-        delta = jnp.linalg.solve(jac_u, -f_val)
+        delta = linear_solver(jac_u, -f_val)
         u_new = u + delta
         f_new = f(u_new, p_fixed)
         r_new = jnp.sqrt(jnp.sum(f_new ** 2))
@@ -307,7 +314,7 @@ def _natural_correct(f, u_pred, p_fixed, tol, max_iter):
     return u_f, converged, it_f
 
 
-@partial(jax.jit, static_argnums=(0, 8))
+@partial(jax.jit, static_argnums=(0, 8, 10))
 def natural_scan(
     f: Callable[[Array, Array], Array],
     u0: Array,
@@ -319,6 +326,7 @@ def natural_scan(
     tol: Array,
     max_steps: int,
     max_iter: Array,
+    linear_solver: LinearSolver = Dense(),
 ) -> ScanResult:
     """
     Continue ``f(u, p) = 0`` in ``p`` from ``(u0, p0)`` toward ``p_end``
@@ -332,7 +340,8 @@ def natural_scan(
     ``f`` and ``max_steps`` are static; buffers are ``(max_steps + 1, ...)``.
     Returns the same :class:`ScanResult` shape -- ``tangents`` is zero-filled
     (natural continuation has no tangent concept) so both engines share one
-    reassembly path in ``api.py``.
+    reassembly path in ``api.py``. ``linear_solver`` is static -- same
+    contract as ``pseudo_arclength_scan``.
     """
     u0 = jnp.asarray(u0)
     n = u0.shape[0]
@@ -365,7 +374,7 @@ def natural_scan(
 
     def body(c: Carry):
         p_pred = c.p + direction * c.ds
-        u_new, converged, iters = _natural_correct(f, c.u, p_pred, tol, max_iter)
+        u_new, converged, iters = _natural_correct(f, c.u, p_pred, tol, max_iter, linear_solver)
 
         write = c.idx + 1
         P = c.P.at[write].set(jnp.where(converged, u_new, c.P[write]))
