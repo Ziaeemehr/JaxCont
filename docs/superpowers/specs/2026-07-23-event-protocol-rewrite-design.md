@@ -191,6 +191,7 @@ class Hopf(Event):
         p_left, p_right = left.p, right.p
         u_left, u_right = left.u, right.u
         t_left = self.test_function(left)
+        t_right = self.test_function(right)
         for _ in range(max_iterations):
             if abs(p_right - p_left) < tolerance:
                 break
@@ -202,10 +203,19 @@ class Hopf(Event):
                 eigenvalues=_eigenvalues_at(rhs, u_mid, p_mid),
             )
             t_mid = self.test_function(mid_point)
+            # Three-way branch (not just "left-half or else"): a two-way
+            # version was tried during design and verified broken -- if
+            # t_mid lands on an exact zero, "t_left * t_mid < 0" is never
+            # true, and a bare `else` then marches p_left monotonically
+            # toward p_right every iteration instead of bisecting, converging
+            # to the wrong endpoint. `break` on the degenerate case (matches
+            # today's BifurcationDetector.locate_bifurcation) avoids that.
             if t_left * t_mid < 0:
-                p_right, u_right = p_mid, u_mid
-            else:
+                p_right, u_right, t_right = p_mid, u_mid, t_mid
+            elif t_mid * t_right < 0:
                 p_left, u_left, t_left = p_mid, u_mid, t_mid
+            else:
+                break
         p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
         return EventHit(
             kind="hopf", p=float(p_bif), u=u_bif, index=index,
