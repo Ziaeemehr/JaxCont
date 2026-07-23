@@ -58,7 +58,7 @@ beyond the internal primitive, and changes no observable behavior of
 ```python
 def differentiable_root(
     G: Callable[[Array, PyTree], Array],
-    x0: Array,
+    x0: Array | Callable[[PyTree], Array],
     theta: PyTree,
     *,
     tol: float = 1e-8,
@@ -66,19 +66,22 @@ def differentiable_root(
 ) -> Array:
     """Solve G(x, theta) = 0 for x via Newton, differentiable in theta.
 
-    G(x0, theta) must be evaluable to determine the residual shape; x0 is
-    the fixed-shape initial guess (its shape is baked into the jaxpr, same
-    constraint as today's fold solver). The gradient dx*/dtheta uses the
-    implicit function theorem, so it does not differentiate through the
-    inner Newton loop.
+    x0 is the Newton seed. Pass a plain Array for a theta-independent seed,
+    or a callable `theta -> Array` for a seed that depends on theta (as
+    fold's null-vector guess does) — see "x0 as callable" below for why the
+    callable form is required rather than precomputing a theta-dependent
+    array and passing it in. The gradient dx*/dtheta uses the implicit
+    function theorem, so it does not differentiate through the inner Newton
+    loop.
     """
 ```
 
 Internals are today's `newton()` + `custom_vjp` forward/backward pair from
 `fold_solve.py`, lifted out and generalized:
-- `newton(theta)`: `lax.while_loop` over Newton steps on `G(x, theta)`,
-  `x0` as the fixed starting point, dense `jnp.linalg.solve` for the step,
-  same convergence/divergence `done` condition (`norm(residual) < tol` or
+- `newton(theta)`: resolves `x_seed = x0(theta) if callable(x0) else x0`,
+  then `lax.while_loop` over Newton steps on `G(x, theta)` starting from
+  `x_seed`, dense `jnp.linalg.solve` for the step, same
+  convergence/divergence `done` condition (`norm(residual) < tol` or
   non-finite residual) as today.
 - `custom_vjp` forward: run `newton`, save `(x_star, theta)` as residuals.
 - `custom_vjp` backward: `Gx = jacobian(G, argnums=0)(x_star, theta)`,
@@ -90,6 +93,27 @@ code, not new design surface; a config-object/protocol wrapper (to mirror
 item 5's upcoming `LinearSolver` style) would add abstraction this doesn't
 need and was considered and rejected on YAGNI grounds.
 
+**`x0` as callable (found during prototyping, not in the original ROADMAP
+wording):** `fold_solve.py`'s actual seed (`_initial_v`, the SVD-based null
+vector) genuinely depends on `theta`/`args` — it's not a fixed constant.
+Prototyping the naive `differentiable_root(G, x0, theta)` signature (`x0` a
+plain, precomputed `Array`) against this case surfaced a real
+`jax.errors.UnexpectedTracerError`: computing `x0` from `theta` *outside*
+`differentiable_root` and closing it into the `custom_vjp`-wrapped `newton`
+leaks a `LinearizeTracer` across `lax.while_loop`'s internal trace boundary
+during `jax.grad`. A `theta`-*independent* `x0` (verified separately) does
+not hit this — the leak is specific to a seed that both (a) depends on the
+differentiated argument and (b) is computed in a different function scope
+than the one `custom_vjp` traces. The fix, verified against both a toy case
+and the real fold extended system (exact match to the `theta/2` /
+`theta**2/4` analytics `TestDifferentiableFold` checks): accept `x0` as
+`Array | Callable[[theta], Array]`; when callable, `newton(theta)` evaluates
+it as its first step, so the theta-dependence is computed *inside* the
+traced primal (matching how `fold_solve.py` already did this today, before
+this refactor — `_initial_v` runs inside `newton(args)` in the current
+code). Callers with a genuinely constant seed pass a plain `Array`, unchanged
+from the original signature.
+
 ### 2. `fold_solve.py` refactor
 
 - Delete `_make_fold_solver` (its `newton`/`custom_vjp` body moves to
@@ -98,10 +122,12 @@ need and was considered and rejected on YAGNI grounds.
   as-is (these are fold-domain-specific: building `G` and the initial
   `x0 = (u, p, v)`), then calls:
   ```python
-  G = lambda x, args: _extended_residual(x, f, args, n)
-  x0 = _pack(u_guess, p_guess, _initial_v(f, u_guess, p_guess, args, n))
+  G = lambda x, theta: _extended_residual(x, f, theta, n)
+  x0 = lambda theta: _pack(u_guess, p_guess, _initial_v(f, u_guess, p_guess, theta, n))
   x_star = differentiable_root(G, x0, args, tol=tol, max_iter=max_iter)
   ```
+  (`x0` is passed as a callable, not a precomputed array — see "`x0` as
+  callable" above; `_initial_v` depends on `args`/`theta`, same as today.)
 - `fold_parameter` is unchanged (already just delegates to `fold_point`).
 - Public signatures, defaults, and docstrings of `fold_point`/`fold_parameter`
   are unchanged.
@@ -112,11 +138,17 @@ need and was considered and rejected on YAGNI grounds.
   theory:
   - A toy scalar `G(x, theta) = x**2 - theta` (root `x* = sqrt(theta)`):
     correctness of `differentiable_root` against the analytic root, and
-    `jax.grad` against the analytic `dx*/dtheta = 1/(2*sqrt(theta))`.
-  - A toy vector-valued case with `theta` as a small pytree (dict or tuple of
-    two scalars), checking `jax.jacobian` over `differentiable_root` matches
-    a hand-derived Jacobian — mirrors `TestDifferentiableFold`'s
+    `jax.grad` against the analytic `dx*/dtheta = 1/(2*sqrt(theta))`, with
+    `x0` passed as a plain (theta-independent) `Array`.
+  - A toy vector-valued case with `theta` as an array of two scalars,
+    checking `jax.jacobian` over `differentiable_root` matches a
+    hand-derived Jacobian — mirrors `TestDifferentiableFold`'s
     `test_vector_parameter_jacobian` but without fold machinery.
+  - A case with `x0` passed as a **callable** `theta -> Array` (a seed that
+    depends on `theta`, e.g. `x0 = lambda theta: jnp.array([jnp.sqrt(theta)])`)
+    — this is the path `fold_solve.py`'s refactor actually exercises, and the
+    one that surfaced the tracer-leak bug during design, so it needs its own
+    direct regression test rather than relying solely on the fold tests.
 - Existing `tests/test_functional_api.py::TestDifferentiableFold` re-run
   unmodified as the regression check that the refactor preserves behavior.
 - Full suite (`pytest tests/ -q`) green, same pass count as before plus the
