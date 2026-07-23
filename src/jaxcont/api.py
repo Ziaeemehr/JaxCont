@@ -301,22 +301,6 @@ jax.tree_util.register_pytree_node(
 # Adapters (BifProblem <-> legacy ContinuationProblem/Solution)
 # ---------------------------------------------------------------------------
 
-def _to_legacy_problem(problem: BifProblem) -> ContinuationProblem:
-    """Wrap a BifProblem's ``f(u, p, args)`` as a legacy ``rhs(u, params)``."""
-    f = problem.f
-    args = problem.args
-
-    def rhs(u, params):
-        return f(u, params[_P_KEY], args)
-
-    return ContinuationProblem(
-        rhs=rhs,
-        u0=problem.u0,
-        params={_P_KEY: float(problem.p0)},
-        continuation_param=_P_KEY,
-        problem_type=problem.kind,
-    )
-
 
 def _run_scan(
     scan_fn,
@@ -420,13 +404,13 @@ def _run_scan_traced(
     ``_run_scan``'s path when ``res.n_valid`` is a tracer (called inside
     ``jax.vmap``/``jax.jit``). No concrete trim length exists, so the fixed-
     size engine buffers are returned as-is with a ``valid`` mask instead of
-    the legacy ``ContinuationSolution``/``BifurcationDetector`` machinery,
+    the legacy ``ContinuationSolution``/``detect_events`` machinery,
     neither of which is traceable (Python loops, ``float()``, ``list.sort()``).
     """
     if len(events) > 0:
         raise NotImplementedError(
             "events=[...] is not supported when continuation() runs inside "
-            "jax.vmap/jax.jit: BifurcationDetector uses Python-level control "
+            "jax.vmap/jax.jit: detect_events uses Python-level control "
             "flow (loops, list.sort(), float()) that isn't traceable. Call "
             "continuation() without events inside the trace -- e.g. inspect "
             "branch.states/branch.params/branch.valid -- or run it eagerly "
