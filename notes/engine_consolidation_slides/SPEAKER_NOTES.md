@@ -1,213 +1,124 @@
 # Speaker notes
 
-These notes are written for someone new to numerical continuation. Do not try
-to read every equation aloud. First explain the picture and purpose; then use
-the equation to make the statement precise.
+These notes support a beginner-friendly technical presentation. Explain the
+purpose and picture before the equation. Do not assume the audience already
+knows numerical continuation, bifurcation terminology, or JAX transformations.
 
 ## Suggested routes
 
-### 15-minute route
+### Short route: 15–20 minutes
 
-Use slides 1–3, 4–7, 9–16, 19, 21–22, 27–33, 38, 41–44. The central message is:
-problem → fold failure → pseudo-arclength → whole-loop JIT → fixed buffers →
-`vmap` → current limitations.
+Cover the research problem, branch geometry, fold failure, pseudo-arclength
+prediction and correction, the public API, the compiled-loop idea, the research
+workflow, validation, and main takeaways.
 
-### 35–45-minute route
+### Full route: 40–50 minutes
 
-Use every main slide. Pause after the bordered system and ask the audience to
-identify which new row/column removes the fold singularity. Use the appendix
-only for questions.
+Use all main slides. Pause after the bordered Newton system and after the
+fixed-buffer explanation. Use the appendix only for derivations, method
+comparison, or implementation questions.
 
-## Opening and framing (slides 1–3)
+## Teaching sequence
 
-Start with: “There are two stories here. One is a numerical mathematics story:
-how to follow a curve through a fold. The other is a software execution story:
-how to express that repeated method so JAX can compile and batch it.”
+### 1. Begin with the scientific question
 
-Stress that `scan` is a project naming convention for the whole-sweep engine.
-The implementation uses `lax.while_loop`. This prevents the most likely source
-of confusion at the beginning.
+Continuation asks where equilibria exist as a model parameter changes.
+Simulation asks where one trajectory goes in physical time. A root solver finds
+one equilibrium; continuation orders many nearby equilibria into a branch.
 
-## Continuation fundamentals (slides 4–8)
+Use the cubic example throughout. Point out that the branch remains smooth at a
+fold even though the parameter stops being a good coordinate.
 
-For slide 4, distinguish equilibrium computation from simulation:
+### 2. Motivate pseudo-arclength geometrically
 
-- simulation asks where a trajectory goes as physical time increases;
-- continuation asks where equilibria exist as a model parameter changes.
+Natural continuation takes fixed-parameter slices. At a fold the slice becomes
+tangent to the branch and the state Jacobian becomes singular.
 
-For slides 5–6, point to successive dots on the curve. A root solver computes
-one dot; continuation orders many dots and reuses local information.
-
-For slide 7, say that `F_u` measures how the residual changes when the state is
-perturbed. When it is invertible, a small parameter change has a locally unique
-state correction. At a fold one state direction produces almost no first-order
-residual change, so the inverse problem becomes singular.
-
-For slide 8, physically trace the S-shaped curve with your finger. The curve is
-not broken at a fold; only `p` is a bad coordinate there.
-
-## Natural continuation (slides 9–10)
-
-Describe natural continuation as a sequence of vertical slices in the branch
-diagram. It fixes the next parameter value and asks Newton to find the state.
-Near a fold that slice becomes tangent to the branch. Reducing the step helps
-approach the fold but does not let the method turn around it.
-
-Make clear that this failure is expected mathematical behavior, not a bug in
-`natural_scan`. Natural continuation remains useful on monotone branches and as
-a teaching/reference algorithm.
-
-## Pseudo-arclength mathematics (slides 11–17)
-
-On slide 11, define the tangent as an arrow in combined state–parameter space.
-Both the state and parameter components can change.
-
-On slide 12, identify three points:
+For pseudo-arclength, identify three points in the picture:
 
 1. the last accepted point;
-2. the tangent prediction, which is cheap but usually off the branch;
-3. the corrected point, where the branch meets the correction hyperplane.
+2. the tangent prediction;
+3. the Newton-corrected point on the branch.
 
-On slide 13, explain the two equations in words before symbols:
+Explain the augmented equations in words:
 
-- the model equation says “be an equilibrium”;
-- the arclength equation says “be approximately one step ahead, not another
-  arbitrary equilibrium.”
+- the model residual says “be an equilibrium”;
+- the arclength constraint says “be approximately one step ahead.”
 
-On slide 14, explain why tangent orientation matters. A null space has no
-preferred sign. Without comparison to the previous tangent, the direction
-could flip and the method could walk backwards.
+The bordered Newton system is the mathematical core. The extra parameter column
+and geometric row can keep the larger system nonsingular at an ordinary fold.
 
-Slide 15 is the mathematical core. At the fold, the upper-left block `F_u` is
-singular. The additional parameter column and arclength row make a larger
-system that is generically nonsingular at an ordinary fold. JaxCont solves the
-full bordered system; it does not first invert `F_u`.
+### 3. Explain the implementation without unnecessary jargon
 
-For slides 16–17, frame the method as an accept/reject state machine. Adaptive
-step size is not changing the equations; it changes how far the next prediction
-travels.
+Separate three ideas:
 
-## Scan engines and consolidation (slides 18–25)
+- pseudo-arclength is the numerical method;
+- predictor–corrector is the repeated algorithmic pattern;
+- the scan engine is JaxCont’s compiled whole-branch implementation.
 
-Slide 18 is the terminology slide. Repeat it if needed:
+The current outer loop uses `jax.lax.while_loop`; “scan engine” does not mean
+that it calls `jax.lax.scan`.
 
-- pseudo-arclength = mathematics;
-- scan engine = implementation structure;
-- `lax.while_loop` = concrete JAX primitive currently used.
+Describe fixed buffers as reserved output capacity. `n_valid` or the `valid`
+mask distinguishes real points from unused capacity. This predictable shape is
+what makes JIT compilation and `vmap` batching practical.
 
-For slides 19–20, describe duplication as a correctness problem, not merely a
-code-style complaint. A real fix reached one old implementation and not its
-sibling. The consolidation leaves two mathematical engines, because natural
-and pseudo-arclength genuinely have different correctors, but one result and
-reassembly spine.
+One branch is sequential because every point depends on the preceding point.
+`vmap` provides parallelism across independent branches, not across the steps of
+one branch.
 
-On slide 21, walk from the user's `jc.continuation` call down to the selected
-engine and back into common result handling. Slide 22 is an important migration
-lesson: the starting equilibrium is paired with `p_span[0]`, not silently with
-`problem.p0`. These two values should describe the same equilibrium.
+### 4. Connect features to research applications
 
-On slides 23–24, explain the carry and buffers as the compiled equivalent of
-local variables and output lists. “Immutable” means each iteration returns the
-next logical state; JAX/XLA may still optimize storage internally.
+Continuation can map equilibria, locate candidate transition thresholds,
+identify multistable regions, follow stability changes, and repeat the same
+analysis over uncertain parameters or design variants.
 
-Slide 25 explains why the program is guaranteed to end. Mention both the outer
-branch budget and inner Newton budget.
+Do not imply that a bifurcation diagram validates a model or establishes
+causality. It describes mathematical solutions of the supplied model.
 
-## Performance strategy (slides 26–37)
+### 5. End with a trustworthy workflow
 
-For slide 26, avoid saying that JAX operations themselves were slow. The issue
-was many tiny dispatches coordinated by Python. Small linear algebra can finish
-faster than the orchestration around it.
+Emphasize five habits:
 
-On slide 27, contrast many host-side loop iterations with one device program.
-The continuation remains sequential mathematically, but the sequencing happens
-inside compiled control flow.
+1. verify the starting equilibrium;
+2. begin with a small conservative run;
+3. inspect residuals, termination, and step sizes;
+4. repeat with changed settings or direction;
+5. validate important conclusions independently.
 
-On slide 28, explain cold versus warm timing. JAX compilation is an investment.
-For a one-off tiny branch it may not pay back; for repeated/batched runs it often
-does.
-
-On slide 29, explain static arguments as part of the program's structure.
-`max_steps` determines array dimensions, so changing it changes the compiled
-shape.
-
-On slides 30–31, fixed buffers and `jnp.where` are the main transformation
-techniques. They replace variable-length Python lists and runtime Python `if`
-statements with uniform array programs.
-
-For slide 32, be precise: one branch's steps still depend on previous steps and
-are not parallel. `vmap` parallelizes independent branches, such as different
-design values or initial conditions.
-
-Slide 33 shows a second pattern: after the sequential branch exists,
-independent eigenvalue calculations across points are vectorized.
-
-Slides 34–35 distinguish forward-mode differentiation through the scan from
-reverse-mode implicit differentiation of a selected fold. Do not imply that
-`jax.grad` can simply backpropagate through every `while_loop` iteration.
-
-Slide 36 explains the eager/traced split. Convenience operations such as Python
-list sorting and variable-length trimming stay outside the transformed path.
-Events are therefore currently an eager-only feature.
-
-For slide 37, give measured values only with their context. The safest external
-claim is that the architecture reduces dispatch and enables batching. Re-run
-benchmarks before publishing a speedup number.
-
-## Correctness and scope (slides 38–44)
-
-On slide 38, emphasize that white-box mathematical tests are valuable during a
-large API migration. They ensure the new functional surface did not weaken the
-actual tangent/corrector guarantees. Then give the final evidence: 75 default
-tests plus 12 slow-marked tests, all six migrated gallery examples, and the two
-BifurcationKit.jl cross-checks.
-
-Slides 39–40 separate completed engine consolidation from the future
-periodic-orbit feature. The merged work removes old code and creates a reliable
-spine; it is not the complete v0.2 roadmap. Mention that some loop-body
-duplication is intentionally retained until a third predictor provides a clear
-abstraction target.
-
-Slide 41 is deliberately candid. A technically strong presentation states
-transformation and scaling boundaries explicitly.
-
-Slide 42 can be used verbatim as the final spoken summary. Slide 43 is a quick
-reference if terminology questions arise. End on slide 44 with the six main
-takeaways.
+Repository tests establish software behavior. They do not replace validation of
+the researcher’s model, parameter range, initial solution, or interpretation.
 
 ## Likely questions
 
 ### Why not always use pseudo-arclength?
 
-It is more robust at folds but solves a slightly larger linear system and needs
-a tangent. Natural continuation is simpler and can be useful when the parameter
-is known to remain a good coordinate. In JaxCont the default is
-pseudo-arclength because bifurcation diagrams commonly contain folds.
+It is more robust at folds but solves a slightly larger system and needs a
+tangent. Natural continuation is useful for simple monotone branches and as a
+reference method.
 
 ### Is pseudo-arclength exact arclength?
 
-No. The added constraint is a local linear approximation based on the previous
-tangent. That is why the method is called pseudo-arclength.
+No. Its extra constraint is a local linear approximation based on the previous
+tangent.
 
-### Is `lax.while_loop` parallel?
+### Does JIT make the numerical answer more accurate?
 
-Not across dependent continuation steps. Its main benefit here is compiled
-control flow with low dispatch overhead. Parallelism comes from `vmap` across
-independent branches and from vectorized post-processing.
+No. JIT changes execution, not the mathematical conditioning or convergence of
+the problem.
 
-### Why fixed buffers instead of dynamic arrays?
+### Does automatic differentiation make everything exact?
 
-JIT and `vmap` need predictable output shapes. The method reserves a maximum
-capacity and returns `n_valid`/a mask to distinguish used entries.
+It avoids a finite-difference step choice for Jacobian construction, but it
+does not fix poor conditioning, low precision, non-convergence, or the wrong
+branch.
 
-### Does automatic differentiation guarantee accuracy?
+### If continuation stops, did the physical branch end?
 
-It removes finite-difference truncation choices for Jacobian construction, but
-it does not fix poor conditioning, an unconverged Newton solve, low floating
-point precision, or following the wrong branch.
+Not necessarily. Check termination reason, residuals, step-size limits,
+non-finite model values, and the attempt budget before interpreting the stop.
 
-### What happens at a branch point rather than a fold?
+### Does finding a Hopf point give the oscillation amplitude?
 
-The null space has additional structure and branch switching is required.
-Pseudo-arclength can follow the current branch, but selecting a new branch is a
-separate capability and is outside this consolidation.
+No. It identifies a local stability transition of an equilibrium. Following
+the periodic orbit requires an additional periodic-orbit method.

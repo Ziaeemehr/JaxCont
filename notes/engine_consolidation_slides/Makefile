@@ -1,5 +1,5 @@
 LATEXMK ?= latexmk
-JOB := engine_consolidation
+JOB := jaxcont_technical_presentation
 TEX := $(JOB).tex
 PDF := $(JOB).pdf
 

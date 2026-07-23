@@ -4,6 +4,7 @@
 \usecolortheme{default}
 \usepackage{amsmath,amssymb,bm}
 \usepackage{booktabs}
+\usepackage{array}
 \usepackage{listings}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,calc,fit,shapes.geometric}
@@ -28,7 +29,7 @@
 \setbeamertemplate{footline}{%
   \leavevmode\hbox{%
   \begin{beamercolorbox}[wd=.78\paperwidth,ht=2.5ex,dp=1.1ex,leftskip=1em]{author in head/foot}%
-    JaxCont v0.2 engine consolidation
+    JaxCont technical presentation
   \end{beamercolorbox}%
   \begin{beamercolorbox}[wd=.22\paperwidth,ht=2.5ex,dp=1.1ex,rightskip=1em plus1fil]{date in head/foot}%
     \insertframenumber{} / \inserttotalframenumber
@@ -55,10 +56,10 @@
 \newcommand{\good}{\textcolor{JaxGreen}{\bfseries advantage}}
 \newcommand{\limit}{\textcolor{JaxRed}{\bfseries limitation}}
 
-\title{How JaxCont Follows Solution Branches}
-\subtitle{Pseudo-arclength continuation, the scan engines, and the JAX performance strategy}
-\author{Beginner-friendly technical presentation}
-\date{Merged state: \texttt{main} at \texttt{b105417}, 22 July 2026}
+\title{JaxCont Technical Presentation}
+\subtitle{A beginner-friendly guide to continuation, implementation, and research applications}
+\author{JaxCont}
+\date{Living technical guide}
 
 \begin{document}
 
@@ -71,9 +72,9 @@
   \item What a continuation method computes---and why it is not time integration.
   \item Why natural parameter continuation fails at a fold.
   \item How pseudo-arclength prediction and correction pass a fold.
-  \item What \texttt{pseudo\_arclength\_scan} actually means in JaxCont.
-  \item Why fixed buffers, \texttt{lax.while\_loop}, JIT and \texttt{vmap} make it fast.
-  \item What the consolidated v0.2 engine does today, and what it still cannot do.
+  \item How JaxCont turns the mathematics into a compiled numerical workflow.
+  \item What fixed buffers, \texttt{lax.while\_loop}, JIT and \texttt{vmap} contribute.
+  \item How to plan, run, validate, and interpret a continuation study.
 \end{enumerate}
 \begin{alertblock}{Important naming clarification}
 The function contains ``scan'' in its name, but its outer loop is currently
@@ -390,7 +391,7 @@ The entire algorithm is a bounded transition from one immutable carry state to t
 \end{frame}
 
 \begin{frame}{Adaptive step size in the branch implementation}
-The consolidated engine uses Newton effort as a difficulty signal:
+The continuation engine uses Newton effort as a difficulty signal:
 \begin{center}
 \begin{tabular}{lll}
 \toprule
@@ -409,7 +410,7 @@ A failed attempt consumes one outer-loop iteration but does not consume an outpu
 \end{alertblock}
 \end{frame}
 
-\section{What the scan engines are}
+\section{How JaxCont implements the methods}
 
 \begin{frame}{What does \texttt{pseudo\_arclength\_scan} mean?}
 \begin{columns}[T]
@@ -431,25 +432,34 @@ The implementation style: execute the whole bounded branch sweep inside one comp
 \end{block}
 \end{frame}
 
-\begin{frame}{Why the engine was consolidated}
-Before consolidation, three implementations duplicated the same predictor--corrector idea:
-\begin{center}
-\begin{tikzpicture}[node distance=7mm,>=Latex,
- old/.style={rounded corners,draw=JaxRed,fill=JaxRed!8,minimum width=43mm,minimum height=9mm,align=center},
- issue/.style={rounded corners,draw=JaxOrange,fill=JaxOrange!10,align=center}]
-\node[old] (n) {\texttt{NaturalContinuation}\\Python-loop OO};
-\node[old,below=of n] (p) {\texttt{PseudoArclengthContinuation}\\Python-loop OO};
-\node[old,below=of p] (s) {\texttt{pseudo\_arclength\_scan}\\compiled functional};
-\node[issue,right=18mm of p] (bug) {Fixes and behavior drifted\\between implementations};
-\draw[->,thick,JaxRed] (n.east)--(bug.west);
-\draw[->,thick,JaxRed] (p.east)--(bug.west);
-\draw[->,thick,JaxRed] (s.east)--(bug.west);
-\end{tikzpicture}
-\end{center}
-A real example: autodiff/bordered-solve fixes landed in pseudo-arclength but not in the sibling natural-continuation class. Duplication had become a correctness risk.
+\begin{frame}{Choosing a continuation method}
+\begin{columns}[T]
+\column{.48\textwidth}
+\begin{block}{Use \texttt{Natural()} when}
+\begin{itemize}
+  \item the branch is expected to be single-valued in $p$;
+  \item folds are not part of the research question;
+  \item a simple reference calculation is useful.
+\end{itemize}
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Use \texttt{PseudoArclength()} when}
+\begin{itemize}
+  \item folds or hysteresis may occur;
+  \item the branch can turn in the parameter;
+  \item robust branch following matters more than the smallest linear system.
+\end{itemize}
+\end{block}
+\end{columns}
+\vspace{4mm}
+\begin{alertblock}{Practical default}
+For exploratory bifurcation analysis, pseudo-arclength is usually the safer
+starting choice. Natural continuation remains useful for simple monotone
+branches and for learning the predictor--corrector idea.
+\end{alertblock}
 \end{frame}
 
-\begin{frame}{Consolidated architecture}
+\begin{frame}{From a user request to a computed branch}
 \centering
 \begin{tikzpicture}[scale=.96,transform shape,node distance=8mm and 14mm,>=Latex,
  api/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,minimum width=42mm,minimum height=10mm,align=center},
@@ -466,7 +476,8 @@ A real example: autodiff/bordered-solve fixes landed in pseudo-arclength but not
 \draw[->,thick] (ns)--(run); \draw[->,thick] (ps)--(run);
 \end{tikzpicture}
 \vspace{3mm}
-Both engines return the same fixed-shape \texttt{ScanResult}; natural continuation zero-fills the tangent buffer because it has no tangent concept.
+Both methods return the same fixed-shape \texttt{ScanResult}. This gives
+plotting, stability analysis, and event detection one predictable input format.
 \end{frame}
 
 \begin{frame}[fragile]{The public API stays simple}
@@ -565,42 +576,42 @@ Bounded loops and explicit finite-value guards prevent a compiled computation fr
 
 \section{How it is made fast}
 
-\begin{frame}{The original bottleneck was dispatch, not algebra}
+\begin{frame}{Why compile the complete continuation loop?}
 Small systems perform many tiny operations per point:
 \[
 \text{Python step}\to F\to \text{Jacobian}\to\text{solve}\to F\to\cdots
 \]
 Each arrow can cause Python orchestration and device dispatch.
-\begin{alertblock}{Measured lesson from JaxCont}
-JIT-compiling only the corrector did not measurably improve small-system continuation: roughly $21$ ms/point before and after. The Python outer loop remained dominant.
-\end{alertblock}
 \begin{block}{Optimization target}
-Reduce dispatch count by compiling the entire predictor--corrector sweep, not merely one small kernel inside it.
+Place prediction, Newton correction, step adaptation, buffer writes, and
+termination inside one compiled program. The mathematics remains sequential,
+but the device executes the sequence without returning to Python at every step.
 \end{block}
+\begin{alertblock}{What this does not mean}
+Compilation does not improve an ill-conditioned model or repair a poor initial
+equilibrium. It reduces execution overhead; numerical validity still depends on
+the continuation setup.
+\end{alertblock}
 \end{frame}
 
 \begin{frame}{Whole-loop JIT}
 \centering
-\begin{tikzpicture}[>=Latex,
- py/.style={draw=JaxRed,fill=JaxRed!8,rounded corners,minimum width=18mm,minimum height=8mm,align=center},
- xla/.style={draw=JaxGreen,thick,fill=JaxGreen!10,rounded corners,
-             minimum width=118mm,minimum height=14mm,align=center}]
-\node[anchor=west,font=\bfseries,text=JaxRed] at (-5.5,1.30)
-    {Before: Python coordinates and dispatches every step};
-\node[py] (p1) at (-4.4,.45) {Python\\step 1};
-\node[py] (p2) at (-2.2,.45) {Python\\step 2};
-\node[py] (p3) at (0,.45) {Python\\step 3};
-\node[py] (pd) at (2.2,.45) {$\cdots$};
-\node[py] (pm) at (4.4,.45) {Python\\step $M$};
-\draw[->] (p1)--(p2); \draw[->] (p2)--(p3); \draw[->] (p3)--(pd); \draw[->] (pd)--(pm);
-
-\node[anchor=west,font=\bfseries,text=JaxGreen!60!black] at (-5.5,-.62)
-    {After: one device program owns the complete loop};
-\node[xla] (all) at (0,-1.55)
-    {\textbf{one compiled XLA program}\\[1mm]
-     tangent $\rightarrow$ predict $\rightarrow$ Newton $\rightarrow$ adapt $\rightarrow$ repeat};
+\begin{tikzpicture}[node distance=6mm and 8mm,>=Latex,
+ stage/.style={draw=JaxBlue,fill=SoftBlue,rounded corners,minimum width=25mm,
+              minimum height=9mm,align=center},
+ boundary/.style={draw=JaxGreen,very thick,rounded corners,inner sep=5mm}]
+\node[stage] (tan) {compute\\tangent};
+\node[stage,right=of tan] (pred) {predict};
+\node[stage,right=of pred] (corr) {Newton\\correct};
+\node[stage,right=of corr] (adapt) {accept, store,\\and adapt};
+\draw[->,thick] (tan)--(pred);
+\draw[->,thick] (pred)--(corr);
+\draw[->,thick] (corr)--(adapt);
+\draw[->,thick] (adapt.south) -- ++(0,-.55) -| (tan.south);
+\node[boundary,fit=(tan)(pred)(corr)(adapt),
+      label={[text=JaxGreen!60!black,font=\bfseries]above:one compiled continuation program}] {};
 \end{tikzpicture}
-\vspace{2mm}
+\vspace{5mm}
 \begin{block}{The JIT boundary}
 \small
 \texttt{@partial(jax.jit, static\_argnums=(0, 8))} wraps the full engine.
@@ -765,20 +776,22 @@ The length is a tracer. Return full buffers and a \texttt{valid} mask; avoid Pyt
 \end{alertblock}
 \end{frame}
 
-\begin{frame}{Performance evidence---and how to state it honestly}
-Repository measurements report:
+\begin{frame}{When acceleration helps a research study}
 \begin{itemize}
-  \item pitchfork scan: about $0.74$ ms warm versus about $250$ ms for the old Python loop (roughly $340\times$ in that experiment);
-  \item 256-diagram \texttt{vmap} example: about $163\times$ versus a Python loop in the recorded run;
-  \item CPU and local RTX A5000 smoke tests execute full continuation and batched sweeps.
+  \item Repeating the same branch calculation for many parameter sets.
+  \item Screening uncertain parameters or candidate model designs.
+  \item Differentiating a selected output with respect to a few design variables.
+  \item Running independent continuation problems as a \texttt{vmap} batch.
+  \item Reusing one compiled program for calls with compatible shapes and settings.
 \end{itemize}
-\begin{alertblock}{Do not generalize the numbers}
-Speedup depends on model size, precision, device, branch length, compilation cache and comparison baseline. Report cold time, warm time, hardware and settings separately.
+\begin{alertblock}{Measure the workload you actually care about}
+Record compilation time and warm execution time separately. Document hardware,
+precision, model dimension, \texttt{max\_steps}, branch length, and batch size;
+these determine whether acceleration is scientifically useful.
 \end{alertblock}
-The defensible claim is architectural: fewer dispatches, compiled control flow, vectorized ensembles and accelerator-compatible arrays.
 \end{frame}
 
-\begin{frame}{Where the time and memory still go}
+\begin{frame}{Computational limits to plan for}
 \begin{itemize}
   \item Dense Jacobians and dense $(n+1)\times(n+1)$ solves dominate as $n$ grows.
   \item Fixed buffers cost memory proportional to \texttt{max\_steps}.
@@ -787,56 +800,101 @@ The defensible claim is architectural: fewer dispatches, compiled control flow, 
   \item The first call pays tracing and compilation cost.
   \item A sequential branch cannot parallelize across its own steps; batching parallelizes \emph{across branches}.
 \end{itemize}
-\begin{block}{Future scaling seam}
-The roadmap proposes explicit linear/eigen-solver protocols so dense solves can later be replaced by iterative or matrix-free methods without redesigning the continuation API.
+\begin{block}{Planning implication}
+Estimate state dimension, number of branch points, and ensemble size before a
+large study. Start with a small validated run, then increase resolution or
+batch size while monitoring memory and convergence.
 \end{block}
 \end{frame}
 
-\section{Correctness, scope, and presentation}
+\section{Research applications and workflow}
 
-\begin{frame}{How the consolidation is tested}
-\begin{itemize}
-  \item Direct tests of tangent and bordered Newton mathematics.
-  \item Natural scan tracks a linear branch and stalls at a fold as designed.
-  \item Pseudo-arclength passes folds and preserves tangent orientation.
-  \item Adaptive-step tests check fast/slow/failure behavior and per-point $\Delta s$.
-  \item \texttt{vmap} tests check fixed shapes, masks and batch outputs.
-  \item Functional API tests verify both algorithms dispatch to scan engines.
-  \item Cross-validated gallery examples compare with analytic results and BifurcationKit.jl references.
-\end{itemize}
-\begin{block}{Final verification recorded at completion}
-All 75 default tests and 12 slow-marked tests passed with zero failures. All six
-migrated gallery examples ran headlessly, and the BifurcationKit.jl matches in
-examples 02 and 05 remained intact.
-\end{block}
-\end{frame}
-
-\begin{frame}{What the merged consolidation changed}
-\begin{itemize}
-  \item added \texttt{natural\_scan} and per-point step-size buffers;
-  \item routed \texttt{Natural()} and \texttt{PseudoArclength()} through shared scan reassembly;
-  \item removed three old OO/Python-loop continuation modules and free-function facades;
-  \item migrated all 32 dependent tests, all six affected gallery examples, and the profiling script;
-  \item repaired the user guide, quickstart, API reference, and development documentation;
-  \item merged the completed work, design, and implementation plan into \texttt{main}.
-\end{itemize}
-\begin{alertblock}{Scope}
-This is engine consolidation, a prerequisite for v0.2 periodic orbits. It does not itself implement periodic-orbit collocation, Floquet multipliers or the new event protocol.
+\begin{frame}{What continuation can answer}
+\begin{center}
+\begin{tabular}{>{\raggedright\arraybackslash}p{.29\textwidth}
+                >{\raggedright\arraybackslash}p{.59\textwidth}}
+\toprule
+Research question & Continuation output\\
+\midrule
+Where do equilibria exist? & A connected branch of steady states over a parameter range.\\
+Where can abrupt transitions occur? & Fold candidates and multistable parameter regions.\\
+When does an equilibrium lose stability? & Stability changes and candidate local bifurcations.\\
+How robust is a conclusion? & Batches of branches over uncertain parameters or model variants.\\
+How does a threshold move? & Sensitivity of a selected, well-defined bifurcation point.\\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{alertblock}{Interpretation boundary}
+A bifurcation diagram describes model solutions and their local stability. It
+does not by itself establish causality, fit parameters, or validate the model
+against observations.
 \end{alertblock}
 \end{frame}
 
-\begin{frame}{What remains after engine consolidation}
+\begin{frame}{A beginner-friendly research workflow}
+\begin{enumerate}
+  \item State the scientific question and choose one continuation parameter.
+  \item Implement a deterministic, smooth residual $F(\state,p)$.
+  \item Find one equilibrium and verify $\|F(\state_0,p_0)\|$ is small.
+  \item Run a short continuation with conservative settings.
+  \item Inspect convergence, branch shape, stability, and possible events.
+  \item Repeat in the opposite direction or from another known equilibrium.
+  \item Refine interesting regions and validate them independently.
+  \item Save code, settings, precision, hardware, and diagnostic information.
+\end{enumerate}
+\begin{block}{Start small}
+Use a reduced model or narrow parameter interval first. A trustworthy small
+calculation is more valuable than a large unexplained diagram.
+\end{block}
+\end{frame}
+
+\begin{frame}{How to validate a computed branch}
 \begin{itemize}
-  \item Event detection is not transformation-safe and has known duplicate/spurious classifications in difficult examples.
-  \item Per-point Newton iteration counts are not yet carried into the high-level metadata.
+  \item Check $\|F(\state_k,p_k)\|$ at accepted points, not only a success flag.
+  \item Repeat with smaller and larger step-size bounds.
+  \item Continue from both directions and compare overlapping branch segments.
+  \item Compare simple cases with an analytic solution when one exists.
+  \item Confirm important events with eigenvalues and a refined local solve.
+  \item Compare selected results with simulation or another continuation tool.
+  \item Test scientific conclusions under plausible parameter and model changes.
+\end{itemize}
+\begin{block}{Software tests and research validation are different}
+Repository tests check implementation behavior. Researchers must additionally
+check that their model, starting solution, parameter range, and interpretation
+are appropriate for the scientific question.
+\end{block}
+\end{frame}
+
+\begin{frame}{How to read the result}
+\begin{itemize}
+  \item Use only entries selected by \texttt{valid} or \texttt{[:n\_valid]}.
+  \item Plot a scientifically meaningful state observable against $p$.
+  \item Treat stability as local information about the equilibrium.
+  \item Treat detected events as candidates until they are refined and checked.
+  \item Inspect step sizes and residuals near sharp turns or failed regions.
+  \item Keep separate branches separate; one run may not reveal every solution.
+\end{itemize}
+\begin{alertblock}{A missing point is not necessarily a missing solution}
+Continuation can stop because of settings, conditioning, non-finite model
+values, or the attempt budget. Diagnose termination before concluding that a
+physical branch ends.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Current capability boundaries}
+\begin{itemize}
+  \item Event detection is not transformation-safe inside \texttt{jit}/\texttt{vmap}.
+  \item Difficult spectra can produce ambiguous or duplicate event candidates.
   \item Dense linear algebra limits scaling to large systems.
   \item Natural continuation is intentionally unable to pass folds.
   \item Reverse-mode gradients require implicit/custom rules rather than backpropagation through the scan loop.
-  \item The two scan bodies still duplicate their predict--correct--write--adapt--stop skeleton; this was deliberately deferred until a third predictor justifies an abstraction.
+  \item Following equilibrium branches does not compute periodic-orbit amplitude or stability.
+  \item Branch switching and discovery of disconnected branches require additional analysis.
 \end{itemize}
-\begin{block}{Healthy engineering message}
-The consolidation is complete and merged. Periodic orbits, solver protocols,
-and a transformation-safe event protocol remain separate roadmap work.
+\begin{block}{Use the tool within its scope}
+JaxCont is a numerical aid for structured exploration. Combine its output with
+model-specific reasoning, diagnostics, independent calculations, and domain
+evidence.
 \end{block}
 \end{frame}
 
@@ -844,7 +902,7 @@ and a transformation-safe event protocol remain separate roadmap work.
 \begin{quote}
 JaxCont follows equilibria $F(u,p)=0$ as a curve. Natural continuation increments $p$ and solves for $u$, so it fails when the curve folds and $F_u$ becomes singular. Pseudo-arclength instead treats both $u$ and $p$ as unknowns, predicts along the curve tangent, and adds one geometric constraint during Newton correction. The resulting bordered system remains solvable through an ordinary fold.
 
-The ``scan'' engine is the implementation: the complete bounded predictor--corrector sweep is expressed as a pure \texttt{lax.while\_loop} over fixed-size buffers and JIT-compiled as one XLA program. Fixed shapes and masks make the result compatible with \texttt{vmap}, so many branches can run as one batched accelerator program. The consolidation puts natural and pseudo-arclength methods behind the same functional API and result path.
+The ``scan'' engine is the implementation: the complete bounded predictor--corrector sweep is expressed as a pure \texttt{lax.while\_loop} over fixed-size buffers and JIT-compiled as one XLA program. Fixed shapes and masks make the result compatible with \texttt{vmap}, so many branches can run as one batched accelerator program. Researchers still need a valid starting equilibrium, suitable settings, diagnostics, and independent validation before interpreting the branch scientifically.
 \end{quote}
 \end{frame}
 
@@ -867,10 +925,10 @@ The ``scan'' engine is the implementation: the complete bounded predictor--corre
 \begin{enumerate}
   \item The mathematical breakthrough is reparameterization: follow the branch by local arclength, not only by $p$.
   \item The numerical workhorse is the full bordered Newton solve, which remains regular at ordinary folds.
-  \item The performance breakthrough is whole-loop compilation; JIT on tiny inner pieces was insufficient.
+  \item Whole-loop compilation reduces orchestration overhead and enables reusable, batched array programs.
   \item Fixed buffers, masks and array control flow are the price of JIT/\texttt{vmap}/GPU compatibility.
-  \item Engine consolidation reduces correctness risk and creates one functional spine for future periodic-orbit work.
-  \item Fast does not remove numerical responsibilities: convergence, conditioning, validation and honest limitations still matter.
+  \item A useful study begins with a verified equilibrium and ends with independent validation.
+  \item Fast computation does not remove numerical or scientific responsibilities.
 \end{enumerate}
 \end{frame}
 
@@ -940,16 +998,16 @@ The real code uses JAX arrays, \texttt{NamedTuple} carry state, \texttt{jnp.wher
 \begin{frame}{Appendix: sources used for this deck}
 \small
 \begin{itemize}
-  \item \texttt{docs/superpowers/specs/2026-07-21-engine-consolidation-design.md}
-  \item \texttt{docs/superpowers/plans/2026-07-21-engine-consolidation.md}
-  \item merged implementation in \texttt{src/jaxcont/core/scan\_continuation.py}
+  \item implementation in \texttt{src/jaxcont/core/scan\_continuation.py}
   \item public dispatch and result paths in \texttt{src/jaxcont/api.py}
-  \item \texttt{notes/ARCHITECTURE.md}, \texttt{notes/ROADMAP.md}, and beginner guide
-  \item branch tests and examples, especially natural/PALC, \texttt{vmap}, and differentiable fold examples
-  \item final verification in \texttt{notes/ROADMAP.md} and commit history through \texttt{b105417} on \texttt{main}
+  \item \texttt{notes/BEGINNERS\_GUIDE\_TO\_BIFURCATION\_ANALYSIS.md}
+  \item \texttt{notes/ARCHITECTURE.md} and \texttt{notes/ROADMAP.md}
+  \item branch tests and examples for natural continuation, pseudo-arclength,
+        \texttt{vmap}, stability, and differentiable folds
 \end{itemize}
 \begin{block}{Reproducibility note}
-Performance numbers are repository measurements, not universal benchmarks. Re-run them on the target hardware before external publication.
+Re-run numerical examples and benchmarks with the current implementation,
+settings, precision, and target hardware before external publication.
 \end{block}
 \end{frame}
 
