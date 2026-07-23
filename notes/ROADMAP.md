@@ -448,14 +448,22 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
    fold's SVD-based null-vector guess does) — a precomputed theta-dependent seed closed over from
    outside leaks a JAX tracer under `jax.grad`. `differentiable_root` supports both forms; the
    callable form resolves the seed inside the traced primal instead.
-4. **Replace `BifurcationDetector` with the sketched `Event` protocol (ARCHITECTURE.md §4.7) as
-   part of fixing issue #7 (duplicate/spurious fold-vs-Hopf flags), not instead of it.** The
-   current detector is one class doing sign-change scanning, bisection, and dedup for multiple
-   bifurcation types at once — a plausible root cause of the duplicate-flag bug. Rewriting `Fold`/
-   `Hopf` as small, independently-testable `Event` implementations (as already designed) is a
-   natural place to fix the dedup logic once, cleanly, rather than patching the monolithic
-   detector and inheriting the same fragility when `PeriodDoubling`/`LPC`/`NS` events are added in
-   v0.2.
+4. ✅ **Replace `BifurcationDetector` with the sketched `Event` protocol (ARCHITECTURE.md §4.7) as
+   part of fixing issue #7 (duplicate/spurious fold-vs-Hopf flags), not instead of it.** *(done
+   2026-07-23 — see
+   [docs/superpowers/plans/2026-07-23-event-protocol-rewrite.md](../docs/superpowers/plans/2026-07-23-event-protocol-rewrite.md)
+   and its [design spec](../docs/superpowers/specs/2026-07-23-event-protocol-rewrite-design.md))*
+   `BifurcationDetector`/`FoldBifurcation`/`HopfBifurcation` are gone, replaced by small,
+   independently-testable `Event` implementations (`Fold`, `Hopf`) in
+   `bifurcations/events.py`. Root-caused issue #7 to `Fold`'s eigenvalue-based test function
+   picking up a Hopf pair's real part; fixed by switching `Fold` to the pseudo-arclength tangent's
+   `dp` sign change (no eigenvalues at all), plus a same-kind-only dedup pass and a `nan` (not
+   `inf`) "no complex eigenvalues" sentinel — both found and fixed during design by actually
+   running the change against the two real BifurcationKit.jl-cross-validated examples, not just
+   reasoning about it. Verified end to end: `example_02_lorenz.py` goes from 6 raw detections
+   (with duplicates) to exactly 4 clean ones; `example_05_neural_mass.py` from 5 to exactly 3;
+   zero spurious/unmatched rows in either. Still eager-only — trace-safe (`vmap`/`jit`) event
+   detection remains unimplemented and is now its own future item, not bundled into this one.
 5. **Make `LinearSolver`/`EigenSolver` (ARCHITECTURE.md §4.6) real protocols with a `Dense()`
    implementation now, even though nothing else exists yet.** Right now the "GPU-ready" and
    "matrix-free/iterative" claims in ARCHITECTURE.md §3's comparison table are aspirational — every
