@@ -1,0 +1,959 @@
+\documentclass[11pt,oneside]{book}
+
+\usepackage[a4paper,margin=25mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs,tabularx,array}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,shapes.geometric}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+
+\definecolor{JaxBlue}{HTML}{1261A0}
+\definecolor{JaxTeal}{HTML}{138A8A}
+\definecolor{JaxOrange}{HTML}{E07A1F}
+\definecolor{JaxGreen}{HTML}{2E8B57}
+\definecolor{JaxRed}{HTML}{B64040}
+\definecolor{SoftBlue}{HTML}{EAF3FA}
+\definecolor{SoftGray}{HTML}{F3F5F7}
+\definecolor{CodeBg}{HTML}{F7F7F7}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=JaxBlue,
+  urlcolor=JaxTeal,
+  citecolor=JaxGreen!70!black,
+  pdftitle={From Dynamical System to Practical Bifurcation Analysis},
+  pdfauthor={JaxCont project}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{JaxCont practical bifurcation guide}
+\fancyhead[R]{\leftmark}
+\fancyfoot[C]{\thepage}
+\setlength{\headheight}{14pt}
+\setcounter{tocdepth}{2}
+\setcounter{secnumdepth}{2}
+\setlist{nosep}
+
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{CodeBg},
+  frame=single,
+  rulecolor=\color{black!20},
+  keywordstyle=\color{JaxBlue}\bfseries,
+  commentstyle=\color{JaxGreen!70!black},
+  stringstyle=\color{JaxOrange!90!black},
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  upquote=true
+}
+
+\newcommand{\state}{\bm{u}}
+\newcommand{\param}{p}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\residual}{F}
+
+\newenvironment{keyidea}
+  {\par\medskip\noindent\begin{minipage}{\textwidth}
+   \color{JaxBlue}\rule{\textwidth}{0.8pt}\par
+   \textbf{Key idea.}\ \color{black}}
+  {\par\color{JaxBlue}\rule{\textwidth}{0.8pt}
+   \end{minipage}\par\medskip}
+
+\newenvironment{warningbox}
+  {\par\medskip\noindent\begin{minipage}{\textwidth}
+   \color{JaxRed}\rule{\textwidth}{0.8pt}\par
+   \textbf{Important limitation.}\ \color{black}}
+  {\par\color{JaxRed}\rule{\textwidth}{0.8pt}
+   \end{minipage}\par\medskip}
+
+\newenvironment{workflowbox}
+  {\par\medskip\noindent\begin{minipage}{\textwidth}
+   \color{JaxGreen!70!black}\rule{\textwidth}{0.8pt}\par
+   \textbf{Research workflow.}\ \color{black}}
+  {\par\color{JaxGreen!70!black}\rule{\textwidth}{0.8pt}
+   \end{minipage}\par\medskip}
+
+\title{\Huge From Dynamical System to\\[2mm]Practical Bifurcation Analysis\\[7mm]
+       \Large A beginner-friendly workflow with JaxCont}
+\author{JaxCont project}
+\date{First edition: equilibrium continuation}
+
+\begin{document}
+
+\frontmatter
+\maketitle
+\clearpage
+\setcounter{page}{2}
+
+\chapter*{About this edition}
+\addcontentsline{toc}{chapter}{About this edition}
+
+This handbook answers a practical question:
+
+\begin{quote}
+\emph{Given a new nonlinear dynamical system, what should I compute first,
+what comes next, how do I check the result, and when should I stop?}
+\end{quote}
+
+The method is broadly applicable to continuation packages, while executable
+examples use JaxCont. This first edition deliberately concentrates on
+\textbf{equilibrium continuation}, the part of the public JaxCont API that is
+currently supported. Branch switching, periodic-orbit continuation,
+codimension-two continuation, and global bifurcations are explained so readers
+can plan a complete study, but they are not presented as current JaxCont
+commands.
+
+\begin{warningbox}
+Do not infer software support from the existence of an internal class or stub.
+The supported public workflow in this edition is
+\texttt{bif\_problem} $\rightarrow$ \texttt{continuation} with
+\texttt{Natural} or \texttt{PseudoArclength}, optional equilibrium stability,
+and fold/Hopf event candidates.
+\end{warningbox}
+
+\chapter*{How to use this book}
+\addcontentsline{toc}{chapter}{How to use this book}
+
+New readers should follow Chapters~1--9 in order. Researchers with an existing
+model can begin with the checklist in Chapter~4, run the complete example in
+Chapter~8, and return to the mathematics when a diagnostic is unclear.
+Chapters~10--12 show how the equilibrium analysis connects to more advanced
+continuation tasks.
+
+\tableofcontents
+
+\mainmatter
+
+\part{Foundations}
+
+\chapter{What bifurcation analysis computes}
+
+\section{A dynamical system and its equilibria}
+
+Consider an autonomous system
+\[
+  \dot{\state}=f(\state,\param;\theta),
+  \qquad \state\in\R^n,
+\]
+where $\param$ is the parameter to be varied and $\theta$ contains fixed model
+parameters. An equilibrium is a state $\state^*$ satisfying
+\[
+  f(\state^*,\param;\theta)=0.
+\]
+For numerical work it is useful to call the right-hand side a residual,
+\[
+  \residual(\state,\param)=f(\state,\param;\theta).
+\]
+
+A single root solve finds one pair $(\state^*,\param)$. Continuation follows a
+connected curve of such pairs while the parameter changes.
+
+\begin{keyidea}
+Simulation follows a state through physical time. Continuation follows a family
+of mathematical solutions through state--parameter space. They answer different
+questions and should be used together.
+\end{keyidea}
+
+\section{What a bifurcation diagram means}
+
+A bifurcation diagram normally places a parameter on the horizontal axis and
+one chosen state observable on the vertical axis. Each point represents an
+equilibrium, not a time sample. Stable and unstable segments describe local
+behavior near those equilibria.
+
+\begin{center}
+\begin{tikzpicture}[x=1.7cm,y=1.05cm,>=Latex]
+  \draw[->] (-2.8,0)--(2.8,0) node[right] {$p$};
+  \draw[->] (0,-2.5)--(0,2.5) node[above] {observable};
+  \draw[JaxBlue,very thick,smooth,domain=-2.05:2.05,samples=100]
+      plot ({\x^3/3-\x},{\x});
+  \foreach \x in {-1.8,-1.3,-.8,-.3,.2,.7,1.2,1.7}
+    \fill[JaxOrange] ({\x^3/3-\x},{\x}) circle (1.5pt);
+  \node[align=left,anchor=west] at (1.05,1.75)
+      {one connected\\solution branch};
+\end{tikzpicture}
+\end{center}
+
+\section{The questions continuation can answer}
+
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{.30\textwidth}X}
+\toprule
+Question & Useful output\\
+\midrule
+Where do steady states exist? & Equilibrium branches over a parameter range.\\
+Can several steady states coexist? & Multiple branch segments at the same
+parameter value.\\
+Where may abrupt transitions occur? & Fold candidates and stability changes.\\
+Where can oscillatory instability begin? & Hopf candidates on equilibrium
+branches.\\
+How robust is the diagram? & Repeated branches over uncertain parameters or
+model variants.\\
+\bottomrule
+\end{tabularx}
+
+\begin{warningbox}
+A computed diagram describes the supplied mathematical model. It does not by
+itself establish causality, estimate parameters, prove that every solution has
+been found, or validate the model against observations.
+\end{warningbox}
+
+\chapter{Stability and local bifurcations}
+
+\section{Linearization}
+
+Near an equilibrium, write $\state=\state^*+\delta\state$. To first order,
+\[
+  \dot{\delta\state}=J\,\delta\state,
+  \qquad
+  J=\frac{\partial f}{\partial\state}(\state^*,\param).
+\]
+The eigenvalues $\lambda_i$ of $J$ determine local equilibrium stability:
+
+\begin{itemize}
+  \item if every $\operatorname{Re}\lambda_i<0$, the equilibrium is locally
+        asymptotically stable;
+  \item if any $\operatorname{Re}\lambda_i>0$, it is unstable;
+  \item if an eigenvalue is close to the imaginary axis, the linear test is
+        sensitive and a bifurcation may be nearby.
+\end{itemize}
+
+\section{Common local equilibrium bifurcations}
+
+\begin{tabularx}{\textwidth}{>{\bfseries}p{.20\textwidth}p{.26\textwidth}X}
+\toprule
+Type & Linear signature & Interpretation\\
+\midrule
+Fold (LP) & one real eigenvalue reaches zero & two equilibrium branches meet
+and turn; multistability may begin or end\\
+Hopf (H) & a complex-conjugate pair reaches the imaginary axis & equilibrium
+stability changes and a family of periodic orbits may be present\\
+Pitchfork & zero eigenvalue plus symmetry/normal-form conditions & a symmetric
+branch meets two symmetry-related branches\\
+Transcritical & zero eigenvalue plus branch-intersection conditions & two
+equilibrium branches intersect and exchange stability\\
+\bottomrule
+\end{tabularx}
+
+\begin{warningbox}
+An eigenvalue crossing is a candidate condition, not a complete classification.
+Pitchfork and transcritical bifurcations need structural information; a generic
+Hopf classification needs nondegeneracy information such as a first Lyapunov
+coefficient. Current JaxCont event detection reports fold and Hopf candidates.
+\end{warningbox}
+
+\section{Global and periodic-orbit bifurcations}
+
+Period doubling, torus bifurcations, folds of cycles, homoclinic orbits,
+heteroclinic connections, and SNIC bifurcations involve periodic or global
+objects rather than only the local equilibrium Jacobian. They require
+additional representations, test functions, and solvers. They are introduced
+in Part~III so the reader can recognize when equilibrium continuation is no
+longer sufficient.
+
+\chapter{Why continuation is needed}
+
+\section{A parameter sweep is not continuation}
+
+A simulation sweep selects parameter values, simulates from chosen initial
+conditions, and records the long-time behavior. It may miss unstable
+equilibria, depend strongly on initial conditions, and jump between attractors.
+Continuation instead uses the preceding solution as information for the next
+one and can follow unstable equilibrium segments.
+
+\section{Natural parameter continuation}
+
+At an accepted point $(\state_k,p_k)$, natural continuation predicts a new
+parameter $p_{k+1}=p_k+\Delta p$ and solves
+\[
+  \residual(\state,p_{k+1})=0
+\]
+for $\state$. It is simple and effective while the branch is a single-valued
+function $\state(p)$.
+
+Differentiate the equilibrium equation:
+\[
+  \residual_{\state}\frac{d\state}{dp}+\residual_p=0,
+  \qquad
+  \frac{d\state}{dp}=-\residual_{\state}^{-1}\residual_p.
+\]
+At a fold, $\residual_{\state}$ becomes singular. Decreasing the parameter step
+can approach the fold but does not change this geometry.
+
+\section{Pseudo-arclength continuation}
+
+Pseudo-arclength introduces an artificial curve coordinate $s$ and treats both
+$\state$ and $p$ as unknowns. With unit tangent
+$\bm{t}_k=(\dot{\state}_k,\dot p_k)$, predict
+\[
+  (\state_{\mathrm{pred}},p_{\mathrm{pred}})
+  =(\state_k,p_k)+\Delta s\,\bm{t}_k.
+\]
+Then solve
+\[
+\begin{cases}
+\residual(\state,p)=0,\\
+(\state-\state_k)^T\dot{\state}_k+
+(p-p_k)\dot p_k-\Delta s=0.
+\end{cases}
+\]
+
+\begin{center}
+\begin{tikzpicture}[x=1.55cm,y=1.0cm,>=Latex]
+  \draw[->] (-2.5,0)--(2.8,0) node[right] {$p$};
+  \draw[->] (0,-2.35)--(0,2.35) node[above] {$u$};
+  \draw[JaxBlue,very thick,smooth,domain=-2:2,samples=100]
+      plot ({\x^3/3-\x},{\x});
+  \coordinate (old) at (.375,-1.50);
+  \coordinate (pred) at (1.00,-1.00);
+  \coordinate (new) at (.645,-.85);
+  \fill[JaxBlue] (old) circle (2.5pt) node[below left] {accepted};
+  \draw[JaxOrange,very thick,->] (old)--(pred);
+  \fill[JaxOrange] (pred) circle (2.5pt) node[below right] {predicted};
+  \draw[JaxGreen,dashed,thick] ($(new)!-.65!(pred)$)--($(new)!1.65!(pred)$);
+  \draw[JaxGreen,very thick,->] (pred)--(new);
+  \fill[JaxGreen!75!black] (new) circle (2.5pt) node[above left] {corrected};
+\end{tikzpicture}
+\end{center}
+
+One Newton correction solves the bordered system
+\[
+\begin{bmatrix}
+\residual_{\state} & \residual_p\\
+\dot{\state}_k^T & \dot p_k
+\end{bmatrix}
+\begin{bmatrix}\delta\state\\\delta p\end{bmatrix}
+=-
+\begin{bmatrix}\residual(\state,p)\\g(\state,p)\end{bmatrix}.
+\]
+Although $\residual_{\state}$ is singular at an ordinary fold, the full
+bordered matrix can remain nonsingular.
+
+\part{The practical JaxCont workflow}
+
+\chapter{Step 1: understand and encode the model}
+
+\section{Model worksheet}
+
+Before writing continuation code, record:
+
+\begin{enumerate}
+  \item state variables, units, and physically meaningful ranges;
+  \item fixed parameters and their provenance;
+  \item the proposed continuation parameter and a defensible range;
+  \item which state or derived observable should appear in the diagram;
+  \item expected symmetries, invariants, discontinuities, and singularities;
+  \item whether the scientific question concerns equilibria or time-dependent
+        solutions.
+\end{enumerate}
+
+\begin{workflowbox}
+Choose one continuation parameter first. A two-parameter scientific question
+can often begin as several one-parameter slices. This is easier to debug and is
+compatible with the current public JaxCont workflow.
+\end{workflowbox}
+
+\section{The JaxCont residual signature}
+
+JaxCont expects a function of state, continuation parameter, and fixed
+arguments:
+
+\begin{lstlisting}
+def rhs(u, p, args):
+    # u: state vector
+    # p: scalar continuation parameter
+    # args: fixed parameters or other JAX PyTree data
+    return residual_vector
+\end{lstlisting}
+
+Use \texttt{jax.numpy} operations and return a one-dimensional array with the
+same number of residual equations as state variables. Keep the function smooth
+where possible. Hard clipping, conditionals, lookup discontinuities, and
+non-finite expressions can make Newton correction and automatic
+differentiation unreliable.
+
+\chapter{Step 2: find and verify a starting equilibrium}
+
+\section{Why the starting point matters}
+
+Continuation does not discover a branch from nothing. It requires a pair
+$(\state_0,p_0)$ satisfying
+\[
+  \|\residual(\state_0,p_0)\|\ll1.
+\]
+An approximate point from simulation, an analytic equilibrium, experimental
+knowledge, or a separate root solver is acceptable only after residual
+verification.
+
+\begin{lstlisting}
+residual = rhs(u0, p0, args)
+residual_norm = jnp.linalg.norm(residual, ord=jnp.inf)
+print("starting residual:", float(residual_norm))
+\end{lstlisting}
+
+\begin{warningbox}
+\texttt{p\_span[0]} is the literal parameter paired with
+\texttt{problem.u0} when continuation begins. It must describe the same
+equilibrium as the supplied state. Storing a different value in
+\texttt{problem.p0} does not repair an inconsistent starting pair.
+\end{warningbox}
+
+\section{How to search for multiple equilibria}
+
+A single root solve normally returns a single root. To investigate
+multistability:
+
+\begin{enumerate}
+  \item generate several physically plausible initial guesses;
+  \item solve at the same parameter value;
+  \item reject roots with large residuals or invalid state values;
+  \item cluster nearly identical roots;
+  \item continue each distinct verified root;
+  \item compare the resulting connected branches.
+\end{enumerate}
+
+Failure to find another root is not proof that none exists.
+
+\chapter{Steps 3--5: continue, assess stability, and detect events}
+
+\section{A complete minimal run}
+
+\begin{lstlisting}
+import jax.numpy as jnp
+import jaxcont as jc
+
+def rhs(u, p, args):
+    x = u[0]
+    return jnp.array([p + x - x**3 / 3])
+
+problem = jc.bif_problem(
+    rhs,
+    u0=jnp.array([-2.0]),
+    p0=-1.0,
+    state_names=["x"],
+    param_name="p",
+)
+
+settings = jc.ContinuationPar(
+    ds=0.01,
+    ds_min=1e-5,
+    ds_max=0.05,
+    max_steps=300,
+    newton_tol=1e-6,
+    newton_max_iter=20,
+    compute_stability=True,
+)
+
+result = jc.continuation(
+    problem,
+    jc.PseudoArclength(),
+    p_span=(-1.0, 1.0),
+    settings=settings,
+    events=[jc.Fold(), jc.Hopf()],
+)
+\end{lstlisting}
+
+\section{How to read the result}
+
+The high-level result contains:
+
+\begin{itemize}
+  \item \texttt{result.branch.states}: accepted state vectors;
+  \item \texttt{result.branch.params}: corresponding parameter values;
+  \item stability/eigenvalue information when requested;
+  \item \texttt{result.events}: detected fold or Hopf candidates;
+  \item \texttt{result.stats}: run summary information.
+\end{itemize}
+
+In an ordinary eager call, branch arrays are trimmed to the accepted points.
+Inside \texttt{jax.jit} or \texttt{jax.vmap}, fixed buffers and a validity mask
+are returned because transformed JAX code needs predictable shapes.
+
+\section{Choosing numerical settings}
+
+\begin{tabularx}{\textwidth}{>{\ttfamily}p{.24\textwidth}X}
+\toprule
+\normalfont Setting & Interpretation\\
+\midrule
+ds & initial distance for the next prediction\\
+ds\_min & smallest permitted retry step; reaching it can stop the run\\
+ds\_max & largest adaptive step; smaller values give denser branch sampling\\
+max\_steps & attempt budget, including failed retries\\
+newton\_tol & correction convergence tolerance\\
+newton\_max\_iter & maximum Newton iterations per attempt\\
+compute\_stability & whether equilibrium eigenvalues are computed\\
+\bottomrule
+\end{tabularx}
+
+Begin conservatively. If the branch is smooth and corrections are easy, allow
+adaptive growth. Near sharp turns, close events, or stiff regions, reduce
+\texttt{ds\_max} and verify that conclusions persist.
+
+\section{Natural or pseudo-arclength?}
+
+\begin{tabularx}{\textwidth}{p{.27\textwidth}XX}
+\toprule
+ & \texttt{Natural()} & \texttt{PseudoArclength()}\\
+\midrule
+Correction unknowns & state only & state and parameter\\
+At an ordinary fold & normally stalls & can continue through\\
+Cost per Newton step & $n\times n$ solve & $(n+1)\times(n+1)$ solve\\
+Recommended use & simple monotone reference branch & exploratory
+bifurcation analysis\\
+\bottomrule
+\end{tabularx}
+
+\section{Event detection is a screening step}
+
+Fold and Hopf events should be treated as candidates:
+
+\begin{enumerate}
+  \item identify the bracket or reported location;
+  \item inspect nearby eigenvalues and residuals;
+  \item repeat with a smaller step bound;
+  \item refine with an appropriate local solve when available;
+  \item check model-specific nondegeneracy or symmetry conditions;
+  \item compare important events with an analytic result or another tool.
+\end{enumerate}
+
+\chapter{Step 6: interpret and visualize the branch}
+
+\section{Choose an observable}
+
+For an $n$-dimensional state, a two-dimensional plot requires a selected
+component or derived quantity $h(\state)$. Choose it for scientific meaning,
+not merely because it is the first state component. Useful choices include a
+concentration, voltage, firing rate, norm, energy-like quantity, or maximum
+component.
+
+\section{A validated scalar fold example}
+
+The residual
+\[
+  F(x,p)=p+x-\frac{x^3}{3}
+\]
+has branch $p=x^3/3-x$ and analytic folds at
+\[
+  (x,p)=(-1,2/3),\qquad(1,-2/3).
+\]
+It is an ideal first test because geometry, singularity, and expected event
+locations are known exactly.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=.78\textwidth]{../../examples/images/pitchfork_bifurcation.png}
+\caption{Repository-generated JaxCont equilibrium branch for the scalar cubic
+example. The filename retains its historical ``pitchfork'' label, but the
+displayed imperfect cubic branch is used here primarily as an analytic fold
+test.}
+\end{figure}
+
+\section{What not to over-interpret}
+
+\begin{itemize}
+  \item A stable equilibrium branch does not reveal its full basin of attraction.
+  \item An unstable equilibrium can still organize transient dynamics.
+  \item A Hopf candidate does not provide the amplitude or stability of cycles.
+  \item One connected run does not guarantee discovery of disconnected branches.
+  \item Plot smoothness does not guarantee small residuals or correct event labels.
+\end{itemize}
+
+\chapter{Step 7: validate before interpreting}
+
+\section{The validation ladder}
+
+\begin{center}
+\begin{tikzpicture}[node distance=7mm,>=Latex,
+ box/.style={rounded corners,draw=JaxBlue,fill=SoftBlue,
+             minimum width=95mm,minimum height=9mm,align=center}]
+\node[box] (r) {1. residuals and finite values};
+\node[box,below=of r] (s) {2. repeat with changed step bounds and tolerances};
+\node[box,below=of s] (d) {3. continue in both directions or from another root};
+\node[box,below=of d] (a) {4. compare with analytic limits or conservation laws};
+\node[box,below=of a] (t) {5. compare selected points with simulation or another tool};
+\draw[->,thick] (r)--(s);
+\draw[->,thick] (s)--(d);
+\draw[->,thick] (d)--(a);
+\draw[->,thick] (a)--(t);
+\end{tikzpicture}
+\end{center}
+
+\section{Residual checks}
+
+For every accepted point, evaluate
+\[
+  r_k=\|\residual(\state_k,p_k)\|_\infty.
+\]
+Plot or summarize $r_k$. A success flag is useful, but the physical equations
+are the final numerical check.
+
+\section{Simulation as a complementary check}
+
+Select parameter values away from and near important transitions. Simulate from
+several initial conditions and compare long-time behavior with the stable
+equilibria predicted by continuation. Record transients and integration
+settings.
+
+Simulation will not normally converge to an unstable equilibrium, so lack of a
+simulated unstable state does not contradict the continuation result.
+
+\section{Independent software}
+
+For high-value thresholds, reproduce selected calculations with an established
+package such as BifurcationKit.jl, MatCont, AUTO, or COCO. Use identical
+equations, parameters, scaling, and event definitions. Agreement within a
+continuation step is evidence; disagreement is a diagnostic opportunity.
+
+\begin{workflowbox}
+Repository software tests answer ``does JaxCont behave as implemented?'' Your
+validation must also answer ``is my model, starting point, parameter range, and
+scientific interpretation appropriate?''
+\end{workflowbox}
+
+\chapter{Step 8: efficient ensembles with JAX}
+
+\section{Why batching matters}
+
+Many studies repeat the same continuation problem over uncertain parameters,
+design variables, or model variants. JaxCont expresses a bounded branch sweep
+with compiled JAX control flow and fixed-size buffers. Compatible runs can be
+batched using \texttt{jax.vmap}.
+
+\begin{lstlisting}
+def run_one(design_value):
+    problem_i = base_problem.at(args=design_value)
+    return jc.continuation(
+        problem_i,
+        jc.PseudoArclength(),
+        p_span=(p0, p1),
+        settings=settings,
+    )
+
+batched_result = jax.vmap(run_one)(design_values)
+\end{lstlisting}
+
+Events currently involve Python-level processing and should not be requested
+inside a transformed \texttt{vmap}/\texttt{jit} call. Compute transformation-safe
+branch/stability data first, then inspect or refine events outside the batch.
+
+\section{Cold and warm timing}
+
+The first compatible call includes tracing and compilation. Later calls may
+reuse the compiled executable. Report both cold and warm timing and call
+\texttt{block\_until\_ready()} before stopping a timer. Also report hardware,
+precision, state dimension, maximum steps, accepted points, and batch size.
+
+\chapter{Complete current-workflow case studies}
+
+\section{Case study A: scalar cubic folds}
+
+Use the minimal example from Chapter~6. The learning goals are:
+
+\begin{enumerate}
+  \item verify the analytic starting root;
+  \item observe natural continuation approach a fold;
+  \item observe pseudo-arclength pass the fold;
+  \item compare detected fold parameters with $\pm2/3$;
+  \item repeat with several values of \texttt{ds\_max}.
+\end{enumerate}
+
+\section{Case study B: Van der Pol equilibrium stability}
+
+For
+\[
+  \dot x=y,\qquad
+  \dot y=\mu(1-x^2)y-x,
+\]
+the origin is an equilibrium for every $\mu$. Its Jacobian is
+\[
+  J(0,0;\mu)=
+  \begin{bmatrix}0&1\\-1&\mu\end{bmatrix}.
+\]
+At $\mu=0$, the eigenvalues are $\pm i$. Equilibrium continuation can show the
+stability crossing and report a Hopf candidate.
+
+\begin{lstlisting}
+def van_der_pol_rhs(u, mu, args):
+    x, y = u
+    return jnp.array([y, mu * (1.0 - x**2) * y - x])
+
+problem = jc.bif_problem(
+    van_der_pol_rhs,
+    u0=jnp.array([0.0, 0.0]),
+    p0=-2.0,
+    state_names=["x", "y"],
+    param_name="mu",
+)
+
+result = jc.continuation(
+    problem,
+    jc.PseudoArclength(),
+    p_span=(-2.0, 2.0),
+    settings=jc.ContinuationPar(
+        ds=0.02, ds_max=0.05, max_steps=160,
+        newton_tol=1e-7, compute_stability=True,
+    ),
+    events=[jc.Hopf()],
+)
+\end{lstlisting}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=.82\textwidth]{../../examples/van_der_pol.png}
+\caption{Repository-generated eigenvalue view of the Van der Pol equilibrium
+branch. The crossing at $\mu=0$ is analytically checkable.}
+\end{figure}
+
+\begin{warningbox}
+This particular crossing is degenerate: the first Lyapunov coefficient reported
+by the repository's MatCont validation is zero. A linear eigenvalue crossing
+alone must not be described as a generic birth of a stable or unstable small
+cycle.
+\end{warningbox}
+
+\section{Case study C: neural-mass model}
+
+The neural-mass example demonstrates a more realistic workflow:
+
+\begin{enumerate}
+  \item refine an approximate equilibrium with a separate Newton solve;
+  \item verify the residual at the actual starting parameter;
+  \item continue a three-dimensional equilibrium branch;
+  \item compute stability and screen for fold/Hopf candidates;
+  \item compare selected events with an independent BifurcationKit.jl run;
+  \item diagnose a continuation stop before interpreting it physically.
+\end{enumerate}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=.82\textwidth]{../../examples/images/neural_mass_bifurcation.png}
+\caption{Repository-generated neural-mass equilibrium diagram. This example is
+useful for practicing initialization, scaling, event screening, and
+cross-validation on a multi-state model.}
+\end{figure}
+
+\part{Beyond the current equilibrium workflow}
+
+\chapter{Branch switching}
+
+\section{What branch switching means}
+
+At a pitchfork, transcritical point, or other branch point, several local
+solution directions can meet. Ordinary pseudo-arclength continuation normally
+continues the branch direction it already follows. Branch switching constructs
+an initial point and tangent on another local branch, often using null-space or
+normal-form information.
+
+\section{Capability status}
+
+\begin{warningbox}
+Branch switching is not part of the current supported public JaxCont API.
+Do not invent a JaxCont command for it. Use analytic initialization when
+possible, or use BifurcationKit.jl, MatCont, AUTO, or COCO for a mature branch
+switching workflow.
+\end{warningbox}
+
+Even without automated switching, a researcher can sometimes start a distinct
+equilibrium branch from a separately verified root. This is a new continuation
+run, not automated branch switching.
+
+\chapter{Periodic orbits}
+
+\section{Why equilibrium continuation is insufficient}
+
+At a Hopf point, an equilibrium may be accompanied by a family of periodic
+solutions. A periodic orbit is a function $\state(t)$ and an unknown period
+$T$, satisfying
+\[
+  \dot{\state}=f(\state,p),\qquad
+  \state(0)=\state(T),
+\]
+plus a phase condition that removes time-translation ambiguity.
+
+Numerical methods include shooting and orthogonal collocation. Stability is
+described by Floquet multipliers rather than only the equilibrium Jacobian.
+
+\section{Planned workflow}
+
+\begin{enumerate}
+  \item locate and classify a sufficiently regular Hopf point;
+  \item construct a small-amplitude initial cycle;
+  \item solve the periodic boundary-value problem;
+  \item continue the cycle in a parameter;
+  \item record period, amplitude, and selected observables;
+  \item compute Floquet multipliers;
+  \item detect folds of cycles, period doubling, or torus candidates;
+  \item validate representative cycles by time integration.
+\end{enumerate}
+
+\begin{warningbox}
+Periodic-orbit continuation and supported Floquet analysis are roadmap work in
+JaxCont. Internal periodic/Floquet modules do not make this a supported public
+workflow. Use an established periodic-orbit package today when the scientific
+question depends on cycle amplitude or cycle stability.
+\end{warningbox}
+
+\chapter{Two-parameter, codimension-two, and global analysis}
+
+\section{Why continue a special point?}
+
+A fold or Hopf point found in a one-parameter slice can move when a second
+parameter changes. Continuing the defining equations of that special point
+creates a curve in a two-parameter plane. Intersections and degeneracies on
+these curves produce organizing centers such as cusp, Bogdanov--Takens,
+generalized Hopf (Bautin), and Hopf--Hopf points.
+
+\section{Global bifurcations}
+
+Homoclinic and heteroclinic connections, SNIC bifurcations, and related global
+events depend on entire trajectories or invariant manifolds. They generally
+require specialized boundary-value formulations, careful truncation, and
+problem-specific diagnostics.
+
+\begin{warningbox}
+Two-parameter continuation, codimension-two classification, and global-orbit
+continuation are outside the current supported JaxCont API. MatCont,
+BifurcationKit.jl, AUTO, and COCO are appropriate tools to consider, depending
+on the model and the research group’s expertise.
+\end{warningbox}
+
+\chapter{A decision guide for real projects}
+
+\begin{center}
+\begin{tikzpicture}[scale=.75,transform shape,node distance=9mm and 17mm,>=Latex,
+ box/.style={rounded corners,draw=JaxBlue,fill=SoftBlue,
+             minimum width=42mm,minimum height=10mm,align=center},
+ decision/.style={diamond,aspect=2.1,draw=JaxOrange,fill=JaxOrange!10,
+                  align=center,inner sep=1.5pt},
+ external/.style={rounded corners,draw=JaxRed,fill=JaxRed!7,
+                  minimum width=48mm,minimum height=10mm,align=center}]
+\node[box] (q) {Define the scientific question};
+\node[decision,below=of q] (eq) {Equilibria?};
+\node[box,below left=of eq] (jc) {Use JaxCont equilibrium\\continuation};
+\node[external,below right=of eq] (po) {Periodic/global object:\\use a mature external workflow};
+\node[box,below=of jc] (val) {Validate residuals, settings,\\events, and interpretation};
+\node[decision,below=of val] (enough) {Question answered?};
+\node[box,below left=of enough] (report) {Report methods, diagnostics,\\and limitations};
+\node[external,below right=of enough] (advanced) {Escalate to branch switching,\\cycles, or two parameters};
+\draw[->,thick] (q)--(eq);
+\draw[->,thick] (eq)--node[above left]{yes}(jc);
+\draw[->,thick] (eq)--node[above right]{no}(po);
+\draw[->,thick] (jc)--(val);
+\draw[->,thick] (val)--(enough);
+\draw[->,thick] (enough)--node[above left]{yes}(report);
+\draw[->,thick] (enough)--node[above right]{no}(advanced);
+\end{tikzpicture}
+\end{center}
+
+\section{When to stop}
+
+Stop the numerical expansion of a study when:
+
+\begin{itemize}
+  \item the original scientific question is answered at a defensible resolution;
+  \item important conclusions survive relevant numerical and model checks;
+  \item additional branches or parameter dimensions would not change the
+        intended conclusion;
+  \item remaining uncertainty is dominated by data or model assumptions rather
+        than continuation resolution;
+  \item claims can be stated together with clear capability boundaries.
+\end{itemize}
+
+\appendix
+
+\chapter{Newton's method}
+
+For $G(z)=0$, Newton's method solves
+\[
+  G_z(z_k)\,\delta z=-G(z_k),
+  \qquad z_{k+1}=z_k+\delta z.
+\]
+Convergence depends on a suitable initial guess, a locally informative
+Jacobian, scaling, precision, and stopping rules. A small update alone is not
+enough; inspect the residual.
+
+\chapter{Pseudo-arclength algorithm}
+
+\begin{enumerate}
+  \item verify the initial solution;
+  \item compute and orient a tangent;
+  \item predict along the tangent by $\Delta s$;
+  \item Newton-correct the augmented equations;
+  \item accept and store a finite converged point;
+  \item adapt $\Delta s$ from correction difficulty;
+  \item repeat until target, failure threshold, non-finite value, or budget.
+\end{enumerate}
+
+\chapter{Glossary}
+
+\begin{description}
+  \item[Branch] A connected family of solutions.
+  \item[Continuation parameter] The model parameter varied along a run.
+  \item[Corrector] Newton iterations that return a prediction to the solution set.
+  \item[Fold] A turning point where the state Jacobian has a zero eigenvalue.
+  \item[Hopf point] An equilibrium event where a complex pair reaches the
+        imaginary axis, subject to additional classification conditions.
+  \item[Predictor] A local estimate of the next branch point.
+  \item[Pseudo-arclength] Continuation using an approximate curve-distance
+        coordinate rather than only the physical parameter.
+  \item[Residual] The equations that must vanish at a numerical solution.
+  \item[Stability] Local response to sufficiently small perturbations.
+  \item[Validation] Evidence that numerical results and scientific
+        interpretation are trustworthy for the intended use.
+\end{description}
+
+\chapter{Checklist before trusting a result}
+
+\begin{enumerate}
+  \item The equations, units, parameter meaning, and state ordering are documented.
+  \item The starting residual is small at exactly \texttt{p\_span[0]}.
+  \item Accepted-point residuals are checked.
+  \item The result is repeated with changed step-size bounds or tolerances.
+  \item Important regions are approached from another direction or root.
+  \item Stability is interpreted locally.
+  \item Events are treated as candidates and independently checked.
+  \item Simulation is used as a complementary, not substitutive, calculation.
+  \item Disconnected branches and unsupported solution types are acknowledged.
+  \item Code, software version, precision, hardware, and settings are archived.
+\end{enumerate}
+
+\chapter{Selected further reading}
+
+\begin{itemize}
+  \item E.~J. Doedel and B.~E. Oldeman, \emph{AUTO-07P: Continuation and
+        Bifurcation Software for Ordinary Differential Equations}.
+  \item Y.~A. Kuznetsov, \emph{Elements of Applied Bifurcation Theory}.
+  \item R.~Seydel, \emph{Practical Bifurcation and Stability Analysis}.
+  \item E.~L. Allgower and K.~Georg, \emph{Numerical Continuation Methods}.
+  \item Current JaxCont examples, API documentation, roadmap, and the
+        repository's beginner guide to bifurcation analysis.
+\end{itemize}
+
+\backmatter
+\chapter*{Maintenance note}
+
+This guide is designed to grow with JaxCont. When a new numerical capability
+becomes supported, update three layers together:
+
+\begin{enumerate}
+  \item the conceptual workflow and capability table;
+  \item a minimal executable example with expected diagnostics;
+  \item a validated case study with limitations and independent evidence.
+\end{enumerate}
+
+Do not convert roadmap items into user instructions until the public API,
+tests, examples, and validation evidence exist.
+
+\end{document}
