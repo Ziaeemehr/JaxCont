@@ -226,7 +226,7 @@ def continuation(
     settings: ContinuationPar = ContinuationPar(),
     p_span: tuple[float, float],
     events: Sequence[Event] = (),
-    solver: Solvers = Solvers(),          # linear/eigen/newton bundle
+    solvers: Solvers = Solvers(),         # linear/eigen bundle
 ) -> ContinuationResult: ...
 ```
 
@@ -473,7 +473,7 @@ DDE-BIFTOOL shows it is a package-sized effort on its own.
    characteristic equation, e.g. `det(λI − A₀ − Σₖ Aₖ e^{−λτₖ}) = 0`, which has infinitely many
    roots. In practice one Chebyshev/pseudospectral-discretizes the infinitesimal generator and
    takes eigenvalues of a large matrix. That is *purely* an eigensolver swap
-   (`ChebyshevDDE()` in place of `Dense()`); the continuation loop is untouched. **This is the
+   (`ChebyshevDDE()` in place of `DenseEigen()`); the continuation loop is untouched. **This is the
    single strongest concrete justification for the pluggable-solver seam in §4.6.**
 3. **lyapax already handles DDE trajectories** (ring-buffer history, `lyapunov_spectrum_dde`), so
    trajectory-level DDE analysis (chaos, spectra) has a home today — same division of labor as §9.
