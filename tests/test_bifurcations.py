@@ -241,12 +241,25 @@ def test_neimark_sacker_test_function_finds_complex_pair_near_unit_circle():
 
 
 def test_neimark_sacker_test_function_below_unit_circle():
+    # magnitude of 0.42+0.56j is exactly 0.7 (0.42^2+0.56^2=0.49=0.7^2), so
+    # |magnitude-1|=0.3 -- comfortably INSIDE near_unit_circle=0.5, not
+    # exactly on the boundary. (An earlier version of this test used
+    # 0.3+0.4j, magnitude exactly 0.5, |magnitude-1|=0.5 -- exactly ON the
+    # boundary. This was the plan's own bug, found during Task 1 review:
+    # with the correct strict "<" filter, that value is excluded, since
+    # 0.5 < 0.5 is False, contradicting the test's own expected value.
+    # Verified numerically before fixing: with the boundary value and
+    # strict "<", test_function correctly returns nan (both real
+    # candidates filtered out) rather than -0.5. Fixed here by moving the
+    # test value comfortably off the boundary, not by weakening the filter
+    # to "<=" -- strict "<" is what was numerically verified end-to-end
+    # against the real bifurcation-detection sweeps in Task 2.)
     ns = NeimarkSacker(raw_f=lambda u, p, args: u, mesh=None)
     point = BranchPoint(
         p=0.0, u=jnp.zeros(1),
-        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, 0.3 + 0.4j, 0.3 - 0.4j]),
+        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, 0.42 + 0.56j, 0.42 - 0.56j]),
     )
-    assert jnp.isclose(ns.test_function(point), -0.5, atol=1e-6)
+    assert jnp.isclose(ns.test_function(point), -0.3, atol=1e-6)
 
 
 def test_neimark_sacker_test_function_no_complex_candidate_returns_nan():

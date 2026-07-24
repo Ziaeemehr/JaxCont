@@ -262,7 +262,7 @@ class PeriodDoubling(Event):
         mult = point.eigenvalues
         trivial_idx = jnp.argmin(jnp.abs(mult - 1.0))
         keep = jnp.arange(mult.shape[0]) != trivial_idx
-        near_unit = jnp.abs(jnp.abs(mult) - 1.0) <= self.near_unit_circle
+        near_unit = jnp.abs(jnp.abs(mult) - 1.0) < self.near_unit_circle
         candidates_mask = keep & near_unit & (jnp.abs(jnp.imag(mult)) < self.tolerance)
         if not jnp.any(candidates_mask):
             return float("nan")
@@ -322,7 +322,7 @@ class NeimarkSacker(Event):
         mult = point.eigenvalues
         trivial_idx = jnp.argmin(jnp.abs(mult - 1.0))
         keep = jnp.arange(mult.shape[0]) != trivial_idx
-        near_unit = jnp.abs(jnp.abs(mult) - 1.0) <= self.near_unit_circle
+        near_unit = jnp.abs(jnp.abs(mult) - 1.0) < self.near_unit_circle
         candidates_mask = keep & near_unit & (jnp.abs(jnp.imag(mult)) > self.tolerance)
         if not jnp.any(candidates_mask):
             return float("nan")
