@@ -402,7 +402,33 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
       implementer's attempt to weaken it to `<=` during execution was reverted (the real bug was in
       one of the plan's own hand-built test cases landing exactly on the filter boundary, not the
       filter itself).
-- [ ] Limit-cycle examples (Van der Pol, Brusselator)
+- [x] Limit-cycle examples (Van der Pol, Brusselator) — *(done 2026-07-24, see
+      [plan](../docs/superpowers/plans/2026-07-24-limit-cycle-examples.md) and its
+      [design spec](../docs/superpowers/specs/2026-07-24-limit-cycle-examples-design.md))*. This
+      closes the v0.2.0 "Periodic orbits" epic. Two new example scripts
+      (`examples/example_10_van_der_pol_limit_cycle.py`,
+      `examples/example_11_brusselator_limit_cycle.py`) demonstrate real limit-cycle continuation —
+      not just an equilibrium's Hopf crossing — via `periodic_orbit_problem`. Since JaxCont doesn't
+      integrate ODEs itself, each script simulates a short trajectory with `scipy.integrate.solve_ivp`
+      (the user's own simulation, matching the architecture's intended usage pattern — the library
+      still doesn't call it), extracts one period from the tail via `scipy.signal.find_peaks`, and
+      hands `(u_trajectory, t_trajectory, period0)` to `periodic_orbit_problem` for collocation
+      refinement before continuing. Also fixed `example_03_van_der_pol.py`'s stale docstring claim
+      ("periodic-orbit continuation is outside JaxCont's current scope").
+      Two real issues found via end-to-end verification (not assumed from design reasoning alone):
+      (1) `t_trajectory` must be re-based to start at `0` before `periodic_orbit_problem` — its
+      internal resampling computes `t = τ·period0` for `τ∈[0,1]`, so a raw (non-zero-based) time
+      array falls outside `jnp.interp`'s domain and silently clamps to a constant, producing a
+      degenerate `T≈0` "solution" with a deceptively small residual rather than an error; (2) the
+      Brusselator's achievable float32 residual floor at the same mesh size (`ntst=20`) needed a
+      looser `newton_tol=1e-4` than Van der Pol's `1e-5` — confirming (again) that this floor is
+      system-specific, not something to assume transfers from a previously-verified value.
+      Verified results: Van der Pol (`μ: 1→4`) shows near-constant amplitude (`≈2.0`) with period
+      growing `6.66→10.25` — the relaxation-oscillator signature here is period growth and waveform
+      sharpening, not amplitude growth (a known fact about this normalization); Brusselator
+      (`a=1`, `b: 2.5→4.0`) shows amplitude growing `2.02→4.70`, a deliberately different pair of
+      qualitative behaviors. Both stable throughout (`compute_stability=True`, asserted via `raise`,
+      not a silent print).
 
 ## v0.3.0+ — Advanced (demand-driven)
 - [ ] Branch switching
