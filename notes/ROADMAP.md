@@ -344,7 +344,27 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
       Fixed mesh only — no adaptive mesh redistribution (would break the fixed-shape-buffer
       `jit`/`vmap` discipline the whole scan engine relies on); explicitly deferred, not an
       oversight.
-- [ ] Floquet multipliers from monodromy matrix
+- [x] Floquet multipliers from monodromy matrix — *(done 2026-07-24, see
+      [plan](../docs/superpowers/plans/2026-07-24-floquet-multipliers.md) and its
+      [design spec](../docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md))*. The
+      guard clause above is gone: `settings.compute_stability=True` now works for periodic
+      problems. `Φ(T)` (the monodromy matrix) is built as a block linear recursion across the
+      collocation mesh's `ntst` intervals — reusing the existing Lagrange differentiation matrix
+      `D` and the raw right-hand side's `df/du` Jacobian at each collocation point — not by
+      re-integrating a separate variational-equation IVP (the old pre-v0.1 `scipy.integrate.
+      solve_ivp`-based stub in `stability/floquet.py` was architecturally incompatible with the
+      collocation representation and is now deleted). Floquet multipliers are `Φ(T)`'s
+      eigenvalues, dispatched into `Branch.eigenvalues`/`Branch.stable` the same way equilibrium
+      stability already was — `Branch.stable` uses the periodic-orbit-appropriate magnitude
+      condition (all *non-trivial* multipliers inside the unit circle; the trivial multiplier,
+      always exactly `1`, is identified as `argmin(|multiplier - 1|)` and excluded), not
+      equilibria's real-part condition. Verified against a closed-form exact answer: `r' =
+      r(ρ-r²), θ'=1` has exact Floquet multipliers `{1, exp(-4πρ)}`; both a plain-NumPy and a
+      JAX/`jit` prototype matched it to float32-achievable precision before the plan was written.
+      One notable negative finding (checked, not assumed): unlike the periodic-orbit residual's
+      big einsum contraction, this recursion's small per-interval linear solves needed **no**
+      `jax.default_matmul_precision("float32")` fix for the same GPU TensorFloat32 issue found in
+      the collocation sub-project.
 - [ ] Period-doubling detection
 - [ ] Limit-cycle examples (Van der Pol, Brusselator)
 
