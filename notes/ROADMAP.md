@@ -318,7 +318,32 @@ Design spec: [docs/superpowers/specs/2026-07-22-viz-module-design.md](../docs/su
 Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/superpowers/plans/2026-07-22-viz-module.md).
 
 ## v0.2.0 — Periodic orbits
-- [ ] Periodic-orbit continuation (collocation preferred over shooting)
+- [x] Periodic-orbit continuation (collocation preferred over shooting) — *(done 2026-07-24, see
+      [plan](../docs/superpowers/plans/2026-07-24-periodic-orbit-collocation.md) and its
+      [design spec](../docs/superpowers/specs/2026-07-24-periodic-orbit-collocation-design.md))*.
+      Fixed-mesh Gauss-Legendre orthogonal collocation, reusing the equilibrium scan engine
+      completely unchanged — a periodic orbit's collocation system (mesh/collocation-point states +
+      period + phase condition) is just a large residual `F(U, p) = 0`, exactly what
+      `pseudo_arclength_scan`/`natural_scan` already solve generically. `periodic_orbit_problem(...)`
+      is a pure factory: resamples a caller-supplied trajectory guess onto the mesh, refines to
+      convergence via `differentiable_root`, returns an ordinary `BifProblem`. One new guard clause
+      in `api.py` (`compute_stability=True` raises for periodic problems — that pass would
+      eigendecompose the entire collocation Jacobian, not a meaningful quantity; Floquet
+      multipliers are next). Verified against a closed-form exact answer (not just design
+      reasoning): `r' = r(ρ-r²), θ'=1` has an exact circular limit cycle at ρ=1, and both the
+      initial refinement and full continuation reproduce it to float32-achievable precision.
+      Found and fixed two real numerical bugs mid-implementation, both via independent
+      re-verification refusing to trust an initially-wrong "fix": (1) the plan's original
+      verification numbers were contaminated by a stray `jax_enable_x64=True` left in a prototype
+      script; (2) once genuinely re-verified under this machine's real float32/GPU, `jnp.einsum`'s
+      default reduced (TensorFloat32) matmul precision on GPU turned out to corrupt the collocation
+      Jacobian badly enough to stall Newton convergence — fixed with
+      `jax.default_matmul_precision("float32")` around the residual's two einsum calls, plus a
+      recalibrated `newton_tol=1e-5` for periodic continuation (the default `1e-6` is tighter than
+      the achievable float32 floor and silently stalls continuation otherwise, no error raised).
+      Fixed mesh only — no adaptive mesh redistribution (would break the fixed-shape-buffer
+      `jit`/`vmap` discipline the whole scan engine relies on); explicitly deferred, not an
+      oversight.
 - [ ] Floquet multipliers from monodromy matrix
 - [ ] Period-doubling detection
 - [ ] Limit-cycle examples (Van der Pol, Brusselator)
