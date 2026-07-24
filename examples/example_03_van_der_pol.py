@@ -16,8 +16,9 @@ The origin is stable for :math:`\mu < 0` and unstable for
 This particular crossing is degenerate: at :math:`\mu=0` the vector field
 is the linear harmonic oscillator and MatCont reports a zero first Lyapunov
 coefficient. The familiar Van der Pol cycle therefore does not emerge as a
-generic, vanishing-amplitude Hopf cycle. Periodic-orbit continuation is
-outside JaxCont's current scope.
+generic, vanishing-amplitude Hopf cycle. See
+``examples/example_10_van_der_pol_limit_cycle.py`` for the real limit cycle,
+continued away from this degenerate point via periodic-orbit collocation.
 """
 
 # %%
