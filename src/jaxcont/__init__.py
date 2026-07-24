@@ -54,7 +54,7 @@ from jaxcont.stability.eigenvalue import compute_eigenvalues, analyze_stability
 # doubling APIs are experimental stubs and are intentionally NOT exported at
 # the top level (see the project roadmap). They remain importable from their
 # submodules for development, e.g.:
-#     from jaxcont.problems.periodic import PeriodicOrbitProblem
+#     from jaxcont.problems.periodic import periodic_orbit_problem
 #     from jaxcont.stability.floquet import compute_floquet_multipliers
 
 # Utilities

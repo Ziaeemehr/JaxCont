@@ -31,7 +31,7 @@ Problems Module
 Defines different types of continuation problems:
 
 - ``EquilibriumProblem``: For finding equilibrium points
-- ``PeriodicOrbitProblem``: For periodic orbit continuation
+- ``periodic_orbit_problem``: For periodic orbit continuation
 - ``BoundaryValueProblem``: For BVP formulations
 
 Bifurcations Module
