@@ -21,7 +21,9 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-from jaxcont.bifurcations.events import Event, Fold, Hopf, EventHit, detect_events
+from jaxcont.bifurcations.events import (
+    Event, Fold, Hopf, PeriodDoubling, NeimarkSacker, EventHit, detect_events,
+)
 from jaxcont.core.continuation import ContinuationProblem, ContinuationSolution
 from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
 
@@ -37,6 +39,8 @@ __all__ = [
     "Event",
     "Fold",
     "Hopf",
+    "PeriodDoubling",
+    "NeimarkSacker",
     "EventHit",
     "Branch",
     "ContinuationResult",
