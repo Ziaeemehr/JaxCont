@@ -35,13 +35,39 @@ def _periodic_problem():
     )
 
 
-def test_compute_stability_true_raises_for_periodic_problem():
+def test_compute_stability_true_computes_floquet_multipliers_for_periodic_problem():
+    # Regression for the removed guard clause: compute_stability=True is now
+    # the whole point for periodic problems, not an error case. r' = r*(rho -
+    # r^2), theta' = 1 has limit-cycle radius sqrt(rho) for all rho > 0, so
+    # every branch point should read stable=True (exp(-4*pi*rho) < 1
+    # always) -- see
+    # docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md.
     prob = _periodic_problem()
-    with pytest.raises(ValueError, match="compute_stability"):
-        jc.continuation(
-            prob, p_span=(1.0, 2.0),
-            settings=jc.ContinuationPar(compute_stability=True),
-        )
+    sol = jc.continuation(
+        prob, p_span=(1.0, 2.0),
+        settings=jc.ContinuationPar(
+            compute_stability=True, ds=0.05, max_steps=50, newton_tol=1e-5
+        ),
+    )
+    assert sol.branch.n_valid > 1
+    assert sol.branch.eigenvalues is not None
+    assert sol.branch.eigenvalues.shape == (sol.branch.n_valid, 2)
+    assert sol.branch.stable is not None
+    assert bool(jnp.all(sol.branch.stable))
+
+
+def test_compute_stability_true_default_still_works_for_equilibrium_problem_after_dispatch():
+    # Same as the existing equilibrium regression test, run again after the
+    # problem.kind dispatch is added, to confirm the equilibrium path
+    # (real-part condition via branch_eigenvalues) is provably untouched.
+    def pitchfork(u, p, args):
+        return jnp.array([p * u[0] - u[0] ** 3])
+
+    prob = jc.bif_problem(pitchfork, u0=jnp.array([0.1]), p0=0.5)
+    sol = jc.continuation(prob, p_span=(0.5, 1.5))
+    assert sol.branch.n_valid > 1
+    assert sol.branch.eigenvalues is not None
+    assert sol.branch.stable is not None
 
 
 def test_compute_stability_false_runs_cleanly_for_periodic_problem():

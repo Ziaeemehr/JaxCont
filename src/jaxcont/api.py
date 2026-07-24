@@ -334,18 +334,8 @@ def _run_scan(
     reassemble a legacy-shaped :class:`ContinuationSolution` so
     detection/plotting reuse existing code.
     """
-    if problem.kind == "periodic" and settings.compute_stability:
-        raise ValueError(
-            "settings.compute_stability=True is not supported for "
-            "kind=\"periodic\" problems: the equilibrium stability pass "
-            "eigendecomposes df/du, which for a periodic problem's f is "
-            "the entire collocation Jacobian, not a meaningful dynamical "
-            "quantity. Pass settings=ContinuationPar(compute_stability=False) "
-            "instead. Floquet multipliers (the periodic-orbit analogue of "
-            "stability) are a planned future feature, not yet implemented."
-        )
-
     from jaxcont.core.scan_continuation import branch_eigenvalues
+    from jaxcont.stability.floquet import branch_floquet_multipliers, floquet_stable
 
     args = problem.args
     rhs2 = lambda u, p: problem.f(u, p, args)
@@ -374,7 +364,7 @@ def _run_scan(
         # Traced call (jax.vmap/jax.jit over this problem/settings): n_valid
         # can't become a concrete Python int, so there is no single trim
         # length. Fall back to the fixed-size-buffer + mask representation.
-        return _run_scan_traced(res, rhs2, settings, events, solvers)
+        return _run_scan_traced(res, problem, rhs2, settings, events, solvers)
 
     states = res.states[:n]
     params = res.params[:n]
@@ -384,8 +374,15 @@ def _run_scan(
     stability = None
     want_eigs = settings.compute_stability or len(events) > 0
     if want_eigs and states.shape[0] > 0:
-        eigenvalues = branch_eigenvalues(rhs2, states, params, eigen_solver=solvers.eigen)
-        stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
+        if problem.kind == "periodic":
+            _, _, raw_f, mesh = problem.args
+            eigenvalues = branch_floquet_multipliers(
+                raw_f, mesh, states, params, eigen_solver=solvers.eigen
+            )
+            stability = floquet_stable(eigenvalues)
+        else:
+            eigenvalues = branch_eigenvalues(rhs2, states, params, eigen_solver=solvers.eigen)
+            stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
 
     convergence_info = [
         {
@@ -427,6 +424,7 @@ def _run_scan(
 
 def _run_scan_traced(
     res,
+    problem: BifProblem,
     rhs2: Callable[[Array, Array], Array],
     settings: ContinuationPar,
     events: Sequence[Event],
@@ -450,6 +448,7 @@ def _run_scan_traced(
         )
 
     from jaxcont.core.scan_continuation import branch_eigenvalues
+    from jaxcont.stability.floquet import branch_floquet_multipliers, floquet_stable
 
     states, params, tangents = res.states, res.params, res.tangents
     valid = jnp.arange(states.shape[0]) < res.n_valid
@@ -457,8 +456,15 @@ def _run_scan_traced(
     eigenvalues = None
     stability = None
     if settings.compute_stability:
-        eigenvalues = branch_eigenvalues(rhs2, states, params, eigen_solver=solvers.eigen)
-        stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
+        if problem.kind == "periodic":
+            _, _, raw_f, mesh = problem.args
+            eigenvalues = branch_floquet_multipliers(
+                raw_f, mesh, states, params, eigen_solver=solvers.eigen
+            )
+            stability = floquet_stable(eigenvalues)
+        else:
+            eigenvalues = branch_eigenvalues(rhs2, states, params, eigen_solver=solvers.eigen)
+            stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
 
     branch = Branch(
         params=params,
