@@ -135,11 +135,40 @@ Total: `dim(U) = n · ntst · (ncol + 1) + 1`.
    values `u_i^{(0)}`, `u_{i,j}^{(0)}`. This need only be a *reasonable* starting point for
    Newton — collocation's accuracy comes from the residual, not from a highly accurate initial
    guess.
-3. Flatten into `U0` in the same layout `F` expects.
+3. Flatten into `U_guess` in the same layout `F` expects.
 4. `u_ref`/`u_ref'` for the phase condition (see above) are captured from this same initial
-   resampling and closed over by the returned `f` — they do not change as continuation proceeds,
-   even though `U` (and thus the *current* orbit) does. This is what "phase condition" means:
-   pinning the time-shift relative to the *original* guess, not to a moving target.
+   resampling — they do not change as continuation proceeds, even though `U` (and thus the
+   *current* orbit) does. This is what "phase condition" means: pinning the time-shift relative to
+   the *original* guess, not to a moving target.
+5. **Refine `U_guess` to convergence before returning it as `u0`.** `pseudo_arclength_scan`/
+   `natural_scan` do not Newton-correct their starting point — the engine takes `(u0, p0)` as
+   already satisfying `f(u0, p0) ≈ 0` and marks slot 0 `converged=True` unconditionally (verified
+   by reading `core/scan_continuation.py`: `_tangent` is computed directly from `(u0, p0)`, and the
+   `body` loop only ever corrects *predicted* points from step 1 onward). That's a reasonable
+   contract for equilibrium problems, where callers typically already supply an exact or
+   near-exact point, but directly contradicts this factory's premise of a *coarse* trajectory
+   guess. So `periodic_orbit_problem` calls `differentiable_root` (`solvers/implicit.py`, built
+   earlier this v0.2 cycle for exactly this — implicit-root problems with IFT-based
+   differentiability) on `F(·, p0)` starting from `U_guess`, and uses the converged result as the
+   returned `BifProblem`'s `u0`. This was verified end-to-end in prototyping (see "Verification
+   performed during design," below): from a deliberately wrong guess (radius 0.8 instead of the
+   true 1.0, a phase offset, and a period guess of 5.5 instead of the true `2π`), the refined `U0`
+   matches the exact circle to residual norm `~5e-15` under `jax.jacfwd` + `jit`.
+6. `u_ref`/`u_ref'` (step 4) are captured from the *pre-refinement* `U_guess`, not the refined
+   `U0` — the phase condition pins time-shift relative to what the caller supplied, independent of
+   how the refinement converges within that phase.
+
+## Verification performed during design
+
+Before writing this into an implementation plan, the full scheme (differentiation matrix,
+defect/continuity/periodicity/phase-condition residual, and initial refinement) was prototyped and
+numerically verified against the closed-form circle example from "Testing," below — first in plain
+NumPy/`scipy.optimize.fsolve` (residual norm `3.5e-14`, period `6.283185313` vs. exact
+`6.283185307179586`), then re-verified in JAX under `jax.jacfwd` with a manual Newton loop using
+`jnp.linalg.solve` (matching to all reported digits, residual norm `4.7e-15`), and confirmed to
+trace cleanly under `jax.jit`. The Lagrange differentiation matrix was separately checked against
+a degree-`ncol` polynomial's exact derivative (max error `5.6e-15`, machine precision). This is not
+a design-only exercise — the implementation plan's code is transcribed from what was actually run.
 
 ## Interop constraints with existing machinery
 
@@ -182,6 +211,8 @@ Total: `dim(U) = n · ntst · (ncol + 1) + 1`.
   — the scaffold's own docstring instructs deleting it once real periodic-orbit continuation
   exists; `core/collocation.py`'s `Collocation` type supersedes it with real tests.
 - **Modify: `src/jaxcont/api.py`** — the one guard clause in `_run_scan` described above.
+- **Uses (imports only, no modification): `src/jaxcont/solvers/implicit.py`'s
+  `differentiable_root`** — for the initial-refinement step described above.
 - **Untouched:** `BifProblem`, `continuation()`'s signature, `core/scan_continuation.py`,
   `bifurcations/events.py`, `solvers/protocols.py`, `stability/floquet.py`,
   `bifurcations/period_doubling.py` (still stubs — next sub-projects).
@@ -198,10 +229,11 @@ independent of any external reference tool (BifurcationKit.jl, etc.), matching t
 session set for the `differentiable_root`/Event-protocol work.
 
 1. **Convergence to the exact cycle:** given a deliberately coarse/perturbed initial trajectory
-   guess (not the exact circle) and period guess (not exactly `2π`), `periodic_orbit_problem` +
-   one Newton solve at `p0 = ρ = 1` converges to the exact cycle (residual states within solver
-   tolerance of `(cos τ·T, sin τ·T)` at each mesh/collocation point) and the corrected period
-   matches `2π` to solver tolerance.
+   guess (not the exact circle) and period guess (not exactly `2π`), `periodic_orbit_problem`'s
+   internal refinement (step 5 above) converges `u0` to the exact cycle at `p0 = ρ = 1` (states
+   within solver tolerance of `(cos τ·T, sin τ·T)` at each mesh/collocation point) and the
+   refined period matches `2π` to solver tolerance — checked directly on the returned
+   `BifProblem.u0`, no call to `continuation()` needed for this test.
 2. **Continuation + `Fold()` false-positive check:** continue in `ρ` over a range with no actual
    fold-of-cycles (this system's limit cycle radius `√ρ` varies smoothly, no turning point) with
    `events=[Fold()]`; assert zero detections — a real, meaningful check (not just "does it not
@@ -224,6 +256,9 @@ session set for the `differentiable_root`/Event-protocol work.
   in this sub-project — a deliberate, documented scope cut, not an oversight).
 - JaxCont does not integrate ODEs itself; `periodic_orbit_problem` only resamples a caller-supplied
   trajectory guess onto the collocation mesh.
+- `periodic_orbit_problem` must return a `BifProblem` whose `u0` already satisfies `F(u0, p0) ≈ 0`
+  (refined via `differentiable_root`) — `pseudo_arclength_scan`/`natural_scan` do not correct their
+  starting point, so an unrefined `u0` would silently mark an unconverged point `converged=True`.
 - `events=[Hopf()]` on a periodic problem is a documented footgun (not enforced) — out of scope to
   prevent in this sub-project.
 - Floquet multipliers, period-doubling/Neimark–Sacker detection, and limit-cycle example scripts
