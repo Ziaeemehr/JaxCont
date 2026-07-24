@@ -365,7 +365,43 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
       big einsum contraction, this recursion's small per-interval linear solves needed **no**
       `jax.default_matmul_precision("float32")` fix for the same GPU TensorFloat32 issue found in
       the collocation sub-project.
-- [ ] Period-doubling detection
+- [x] Period-doubling detection — *(done 2026-07-24, see
+      [plan](../docs/superpowers/plans/2026-07-24-period-doubling-neimark-sacker.md) and its
+      [design spec](../docs/superpowers/specs/2026-07-24-period-doubling-neimark-sacker-design.md))*.
+      Shipped alongside Neimark–Sacker detection (not in the checklist item's literal name, but the
+      Floquet design spec's own scope-cut section grouped them as "the natural next `Event`
+      implementations" and the added verification cost turned out to be nearly free — see below).
+      `PeriodDoubling`/`NeimarkSacker` are two new `Event` implementations in
+      `bifurcations/events.py`, alongside `Fold`/`Hopf`, using the existing `Event` protocol/
+      `detect_events` machinery unchanged. Both consume `BranchPoint.eigenvalues` (Floquet
+      multipliers, for periodic branches) exactly the way `Hopf` consumes equilibrium eigenvalues,
+      excluding the trivial multiplier via the same `argmin(|multiplier-1|)` rule
+      `stability.floquet.floquet_stable` uses, then picking the real (`PeriodDoubling`) or complex
+      (`NeimarkSacker`) candidate closest to `-1`/the unit circle. Deleted the dead, pre-`Event`-
+      protocol `bifurcations/period_doubling.py` stub. Each event carries its own `raw_f`/`mesh`
+      fields (mirroring `Hopf`'s `tolerance` field) so `refine()` can call
+      `stability.floquet.floquet_multipliers` directly — `detect_events`'s generic `rhs` parameter is
+      the assembled collocation residual, not the raw ODE, so reusing it would repeat `Hopf`'s
+      equilibrium-only footgun in reverse.
+      Mathematical grounding: for a **2D** autonomous periodic orbit the single non-trivial Floquet
+      multiplier is `exp(∫div(f)dt)`, always positive real — period-doubling (`-1` crossing) and
+      Neimark–Sacker (complex-pair unit-circle crossing) are only possible for **3+**-dimensional
+      systems, so a new verification system was needed (the existing 2D circle system can't exhibit
+      either). Built one: the verified circle system plus a decoupled linear "transverse" block
+      (`w1'=αw1-βw2, w2'=βw1+αw2`), whose exact monodromy contribution is the closed-form
+      `exp((α±iβ)T)` — `β=π/T` gives a real multiplier `=-exp(αT)` crossing `-1` at `α=0` (PD ground
+      truth); any other `β` gives a genuine complex pair whose magnitude crosses `1` at `α=0` (NS
+      ground truth). `w≡0` is an exact periodic solution for any `α`/`β`, so the test fixture needed
+      no new simulation.
+      Found and fixed a real bug via end-to-end verification (not just the closed-form math): the
+      naive "closest multiplier to -1/unit-circle" `argmin` selection could silently switch which
+      *physical* multiplier it tracks once the true one moved far enough away, latching onto an
+      unrelated, always-far multiplier instead and producing a false-positive detection. Fixed with a
+      `near_unit_circle` pre-filter (`|magnitude-1| < 0.5`, a new field on both classes) excluding
+      candidates that were never near the unit circle to begin with — required, not optional; an
+      implementer's attempt to weaken it to `<=` during execution was reverted (the real bug was in
+      one of the plan's own hand-built test cases landing exactly on the filter boundary, not the
+      filter itself).
 - [ ] Limit-cycle examples (Van der Pol, Brusselator)
 
 ## v0.3.0+ — Advanced (demand-driven)
