@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/Ziaeemehr/JaxCont/actions/workflows/tests.yml"><img src="https://github.com/Ziaeemehr/JaxCont/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
-  <a href="https://jaxcont.readthedocs.io/latest/"><img src="https://readthedocs.org/projects/jaxcont/badge/?version=latest" alt="Documentation"></a>
+  <a href="https://jaxcont.readthedocs.io/en/latest/"><img src="https://readthedocs.org/projects/jaxcont/badge/?version=latest" alt="Documentation Status"></a>
   <a href="https://pypi.org/project/jaxcont/"><img src="https://img.shields.io/pypi/v/jaxcont.svg" alt="PyPI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
 </p>
