@@ -464,15 +464,26 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
    (with duplicates) to exactly 4 clean ones; `example_05_neural_mass.py` from 5 to exactly 3;
    zero spurious/unmatched rows in either. Still eager-only — trace-safe (`vmap`/`jit`) event
    detection remains unimplemented and is now its own future item, not bundled into this one.
-5. **Make `LinearSolver`/`EigenSolver` (ARCHITECTURE.md §4.6) real protocols with a `Dense()`
-   implementation now, even though nothing else exists yet.** Right now the "GPU-ready" and
-   "matrix-free/iterative" claims in ARCHITECTURE.md §3's comparison table are aspirational — every
-   solve is hardcoded `jnp.linalg.solve`/`jnp.linalg.eigvals`. Introducing the protocol boundary
-   (with `Dense()` as the only implementation for now) costs little and means a future
-   `GMRES()`/`Arnoldi()` swap — needed for the DDE eigensolver seam in §10.2 and for genuinely
-   large systems — doesn't require touching the continuation loop. Doing this before the v0.1 GPU
-   smoke test also makes that smoke test mean something: "runs on GPU" vs. the honest "runs on GPU
-   because everything is dense and small, scaling claims unverified."
+5. ✅ **Make `LinearSolver`/`EigenSolver` (ARCHITECTURE.md §4.6) real protocols with a `Dense()`
+   implementation now, even though nothing else exists yet.** *(done 2026-07-24 — see
+   [plan](../docs/superpowers/plans/2026-07-23-linear-eigen-solver-protocols.md) and its
+   [design spec](../docs/superpowers/specs/2026-07-23-linear-eigen-solver-protocols-design.md))*
+   Every hardcoded `jnp.linalg.solve`/`jnp.linalg.eigvals` call in the live jitted scan engine
+   (`core/scan_continuation.py`) now routes through a `LinearSolver`/`EigenSolver` parameter,
+   defaulting to `Dense()`/`DenseEigen()` — two zero-field frozen dataclasses, exposed on
+   `continuation()` via a new `Solvers` bundle. `Dense`/`DenseEigen` (two classes, not one
+   `Dense()` reused for both, which the design spec found isn't viable — different `__call__`
+   signatures) are safe `jax.jit` static arguments by construction (value-based `__eq__`/`__hash__`
+   from having no fields), verified with a test that calls the engine twice with two
+   independently-constructed `Dense()` instances and confirms no spurious recompile. Custom-solver
+   routing was proven real, not decorative, with counting-solver test doubles at both the
+   low-level scan-function layer and the public `continuation()` layer. Numerically a no-op:
+   full suite green (134 passed) and `example_02`/`example_05`'s BifurcationKit.jl comparison
+   tables unchanged. Scoped to the live path only — `solvers/implicit.py` (fold refinement) and
+   the not-yet-wired `stability/`/`bifurcations/period_doubling.py` periodic-orbit code were left
+   untouched, per the design spec's explicit scope cut. This was the last unresolved v0.2
+   engineering-prep item; periodic-orbit feature work (collocation, Floquet multipliers,
+   period-doubling detection) is next.
 
 ---
 
