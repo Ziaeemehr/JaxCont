@@ -12,7 +12,9 @@ import jax.numpy as jnp
 from jax import jacfwd
 import pytest
 
-from jaxcont.bifurcations.events import BranchPoint, EventHit, Fold, Hopf, detect_events
+from jaxcont.bifurcations.events import (
+    BranchPoint, EventHit, Fold, Hopf, PeriodDoubling, NeimarkSacker, detect_events,
+)
 
 
 def test_fold_test_function_is_tangent_dp_component():
@@ -183,3 +185,74 @@ def test_dedup_merges_same_kind_but_not_cross_kind():
     )
 
     assert [(h.kind, h.p) for h in hits] == [("fold", 0.10), ("hopf", 0.12), ("hopf", 0.50)]
+
+
+def test_period_doubling_test_function_finds_real_multiplier_near_minus_one():
+    pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
+    point = BranchPoint(
+        p=0.0, u=jnp.zeros(1),
+        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, -0.8 + 0j, -0.8 + 0j]),
+    )
+    assert jnp.isclose(pd.test_function(point), 0.2, atol=1e-6)
+
+
+def test_period_doubling_test_function_at_exact_bifurcation():
+    pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
+    point = BranchPoint(
+        p=0.0, u=jnp.zeros(1),
+        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, -1.0 + 0j, -1.0 + 0j]),
+    )
+    assert jnp.isclose(pd.test_function(point), 0.0, atol=1e-6)
+
+
+def test_period_doubling_near_unit_circle_filter_excludes_far_multipliers():
+    # Regression for the false-positive bug found during design: once a real
+    # multiplier moves far enough past -1 (here -2.776, |real+1|=1.776), an
+    # unrelated multiplier that merely sits near a roughly constant distance
+    # from -1 (the decaying xy multiplier ~3.4e-6, |3.4e-6+1|~1.0) must NOT
+    # be picked as "closer to -1" just because 1.0 < 1.776 -- both are
+    # outside near_unit_circle=0.5 (|mag-1| = 1.776 and ~1.0 respectively),
+    # so nothing should be selected and test_function must return nan, not a
+    # spurious finite value that could register a false sign-change.
+    pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
+    point = BranchPoint(
+        p=0.0, u=jnp.zeros(1),
+        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, -2.776 + 0j, -2.776 + 0j]),
+    )
+    assert jnp.isnan(pd.test_function(point))
+
+
+def test_period_doubling_test_function_no_real_candidate_returns_nan():
+    pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
+    point = BranchPoint(
+        p=0.0, u=jnp.zeros(1),
+        eigenvalues=jnp.array([1.0 + 0j, 0.5 + 0.8j, 0.5 - 0.8j]),
+    )
+    assert jnp.isnan(pd.test_function(point))
+
+
+def test_neimark_sacker_test_function_finds_complex_pair_near_unit_circle():
+    ns = NeimarkSacker(raw_f=lambda u, p, args: u, mesh=None)
+    point = BranchPoint(
+        p=0.0, u=jnp.zeros(1),
+        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, 0.6 + 0.8j, 0.6 - 0.8j]),
+    )
+    assert jnp.isclose(ns.test_function(point), 0.0, atol=1e-6)
+
+
+def test_neimark_sacker_test_function_below_unit_circle():
+    ns = NeimarkSacker(raw_f=lambda u, p, args: u, mesh=None)
+    point = BranchPoint(
+        p=0.0, u=jnp.zeros(1),
+        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, 0.3 + 0.4j, 0.3 - 0.4j]),
+    )
+    assert jnp.isclose(ns.test_function(point), -0.5, atol=1e-6)
+
+
+def test_neimark_sacker_test_function_no_complex_candidate_returns_nan():
+    ns = NeimarkSacker(raw_f=lambda u, p, args: u, mesh=None)
+    point = BranchPoint(
+        p=0.0, u=jnp.zeros(1),
+        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, -0.8 + 0j, -0.8 + 0j]),
+    )
+    assert jnp.isnan(ns.test_function(point))

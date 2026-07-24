@@ -24,6 +24,7 @@ from jax import Array, jacfwd
 
 from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.stability.eigenvalue import compute_eigenvalues
+from jaxcont.stability.floquet import floquet_multipliers
 
 PyTree = Any
 
@@ -226,3 +227,131 @@ def detect_events(
         last_p_by_kind[hit.kind] = hit.p
         deduped.append(hit)
     return deduped
+
+
+@dataclass(frozen=True)
+class PeriodDoubling(Event):
+    """A period-doubling (flip) bifurcation of a periodic orbit.
+
+    Test function: a real Floquet multiplier crosses ``-1`` -- the
+    periodic-orbit analogue of ``Hopf``'s imaginary-axis crossing, but a
+    magnitude/sign condition on multipliers, not a real-part condition (see
+    ``docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md``).
+    Only meaningful for ``kind="periodic"`` branches (``point.eigenvalues``
+    must be Floquet multipliers, not equilibrium eigenvalues) -- using this
+    on an equilibrium branch is the mirror image of the existing
+    ``Hopf()``-on-periodic footgun: not enforced by a raise, just
+    meaningless.
+
+    ``raw_f``/``mesh`` are required (no meaningful default) because
+    ``refine`` must recompute Floquet multipliers at bisection midpoints via
+    ``stability.floquet.floquet_multipliers``, whose signature
+    (``raw_f, mesh, U, p``) is incompatible with ``detect_events``'s generic
+    ``rhs`` parameter (the assembled collocation *residual*, not the raw
+    ODE) -- so this event carries its own copy of what
+    ``periodic_orbit_problem`` was built with.
+    """
+
+    raw_f: Callable[[Array, Array, PyTree], Array]
+    mesh: Any
+    kind: str = "period_doubling"
+    tolerance: float = 1e-6
+    near_unit_circle: float = 0.5
+
+    def test_function(self, point: BranchPoint) -> float:
+        mult = point.eigenvalues
+        trivial_idx = jnp.argmin(jnp.abs(mult - 1.0))
+        keep = jnp.arange(mult.shape[0]) != trivial_idx
+        near_unit = jnp.abs(jnp.abs(mult) - 1.0) <= self.near_unit_circle
+        candidates_mask = keep & near_unit & (jnp.abs(jnp.imag(mult)) < self.tolerance)
+        if not jnp.any(candidates_mask):
+            return float("nan")
+        candidates = jnp.where(candidates_mask, mult, jnp.nan)
+        idx = jnp.nanargmin(jnp.abs(jnp.real(candidates) + 1.0))
+        return float(jnp.real(mult[idx]) + 1.0)
+
+    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+        p_left, p_right = left.p, right.p
+        u_left, u_right = left.u, right.u
+        t_left = self.test_function(left)
+        t_right = self.test_function(right)
+        for _ in range(max_iterations):
+            if abs(p_right - p_left) < tolerance:
+                break
+            p_mid = (p_left + p_right) / 2
+            alpha = (p_mid - p_left) / (p_right - p_left)
+            u_mid = u_left + alpha * (u_right - u_left)
+            mult_mid = floquet_multipliers(self.raw_f, self.mesh, u_mid, p_mid)
+            mid_point = BranchPoint(p=p_mid, u=u_mid, eigenvalues=mult_mid)
+            t_mid = self.test_function(mid_point)
+            # Three-way branch, not "left-half or else" -- see this file's
+            # existing Global Constraints (Hopf has the same shape, for the
+            # same reason: a two-way version degenerates whenever t_mid
+            # lands on an exact zero).
+            if t_left * t_mid < 0:
+                p_right, u_right, t_right = p_mid, u_mid, t_mid
+            elif t_mid * t_right < 0:
+                p_left, u_left, t_left = p_mid, u_mid, t_mid
+            else:
+                break
+        p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
+        return EventHit(
+            kind="period_doubling", p=float(p_bif), u=u_bif, index=index,
+            info={"method": "bisection"},
+        )
+
+
+@dataclass(frozen=True)
+class NeimarkSacker(Event):
+    """A Neimark-Sacker (torus) bifurcation of a periodic orbit.
+
+    Test function: a complex-conjugate pair of Floquet multipliers crosses
+    the unit circle away from the real axis. See ``PeriodDoubling``'s
+    docstring for the shared rationale (equilibrium-branch footgun,
+    ``raw_f``/``mesh`` fields, why ``detect_events``'s generic ``rhs`` isn't
+    used).
+    """
+
+    raw_f: Callable[[Array, Array, PyTree], Array]
+    mesh: Any
+    kind: str = "neimark_sacker"
+    tolerance: float = 1e-6
+    near_unit_circle: float = 0.5
+
+    def test_function(self, point: BranchPoint) -> float:
+        mult = point.eigenvalues
+        trivial_idx = jnp.argmin(jnp.abs(mult - 1.0))
+        keep = jnp.arange(mult.shape[0]) != trivial_idx
+        near_unit = jnp.abs(jnp.abs(mult) - 1.0) <= self.near_unit_circle
+        candidates_mask = keep & near_unit & (jnp.abs(jnp.imag(mult)) > self.tolerance)
+        if not jnp.any(candidates_mask):
+            return float("nan")
+        candidates = jnp.where(candidates_mask, mult, jnp.nan)
+        idx = jnp.nanargmin(jnp.abs(jnp.abs(candidates) - 1.0))
+        return float(jnp.abs(mult[idx]) - 1.0)
+
+    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+        p_left, p_right = left.p, right.p
+        u_left, u_right = left.u, right.u
+        t_left = self.test_function(left)
+        t_right = self.test_function(right)
+        for _ in range(max_iterations):
+            if abs(p_right - p_left) < tolerance:
+                break
+            p_mid = (p_left + p_right) / 2
+            alpha = (p_mid - p_left) / (p_right - p_left)
+            u_mid = u_left + alpha * (u_right - u_left)
+            mult_mid = floquet_multipliers(self.raw_f, self.mesh, u_mid, p_mid)
+            mid_point = BranchPoint(p=p_mid, u=u_mid, eigenvalues=mult_mid)
+            t_mid = self.test_function(mid_point)
+            if t_left * t_mid < 0:
+                p_right, u_right, t_right = p_mid, u_mid, t_mid
+            elif t_mid * t_right < 0:
+                p_left, u_left, t_left = p_mid, u_mid, t_mid
+            else:
+                break
+        p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
+        return EventHit(
+            kind="neimark_sacker", p=float(p_bif), u=u_bif, index=index,
+            info={"method": "bisection"},
+        )
