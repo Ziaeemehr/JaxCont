@@ -107,7 +107,7 @@ def periodic_orbit_problem(
         return mesh_states, coll_states, T
 
     def residual(U: Array, p: Array, args: PyTree) -> Array:
-        u_ref_coll, uref_prime_coll = args
+        u_ref_coll, uref_prime_coll, _raw_f, _mesh = args
         mesh_states, coll_states, T = unpack(U)
         v = jnp.concatenate([mesh_states[:, None, :], coll_states], axis=1)  # (ntst, ncol+1, n)
         # On GPU, jnp.einsum defaults to reduced (TensorFloat32-like)
@@ -134,7 +134,7 @@ def periodic_orbit_problem(
 
     U_guess = pack(mesh_guess, coll_guess, jnp.asarray(period0, dtype=mesh_guess.dtype))
     uref_prime_coll = jax.vmap(jax.vmap(lambda u: f(u, p0, None)))(coll_guess)
-    args: PyTree = (coll_guess, uref_prime_coll)
+    args: PyTree = (coll_guess, uref_prime_coll, f, mesh)
 
     p0_arr = jnp.asarray(p0, dtype=mesh_guess.dtype)
     # tol=1e-5, not differentiable_root's default 1e-8: this project runs

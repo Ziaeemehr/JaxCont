@@ -100,3 +100,18 @@ def test_periodic_orbit_problem_mesh_size_scaling_sanity():
 
     assert err_coarse < 1e-5
     assert err_fine < 1e-5
+
+
+def test_periodic_orbit_problem_args_carries_raw_f_and_mesh():
+    u_trajectory, t_trajectory = _coarse_wrong_trajectory()
+    mesh = Collocation(ntst=10, ncol=4)
+    prob = periodic_orbit_problem(_rhs, u_trajectory, t_trajectory, 5.5, 1.0, mesh)
+
+    assert len(prob.args) == 4
+    u_ref_coll, uref_prime_coll, raw_f, returned_mesh = prob.args
+    assert raw_f is _rhs
+    assert returned_mesh is mesh
+    # Residual must still evaluate correctly with the extended args (this
+    # exercises the fixed destructuring line inside residual()).
+    r = prob.f(prob.u0, prob.p0, prob.args)
+    assert float(jnp.linalg.norm(r)) < 1e-5
