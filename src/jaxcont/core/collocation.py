@@ -10,6 +10,8 @@ core/scan_continuation.py's role as the engine's pure-numerics layer.
 from __future__ import annotations
 
 import equinox as eqx
+import jax
+import jax.numpy as jnp
 import numpy as np
 
 
@@ -94,3 +96,42 @@ def collocation_matrices(ncol: int):
     D = lagrange_diff_matrix(local_nodes)
     E = lagrange_eval_weights(local_nodes, 1.0)
     return D, E, gauss, gw
+
+
+def monodromy_matrix(raw_f, D: "jnp.ndarray", E: "jnp.ndarray", h: float, mesh_states, coll_states, T, p):
+    """``(n, n)`` monodromy matrix ``Phi(T)`` via a block linear recursion
+    across the ``ntst`` mesh intervals, reusing the local differentiation
+    matrix ``D`` and extrapolation weights ``E`` already built for the
+    collocation residual (see ``collocation_matrices``). ``raw_f(u, p, args)``
+    is the ODE right-hand side (``args=None`` internally) -- NOT the
+    assembled collocation residual. No re-integration of a separate
+    variational-equation IVP: this is a linearization of the same defect/
+    continuity equations the residual already encodes, solved for
+    sensitivity instead of state. Verified during design against the
+    closed-form circle system's Floquet multipliers -- see
+    docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md."""
+    ntst, n = mesh_states.shape
+    ncol = coll_states.shape[1]
+    eye_n = jnp.eye(n)
+
+    def interval_map(mesh_state_i, coll_states_i):
+        # Jacobian df/du at each of this interval's ncol collocation points.
+        Jm = jax.vmap(jax.jacfwd(lambda u: raw_f(u, p, None)))(coll_states_i)  # (ncol, n, n)
+
+        def build_A_row(m):
+            def build_block(k):
+                coeff = D[m + 1, k + 1]
+                block = coeff * eye_n
+                return jnp.where(k == m, block - T * h * Jm[m], block)
+
+            return jax.vmap(build_block)(jnp.arange(ncol))
+
+        A_blocks = jax.vmap(build_A_row)(jnp.arange(ncol))  # (ncol, ncol, n, n)
+        A = jnp.transpose(A_blocks, (0, 2, 1, 3)).reshape(ncol * n, ncol * n)
+        b0 = (-D[1:, 0][:, None, None] * eye_n[None, :, :]).reshape(ncol * n, n)
+        S = jnp.linalg.solve(A, b0).reshape(ncol, n, n)
+        return E[0] * eye_n + jnp.sum(E[1:][:, None, None] * S, axis=0)
+
+    M_all = jax.vmap(interval_map)(mesh_states, coll_states)  # (ntst, n, n)
+    Phi, _ = jax.lax.scan(lambda carry, M: (M @ carry, None), eye_n, M_all)
+    return Phi
