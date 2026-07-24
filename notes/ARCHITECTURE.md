@@ -190,8 +190,10 @@ designed up front. Everything in §6 is deferred.
 
 ### 4.1 Problem — ONE type
 
-Replaces the current split between `ContinuationProblem` (core) and
-`EquilibriumProblem`/`PeriodicOrbitProblem` (problems/).
+Replaces the original split between `ContinuationProblem` (core) and
+`EquilibriumProblem`/`PeriodicOrbitProblem` (problems/) -- the latter is now the
+`periodic_orbit_problem` factory (`problems/periodic.py`), a collocation-based `BifProblem`
+builder, not a class.
 
 ```python
 class BifProblem(eqx.Module):        # a PyTree; frozen dataclass-like

@@ -64,6 +64,14 @@ def periodic_orbit_problem(
     than the default corrector tolerance can reliably satisfy every step,
     which stalls continuation (every step rejected, step size shrinks to
     ``ds_min``, branch terminates after the initial point).
+
+    Note: do not pass ``events=[jc.Hopf()]`` for the returned problem --
+    ``Hopf`` eigendecomposes the full collocation Jacobian, which is not a
+    meaningful dynamical quantity for a periodic orbit (the periodic-orbit
+    analogues, period-doubling and Neimark-Sacker detection, are future
+    features, not yet implemented). ``events=[jc.Fold()]`` is fine and
+    meaningful (fold-of-cycles) -- ``Fold``'s tangent-based test is
+    dimension-agnostic and needs no special-casing here.
     """
     ntst, ncol = mesh.ntst, mesh.ncol
     n = u_trajectory.shape[-1]
