@@ -1,9 +1,11 @@
 # JaxCont Roadmap — Single Source of Truth
 
-**Last updated:** 2026-07-22
-**Current version:** 0.1.0 — **published to PyPI** (https://pypi.org/project/jaxcont/), tagged
-`v0.1.0`. Zenodo DOI archival deliberately deferred until a more mature release (not a v0.1.0
-blocker — `CITATION.cff` metadata is ready whenever it happens).
+**Last updated:** 2026-07-24
+**Current version:** 0.2.0 — **published to PyPI** (https://pypi.org/project/jaxcont/), tagged
+`v0.2.0`. Adds periodic-orbit continuation, Floquet multipliers, period-doubling/Neimark–Sacker
+detection, and limit-cycle examples on top of v0.1.0's equilibrium continuation. Zenodo DOI archival
+still deliberately deferred until a more mature release (not a blocker — `CITATION.cff` metadata is
+ready whenever it happens).
 **Scope decision:** Ship a focused **equilibrium continuation** library first. See [PROJECT_REVIEW_2026-07.md](PROJECT_REVIEW_2026-07.md) for the full rationale.
 **API design:** Committed to a functional, diffrax-style surface (`continuation(problem, alg, ...)`).
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provisional v0.2+ API.
