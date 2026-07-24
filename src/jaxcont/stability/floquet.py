@@ -1,117 +1,79 @@
 """
-Floquet multipliers for periodic orbit stability analysis.
+Floquet multipliers for periodic-orbit stability, via the collocation
+monodromy matrix -- see
+docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md.
 """
 
-from typing import Tuple
+from __future__ import annotations
+
+from typing import Any, Callable
+
+import jax
 import jax.numpy as jnp
-from jax import Array, jacfwd
-from scipy.integrate import solve_ivp
-import numpy as np
+from jax import Array
+
+from jaxcont.core.collocation import Collocation, collocation_matrices, monodromy_matrix
+from jaxcont.solvers.protocols import DenseEigen, EigenSolver
+
+PyTree = Any
 
 
-def compute_floquet_multipliers(
-    rhs: callable,
-    u0: Array,
-    period: float,
-    params: dict,
-    **kwargs
+def floquet_multipliers(
+    raw_f: Callable[[Array, Array, PyTree], Array],
+    mesh: Collocation,
+    U: Array,
+    p: Array,
+    eigen_solver: EigenSolver = DenseEigen(),
 ) -> Array:
-    """
-    Compute Floquet multipliers for a periodic orbit.
-    
-    Floquet multipliers are eigenvalues of the monodromy matrix,
-    which is the linearized flow map over one period.
-    
-    Args:
-        rhs: Right-hand side function f(u, params)
-        u0: Initial point on periodic orbit
-        period: Period of the orbit
-        params: System parameters
-        **kwargs: Additional arguments for integration
-    
-    Returns:
-        Array of Floquet multipliers (one will always be 1 due to time-translation)
-    """
-    n = len(u0)
-    
-    # Integrate the variational equation to get monodromy matrix
-    # We need to solve: dΦ/dt = J(u(t)) * Φ, with Φ(0) = I
-    
-    def augmented_rhs(t, y):
-        """Augmented system: [u, vec(Φ)]"""
-        u = y[:n]
-        phi_vec = y[n:]
-        phi = phi_vec.reshape((n, n))
-        
-        # Compute du/dt
-        dudt = np.array(rhs(jnp.array(u), params))
-        
-        # Compute Jacobian
-        def f_jac(u_eval):
-            return rhs(u_eval, params)
-        jac = np.array(jacfwd(f_jac)(jnp.array(u)))
-        
-        # Compute dΦ/dt = J * Φ
-        dphidt = jac @ phi
-        
-        # Return augmented vector
-        return np.concatenate([dudt, dphidt.flatten()])
-    
-    # Initial conditions: [u0, I]
-    y0 = np.concatenate([np.array(u0), np.eye(n).flatten()])
-    
-    # Integrate over one period
-    sol = solve_ivp(
-        augmented_rhs,
-        (0, period),
-        y0,
-        method='RK45',
-        rtol=1e-8,
-        atol=1e-10
-    )
-    
-    # Extract monodromy matrix
-    phi_final = sol.y[n:, -1].reshape((n, n))
-    
-    # Compute eigenvalues (Floquet multipliers)
-    multipliers = jnp.linalg.eigvals(jnp.array(phi_final))
-    
-    # Sort by magnitude (descending)
-    idx = jnp.argsort(-jnp.abs(multipliers))
-    return multipliers[idx]
+    """Floquet multipliers (eigenvalues of the monodromy matrix ``Phi(T)``)
+    at one converged periodic-orbit branch point. ``U`` is the flat
+    collocation unknown vector (same layout as a periodic ``BifProblem``'s
+    ``u0``: ``ntst`` mesh-point states, then ``ntst*ncol`` collocation-point
+    states, then the period ``T``). ``raw_f`` is the ODE right-hand side
+    (``args=None`` internally), not the assembled collocation residual.
+    ``mesh`` has no ``n`` (state dimension) field, so it is derived
+    algebraically from ``U``'s length."""
+    ntst, ncol = mesh.ntst, mesh.ncol
+    n = (U.shape[-1] - 1) // (ntst * (1 + ncol))
+    h = 1.0 / ntst
+
+    D_np, E_np, _, _ = collocation_matrices(ncol)
+    D, E = jnp.asarray(D_np), jnp.asarray(E_np)
+
+    mesh_states = U[: ntst * n].reshape(ntst, n)
+    coll_states = U[ntst * n : ntst * n + ntst * ncol * n].reshape(ntst, ncol, n)
+    T = U[-1]
+
+    Phi = monodromy_matrix(raw_f, D, E, h, mesh_states, coll_states, T, p)
+    return eigen_solver(Phi)
 
 
-def analyze_periodic_orbit_stability(
-    floquet_multipliers: Array,
-    tolerance: float = 1e-6
-) -> dict:
-    """
-    Analyze stability of periodic orbit based on Floquet multipliers.
-    
-    Args:
-        floquet_multipliers: Floquet multipliers
-        tolerance: Tolerance for unit circle check
-    
-    Returns:
-        Dictionary with stability information
-    """
-    abs_multipliers = jnp.abs(floquet_multipliers)
-    
-    # Count multipliers outside unit circle (ignoring the trivial one at 1)
-    # Find the trivial multiplier
-    trivial_idx = jnp.argmin(jnp.abs(abs_multipliers - 1.0))
-    
-    # Check others
-    max_mult = 0.0
-    for i, mult in enumerate(abs_multipliers):
-        if i != trivial_idx:
-            max_mult = max(max_mult, float(mult))
-    
-    is_stable = max_mult < 1.0 + tolerance
-    
-    return {
-        "is_stable": bool(is_stable),
-        "max_multiplier": float(max_mult),
-        "multipliers": floquet_multipliers,
-        "n_unstable": int(jnp.sum((abs_multipliers > 1.0 + tolerance))),
-    }
+def branch_floquet_multipliers(
+    raw_f: Callable[[Array, Array, PyTree], Array],
+    mesh: Collocation,
+    states: Array,
+    params: Array,
+    eigen_solver: EigenSolver = DenseEigen(),
+) -> Array:
+    """Vectorized (vmap) Floquet multipliers along a stored periodic branch
+    -- the periodic-orbit analogue of
+    ``core.scan_continuation.branch_eigenvalues``."""
+    def at(U, p):
+        return floquet_multipliers(raw_f, mesh, U, p, eigen_solver)
+
+    return jax.vmap(at)(states, params)
+
+
+def floquet_stable(multipliers: Array) -> Array:
+    """``(n_valid,)`` stability booleans from ``(n_valid, n)`` Floquet
+    multipliers. A periodic orbit always has exactly one trivial multiplier
+    equal to ``1`` (tangent to the flow) -- identified per-point as the one
+    closest to ``1`` (``argmin(|multiplier - 1|)``) and excluded. Stability
+    is a magnitude condition on the remaining multipliers (inside the unit
+    circle), unlike equilibria's real-part condition."""
+    def stable_at(row: Array) -> Array:
+        trivial_idx = jnp.argmin(jnp.abs(row - 1.0))
+        is_trivial = jnp.arange(row.shape[0]) == trivial_idx
+        return jnp.all(jnp.where(is_trivial, True, jnp.abs(row) < 1.0))
+
+    return jax.vmap(stable_at)(multipliers)
