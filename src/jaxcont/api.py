@@ -334,6 +334,17 @@ def _run_scan(
     reassemble a legacy-shaped :class:`ContinuationSolution` so
     detection/plotting reuse existing code.
     """
+    if problem.kind == "periodic" and settings.compute_stability:
+        raise ValueError(
+            "settings.compute_stability=True is not supported for "
+            "kind=\"periodic\" problems: the equilibrium stability pass "
+            "eigendecomposes df/du, which for a periodic problem's f is "
+            "the entire collocation Jacobian, not a meaningful dynamical "
+            "quantity. Pass settings=ContinuationPar(compute_stability=False) "
+            "instead. Floquet multipliers (the periodic-orbit analogue of "
+            "stability) are a planned future feature, not yet implemented."
+        )
+
     from jaxcont.core.scan_continuation import branch_eigenvalues
 
     args = problem.args
