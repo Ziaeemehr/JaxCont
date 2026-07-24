@@ -376,8 +376,10 @@ def test_periodic_orbit_problem_refines_to_exact_circle():
 
     # Tolerances here (1e-5) are float32-achievable, not float64-tight --
     # this project runs float32 by default (no jax_enable_x64 anywhere).
-    # Verified during design under real float32: T error ~3.5e-8, radius
-    # error ~1.0e-8 -- both comfortably inside 1e-5 with margin to spare.
+    # Verified during design under real float32 (with the matmul-precision
+    # fix in residual() -- without it, this system doesn't converge at
+    # all, see periodic.py): T error ~3.0e-7, radius error ~2.4e-7 -- both
+    # comfortably inside 1e-5 with margin to spare.
     assert abs(float(T) - 2 * np.pi) < 1e-5
     radii = jnp.linalg.norm(mesh_states, axis=1)
     assert float(jnp.max(jnp.abs(radii - 1.0))) < 1e-5
@@ -390,15 +392,25 @@ def test_periodic_orbit_problem_residual_is_near_zero_at_u0():
     prob = periodic_orbit_problem(_rhs, u_trajectory, t_trajectory, 5.5, 1.0, mesh)
 
     r = prob.f(prob.u0, prob.p0, prob.args)
-    # Verified during design under real float32: residual norm ~7e-8.
+    # Verified during design under real float32: residual norm ~3.4e-6 --
+    # the achievable floor for this ~100-dim system at this precision
+    # (hence differentiable_root's tol=1e-5 in periodic.py, not the
+    # unreachable default 1e-8).
     assert float(jnp.linalg.norm(r)) < 1e-5
 
 
 def test_periodic_orbit_problem_mesh_size_scaling_sanity():
-    # Regression for the mesh-size sanity check verified during design: a
-    # finer mesh (ntst=15) must converge at least as accurately as the
-    # coarser one (ntst=10) verified in the previous test, to the same
-    # exact circle.
+    # Regression for the mesh-size sanity check verified during design:
+    # both a coarser (ntst=10) and finer (ntst=15) mesh converge to the
+    # same exact circle to float32-achievable precision. This does NOT
+    # assert finer-is-more-accurate (err_fine <= err_coarse): verified
+    # during design, at this precision both mesh sizes sit at the float32
+    # noise floor (~1e-7 range) where floating-point rounding, not
+    # discretization error, dominates -- coarse measured ~2.4e-7, fine
+    # ~3.6e-7 (fine slightly *worse*, not better). Asserting an ordering
+    # here would be asserting noise, not a real discretization-order
+    # property; that requires float64 to observe meaningfully, which this
+    # project doesn't run by default.
     u_trajectory, t_trajectory = _coarse_wrong_trajectory()
     mesh_coarse = Collocation(ntst=10, ncol=4)
     mesh_fine = Collocation(ntst=15, ncol=4)
@@ -413,11 +425,8 @@ def test_periodic_orbit_problem_mesh_size_scaling_sanity():
     err_coarse = float(jnp.max(jnp.abs(jnp.linalg.norm(mesh_states_coarse, axis=1) - 1.0)))
     err_fine = float(jnp.max(jnp.abs(jnp.linalg.norm(mesh_states_fine, axis=1) - 1.0)))
 
-    # float32-achievable tolerances -- verified during design: coarse
-    # (ntst=10) radius error ~1.0e-8, fine (ntst=15) ~8.8e-9.
     assert err_coarse < 1e-5
     assert err_fine < 1e-5
-    assert err_fine <= err_coarse
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -486,6 +495,14 @@ def periodic_orbit_problem(
     passed to ``jc.continuation()`` (that's an ordinary call into the
     existing scan engine). Making construction itself differentiable is a
     possible future enhancement, not required by the current design spec.
+
+    Note: pass ``settings=jc.ContinuationPar(newton_tol=1e-5, ...)`` (not
+    the default ``1e-6``) to ``jc.continuation()`` for the returned
+    problem. The collocation residual's achievable precision floor on this
+    project's default float32 (~3e-6, verified during design) is tighter
+    than the default corrector tolerance can reliably satisfy every step,
+    which stalls continuation (every step rejected, step size shrinks to
+    ``ds_min``, branch terminates after the initial point).
     """
     ntst, ncol = mesh.ntst, mesh.ncol
     n = u_trajectory.shape[-1]
@@ -524,10 +541,19 @@ def periodic_orbit_problem(
         u_ref_coll, uref_prime_coll = args
         mesh_states, coll_states, T = unpack(U)
         v = jnp.concatenate([mesh_states[:, None, :], coll_states], axis=1)  # (ntst, ncol+1, n)
-        Dv = jnp.einsum("jk,ikc->ijc", D, v)
+        # On GPU, jnp.einsum defaults to reduced (TensorFloat32-like)
+        # matmul precision (~1e-3 relative), which corrupts this
+        # collocation Jacobian's entries (D's rows can be O(10)) badly
+        # enough to stall Newton convergence entirely -- force genuine
+        # float32 precision for these two contractions. Verified during
+        # design: without this, residual plateaus at ~0.02 regardless of
+        # Newton tolerance/iteration count; with it, ~3.4e-6 (the real
+        # float32 floor for this system).
+        with jax.default_matmul_precision("float32"):
+            Dv = jnp.einsum("jk,ikc->ijc", D, v)
+            extrap = jnp.einsum("k,ikc->ic", E, v)  # (ntst, n)
         f_at_v = jax.vmap(jax.vmap(lambda u: f(u, p, None)))(v[:, 1:, :])
         defect = Dv[:, 1:, :] - T * h * f_at_v  # (ntst, ncol, n)
-        extrap = jnp.einsum("k,ikc->ic", E, v)  # (ntst, n)
         u_next = jnp.roll(mesh_states, -1, axis=0)
         continuity = u_next - extrap  # (ntst, n)
         phase = jnp.sum(
@@ -544,15 +570,13 @@ def periodic_orbit_problem(
     p0_arr = jnp.asarray(p0, dtype=mesh_guess.dtype)
     # tol=1e-5, not differentiable_root's default 1e-8: this project runs
     # float32 by default (no jax_enable_x64 anywhere -- see
-    # tests/test_functional_api.py's "tol=1e-6 (float32-reachable)" note).
-    # A ~100-dimensional collocation Newton solve at tol=1e-8 cannot
-    # converge in float32 -- worse, letting it keep iterating past
-    # float32's noise floor actively degrades the result (the linear solve
-    # each iteration becomes noise-dominated once residuals are near
-    # machine epsilon, and repeated exposure to that over many iterations
-    # accumulates error rather than improving it). Verified during design:
-    # default tol=1e-8 left residual norm ~0.02 after 50 iterations; tol=1e-5
-    # converges cleanly to residual norm ~7e-8 in far fewer iterations.
+    # tests/test_functional_api.py's "tol=1e-6 (float32-reachable)" note),
+    # and even with the matmul-precision fix inside residual() above, this
+    # ~100-dimensional collocation Newton solve's achievable float32
+    # residual floor is ~3e-6 -- below default tol=1e-8's threshold, which
+    # would just burn all max_iter iterations without ever satisfying
+    # "done". Verified during design: with tol=1e-5 (comfortably above
+    # that floor), residual converges cleanly to ~3.4e-6.
     U0 = differentiable_root(lambda U, p: residual(U, p, args), U_guess, p0_arr, tol=1e-5)
 
     return BifProblem(f=residual, u0=U0, p0=p0_arr, args=args, kind="periodic")
@@ -707,10 +731,19 @@ def test_compute_stability_true_raises_for_periodic_problem():
 
 
 def test_compute_stability_false_runs_cleanly_for_periodic_problem():
+    # newton_tol=1e-5, not ContinuationPar's default 1e-6: the collocation
+    # residual's achievable float32 precision floor (~3.4e-6, verified
+    # during design -- see periodic.py's periodic_orbit_problem docstring)
+    # is tighter than the default corrector tolerance can reliably satisfy
+    # every step, which stalls continuation (every step rejected, n_valid
+    # stuck at 1) rather than raising -- this test would otherwise fail
+    # silently on the n_valid assertion below, not on an obvious error.
     prob = _periodic_problem()
     sol = jc.continuation(
         prob, p_span=(1.0, 2.0),
-        settings=jc.ContinuationPar(compute_stability=False, ds=0.05, max_steps=50),
+        settings=jc.ContinuationPar(
+            compute_stability=False, ds=0.05, max_steps=50, newton_tol=1e-5
+        ),
     )
     assert sol.branch.n_valid > 1
 
@@ -736,7 +769,9 @@ def test_fold_events_zero_false_positives_on_periodic_branch():
     prob = _periodic_problem()
     sol = jc.continuation(
         prob, p_span=(1.0, 2.0),
-        settings=jc.ContinuationPar(compute_stability=False, ds=0.05, max_steps=50),
+        settings=jc.ContinuationPar(
+            compute_stability=False, ds=0.05, max_steps=50, newton_tol=1e-5
+        ),
         events=[jc.Fold()],
     )
     assert sol.branch.n_valid > 1
