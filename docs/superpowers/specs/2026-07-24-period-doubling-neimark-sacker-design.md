@@ -57,14 +57,34 @@ real Floquet multipliers (shipped in the prior sub-project).
 Both events identify and exclude the trivial multiplier the same way `stability/floquet.floquet_stable`
 already does — `argmin(|multiplier - 1|)` — before applying their own test:
 
-- **`PeriodDoubling`**: among the remaining multipliers, filter to real ones (`|imag| < tolerance`), pick
+- **`PeriodDoubling`**: among the remaining multipliers, filter to those both (a) real (`|imag| <
+  tolerance`) and (b) near the unit circle (`|magnitude - 1| < near_unit_circle`, see below), then pick
   the one closest to `-1` (`argmin(|multiplier + 1|)`), test function = `real(multiplier) + 1`. Returns
   `nan` (never `inf`, for the same reason `Hopf` uses `nan` — avoids a false sign-change when the
-  branch's multiplier structure merely transitions from real to complex) if no real candidate remains
-  after excluding the trivial multiplier.
-- **`NeimarkSacker`**: among the remaining multipliers, filter to complex ones (`|imag| > tolerance`),
-  pick the pair with `|multiplier|` closest to `1` (`argmin(||multiplier| - 1|)`), test function =
-  `|multiplier| - 1`. Returns `nan` if no complex candidate remains.
+  branch's multiplier structure merely transitions from real to complex) if no candidate remains after
+  filtering.
+- **`NeimarkSacker`**: among the remaining multipliers, filter to those both (a) complex (`|imag| >
+  tolerance`) and (b) near the unit circle (`|magnitude - 1| < near_unit_circle`), then pick the pair
+  with `|multiplier|` closest to `1` (`argmin(||multiplier| - 1|)`), test function = `|multiplier| - 1`.
+  Returns `nan` if no candidate remains after filtering.
+
+**The near-unit-circle filter is required, not optional — found by end-to-end verification, not design
+reasoning alone.** Without it, `argmin(|multiplier + 1|)`/`argmin(||multiplier| - 1|)` can silently
+*switch* which physical multiplier it tracks as the branch evolves: once the true transverse multiplier
+moves far enough past `-1` (e.g. `real = -2.78`, `|real + 1| = 1.78`), an unrelated multiplier that
+merely sits at a roughly constant distance from `-1` (e.g. the circle system's always-decaying multiplier
+`≈ 3.4e-6`, `|3.4e-6 + 1| ≈ 1.0`) can become the argmin instead, purely because `1.0 < 1.78` — with no
+physical crossing anywhere nearby. This produces a real false-positive `PeriodDoubling` detection: verified
+directly against `jc.continuation()` on the `circle ⊕ transverse` system (`β=π/T`, `α` sweep `-0.1→0.1`)
+BEFORE adding this filter, which reported two hits — the genuine one at `p≈-2.8e-7` (correct) and a
+spurious second one at `p≈0.110` (exactly where `|−exp(αT) + 1|` first exceeds `|3.4e-6 + 1| ≈ 1`,
+confirming the mechanism). Adding the filter (`near_unit_circle`, a new field on both classes, default
+`0.5`) eliminated the false positive with the same sweep, and a follow-up check across a *wider* sweep
+(`-0.1 → 0.3`, deliberately re-exercising the exact range that produced the false positive) confirmed
+exactly one detection, at the correct point. `near_unit_circle=0.5` was chosen empirically during this
+verification (not a value from the dead stub, which used `0.1` — too tight for even a moderate `α` sweep,
+since `|magnitude - 1|` grows quickly with `α·T`) as wide enough to track a multiplier through a
+realistic sweep range while still excluding multipliers that were never near the circle to begin with.
 
 Both `refine()` methods bisect exactly like `Hopf.refine` does today: three-way bisection (not a
 two-way "left-half-or-else", which degenerates whenever the midpoint test value lands on an exact zero —
@@ -76,7 +96,8 @@ incompatible with `detect_events`'s existing `rhs` parameter (the 2-arg equilibr
 ODE — using it here would repeat `Hopf`'s exact footgun in reverse). Rather than changing `Event`,
 `BranchPoint`, or `detect_events` to thread `raw_f`/`mesh` through generically (which the Global
 Constraints below rule out), `PeriodDoubling`/`NeimarkSacker` each carry `raw_f`/`mesh` as their own
-required constructor fields, exactly the way `Hopf` already carries `tolerance` — e.g.
+required constructor fields (plus `tolerance: float = 1e-6` and `near_unit_circle: float = 0.5`,
+both defaulted), exactly the way `Hopf` already carries `tolerance` — e.g.
 `jc.PeriodDoubling(raw_f=my_rhs, mesh=my_mesh)`. `refine` ignores the generic `rhs` argument `detect_events`
 passes in and uses `self.raw_f`/`self.mesh` instead. This keeps the `Event` protocol and `detect_events`
 completely unchanged, at the cost of the caller supplying `raw_f`/`mesh` a second time (redundant with what
@@ -114,6 +135,15 @@ closed-form prediction to float32 precision, including both exact-bifurcation ca
 system's transverse multiplier came out `-1.0000045` (predicted exactly `-1`), and the NS system's
 transverse pair had magnitude `≈1.0000035` (predicted exactly `1`).
 
+**End-to-end verification against real `PeriodDoubling`/`NeimarkSacker` `Event` code** (not just the
+closed-form multipliers above) additionally confirmed, after the near-unit-circle fix described above:
+sweeping `α` from `-0.05` to `0.05` with `events=[PeriodDoubling(...)]` on the `β=π/T` system detects
+exactly one hit, at `p≈-4.6e-7`; the symmetric `NeimarkSacker(...)` sweep on the `β=0.3` system detects
+exactly one hit, at `p≈-4.6e-7`; running each event type against the *other* system produces zero hits in
+both directions; and re-running the originally-problematic wider sweep (`-0.1 → 0.3`, `β=π/T`,
+`PeriodDoubling`) after the fix produces exactly one hit, at `p≈-2.8e-7` — matching `α=0` to well within
+bisection tolerance in every case.
+
 ## Symmetric footgun documentation
 
 `PeriodDoubling()`/`NeimarkSacker()` on an **equilibrium** branch is the mirror image of the existing
@@ -138,7 +168,10 @@ reasoning.
 3. **Zero false positives**: run `NeimarkSacker(raw_f=rhs, mesh=mesh)` detection on the `β=π/T` (PD)
    system and `PeriodDoubling(raw_f=rhs, mesh=mesh)` detection on the `β=0.3` (NS) system; assert zero
    detections in both — confirms each test function doesn't fire on the other's bifurcation type.
-4. **Regression**: existing `Fold`/`Hopf` tests untouched; full suite green.
+4. **Near-unit-circle filter regression**: sweep `α` from `-0.1` to `0.3` (`β=π/T`) with
+   `events=[jc.PeriodDoubling(...)]` and assert exactly one detection (not two) — regression test for the
+   candidate-switching false positive found and fixed during design (see Architecture above).
+5. **Regression**: existing `Fold`/`Hopf` tests untouched; full suite green.
 
 ## File layout
 
