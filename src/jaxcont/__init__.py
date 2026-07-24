@@ -24,6 +24,8 @@ from jaxcont.api import (
     Event,
     Fold,
     Hopf,
+    PeriodDoubling,
+    NeimarkSacker,
     EventHit,
     Branch,
     ContinuationResult,
@@ -50,12 +52,16 @@ from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolv
 # Stability analysis
 from jaxcont.stability.eigenvalue import compute_eigenvalues, analyze_stability
 
-# NOTE: v0.1.0 ships equilibria only. Periodic-orbit / Floquet / BVP / period-
-# doubling APIs are experimental stubs and are intentionally NOT exported at
-# the top level (see the project roadmap). They remain importable from their
-# submodules for development, e.g.:
+# NOTE: v0.1.0 shipped equilibria only. Periodic-orbit continuation and
+# Floquet-multiplier computation are real (not stubs) but intentionally not
+# exported at the top level yet (see the project roadmap) -- import from
+# their submodules, e.g.:
 #     from jaxcont.problems.periodic import periodic_orbit_problem
-#     from jaxcont.stability.floquet import compute_floquet_multipliers
+#     from jaxcont.stability.floquet import floquet_multipliers
+# The bifurcation-detection Events that consume them (Fold, Hopf,
+# PeriodDoubling, NeimarkSacker) ARE exported at the top level above, since
+# events=[...] is passed to the top-level continuation() call regardless of
+# problem kind. BVP continuation remains an unimplemented stub.
 
 # Utilities
 from jaxcont.utils.config import Config
@@ -74,6 +80,8 @@ __all__ = [
     "Event",
     "Fold",
     "Hopf",
+    "PeriodDoubling",
+    "NeimarkSacker",
     "EventHit",
     "Branch",
     "ContinuationResult",
