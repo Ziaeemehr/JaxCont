@@ -648,3 +648,57 @@ def test_plot_equilibria_uses_neutral_style_without_stability_data():
 def test_plot_equilibria_rejects_a_problem():
     with pytest.raises(TypeError, match="ContinuationResult or Branch"):
         plot_equilibria(_linear_spiral_problem(), 0.0)
+
+
+from jaxcont.viz.phase_plane import plot_trajectory
+
+
+def test_plot_trajectory_integrates_toward_the_stable_spiral():
+    """dx/dt = y - x, dy/dt = -x - y has a stable spiral at the origin."""
+    problem = _linear_spiral_problem()
+    fig, ax = plt.subplots()
+
+    returned_fig = plot_trajectory(
+        problem, u0=jnp.array([1.5, 0.0]), p=0.0, t_span=(0.0, 20.0),
+        n_points=400, ax=ax,
+    )
+
+    assert returned_fig is fig
+    line = ax.get_lines()[0]
+    xs, ys = line.get_xdata(), line.get_ydata()
+    np.testing.assert_allclose([xs[0], ys[0]], [1.5, 0.0], atol=1e-6)
+    assert np.hypot(xs[-1], ys[-1]) < 1e-4
+
+
+def test_plot_trajectory_accepts_a_precomputed_array():
+    states = np.column_stack([np.linspace(0.0, 1.0, 50), np.linspace(1.0, 0.0, 50)])
+    fig, ax = plt.subplots()
+
+    plot_trajectory(states, ax=ax, arrow=False)
+
+    line = ax.get_lines()[0]
+    np.testing.assert_allclose(line.get_xdata(), states[:, 0])
+    np.testing.assert_allclose(line.get_ydata(), states[:, 1])
+
+
+def test_plot_trajectory_rejects_mixing_the_two_calling_forms():
+    states = np.zeros((10, 2))
+    with pytest.raises(TypeError, match="takes no u0"):
+        plot_trajectory(states, u0=jnp.array([1.0, 0.0]))
+
+
+def test_plot_trajectory_requires_all_integration_arguments():
+    with pytest.raises(TypeError, match="requires u0, p and t_span"):
+        plot_trajectory(_linear_spiral_problem(), u0=jnp.array([1.0, 0.0]))
+
+
+def test_plot_trajectory_rejects_a_wrongly_shaped_array():
+    with pytest.raises(ValueError, match=r"\(n_steps, 2\)"):
+        plot_trajectory(np.zeros((10, 3)))
+
+
+def test_plot_trajectory_rejects_three_state_problem():
+    with pytest.raises(NotImplementedError, match="n=3"):
+        plot_trajectory(
+            _three_state_problem(), u0=jnp.ones(3), p=0.0, t_span=(0.0, 1.0)
+        )

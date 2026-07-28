@@ -434,3 +434,128 @@ def plot_equilibria(
         seen_labels.add(label)
 
     return fig
+
+
+def _integrate(problem, u0, p, t_span, n_points, rtol, atol) -> np.ndarray:
+    """Integrate the frozen right-hand side with scipy's solve_ivp.
+
+    scipy is already a hard dependency, so this needs no optional extra. The
+    right-hand side is jitted once; the per-step JAX -> NumPy round trip is
+    negligible for a 2D system over a plotting-length interval.
+    """
+    from scipy.integrate import solve_ivp
+
+    _require_2d(problem)
+    rhs = jax.jit(problem.as_rhs(p))
+
+    def scipy_rhs(_t, y):
+        return np.asarray(rhs(jnp.asarray(y)), dtype=float)
+
+    solution = solve_ivp(
+        scipy_rhs,
+        (float(t_span[0]), float(t_span[1])),
+        np.asarray(u0, dtype=float),
+        t_eval=np.linspace(float(t_span[0]), float(t_span[1]), n_points),
+        rtol=rtol,
+        atol=atol,
+    )
+    if not solution.success:
+        raise RuntimeError(f"Trajectory integration failed: {solution.message}")
+    return solution.y.T
+
+
+def plot_trajectory(
+    problem,
+    u0=None,
+    p=None,
+    t_span: Optional[Tuple[float, float]] = None,
+    *,
+    n_points: int = 1000,
+    rtol: float = 1e-8,
+    atol: float = 1e-10,
+    arrow: bool = True,
+    color: str = "#262626",
+    ax: Optional[plt.Axes] = None,
+    figsize: Tuple[float, float] = DEFAULT_FIGSIZE,
+    **kwargs,
+) -> plt.Figure:
+    """
+    Draw a trajectory of a 2D autonomous system on the phase plane.
+
+    Two calling forms::
+
+        plot_trajectory(problem, u0, p, t_span)   # integrates with scipy
+        plot_trajectory(states_array)             # draws a precomputed orbit
+
+    The second form takes any ``(n_steps, 2)`` array, so an orbit computed
+    with diffrax, lyapax, or anything else drops straight in. JaxCont does not
+    own an integrator; ``problem.as_rhs(p)`` is the bridge to whichever solver
+    you prefer.
+
+    Args:
+        problem: A 2D :class:`~jaxcont.api.BifProblem`, or an
+            ``(n_steps, 2)`` array of precomputed states.
+        u0: Initial condition (integration form only).
+        p: Value of the continuation parameter (integration form only).
+        t_span: ``(t_start, t_end)`` (integration form only).
+        n_points: Number of output samples (integration form only).
+        rtol: Relative tolerance passed to ``solve_ivp``.
+        atol: Absolute tolerance passed to ``solve_ivp``.
+        arrow: Draw a direction arrow at the trajectory midpoint.
+        color: Trajectory color.
+        ax: Matplotlib axes (creates a new figure if None).
+        figsize: Figure size when ``ax`` is not supplied.
+        **kwargs: Additional options forwarded to ``ax.plot``.
+
+    Returns:
+        Matplotlib figure.
+
+    Raises:
+        TypeError: If the two calling forms are mixed.
+        ValueError: If a precomputed array is not shaped ``(n_steps, 2)``.
+        NotImplementedError: If the problem is not two-dimensional.
+    """
+    from jaxcont.api import BifProblem
+
+    if isinstance(problem, BifProblem):
+        if u0 is None or p is None or t_span is None:
+            raise TypeError(
+                "plot_trajectory(problem, u0, p, t_span) requires u0, p and "
+                "t_span; or call plot_trajectory(states_array) with a "
+                "precomputed (n_steps, 2) array."
+            )
+        states = _integrate(problem, u0, p, t_span, n_points, rtol, atol)
+        names = _state_names(problem)
+    else:
+        if u0 is not None or p is not None or t_span is not None:
+            raise TypeError(
+                "plot_trajectory(states_array) takes no u0, p or t_span; pass "
+                "a BifProblem as the first argument to integrate instead."
+            )
+        states = np.asarray(problem, dtype=float)
+        if states.ndim != 2 or states.shape[1] != 2:
+            raise ValueError(
+                "A precomputed trajectory must have shape (n_steps, 2); got "
+                f"{states.shape}."
+            )
+        names = None
+
+    fig, ax = _prepare_axes(ax, figsize)
+
+    line_options = {"linewidth": 1.6, "zorder": 4}
+    line_options.update(kwargs)
+    ax.plot(states[:, 0], states[:, 1], color=color, **line_options)
+
+    if arrow and len(states) >= 3:
+        mid = len(states) // 2
+        ax.annotate(
+            "",
+            xy=states[mid + 1], xytext=states[mid],
+            arrowprops={"arrowstyle": "->", "color": color, "linewidth": 1.6},
+            zorder=4,
+        )
+
+    if names is not None:
+        ax.set_xlabel(names[0], fontsize=12)
+        ax.set_ylabel(names[1], fontsize=12)
+    return fig
