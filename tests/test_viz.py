@@ -484,3 +484,62 @@ def test_plot_nullclines_labels_axes_from_state_names():
 def test_plot_nullclines_rejects_three_state_problem():
     with pytest.raises(NotImplementedError, match="n=3"):
         plot_nullclines(_three_state_problem(), 0.0, (-1.0, 1.0), (-1.0, 1.0))
+
+
+from jaxcont.viz.phase_plane import plot_streamlines, plot_vector_field
+
+
+def test_plot_vector_field_normalizes_arrows_to_unit_length():
+    problem = _linear_spiral_problem()
+
+    fig = plot_vector_field(
+        problem, 0.0, (-2.0, 2.0), (-2.0, 2.0), density=7, normalize=True
+    )
+    quiver = fig.axes[0].collections[0]
+
+    lengths = np.hypot(quiver.U, quiver.V)
+    finite = lengths[np.isfinite(lengths)]
+    # Every arrow is unit length except at the origin, where the field is zero.
+    assert np.all((np.abs(finite - 1.0) < 1e-6) | (finite < 1e-12))
+
+
+def test_plot_vector_field_unnormalized_keeps_true_magnitudes():
+    problem = _linear_spiral_problem()
+
+    fig = plot_vector_field(
+        problem, 0.0, (-2.0, 2.0), (-2.0, 2.0), density=7, normalize=False
+    )
+    quiver = fig.axes[0].collections[0]
+
+    assert np.max(np.hypot(quiver.U, quiver.V)) > 1.5
+
+
+def test_plot_vector_field_draws_onto_supplied_ax():
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+
+    returned_fig = plot_vector_field(
+        _linear_spiral_problem(), 0.0, (-2.0, 2.0), (-2.0, 2.0), density=7, ax=ax2
+    )
+
+    assert returned_fig is fig
+    assert len(ax2.collections) == 1
+    assert len(ax1.collections) == 0
+
+
+def test_plot_streamlines_draws_onto_supplied_ax():
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+
+    returned_fig = plot_streamlines(
+        _linear_spiral_problem(), 0.0, (-2.0, 2.0), (-2.0, 2.0), resolution=25, ax=ax2
+    )
+
+    assert returned_fig is fig
+    assert len(ax2.get_children()) > len(ax1.get_children())
+
+
+def test_vector_field_and_streamlines_reject_three_state_problem():
+    problem = _three_state_problem()
+    with pytest.raises(NotImplementedError, match="n=3"):
+        plot_vector_field(problem, 0.0, (-1.0, 1.0), (-1.0, 1.0))
+    with pytest.raises(NotImplementedError, match="n=3"):
+        plot_streamlines(problem, 0.0, (-1.0, 1.0), (-1.0, 1.0))

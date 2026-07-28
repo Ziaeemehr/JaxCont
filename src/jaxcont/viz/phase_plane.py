@@ -148,3 +148,117 @@ def plot_nullclines(
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     return fig
+
+
+def plot_vector_field(
+    problem,
+    p,
+    xlim: Tuple[float, float],
+    ylim: Tuple[float, float],
+    *,
+    density: int = 20,
+    normalize: bool = True,
+    ax: Optional[plt.Axes] = None,
+    figsize: Tuple[float, float] = DEFAULT_FIGSIZE,
+    **kwargs,
+) -> plt.Figure:
+    """
+    Plot the vector field of a 2D autonomous system as arrows.
+
+    Args:
+        problem: A 2D :class:`~jaxcont.api.BifProblem`.
+        p: Value of the continuation parameter to freeze the system at.
+        xlim: ``(min, max)`` range for the first state component.
+        ylim: ``(min, max)`` range for the second state component.
+        density: Arrows per axis. Coarser than the nullcline grid on purpose.
+        normalize: Scale arrows to unit length so direction stays legible
+            where the field is stiff, and color them by ``log10`` of the true
+            magnitude so speed information is not lost. When False, arrows
+            carry their true magnitude in a single color.
+        ax: Matplotlib axes (creates a new figure if None).
+        figsize: Figure size when ``ax`` is not supplied.
+        **kwargs: Additional options forwarded to ``ax.quiver``.
+
+    Returns:
+        Matplotlib figure.
+
+    Raises:
+        NotImplementedError: If the problem is not two-dimensional.
+    """
+    X, Y, F = _evaluate_field(problem, p, xlim, ylim, density)
+    fig, ax = _prepare_axes(ax, figsize)
+
+    U, V = F[..., 0], F[..., 1]
+    magnitude = np.hypot(U, V)
+
+    quiver_options = {"pivot": "mid", "width": 0.004}
+    quiver_options.update(kwargs)
+
+    if normalize:
+        # Leave true zeros at zero rather than dividing by them; a zero-length
+        # arrow is the honest rendering of an equilibrium.
+        scale = np.where(magnitude == 0.0, 1.0, magnitude)
+        speed = np.ma.masked_invalid(
+            np.log10(np.where(magnitude == 0.0, np.nan, magnitude))
+        )
+        quiver_options.setdefault("cmap", "viridis")
+        ax.quiver(X, Y, U / scale, V / scale, speed, **quiver_options)
+    else:
+        quiver_options.setdefault("color", "#7F7F7F")
+        ax.quiver(X, Y, U, V, **quiver_options)
+
+    names = _state_names(problem)
+    ax.set_xlabel(names[0], fontsize=12)
+    ax.set_ylabel(names[1], fontsize=12)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    return fig
+
+
+def plot_streamlines(
+    problem,
+    p,
+    xlim: Tuple[float, float],
+    ylim: Tuple[float, float],
+    *,
+    resolution: int = 100,
+    color: str = "#7F7F7F",
+    ax: Optional[plt.Axes] = None,
+    figsize: Tuple[float, float] = DEFAULT_FIGSIZE,
+    **kwargs,
+) -> plt.Figure:
+    """
+    Plot the flow of a 2D autonomous system as streamlines.
+
+    Args:
+        problem: A 2D :class:`~jaxcont.api.BifProblem`.
+        p: Value of the continuation parameter to freeze the system at.
+        xlim: ``(min, max)`` range for the first state component.
+        ylim: ``(min, max)`` range for the second state component.
+        resolution: Grid points per axis used to seed the integrator.
+        color: Streamline color.
+        ax: Matplotlib axes (creates a new figure if None).
+        figsize: Figure size when ``ax`` is not supplied.
+        **kwargs: Additional options forwarded to ``ax.streamplot``.
+
+    Returns:
+        Matplotlib figure.
+
+    Raises:
+        NotImplementedError: If the problem is not two-dimensional.
+    """
+    X, Y, F = _evaluate_field(problem, p, xlim, ylim, resolution)
+    fig, ax = _prepare_axes(ax, figsize)
+
+    # streamplot needs 1-D, evenly spaced coordinates -- exactly the rows and
+    # columns _evaluate_field built the grid from.
+    stream_options = {"density": 1.0, "linewidth": 0.8, "arrowsize": 0.9}
+    stream_options.update(kwargs)
+    ax.streamplot(X[0, :], Y[:, 0], F[..., 0], F[..., 1], color=color, **stream_options)
+
+    names = _state_names(problem)
+    ax.set_xlabel(names[0], fontsize=12)
+    ax.set_ylabel(names[1], fontsize=12)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    return fig
