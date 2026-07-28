@@ -13,8 +13,10 @@ Build with:
 make
 ```
 
-The first edition concentrates on the equilibrium-continuation workflow that
-JaxCont currently supports. Later workflow stages are included as conceptual
-orientation and are explicitly marked as not yet implemented in the public
-JaxCont API. Existing repository-generated figures are reused through relative
-paths, so build the document from this directory.
+The v0.2 tutorial edition covers the supported equilibrium workflow and the
+fixed-mesh periodic-orbit workflow, including Floquet stability,
+period-doubling, and Neimark--Sacker screening. Branch switching, automatic
+Hopf-to-cycle initialization, adaptive periodic meshes, two-parameter
+continuation, and global-orbit analysis remain clearly labelled future-version
+placeholders. Existing repository-generated figures are reused through
+relative paths, so build the document from this directory.

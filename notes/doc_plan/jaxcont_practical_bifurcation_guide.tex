@@ -7,10 +7,12 @@
 \usepackage{microtype}
 \usepackage{amsmath,amssymb,bm}
 \usepackage{booktabs,tabularx,array}
+\usepackage{longtable}
 \usepackage{graphicx}
 \usepackage{xcolor}
 \usepackage{enumitem}
 \usepackage{listings}
+\usepackage{needspace}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,calc,fit,shapes.geometric}
 \usepackage{fancyhdr}
@@ -36,10 +38,17 @@
 
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{JaxCont practical bifurcation guide}
-\fancyhead[R]{\leftmark}
+\fancyhead[C]{\small\color{JaxBlue}\nouppercase{\leftmark}}
 \fancyfoot[C]{\thepage}
-\setlength{\headheight}{14pt}
+\renewcommand{\chaptermark}[1]{\markboth{\thechapter.\ #1}{}}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\headheight}{16pt}
+\setlength{\headsep}{18pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}
+  \fancyfoot[C]{\thepage}
+  \renewcommand{\headrulewidth}{0pt}
+}
 \setcounter{tocdepth}{2}
 \setcounter{secnumdepth}{2}
 \setlist{nosep}
@@ -86,10 +95,31 @@
   {\par\color{JaxGreen!70!black}\rule{\textwidth}{0.8pt}
    \end{minipage}\par\medskip}
 
+\newenvironment{diagnosticbox}
+  {\par\medskip\noindent\begin{minipage}{\textwidth}
+   \color{JaxOrange!90!black}\rule{\textwidth}{0.8pt}\par
+   \textbf{Diagnostic.}\ \color{black}}
+  {\par\color{JaxOrange!90!black}\rule{\textwidth}{0.8pt}
+   \end{minipage}\par\medskip}
+
+\newenvironment{trythis}
+  {\par\medskip\noindent\begin{minipage}{\textwidth}
+   \color{JaxTeal}\rule{\textwidth}{0.8pt}\par
+   \textbf{Try it.}\ \color{black}}
+  {\par\color{JaxTeal}\rule{\textwidth}{0.8pt}
+   \end{minipage}\par\medskip}
+
+\newenvironment{futurebox}
+  {\par\medskip\noindent\begin{minipage}{\textwidth}
+   \color{black!55}\rule{\textwidth}{0.8pt}\par
+   \textbf{Future-version placeholder.}\ \color{black}}
+  {\par\color{black!55}\rule{\textwidth}{0.8pt}
+   \end{minipage}\par\medskip}
+
 \title{\Huge From Dynamical System to\\[2mm]Practical Bifurcation Analysis\\[7mm]
        \Large A beginner-friendly workflow with JaxCont}
 \author{JaxCont project}
-\date{First edition: equilibrium continuation}
+\date{v0.2 tutorial edition: equilibria, periodic orbits, and JAX workflows}
 
 \begin{document}
 
@@ -100,6 +130,7 @@
 
 \chapter*{About this edition}
 \addcontentsline{toc}{chapter}{About this edition}
+\markboth{About this edition}{}
 
 This handbook answers a practical question:
 
@@ -109,29 +140,67 @@ what comes next, how do I check the result, and when should I stop?}
 \end{quote}
 
 The method is broadly applicable to continuation packages, while executable
-examples use JaxCont. This first edition deliberately concentrates on
-\textbf{equilibrium continuation}, the part of the public JaxCont API that is
-currently supported. Branch switching, periodic-orbit continuation,
-codimension-two continuation, and global bifurcations are explained so readers
-can plan a complete study, but they are not presented as current JaxCont
-commands.
+examples use JaxCont v0.2. This edition covers two supported numerical
+workflows:
+
+\begin{enumerate}
+  \item continuation of equilibria with natural or pseudo-arclength methods,
+        equilibrium eigenvalues, and fold/Hopf event screening;
+  \item fixed-mesh collocation continuation of periodic orbits, Floquet
+        stability, and fold-of-cycles, period-doubling, or Neimark--Sacker
+        event screening.
+\end{enumerate}
+
+The guide deliberately goes beyond a list of API calls. Each practical chapter
+states what mathematical object is being computed, how to initialize it, what
+output should be inspected, how the computation commonly fails, and what
+evidence is needed before a result becomes a scientific claim.
 
 \begin{warningbox}
-Do not infer software support from the existence of an internal class or stub.
-The supported public workflow in this edition is
-\texttt{bif\_problem} $\rightarrow$ \texttt{continuation} with
-\texttt{Natural} or \texttt{PseudoArclength}, optional equilibrium stability,
-and fold/Hopf event candidates.
+Do not infer software support from a design document, internal scaffold, or
+class name. Branch switching, automatic cycle initialization from a Hopf point,
+adaptive periodic meshes, two-parameter continuation, codimension-two
+classification, and global-orbit continuation remain future work. They are
+kept as explicit placeholders so this guide can grow without pretending those
+commands already exist.
 \end{warningbox}
+
+\section*{Capability map for this edition}
+
+\begin{tabularx}{\textwidth}{>{\bfseries}p{.25\textwidth}p{.20\textwidth}X}
+\toprule
+Workflow & Status & Where to learn it\\
+\midrule
+Equilibrium continuation & Supported & Chapters~4--10 and Examples 01--07\\
+Equilibrium fold/Hopf screening & Supported, eager events & Chapters~6--10\\
+Periodic-orbit collocation & Supported & Chapter~12 and Examples 10--11\\
+Floquet stability, PD, NS & Supported & Chapter~12 and Examples 08--09\\
+Branch switching & Future & Chapter~11 placeholder\\
+Two-parameter/global analysis & Future & Chapter~13 placeholder\\
+\bottomrule
+\end{tabularx}
 
 \chapter*{How to use this book}
 \addcontentsline{toc}{chapter}{How to use this book}
+\markboth{How to use this book}{}
 
-New readers should follow Chapters~1--9 in order. Researchers with an existing
-model can begin with the checklist in Chapter~4, run the complete example in
-Chapter~8, and return to the mathematics when a diagnostic is unclear.
-Chapters~10--12 show how the equilibrium analysis connects to more advanced
-continuation tasks.
+The book is cumulative, but it supports several routes:
+
+\begin{description}
+  \item[First continuation run.] Read Chapters~1--7, then reproduce the scalar
+        fold case study before adapting the code to a new model.
+  \item[Existing equilibrium model.] Begin with the model worksheet and
+        starting-root checks in Chapters~4--5, then use Chapters~6--9 as an
+        execution and validation checklist.
+  \item[Periodic orbit.] Read the stability distinction in Chapter~2 and the
+        equilibrium workflow once, then follow Chapter~12 in order.
+  \item[JAX study.] After one validated scalar run, use the ensemble and
+        differentiability material in Chapters~9--10.
+\end{description}
+
+Code blocks are meant to be run, not merely read. Lines marked as diagnostics
+should be retained in research scripts until the workflow is stable. Values in
+the examples are starting points, not universal tolerances.
 
 \tableofcontents
 
@@ -161,11 +230,52 @@ For numerical work it is useful to call the right-hand side a residual,
 A single root solve finds one pair $(\state^*,\param)$. Continuation follows a
 connected curve of such pairs while the parameter changes.
 
+\section{Four computations that are easy to confuse}
+
+The same model can appear in four different numerical tasks:
+
+\begin{description}
+  \item[Time integration] fixes parameters and advances an initial state in
+        physical time. It answers ``where does this trajectory go?''
+  \item[Root solving] fixes the parameter and solves $F(\state,p)=0$. It
+        answers ``is there an equilibrium near this initial guess?''
+  \item[Continuation] starts from one verified solution and follows a connected
+        family. It answers ``how does this solution change with a parameter?''
+  \item[Event refinement] starts from a sign-changing bracket on a branch and
+        solves a more specialized local problem. It answers ``where precisely
+        does this fold or spectral crossing occur?''
+\end{description}
+
+These tasks support one another but are not interchangeable. Simulation is
+often the easiest way to obtain an initial cycle, while continuation is the
+tool that can retain unstable solutions that simulation will not approach.
+
 \begin{keyidea}
 Simulation follows a state through physical time. Continuation follows a family
 of mathematical solutions through state--parameter space. They answer different
 questions and should be used together.
 \end{keyidea}
+
+\section{One continuation interface, two residual meanings}
+
+JaxCont's continuation engine sees a square residual $F(U,p)=0$. The meaning
+of $U$ depends on the problem:
+
+\noindent\begin{tabularx}{\textwidth}{>{\bfseries}p{.25\textwidth}p{.31\textwidth}X}
+\toprule
+Problem kind & Unknown $U$ & Residual meaning\\
+\midrule
+Equilibrium & physical state $\state$ & ODE right-hand side
+$f(\state,p)$\\
+Periodic orbit & mesh states, collocation states, period $T$ & collocation
+defects, interval continuity, and one phase condition\\
+\bottomrule
+\end{tabularx}
+
+This is the central v0.2 design idea: periodic-orbit continuation does not need
+a second branch-following algorithm. It needs a factory that turns an entire
+cycle into a finite-dimensional root problem. Natural or pseudo-arclength
+continuation can then operate on that larger residual.
 
 \section{What a bifurcation diagram means}
 
@@ -210,6 +320,13 @@ itself establish causality, estimate parameters, prove that every solution has
 been found, or validate the model against observations.
 \end{warningbox}
 
+\begin{trythis}
+For a diagram in your field, write one sentence for each axis, one sentence for
+what a point represents, and one sentence for what stability means. If you
+cannot do this without saying ``the simulation,'' return to the distinction
+between trajectory time and branch progress.
+\end{trythis}
+
 \chapter{Stability and local bifurcations}
 
 \section{Linearization}
@@ -229,6 +346,35 @@ The eigenvalues $\lambda_i$ of $J$ determine local equilibrium stability:
   \item if an eigenvalue is close to the imaginary axis, the linear test is
         sensitive and a bifurcation may be nearby.
 \end{itemize}
+
+\subsection{Worked example: the Van der Pol equilibrium}
+
+For
+\[
+  \dot x=y,\qquad \dot y=\mu(1-x^2)y-x,
+\]
+the origin is an equilibrium for every $\mu$. Its Jacobian is
+\[
+  J(0,0;\mu)=\begin{bmatrix}0&1\\-1&\mu\end{bmatrix},
+\]
+with characteristic equation
+\[
+  \lambda^2-\mu\lambda+1=0.
+\]
+For $\mu<0$ both eigenvalues have negative real part; for $\mu>0$ both have
+positive real part; at $\mu=0$ they are $\pm i$. This analytic calculation
+provides three checks for software:
+
+\begin{enumerate}
+  \item the equilibrium branch should remain exactly at $(x,y)=(0,0)$;
+  \item the stability flag should change at $\mu=0$;
+  \item a Hopf event test should be bracketed near $\mu=0$.
+\end{enumerate}
+
+The third statement is only a candidate classification. In this particular
+example the first Lyapunov coefficient is zero, so the crossing is degenerate.
+The example is valuable precisely because it teaches that a correct spectral
+crossing is not the same as a generic Hopf theorem.
 
 \section{Common local equilibrium bifurcations}
 
@@ -259,9 +405,29 @@ coefficient. Current JaxCont event detection reports fold and Hopf candidates.
 Period doubling, torus bifurcations, folds of cycles, homoclinic orbits,
 heteroclinic connections, and SNIC bifurcations involve periodic or global
 objects rather than only the local equilibrium Jacobian. They require
-additional representations, test functions, and solvers. They are introduced
-in Part~III so the reader can recognize when equilibrium continuation is no
-longer sufficient.
+additional representations, test functions, and solvers.
+
+JaxCont v0.2 supports fixed-mesh periodic-orbit collocation, Floquet
+multipliers, folds of cycles through the tangent-based fold test, period
+doubling, and Neimark--Sacker screening. Homoclinic, heteroclinic, SNIC, and
+other global-orbit workflows remain future work.
+
+\noindent\begin{tabularx}{\textwidth}{>{\bfseries}p{.26\textwidth}p{.27\textwidth}X}
+\toprule
+Solution type & Stability object & Typical crossing\\
+\midrule
+Equilibrium & eigenvalues $\lambda$ of $f_{\state}$ &
+$\operatorname{Re}\lambda=0$\\
+Periodic orbit & Floquet multipliers $\mu$ of the one-period map &
+$|\mu|=1$ after excluding the trivial multiplier near $+1$\\
+\bottomrule
+\end{tabularx}
+
+\begin{warningbox}
+Do not apply the negative-real-part rule to Floquet multipliers. Equilibrium
+eigenvalues are continuous-time growth rates; Floquet multipliers are
+one-period growth factors. Their stability criteria are different.
+\end{warningbox}
 
 \chapter{Why continuation is needed}
 
@@ -272,6 +438,15 @@ conditions, and records the long-time behavior. It may miss unstable
 equilibria, depend strongly on initial conditions, and jump between attractors.
 Continuation instead uses the preceding solution as information for the next
 one and can follow unstable equilibrium segments.
+
+\subsection{A concrete failure of a sweep}
+
+For $F(x,r)=r-x^2$, the equilibria are $x=\pm\sqrt r$ for $r\ge0$. A simulation
+started near the positive state will normally reveal only the attracting
+solution compatible with that initial condition. A root sweep initialized from
+the previous positive root can approach $r=0$ but has no instruction for
+turning onto the negative branch. The missing branch is not absent from the
+equations; it is absent from the workflow.
 
 \section{Natural parameter continuation}
 
@@ -291,6 +466,28 @@ Differentiate the equilibrium equation:
 \]
 At a fold, $\residual_{\state}$ becomes singular. Decreasing the parameter step
 can approach the fold but does not change this geometry.
+
+\begin{lstlisting}
+def quadratic_rhs(u, r, args):
+    return jnp.array([r - u[0] ** 2])
+
+problem = jc.bif_problem(
+    quadratic_rhs, u0=jnp.array([1.0]), p0=1.0
+)
+
+natural = jc.continuation(
+    problem, jc.Natural(), p_span=(1.0, -1.0),
+    settings=jc.ContinuationPar(
+        ds=0.05, max_steps=30,
+        newton_tol=1e-6, newton_max_iter=50,
+    ),
+)
+\end{lstlisting}
+
+The target $r=-1$ intentionally lies beyond the fold even though no real
+equilibrium exists there. The informative output is not a ``failed physics''
+claim; it is that natural continuation stalls before $r=0$ because each
+corrector keeps $r$ fixed.
 
 \section{Pseudo-arclength continuation}
 
@@ -341,6 +538,32 @@ One Newton correction solves the bordered system
 Although $\residual_{\state}$ is singular at an ordinary fold, the full
 bordered matrix can remain nonsingular.
 
+\subsection{Run the same problem with pseudo-arclength}
+
+\begin{lstlisting}
+palc = jc.continuation(
+    problem, jc.PseudoArclength(), p_span=(1.0, -1.0),
+    settings=jc.ContinuationPar(
+        ds=0.05, max_steps=60,
+        newton_tol=1e-6, newton_max_iter=50,
+    ),
+)
+
+print(palc.branch.params[-1], palc.branch.states[-1, 0])
+\end{lstlisting}
+
+After reaching the fold, the parameter turns back toward positive values while
+the state moves onto $x<0$. Therefore the endpoint $-1$ is not a literal
+destination that must be reached after the turn; it sets the initial
+orientation. Inspect the ordered $(r,x)$ pairs rather than judging success only
+from the final parameter.
+
+\begin{diagnosticbox}
+If pseudo-arclength also stops early, inspect the starting residual, accepted
+point count, step sizes, non-finite values, Newton tolerance, and attempt
+budget. ``The branch ends here'' is the last interpretation, not the first.
+\end{diagnosticbox}
+
 \part{The practical JaxCont workflow}
 
 \chapter{Step 1: understand and encode the model}
@@ -362,8 +585,37 @@ Before writing continuation code, record:
 \begin{workflowbox}
 Choose one continuation parameter first. A two-parameter scientific question
 can often begin as several one-parameter slices. This is easier to debug and is
-compatible with the current public JaxCont workflow.
+compatible with the one-parameter continuation workflow. A batch of such slices
+is useful exploration, but it is not the same as continuing a bifurcation point
+in two parameters.
 \end{workflowbox}
+
+\subsection{A model worksheet example}
+
+For the Brusselator,
+\[
+  \dot x=a-(b+1)x+x^2y,\qquad
+  \dot y=bx-x^2y,
+\]
+one useful worksheet is:
+
+\noindent\begin{tabularx}{\textwidth}{>{\bfseries}p{.25\textwidth}X}
+\toprule
+Item & Decision\\
+\midrule
+State & $(x,y)$, both expected to remain non-negative\\
+Fixed parameter & $a=1$\\
+Continuation parameter & $b$\\
+Equilibrium question & stability change near $b=1+a^2=2$\\
+Periodic question & cycle amplitude and period for $b>2$\\
+Observable & equilibrium $x$; for cycles, peak-to-peak $x$ amplitude and $T$\\
+Independent check & time integration and the analytic Hopf threshold\\
+\bottomrule
+\end{tabularx}
+
+This worksheet separates two solution objects before any software is called.
+The equilibrium branch and the periodic branch require different starts,
+stability objects, and plots.
 
 \section{The JaxCont residual signature}
 
@@ -383,6 +635,52 @@ same number of residual equations as state variables. Keep the function smooth
 where possible. Hard clipping, conditionals, lookup discontinuities, and
 non-finite expressions can make Newton correction and automatic
 differentiation unreliable.
+
+\subsection{Put fixed model data in \texttt{args}}
+
+\begin{lstlisting}
+def lorenz84_rhs(u, forcing, args):
+    X, Y, Z, U = u
+    alpha, beta, gamma, delta, G, T = args
+
+    return jnp.array([
+        -Y**2 - Z**2 - alpha*X + alpha*forcing - gamma*U**2,
+        X*Y - beta*X*Z - Y + G,
+        beta*X*Y + X*Z - Z,
+        -delta*U + gamma*U*X + T,
+    ])
+\end{lstlisting}
+
+Here \texttt{forcing} is the scalar continuation parameter and the remaining
+constants form a tuple in \texttt{args}. This distinction matters later:
+\texttt{problem.at(args=...)} is the natural axis for a \texttt{vmap} ensemble
+or a sensitivity calculation.
+
+\subsection{Residual patterns to avoid}
+
+\begin{tabularx}{\textwidth}{>{\ttfamily}p{.31\textwidth}X}
+\toprule
+\normalfont Pattern & Why it is dangerous\\
+\midrule
+if u[0] > 0: & Python branching on a traced value fails under JAX transforms;
+use a smooth model or array control where mathematically appropriate.\\
+numpy.sin(u) & Host NumPy can copy data out of the JAX program; use
+\texttt{jax.numpy}.\\
+jnp.clip(...), abs(...) & Nonsmooth points can make Newton derivatives
+misleading even when the code traces.\\
+1 / (u[0] - c) & A branch approaching the pole can produce non-finite
+residuals and terminate the solver.\\
+global mutable data & Compilation assumes the traced function is effectively
+pure; hidden mutation makes behavior difficult to reason about.\\
+\bottomrule
+\end{tabularx}
+
+\begin{trythis}
+Evaluate your residual at the initial state, at a small perturbation, and under
+\texttt{jax.jacfwd}. Check shape, dtype, finite values, and whether the
+Jacobian changes smoothly. This catches many model-encoding problems before
+continuation adds another layer of complexity.
+\end{trythis}
 
 \chapter{Step 2: find and verify a starting equilibrium}
 
@@ -410,6 +708,46 @@ equilibrium as the supplied state. Storing a different value in
 \texttt{problem.p0} does not repair an inconsistent starting pair.
 \end{warningbox}
 
+\section{Three ways to obtain a start}
+
+\subsection{Use an analytic equilibrium}
+
+For $F(x,p)=p+x-x^3/3$, choose any $x_0$ and compute
+$p_0=x_0^3/3-x_0$. With $x_0=-2$, the consistent parameter is
+$p_0=-2/3$. Writing $p_0=-1$ because it is a convenient plot boundary would
+create an inconsistent pair.
+
+\subsection{Refine a simulation or hand estimate}
+
+The neural-mass gallery example uses the package's Newton solver:
+
+\begin{lstlisting}
+from jaxcont.solvers.newton import NewtonSolver
+
+guess = jnp.array([0.238616, 0.982747, 0.367876])
+p0 = -2.0
+r0 = jnp.linalg.norm(rhs(guess, p0, args))
+
+solver = NewtonSolver(tol=1e-5, max_iter=100)
+u0, converged, n_iter = solver.solve(
+    lambda u: rhs(u, p0, args), guess
+)
+
+check = jnp.linalg.norm(rhs(u0, p0, args), ord=jnp.inf)
+print(converged, n_iter, float(check))
+\end{lstlisting}
+
+Keep the final explicit residual check even when \texttt{converged} is true.
+The example uses $10^{-5}$ rather than assuming that $10^{-8}$ is reachable
+for a stiff float32 problem.
+
+\subsection{Load a trusted reference point}
+
+A point from another continuation package or a previous run can be an excellent
+start if equations, parameter ordering, scaling, precision, and units match.
+Always reevaluate the current residual after loading it. A copied state is data,
+not proof that it belongs to the current model.
+
 \section{How to search for multiple equilibria}
 
 A single root solve normally returns a single root. To investigate
@@ -426,6 +764,31 @@ multistability:
 
 Failure to find another root is not proof that none exists.
 
+\begin{lstlisting}
+guesses = jnp.linspace(-3.0, 3.0, 25)
+roots = []
+
+for guess in guesses:
+    u, ok, _ = solver.solve(
+        lambda z: rhs(z, p0, args),
+        jnp.array([guess]),
+    )
+    if ok and jnp.linalg.norm(rhs(u, p0, args)) < 1e-5:
+        roots.append(float(u[0]))
+
+# Cluster only after checking physical admissibility and residuals.
+unique_roots = []
+for root in sorted(roots):
+    if not unique_roots or abs(root - unique_roots[-1]) > 1e-4:
+        unique_roots.append(root)
+\end{lstlisting}
+
+\begin{warningbox}
+A dense grid of initial guesses is a search strategy, not a completeness
+theorem. Closely spaced roots, high-dimensional basins of convergence, and
+constraints can still hide solutions.
+\end{warningbox}
+
 \chapter{Steps 3--5: continue, assess stability, and detect events}
 
 \section{A complete minimal run}
@@ -441,7 +804,7 @@ def rhs(u, p, args):
 problem = jc.bif_problem(
     rhs,
     u0=jnp.array([-2.0]),
-    p0=-1.0,
+    p0=-2.0 / 3.0,
     state_names=["x"],
     param_name="p",
 )
@@ -459,11 +822,22 @@ settings = jc.ContinuationPar(
 result = jc.continuation(
     problem,
     jc.PseudoArclength(),
-    p_span=(-1.0, 1.0),
+    p_span=(-2.0 / 3.0, 1.0),
     settings=settings,
-    events=[jc.Fold(), jc.Hopf()],
+    events=[jc.Fold()],
 )
 \end{lstlisting}
+
+Before running, verify the exact relation:
+
+\begin{lstlisting}
+start_residual = rhs(problem.u0, -2.0 / 3.0, None)
+assert float(jnp.linalg.norm(start_residual)) < 1e-6
+\end{lstlisting}
+
+This scalar model has only real eigenvalues, so requesting \texttt{Hopf()} would
+add no useful information. Event lists should reflect the model and branch
+kind, not a boilerplate copied from another script.
 
 \section{How to read the result}
 
@@ -480,6 +854,25 @@ The high-level result contains:
 In an ordinary eager call, branch arrays are trimmed to the accepted points.
 Inside \texttt{jax.jit} or \texttt{jax.vmap}, fixed buffers and a validity mask
 are returned because transformed JAX code needs predictable shapes.
+
+\subsection{Inspect before plotting}
+
+\begin{lstlisting}
+branch = result.branch
+
+print("accepted points:", branch.n_valid)
+print("parameter range:",
+      float(branch.params.min()), float(branch.params.max()))
+print("last point:", branch.params[-1], branch.states[-1])
+
+for event in result.events:
+    print(event.kind, event.p, event.u)
+\end{lstlisting}
+
+The last point alone is not a termination diagnosis. A pseudo-arclength branch
+can turn away from the requested endpoint, and a failed attempt can consume the
+attempt budget without creating an output point. Compare the ordered
+parameters, states, and step-size diagnostics.
 
 \section{Choosing numerical settings}
 
@@ -500,6 +893,26 @@ compute\_stability & whether equilibrium eigenvalues are computed\\
 Begin conservatively. If the branch is smooth and corrections are easy, allow
 adaptive growth. Near sharp turns, close events, or stiff regions, reduce
 \texttt{ds\_max} and verify that conclusions persist.
+
+\subsection{A tuning sequence}
+
+\begin{enumerate}
+  \item Start with a verified root, moderate \texttt{ds}, generous
+        \texttt{max\_steps}, and no events.
+  \item Confirm that the branch moves in the intended initial direction.
+  \item Enable stability and inspect the spectrum at a few points.
+  \item Add events only after branch and spectra are credible.
+  \item Reduce \texttt{ds\_max} near important events and repeat.
+  \item Tighten \texttt{newton\_tol} only while residual reduction continues;
+        do not demand a value beneath the dtype/problem precision floor.
+\end{enumerate}
+
+\begin{diagnosticbox}
+If every attempted step is rejected, a smaller \texttt{ds} may help, but first
+check the starting root and tolerance. A tolerance below the attainable
+float32 residual floor makes adaptive step size collapse even when the
+mathematical branch is smooth.
+\end{diagnosticbox}
 
 \section{Natural or pseudo-arclength?}
 
@@ -528,6 +941,30 @@ Fold and Hopf events should be treated as candidates:
   \item compare important events with an analytic result or another tool.
 \end{enumerate}
 
+\subsection{Use events on the correct solution kind}
+
+\begin{tabularx}{\textwidth}{>{\ttfamily}p{.27\textwidth}p{.25\textwidth}X}
+\toprule
+\normalfont Event & Branch kind & Test idea\\
+\midrule
+Fold() & equilibrium or periodic & parameter component of the branch tangent\\
+Hopf() & equilibrium & real part of a genuinely complex eigenvalue pair\\
+PeriodDoubling(...) & periodic & nontrivial real multiplier crosses $-1$\\
+NeimarkSacker(...) & periodic & complex multiplier pair crosses the unit circle\\
+\bottomrule
+\end{tabularx}
+
+JaxCont v0.2 does not yet reject every kind mismatch. A
+\texttt{PeriodDoubling} event on equilibrium eigenvalues or a \texttt{Hopf}
+event on Floquet multipliers may execute but has no valid mathematical meaning.
+
+\begin{diagnosticbox}
+Event detection runs on the eager result path because bracketing, sorting, and
+deduplication use Python-level orchestration. Do not request events inside
+\texttt{jax.vmap} or an outer \texttt{jax.jit}; batch branch/stability arrays
+first and screen selected runs afterwards.
+\end{diagnosticbox}
+
 \chapter{Step 6: interpret and visualize the branch}
 
 \section{Choose an observable}
@@ -537,6 +974,33 @@ component or derived quantity $h(\state)$. Choose it for scientific meaning,
 not merely because it is the first state component. Useful choices include a
 concentration, voltage, firing rate, norm, energy-like quantity, or maximum
 component.
+
+\subsection{Use the result convenience plot first}
+
+\begin{lstlisting}
+fig = result.plot(
+    state_index=0,
+    annotate=True,
+    title="Scalar equilibrium branch",
+)
+\end{lstlisting}
+
+For a multi-state equilibrium model, the visualization module also provides
+all-state, phase-portrait, and eigenvalue helpers. The v0.2 result retains an
+underlying compatibility object for utilities that still expect the older
+solution representation:
+
+\begin{lstlisting}
+from jaxcont.viz import plot_all_states, plot_eigenvalues
+
+solution = result._solution  # v0.2 compatibility bridge
+fig_states = plot_all_states(solution)
+fig_spectrum = plot_eigenvalues(result, show_events=True)
+\end{lstlisting}
+
+The leading underscore is a reminder that this bridge may evolve. Prefer
+\texttt{result.branch} and \texttt{result.events} for new numerical analysis,
+and use the plotting helpers as presentation utilities.
 
 \section{A validated scalar fold example}
 
@@ -570,6 +1034,21 @@ test.}
   \item Plot smoothness does not guarantee small residuals or correct event labels.
 \end{itemize}
 
+\subsection{Plot the diagnostic, not only the headline}
+
+For an equilibrium study, keep at least three views during development:
+
+\begin{enumerate}
+  \item the chosen branch observable versus parameter;
+  \item the largest real part of the equilibrium spectrum versus parameter;
+  \item the residual norm and step size versus accepted-point index.
+\end{enumerate}
+
+For a periodic study, replace the second view with nontrivial Floquet
+multiplier magnitude and add period or amplitude. A publication figure may
+show only the final observable, but the working analysis should preserve the
+diagnostics that justify it.
+
 \chapter{Step 7: validate before interpreting}
 
 \section{The validation ladder}
@@ -599,6 +1078,45 @@ For every accepted point, evaluate
 Plot or summarize $r_k$. A success flag is useful, but the physical equations
 are the final numerical check.
 
+\begin{lstlisting}
+residuals = jax.vmap(
+    lambda u, p: rhs(u, p, problem.args)
+)(result.branch.states, result.branch.params)
+
+residual_norms = jnp.linalg.norm(residuals, ord=jnp.inf, axis=1)
+print("max accepted residual:", float(residual_norms.max()))
+\end{lstlisting}
+
+This direct equilibrium check is intentionally independent of the solver's
+stored convergence flag. For periodic problems, call the assembled
+\texttt{problem.f(U, p, problem.args)} in the same way; its residual includes
+collocation defects, continuity, and phase error.
+
+\section{Resolution and direction checks}
+
+Run at least a small matrix of settings:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Run & \texttt{ds\_max} & Purpose\\
+\midrule
+coarse & baseline & rapid topology check\\
+medium & baseline$/2$ & event and branch comparison\\
+fine & baseline$/4$ & local confirmation near important features\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Compare event locations, stability changes, branch extrema, and termination.
+More points are not automatically more accurate: an inconsistent start or
+wrong event kind remains wrong at every resolution.
+
+When practical, continue from both directions or restart from a later verified
+point. Overlapping segments should agree within the numerical resolution.
+Disagreement can reveal direction-dependent initialization, branch jumping, or
+insufficient correction accuracy.
+
 \section{Simulation as a complementary check}
 
 Select parameter values away from and near important transitions. Simulate from
@@ -608,6 +1126,14 @@ settings.
 
 Simulation will not normally converge to an unstable equilibrium, so lack of a
 simulated unstable state does not contradict the continuation result.
+
+\begin{trythis}
+Select one parameter in each stable region and one near every important event.
+Simulate from a small perturbation of the continued equilibrium. Record whether
+the perturbation decays, grows, or approaches another attractor, and compare
+that behavior with the local spectrum. Do not expect simulation to sit on an
+unstable branch.
+\end{trythis}
 
 \section{Independent software}
 
@@ -632,6 +1158,8 @@ with compiled JAX control flow and fixed-size buffers. Compatible runs can be
 batched using \texttt{jax.vmap}.
 
 \begin{lstlisting}
+import jax
+
 def run_one(design_value):
     problem_i = base_problem.at(args=design_value)
     return jc.continuation(
@@ -648,6 +1176,24 @@ Events currently involve Python-level processing and should not be requested
 inside a transformed \texttt{vmap}/\texttt{jit} call. Compute transformation-safe
 branch/stability data first, then inspect or refine events outside the batch.
 
+\subsection{Understand the fixed-shape result}
+
+\begin{lstlisting}
+res = jax.vmap(run_one)(design_values)
+
+print(res.branch.params.shape)  # (batch, max_steps + 1)
+print(res.branch.states.shape)  # (batch, max_steps + 1, n)
+
+for i in range(len(design_values)):
+    mask = res.branch.valid[i]
+    params_i = res.branch.params[i][mask]
+    states_i = res.branch.states[i][mask]
+\end{lstlisting}
+
+The mask is not missing data; it is the representation that makes different
+branch lengths compatible with one batched array program. Never plot or
+summarize all buffer entries without applying \texttt{valid}.
+
 \section{Cold and warm timing}
 
 The first compatible call includes tracing and compilation. Later calls may
@@ -655,19 +1201,161 @@ reuse the compiled executable. Report both cold and warm timing and call
 \texttt{block\_until\_ready()} before stopping a timer. Also report hardware,
 precision, state dimension, maximum steps, accepted points, and batch size.
 
+\begin{lstlisting}
+batched = jax.jit(jax.vmap(run_one))
+
+t0 = time.perf_counter()
+cold = batched(design_values)
+jax.block_until_ready(cold)
+cold_seconds = time.perf_counter() - t0
+
+t0 = time.perf_counter()
+warm = batched(design_values)
+jax.block_until_ready(warm)
+warm_seconds = time.perf_counter() - t0
+\end{lstlisting}
+
+\begin{warningbox}
+Changing state shape, dtype, model function, collocation mesh, or static buffer
+length can trigger another compilation. A benchmark that silently compares a
+cold call with a warm call measures compilation policy, not solver throughput.
+\end{warningbox}
+
+\section{Differentiable bifurcation quantities}
+
+The full continuation sweep uses a dynamic \texttt{lax.while\_loop}. Forward
+mode can differentiate selected fixed-buffer outputs through this loop, but
+reverse mode is not the general solution for an adaptive full branch. JaxCont
+therefore exposes a more targeted differentiable fold workflow:
+
+\begin{lstlisting}
+def f_fold(u, p, theta):
+    return jnp.array([u[0]**2 - theta*u[0] + p])
+
+def fold_p(theta):
+    return jc.fold_parameter(
+        f_fold, jnp.array([0.4]), jnp.array(0.2), theta
+    )
+
+theta = jnp.array(1.0)
+p_star = fold_p(theta)
+dp_dtheta = jax.grad(fold_p)(theta)
+\end{lstlisting}
+
+Analytically, $p^*(\theta)=\theta^2/4$, so
+$dp^*/d\theta=\theta/2$. Example 07 checks that result and uses the gradient
+for inverse design. The reverse rule differentiates the converged extended
+root through the implicit function theorem rather than unrolling every Newton
+iteration.
+
+\begin{warningbox}
+A derivative is meaningful only while the same isolated fold persists and the
+extended Jacobian remains well conditioned. Near event collisions, branch
+identity changes, or solver failure, a numerically returned gradient may not
+support the intended scientific interpretation.
+\end{warningbox}
+
 \chapter{Complete current-workflow case studies}
 
-\section{Case study A: scalar cubic folds}
+\section{Case study A: learn continuation at a quadratic fold}
 
-Use the minimal example from Chapter~6. The learning goals are:
+Start with
+\[
+  F(x,r)=r-x^2.
+\]
+The solution set is $r=x^2$. It is deliberately simple: every accepted point
+can be checked against an exact equation, while the curve still contains the
+central difficulty that motivates pseudo-arclength continuation.
 
-\begin{enumerate}
-  \item verify the analytic starting root;
-  \item observe natural continuation approach a fold;
-  \item observe pseudo-arclength pass the fold;
-  \item compare detected fold parameters with $\pm2/3$;
-  \item repeat with several values of \texttt{ds\_max}.
-\end{enumerate}
+\subsection{A control experiment without a fold}
+
+Before diagnosing a method at a singularity, verify it on
+$F(x,r)=r-x$. Both natural and pseudo-arclength continuation should reproduce
+$x=r$. If this control fails, the problem is initialization or configuration,
+not fold geometry.
+
+\begin{lstlisting}
+def linear_rhs(u, p, args):
+    return jnp.array([p - u[0]])
+
+linear = jc.bif_problem(
+    linear_rhs, u0=jnp.array([0.0]), p0=0.0
+)
+
+for algorithm in (jc.Natural(), jc.PseudoArclength()):
+    check = jc.continuation(
+        linear, algorithm, p_span=(0.0, 1.0),
+        settings=jc.ContinuationPar(
+            ds=0.1, max_steps=12, newton_tol=1e-6
+        ),
+    )
+    err = jnp.max(jnp.abs(
+        check.branch.states[:, 0] - check.branch.params
+    ))
+    print(type(algorithm).__name__, float(err))
+\end{lstlisting}
+
+\subsection{Run natural continuation toward the fold}
+
+\begin{lstlisting}
+def quadratic_rhs(u, p, args):
+    return jnp.array([p - u[0]**2])
+
+quadratic = jc.bif_problem(
+    quadratic_rhs, u0=jnp.array([1.0]), p0=1.0,
+    state_names=["x"], param_name="r",
+)
+
+natural = jc.continuation(
+    quadratic,
+    jc.Natural(),
+    p_span=(1.0, -1.0),
+    settings=jc.ContinuationPar(
+        ds=0.05, max_steps=30,
+        newton_tol=1e-6, newton_max_iter=50,
+    ),
+)
+\end{lstlisting}
+
+Natural continuation fixes the predicted $r$ and solves only for $x$. Near
+$r=0$, $dx/dr=1/(2x)$ grows without bound; beyond the fold, the next negative
+$r$ has no real solution. It is therefore expected that the run stops short.
+Increasing \texttt{newton\_max\_iter} cannot create a real root.
+
+\subsection{Change only the continuation coordinate}
+
+\begin{lstlisting}
+palc = jc.continuation(
+    quadratic,
+    jc.PseudoArclength(),
+    p_span=(1.0, -1.0),
+    settings=jc.ContinuationPar(
+        ds=0.05, max_steps=60,
+        newton_tol=1e-6, newton_max_iter=50,
+        compute_stability=True,
+    ),
+    events=[jc.Fold()],
+)
+
+residual = (
+    palc.branch.params - palc.branch.states[:, 0]**2
+)
+print("max residual:", float(jnp.max(jnp.abs(residual))))
+print("x sign at last point:", float(palc.branch.states[-1, 0]))
+\end{lstlisting}
+
+The initial endpoint \texttt{-1.0} sets the first parameter direction; it is
+not a promise that the branch will terminate there. PALC moves from the upper
+branch toward $r=0$, crosses the fold, and returns toward increasing $r$ on
+the lower branch. A final $r>0$ with $x<0$ is evidence that the turn was
+passed.
+
+\begin{trythis}
+Repeat both runs with \texttt{ds} equal to $0.1$, $0.05$, and $0.025$.
+Tabulate the last natural-continuation parameter, the PALC fold estimate, and
+the maximum equation residual. Explain which quantity should converge to zero
+and which merely records where an algorithm could no longer proceed.
+\end{trythis}
 
 \section{Case study B: Van der Pol equilibrium stability}
 
@@ -723,7 +1411,82 @@ alone must not be described as a generic birth of a stable or unstable small
 cycle.
 \end{warningbox}
 
-\section{Case study C: neural-mass model}
+\subsection{An analytic stability check}
+
+The characteristic equation is
+\[
+  \lambda^2-\mu\lambda+1=0,\qquad
+  \lambda_{\pm}=\frac{\mu\pm\sqrt{\mu^2-4}}{2}.
+\]
+For $-2<\mu<0$ the origin is a stable focus, and for $0<\mu<2$ it is
+an unstable focus. Compare these expressions with
+\texttt{result.branch.eigenvalues}; this tests the stability calculation
+independently of event labelling.
+
+\section{Case study C: Lorenz--84, a four-state branch}
+
+This example moves from a scalar or planar teaching model to a system where
+the state observable, fixed arguments, and independent validation matter.
+
+\begin{lstlisting}
+F0 = 1.7620532879639
+args = (0.25, 1.0, 0.987, 1.04, 0.25, 0.04)
+u0 = jnp.array([
+    1.6673192028567203, -0.05172586841139392,
+    0.12923880103788027, -0.0660453938041009,
+])
+
+assert jnp.linalg.norm(
+    lorenz84_rhs(u0, F0, args), ord=jnp.inf
+) < 1e-6
+
+problem = jc.bif_problem(
+    lorenz84_rhs, u0=u0, p0=F0, args=args,
+    state_names=["X", "Y", "Z", "U"], param_name="F",
+)
+
+result = jc.continuation(
+    problem, jc.PseudoArclength(),
+    p_span=(F0, 1.0),
+    settings=jc.ContinuationPar(
+        ds=0.005, ds_max=0.01, max_steps=215,
+        newton_tol=1e-6, compute_stability=True,
+    ),
+    events=[jc.Fold(), jc.Hopf()],
+)
+\end{lstlisting}
+
+The branch initially moves downward in $F$, folds near $F=1.55$, and then
+moves upward. Thus the numerical run can later pass above its starting
+parameter even though the second endpoint is $1.0$. This is normal
+pseudo-arclength geometry, not a reversed interval bug.
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Reference type & BifurcationKit.jl $F$ & Expected JaxCont agreement\\
+\midrule
+fold/branch point & 1.546648 & approximately one continuation step\\
+Hopf & 1.619658 & approximately one continuation step\\
+Hopf & 2.467222 & approximately one continuation step\\
+Hopf & 2.859876 & approximately one continuation step\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+These values come from the repository's independent BifurcationKit.jl
+comparison using the same equations. They are reference evidence, not magic
+constants to force by tuning the solver.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=.82\textwidth]{../../examples/images/lorenz84_bifurcation.png}
+\caption{Repository-generated Lorenz--84 equilibrium diagram. A single
+observable $X$ is displayed, while event decisions use the full state and
+spectrum.}
+\end{figure}
+
+\section{Case study D: neural-mass model}
 
 The neural-mass example demonstrates a more realistic workflow:
 
@@ -744,7 +1507,14 @@ useful for practicing initialization, scaling, event screening, and
 cross-validation on a multi-state model.}
 \end{figure}
 
-\part{Beyond the current equilibrium workflow}
+\begin{diagnosticbox}
+For a realistic model, save a compact run record: equations or commit,
+starting state and residual, dtype, all continuation settings, accepted-point
+count, parameter extrema, event table, residual maximum, and independent
+reference. The plot alone is not a reproducible result.
+\end{diagnosticbox}
+
+\part{Periodic orbits in v0.2 and future extensions}
 
 \chapter{Branch switching}
 
@@ -758,20 +1528,20 @@ normal-form information.
 
 \section{Capability status}
 
-\begin{warningbox}
+\begin{futurebox}
 Branch switching is not part of the current supported public JaxCont API.
 Do not invent a JaxCont command for it. Use analytic initialization when
 possible, or use BifurcationKit.jl, MatCont, AUTO, or COCO for a mature branch
 switching workflow.
-\end{warningbox}
+\end{futurebox}
 
 Even without automated switching, a researcher can sometimes start a distinct
 equilibrium branch from a separately verified root. This is a new continuation
 run, not automated branch switching.
 
-\chapter{Periodic orbits}
+\chapter{Periodic orbits with orthogonal collocation}
 
-\section{Why equilibrium continuation is insufficient}
+\section{The solution object changes}
 
 At a Hopf point, an equilibrium may be accompanied by a family of periodic
 solutions. A periodic orbit is a function $\state(t)$ and an unknown period
@@ -785,25 +1555,257 @@ plus a phase condition that removes time-translation ambiguity.
 Numerical methods include shooting and orthogonal collocation. Stability is
 described by Floquet multipliers rather than only the equilibrium Jacobian.
 
-\section{Planned workflow}
+\begin{workflowbox}
+JaxCont v0.2 supports fixed-mesh periodic-orbit collocation, periodic
+continuation, Floquet multipliers, folds of cycles, period-doubling events, and
+Neimark--Sacker events. It does not yet construct a cycle automatically from
+an equilibrium Hopf point. Supply a credible trajectory and period guess.
+\end{workflowbox}
+
+\section{What collocation solves}
+
+Divide one normalized period $\tau\in[0,1]$ into
+\texttt{ntst} intervals and enforce the ODE at \texttt{ncol}
+Gauss--Legendre points per interval. The unknown vector contains mesh states,
+collocation states, and the physical period $T$. The assembled residual
+contains:
 
 \begin{enumerate}
-  \item locate and classify a sufficiently regular Hopf point;
-  \item construct a small-amplitude initial cycle;
-  \item solve the periodic boundary-value problem;
-  \item continue the cycle in a parameter;
-  \item record period, amplitude, and selected observables;
-  \item compute Floquet multipliers;
-  \item detect folds of cycles, period doubling, or torus candidates;
-  \item validate representative cycles by time integration.
+  \item collocation defects, which enforce $\state'(\tau)=T f(\state,p)$;
+  \item continuity equations between neighboring intervals;
+  \item periodic closure of the first and final interval;
+  \item one phase condition to remove arbitrary time translation.
 \end{enumerate}
 
+For state dimension $n$, the packed root has
+\[
+  n\,\texttt{ntst}(1+\texttt{ncol})+1
+\]
+entries. Collocation therefore replaces an $n$-variable equilibrium solve with
+a much larger nonlinear system. Mesh resolution and scaling matter.
+
+\section{Step 1: obtain one complete cycle}
+
+The repository's Van der Pol example simulates at $\mu=1$, after transients
+have decayed, then estimates the period from successive peaks:
+
+\begin{lstlisting}
+from scipy.integrate import solve_ivp
+from scipy.signal import find_peaks
+import numpy as np
+
+mu_start = 1.0
+raw = solve_ivp(
+    van_der_pol_rhs_np, [0.0, 60.0], [0.5, 0.0],
+    args=(mu_start,), max_step=0.01, dense_output=True,
+)
+
+tail_t = np.linspace(40.0, 60.0, 4000)
+tail_x = raw.sol(tail_t)[0]
+peaks, _ = find_peaks(tail_x)
+peak_t = tail_t[peaks]
+period0 = float(np.mean(np.diff(peak_t)))
+\end{lstlisting}
+
+Inspect the peaks rather than blindly taking the last two. There should be
+several, their spacings should be nearly constant, and the state at the two
+cycle endpoints should agree within integration error.
+
+\section{Step 2: rebase time and build the periodic problem}
+
+\begin{lstlisting}
+from jaxcont.core.collocation import Collocation
+from jaxcont.problems.periodic import periodic_orbit_problem
+
+cycle_start = peak_t[-2]
+t_trajectory = np.linspace(
+    0.0, period0, 60, endpoint=False
+)
+u_trajectory = raw.sol(
+    t_trajectory + cycle_start
+).T
+
+mesh = Collocation(ntst=20, ncol=4)
+problem = periodic_orbit_problem(
+    van_der_pol_rhs,
+    jnp.asarray(u_trajectory),
+    jnp.asarray(t_trajectory),
+    period0,
+    mu_start,
+    mesh,
+)
+\end{lstlisting}
+
 \begin{warningbox}
-Periodic-orbit continuation and supported Floquet analysis are roadmap work in
-JaxCont. Internal periodic/Floquet modules do not make this a supported public
-workflow. Use an established periodic-orbit package today when the scientific
-question depends on cycle amplitude or cycle stability.
+\texttt{t\_trajectory} must begin at zero. Passing absolute simulation times
+such as $[48.2,54.9]$ makes resampling query outside the assumed
+$[0,T]$ domain. Interpolation can silently clamp to nearly constant data and
+produce a degenerate near-zero-period result with a small-looking residual.
+Rebasing is a correctness requirement, not cosmetic preprocessing.
 \end{warningbox}
+
+The factory resamples the trajectory on the fixed collocation mesh and refines
+the packed root. Construct the problem outside an outer \texttt{grad} or
+\texttt{vmap}. The returned problem is the transformation-safe object intended
+for continuation.
+
+\section{Step 3: continue the cycle and compute stability}
+
+\begin{lstlisting}
+result = jc.continuation(
+    problem,
+    jc.PseudoArclength(),
+    p_span=(mu_start, 4.0),
+    settings=jc.ContinuationPar(
+        ds=0.05,
+        max_steps=250,
+        newton_tol=1e-5,
+        compute_stability=True,
+    ),
+)
+\end{lstlisting}
+
+The equilibrium RHS still has signature \texttt{f(u,p,args)}, but
+\texttt{result.branch.states} now stores packed collocation roots. Do not
+interpret column zero as the complete periodic solution.
+
+\begin{lstlisting}
+NTST, N_STATE = 20, 2
+n = result.branch.n_valid
+packed = result.branch.states
+
+mesh_states = packed[
+    :, :NTST*N_STATE
+].reshape(n, NTST, N_STATE)
+periods = packed[:, -1]
+amplitude = jnp.max(
+    jnp.abs(mesh_states[:, :, 0]), axis=1
+)
+
+assembled = jax.vmap(
+    lambda U, p: problem.f(U, p, problem.args)
+)(packed, result.branch.params)
+periodic_error = jnp.max(
+    jnp.linalg.norm(assembled, ord=jnp.inf, axis=1)
+)
+\end{lstlisting}
+
+For this normalization, Van der Pol amplitude remains near two while the period
+grows and the waveform sharpens as $\mu$ increases. Period and phase portrait
+therefore reveal more than amplitude alone.
+
+\section{Step 4: interpret Floquet multipliers}
+
+Linear perturbations propagated through one period define the monodromy
+matrix. Its eigenvalues are Floquet multipliers. Every autonomous periodic
+orbit has a trivial multiplier at $+1$ from time translation. JaxCont excludes
+the multiplier closest to $+1$ when deciding branch stability; the remaining
+multipliers must satisfy $|\rho|<1$ for asymptotic orbital stability.
+
+\begin{warningbox}
+Do not classify cycle stability from $\operatorname{Re}(\rho)<0$. That rule is
+for continuous-time equilibrium eigenvalues. A multiplier $0.8$ is stable and
+a multiplier $-1.2$ is unstable because stability uses magnitude relative to
+the unit circle.
+\end{warningbox}
+
+\section{Step 5: detect periodic bifurcations}
+
+Periodic event refinement must recompute multipliers between branch points, so
+the event receives both the raw ODE and the collocation mesh:
+
+\begin{lstlisting}
+pd_result = jc.continuation(
+    pd_problem, jc.PseudoArclength(),
+    p_span=(-0.05, 0.05),
+    settings=jc.ContinuationPar(
+        ds=0.02, max_steps=50,
+        newton_tol=1e-5, compute_stability=True,
+    ),
+    events=[jc.PeriodDoubling(
+        raw_f=period_doubling_rhs, mesh=pd_mesh
+    )],
+)
+
+ns_result = jc.continuation(
+    ns_problem, jc.PseudoArclength(),
+    p_span=(-0.05, 0.05),
+    settings=jc.ContinuationPar(
+        ds=0.02, max_steps=50,
+        newton_tol=1e-5, compute_stability=True,
+    ),
+    events=[jc.NeimarkSacker(
+        raw_f=neimark_sacker_rhs, mesh=ns_mesh
+    )],
+)
+\end{lstlisting}
+
+A period-doubling candidate occurs when a nontrivial real multiplier crosses
+$-1$. A Neimark--Sacker candidate occurs when a genuinely complex conjugate
+pair crosses the unit circle away from special resonances.
+
+\begin{figure}[htbp]
+\centering
+\begin{minipage}{.49\textwidth}
+\centering
+\includegraphics[width=\linewidth]{../../examples/images/example_08_period_doubling.png}
+\end{minipage}\hfill
+\begin{minipage}{.49\textwidth}
+\centering
+\includegraphics[width=\linewidth]{../../examples/images/example_09_neimark_sacker.png}
+\end{minipage}
+\caption{Analytically checkable v0.2 examples. Left: a real multiplier crosses
+$-1$ at $\alpha=0$. Right: a complex pair crosses the unit circle at
+$\alpha=0$.}
+\end{figure}
+
+The test systems have exact transverse multipliers:
+\[
+  \rho_{\mathrm{PD}}=-\exp(\alpha T),\qquad
+  |\rho_{\mathrm{NS}}|=\exp(\alpha T).
+\]
+They are good installation checks because the event location and the entire
+multiplier curve can be compared with a formula.
+
+\section{A second physical example: Brusselator}
+
+For $a=1$, the equilibrium $(x,y)=(1,b)$ changes stability at $b=2$.
+The repository starts a cycle at $b=2.5$, refines it on a
+\texttt{Collocation(ntst=20,ncol=4)} mesh, and continues to $b=4$.
+Unlike Van der Pol, peak-to-peak $x$ amplitude grows substantially with the
+parameter.
+
+The verified continuation tolerance is \texttt{newton\_tol=1e-4}, not the
+$10^{-5}$ used for Van der Pol. At the default float32 precision and this mesh,
+the tighter value can lie below the attainable assembled-residual floor,
+causing step size to collapse although a nearby periodic root is sound.
+
+\begin{trythis}
+Run Examples 10 and 11 unchanged. For each branch plot parameter against
+period, amplitude, maximum assembled residual, and largest nontrivial
+multiplier magnitude. Then double \texttt{ntst} and compare the scientific
+quantities. A mesh refinement study is stronger evidence than merely asking
+Newton for more digits.
+\end{trythis}
+
+\section{Periodic-workflow pitfalls}
+
+\begin{enumerate}
+  \item Do not reuse an equilibrium state as though it were a cycle trajectory.
+  \item Do not pass an incomplete or non-rebased time segment.
+  \item Do not assume every visually closed simulation segment is an exact orbit.
+  \item Do not transfer a verified tolerance from one model to another.
+  \item Do not read packed collocation roots as ordinary state vectors.
+  \item Do not forget the trivial multiplier near $+1$.
+  \item Do not run \texttt{Hopf()} on Floquet multipliers.
+  \item Do not claim convergence under mesh refinement without running it.
+\end{enumerate}
+
+\begin{futurebox}
+Later versions may add automatic Hopf-to-cycle initialization, adaptive mesh
+redistribution, shooting formulations, and branch switching at periodic
+events. In v0.2, use a fixed mesh and construct the initial cycle explicitly.
+\end{futurebox}
 
 \chapter{Two-parameter, codimension-two, and global analysis}
 
@@ -822,12 +1824,12 @@ events depend on entire trajectories or invariant manifolds. They generally
 require specialized boundary-value formulations, careful truncation, and
 problem-specific diagnostics.
 
-\begin{warningbox}
+\begin{futurebox}
 Two-parameter continuation, codimension-two classification, and global-orbit
 continuation are outside the current supported JaxCont API. MatCont,
 BifurcationKit.jl, AUTO, and COCO are appropriate tools to consider, depending
 on the model and the research group’s expertise.
-\end{warningbox}
+\end{futurebox}
 
 \chapter{A decision guide for real projects}
 
@@ -840,20 +1842,21 @@ on the model and the research group’s expertise.
  external/.style={rounded corners,draw=JaxRed,fill=JaxRed!7,
                   minimum width=48mm,minimum height=10mm,align=center}]
 \node[box] (q) {Define the scientific question};
-\node[decision,below=of q] (eq) {Equilibria?};
-\node[box,below left=of eq] (jc) {Use JaxCont equilibrium\\continuation};
-\node[external,below right=of eq] (po) {Periodic/global object:\\use a mature external workflow};
-\node[box,below=of jc] (val) {Validate residuals, settings,\\events, and interpretation};
+\node[decision,below=of q] (kind) {Solution object?};
+\node[box,below left=of kind] (eq) {Equilibrium: verified root\\and Jacobian spectrum};
+\node[box,below right=of kind] (po) {Periodic orbit: trajectory,\\period, mesh, multipliers};
+\node[box,below=16mm of kind] (val) {Use the matching JaxCont v0.2 workflow;\\validate residuals, resolution, and events};
 \node[decision,below=of val] (enough) {Question answered?};
 \node[box,below left=of enough] (report) {Report methods, diagnostics,\\and limitations};
-\node[external,below right=of enough] (advanced) {Escalate to branch switching,\\cycles, or two parameters};
-\draw[->,thick] (q)--(eq);
-\draw[->,thick] (eq)--node[above left]{yes}(jc);
-\draw[->,thick] (eq)--node[above right]{no}(po);
-\draw[->,thick] (jc)--(val);
+\node[external,below right=of enough] (advanced) {Future/external workflow:\\branch switching, two parameters, global orbits};
+\draw[->,thick] (q)--(kind);
+\draw[->,thick] (kind)--node[above left]{equilibrium}(eq);
+\draw[->,thick] (kind)--node[above right]{periodic}(po);
+\draw[->,thick] (eq)--(val);
+\draw[->,thick] (po)--(val);
 \draw[->,thick] (val)--(enough);
 \draw[->,thick] (enough)--node[above left]{yes}(report);
-\draw[->,thick] (enough)--node[above right]{no}(advanced);
+\draw[->,thick] (enough)--node[above right]{needs unsupported object}(advanced);
 \end{tikzpicture}
 \end{center}
 
@@ -884,6 +1887,41 @@ Convergence depends on a suitable initial guess, a locally informative
 Jacobian, scaling, precision, and stopping rules. A small update alone is not
 enough; inspect the residual.
 
+\section{A practical stopping test}
+
+A robust diagnosis considers at least
+\[
+  \|G(z_k)\|_\infty,\qquad
+  \|\delta z_k\|_\infty,\qquad
+  \operatorname{finite}(z_k,G(z_k)),
+\]
+plus an iteration limit. A tiny update with a large residual can mean a
+singular or badly scaled Jacobian; a small residual with a large update can
+mean that the root has been reached in poorly scaled coordinates.
+
+\noindent\begin{tabularx}{\textwidth}{>{\bfseries}p{.27\textwidth}X}
+\toprule
+Observed behavior & Investigation\\
+\midrule
+Residual decreases, then plateaus & Check dtype precision and attainable
+model residual; do not tighten the tolerance automatically.\\
+Residual oscillates & Reduce the starting step, use damping if available, and
+inspect nonsmooth equations or a poor initial guess.\\
+Linear solve is ill conditioned & Rescale variables/equations and check
+whether the point is near a genuine singularity.\\
+Converges to an unwanted root & Change the initial guess or add a
+problem-appropriate formulation; Newton has no branch-selection guarantee.\\
+Non-finite residual & Inspect poles, exponentials, invalid state regions, and
+the first iteration at which finite values are lost.\\
+\bottomrule
+\end{tabularx}
+
+\begin{workflowbox}
+When a continuation corrector fails, reproduce its predicted point in a small
+root-solving experiment if possible. Separating model/Jacobian behavior from
+predictor and step-size logic makes the failure much easier to understand.
+\end{workflowbox}
+
 \chapter{Pseudo-arclength algorithm}
 
 \begin{enumerate}
@@ -896,20 +1934,169 @@ enough; inspect the residual.
   \item repeat until target, failure threshold, non-finite value, or budget.
 \end{enumerate}
 
+\section{The bordered corrector}
+
+Given the previous point $z_k=(\state_k,p_k)$ and normalized tangent $t_k$, a
+predictor is
+\[
+  z_{\mathrm{pred}}=z_k+\Delta s\,t_k.
+\]
+The corrector solves
+\[
+  \begin{bmatrix}
+    F(\state,p)\\
+    t_k^\mathsf{T}(z-z_{\mathrm{pred}})
+  \end{bmatrix}=0.
+\]
+The first row block enforces the model and the final scalar equation selects a
+nearby point on a hyperplane normal to the tangent. Both $\state$ and $p$ are
+unknown, which is why the formulation can remain regular when $p$ turns.
+
+\section{Tangent orientation and endpoints}
+
+The tangent has two signs. The ordered pair in \texttt{p\_span} chooses the
+initial parameter direction, after which orientation is maintained by tangent
+continuity. At a fold the parameter component changes sign. Consequently,
+\texttt{p\_span[1]} is a directional target, not a coordinate that every PALC
+branch must reach monotonically.
+
+\begin{diagnosticbox}
+If the very first step travels in an unexpected direction, check start
+consistency and the order of \texttt{p\_span}. If direction reverses later,
+first inspect whether the branch has passed a real fold before treating it as
+a solver error.
+\end{diagnosticbox}
+
+\chapter{Periodic root layout and resolution}
+
+\section{Packing}
+
+For $n$ ODE states, \texttt{ntst}$=m$ intervals, and
+\texttt{ncol}$=q$ collocation nodes, the unknown count is
+\[
+  N=n\,m(1+q)+1.
+\]
+In v0.2, the first $nm$ values contain mesh-point states and the last value is
+the period. Treat all intermediate values as implementation-level collocation
+unknowns unless a documented reconstruction helper is used.
+
+\begin{lstlisting}
+n_valid = result.branch.n_valid
+U = result.branch.states
+
+mesh_states = U[:, :ntst*n_state].reshape(
+    n_valid, ntst, n_state
+)
+period = U[:, -1]
+\end{lstlisting}
+
+\section{A mesh study}
+
+Run at least two meshes, for example $(m,q)=(20,4)$ and $(40,4)$. Compare:
+
+\begin{enumerate}
+  \item maximum assembled periodic residual;
+  \item period and chosen amplitude at matched parameters;
+  \item important Floquet multipliers;
+  \item event locations;
+  \item phase portraits, especially sharp fast--slow segments.
+\end{enumerate}
+
+Agreement should be judged relative to the scientific precision required.
+Doubling the mesh changes array shape and can trigger a new JAX compilation,
+so record numerical accuracy separately from runtime.
+
+\begin{futurebox}
+Adaptive interval placement and automatic mesh refinement are later-version
+placeholders. Until then, the user owns the fixed-mesh resolution study.
+\end{futurebox}
+
+\chapter{Troubleshooting matrix}
+
+\small
+\begin{longtable}{>{\bfseries}p{.23\textwidth}p{.31\textwidth}p{.34\textwidth}}
+\toprule
+Symptom & Likely causes & First checks\\
+\midrule
+\endhead
+No point beyond the start &
+Inconsistent start; unattainable tolerance; non-finite residual &
+Evaluate the exact starting residual; inspect dtype and the first correction.\\
+\addlinespace
+Natural continuation stops near a turn &
+State Jacobian singular at a fold &
+Switch to PALC; verify with a known fold or tangent parameter reversal.\\
+\addlinespace
+PALC never reaches the second endpoint &
+Branch turned; attempt budget exhausted; repeated correction failure &
+Plot ordered parameter values and step sizes; inspect status and residuals.\\
+\addlinespace
+Event moves substantially when \texttt{ds\_max} changes &
+Coarse bracket, false crossing, close events, or ill-conditioned spectrum &
+Reduce the step bound; inspect the full nearby spectrum; cross-validate.\\
+\addlinespace
+Hopf is reported in a scalar model &
+Copied event list or inappropriate interpretation &
+Remove the event; a scalar real Jacobian cannot contain a complex pair.\\
+\addlinespace
+Batched plot has flat tails or repeated zeros &
+Unused fixed-buffer entries were included &
+Apply \texttt{branch.valid} separately for every batch member.\\
+\addlinespace
+Periodic factory returns a degenerate orbit &
+Absolute rather than rebased times; poor trajectory; wrong period &
+Require time to start at zero; plot endpoints and peak spacings before build.\\
+\addlinespace
+Periodic continuation stalls although simulation looks good &
+Initial path is not an accurate cycle; tolerance below precision floor;
+mesh too coarse &
+Check the assembled root, loosen only with evidence, and repeat on another mesh.\\
+\addlinespace
+Cycle labelled unstable despite negative multiplier real parts &
+Equilibrium stability rule was applied to multipliers &
+Exclude the trivial $+1$ multiplier and compare nontrivial magnitudes with one.\\
+\addlinespace
+First benchmark is much slower &
+JAX tracing and compilation are included &
+Synchronize results and report separate cold and warm times.\\
+\bottomrule
+\end{longtable}
+\normalsize
+
 \chapter{Glossary}
 
 \begin{description}
   \item[Branch] A connected family of solutions.
+  \item[Collocation] A boundary-value discretization that enforces an ODE at
+        selected nodes within mesh intervals.
   \item[Continuation parameter] The model parameter varied along a run.
   \item[Corrector] Newton iterations that return a prediction to the solution set.
   \item[Fold] A turning point where the state Jacobian has a zero eigenvalue.
+  \item[Floquet multiplier] An eigenvalue of the linearized one-period map of a
+        periodic orbit.
   \item[Hopf point] An equilibrium event where a complex pair reaches the
         imaginary axis, subject to additional classification conditions.
+  \item[JIT compilation] JAX tracing and compilation of an array program for
+        compatible shapes, dtypes, and static data.
+  \item[Monodromy matrix] The linear map that advances perturbations through
+        one period of an orbit.
+  \item[Neimark--Sacker candidate] A periodic-orbit event where a nontrivial
+        complex multiplier pair crosses the unit circle.
+  \item[Period doubling] A periodic-orbit event where a nontrivial real
+        multiplier crosses $-1$.
+  \item[Phase condition] An additional equation that removes the arbitrary
+        time origin of an autonomous periodic orbit.
   \item[Predictor] A local estimate of the next branch point.
   \item[Pseudo-arclength] Continuation using an approximate curve-distance
         coordinate rather than only the physical parameter.
   \item[Residual] The equations that must vanish at a numerical solution.
   \item[Stability] Local response to sufficiently small perturbations.
+  \item[Trivial multiplier] The multiplier at $+1$ caused by time-translation
+        invariance of an autonomous periodic orbit.
+  \item[Validity mask] Boolean metadata distinguishing accepted points from
+        unused entries in a fixed-shape transformed result.
+  \item[\texttt{vmap}] A JAX transformation that batches compatible array
+        computations over a chosen axis.
   \item[Validation] Evidence that numerical results and scientific
         interpretation are trustworthy for the intended use.
 \end{description}
@@ -925,7 +2112,10 @@ enough; inspect the residual.
   \item Stability is interpreted locally.
   \item Events are treated as candidates and independently checked.
   \item Simulation is used as a complementary, not substitutive, calculation.
-  \item Disconnected branches and unsupported solution types are acknowledged.
+  \item For cycles, time is rebased, periodic residuals are checked, the
+        trivial multiplier is excluded, and mesh sensitivity is assessed.
+  \item Fixed-buffer validity masks are applied before analysis.
+  \item Disconnected branches and unsupported advanced workflows are acknowledged.
   \item Code, software version, precision, hardware, and settings are archived.
 \end{enumerate}
 

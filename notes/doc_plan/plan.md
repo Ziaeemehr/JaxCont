@@ -4,6 +4,21 @@
 
 ---
 
+# v0.2 capability note
+
+The executable tutorial must distinguish current support from the long-term
+curriculum below. JaxCont v0.2 supports one-parameter equilibrium continuation,
+fixed-mesh periodic-orbit collocation, equilibrium eigenvalues, Floquet
+multipliers, fold/Hopf screening, and periodic fold/period-doubling/Neimark--
+Sacker screening. Branch switching, automatic Hopf-to-cycle initialization,
+adaptive meshes, two-parameter and codimension-two continuation, and global
+orbits remain future-version placeholders.
+
+The chapter-by-chapter implementation plan for the v0.2 revision is
+`../../docs/superpowers/plans/2026-07-28-practical-bifurcation-guide-expansion.md`.
+
+---
+
 # Goal
 
 This document aims to bridge the gap between bifurcation theory textbooks and software manuals by teaching a **systematic workflow** for analyzing nonlinear dynamical systems.
@@ -35,11 +50,11 @@ After completing this guide, readers should be able to
 - Compute and analyze equilibria
 - Determine stability using Jacobian eigenvalues
 - Detect local bifurcations
-- Continue bifurcation points
-- Compute periodic orbits
-- Analyze codimension-2 bifurcations
+- Compute and continue periodic orbits with a supplied trajectory and period
+- Recognize when branch switching, two-parameter, codimension-two, or global
+  analysis requires a future JaxCont version or an external package
 - Validate continuation results using numerical simulations
-- Use JaxCont to perform the complete analysis
+- Use JaxCont for the v0.2-supported stages and document capability boundaries
 
 ---
 
