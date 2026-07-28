@@ -366,3 +366,68 @@ def test_viz_package_exports_public_surface():
         "plot_phase_portrait", "plot_eigenvalues", "EigenvalueReference",
     ):
         assert hasattr(viz, name), f"jaxcont.viz missing {name}"
+
+
+import numpy as np
+
+import jaxcont as jc
+from jaxcont.viz.phase_plane import _evaluate_field, _require_2d, _state_names
+
+
+def _linear_spiral_problem():
+    """dx/dt = y - x, dy/dt = -x - y.
+
+    Nullclines are the straight lines y = x and y = -x. The only equilibrium
+    is the origin, a stable spiral (eigenvalues -1 +/- i).
+    """
+    def rhs(u, p, args):
+        x, y = u
+        return jnp.array([y - x, -x - y])
+
+    return jc.bif_problem(
+        rhs, u0=jnp.array([0.0, 0.0]), p0=0.0,
+        state_names=["x", "y"], param_name="mu",
+    )
+
+
+def _three_state_problem():
+    def rhs(u, p, args):
+        return -u
+
+    return jc.bif_problem(rhs, u0=jnp.array([1.0, 1.0, 1.0]), p0=0.0)
+
+
+def test_require_2d_accepts_two_state_problem():
+    _require_2d(_linear_spiral_problem())  # must not raise
+
+
+def test_require_2d_rejects_higher_dimensional_problem_naming_n():
+    with pytest.raises(NotImplementedError, match="n=3"):
+        _require_2d(_three_state_problem())
+
+
+def test_evaluate_field_shapes_and_values():
+    problem = _linear_spiral_problem()
+
+    X, Y, F = _evaluate_field(problem, 0.0, (-1.0, 1.0), (-2.0, 2.0), resolution=5)
+
+    assert X.shape == (5, 5)
+    assert Y.shape == (5, 5)
+    assert F.shape == (5, 5, 2)
+    assert isinstance(F, np.ndarray)
+    # X varies along columns, Y along rows (matplotlib's "xy" indexing).
+    np.testing.assert_allclose(X[0, :], np.linspace(-1.0, 1.0, 5))
+    np.testing.assert_allclose(Y[:, 0], np.linspace(-2.0, 2.0, 5))
+    # F must equal the right-hand side evaluated pointwise.
+    np.testing.assert_allclose(F[..., 0], Y - X, atol=1e-6)
+    np.testing.assert_allclose(F[..., 1], -X - Y, atol=1e-6)
+
+
+def test_state_names_falls_back_when_problem_has_none():
+    def rhs(u, p, args):
+        return u
+
+    problem = jc.bif_problem(rhs, u0=jnp.array([0.0, 0.0]), p0=0.0)
+
+    assert _state_names(problem) == ("state[0]", "state[1]")
+    assert _state_names(_linear_spiral_problem()) == ("x", "y")
