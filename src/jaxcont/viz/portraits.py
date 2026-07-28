@@ -2,6 +2,7 @@
 Phase-portrait and eigenvalue-trajectory plots for jaxcont.viz.
 """
 
+import warnings
 from dataclasses import dataclass
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -28,7 +29,7 @@ class EigenvalueReference:
     linewidth: float = 1.8
 
 
-def plot_phase_portrait(
+def plot_branch_states(
     solution: ContinuationSolution,
     state_indices: Tuple[int, int] = (0, 1),
     param_indices: Optional[List[int]] = None,
@@ -36,7 +37,13 @@ def plot_phase_portrait(
     **kwargs,
 ) -> plt.Figure:
     """
-    Plot phase portraits for selected parameter values.
+    Scatter two state components of a continuation branch, one point per
+    parameter value.
+
+    This is a picture of the *branch* in state space, not a phase portrait of
+    the flow -- for nullclines and vector fields of a 2D system, see
+    :func:`jaxcont.viz.plot_phase_plane`. The function was named
+    ``plot_phase_portrait`` before v0.3.0.
 
     Args:
         solution: Continuation solution
@@ -77,6 +84,23 @@ def plot_phase_portrait(
 
     plt.tight_layout()
     return fig
+
+
+def plot_phase_portrait(*args, **kwargs) -> plt.Figure:
+    """Deprecated alias for :func:`plot_branch_states`.
+
+    Renamed in v0.3.0: this function scatters branch points in state space, so
+    the old name misdescribed it and collided with the real phase-plane plots
+    in :mod:`jaxcont.viz.phase_plane`. Scheduled for removal in v0.4.0.
+    """
+    warnings.warn(
+        "plot_phase_portrait is deprecated and will be removed in v0.4.0; use "
+        "plot_branch_states instead. For nullclines and vector fields of a 2D "
+        "system, see jaxcont.viz.plot_phase_plane.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return plot_branch_states(*args, **kwargs)
 
 
 def plot_eigenvalues(

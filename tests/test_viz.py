@@ -204,25 +204,35 @@ def test_plot_all_states_single_state_keeps_its_xlabel():
     assert fig.axes[0].get_xlabel() != ""
 
 
-from jaxcont.viz.portraits import EigenvalueReference, plot_eigenvalues, plot_phase_portrait
+from jaxcont.viz.portraits import (
+    EigenvalueReference, plot_branch_states, plot_eigenvalues, plot_phase_portrait,
+)
 
 
-def test_plot_phase_portrait_draws_onto_supplied_ax_not_a_new_figure():
+def test_plot_branch_states_draws_onto_supplied_ax_not_a_new_figure():
     solution = _two_state_solution()
 
     fig, (ax1, ax2) = plt.subplots(1, 2)
     ax1.set_title("placeholder")
 
-    returned_fig = plot_phase_portrait(solution, ax=ax2)
+    returned_fig = plot_branch_states(solution, ax=ax2)
 
     assert returned_fig is fig
     assert ax2.get_title() == "Phase Portrait"
     assert ax1.get_title() == "placeholder"
 
 
-def test_plot_phase_portrait_creates_own_figure_when_no_ax_given():
-    fig = plot_phase_portrait(_two_state_solution())
+def test_plot_branch_states_creates_own_figure_when_no_ax_given():
+    fig = plot_branch_states(_two_state_solution())
     assert len(fig.axes) == 1
+
+
+def test_plot_phase_portrait_alias_warns_and_forwards():
+    with pytest.warns(DeprecationWarning, match="plot_branch_states"):
+        fig = plot_phase_portrait(_two_state_solution())
+
+    assert len(fig.axes) == 1
+    assert fig.axes[0].get_title() == "Phase Portrait"
 
 
 def test_plot_eigenvalues_raises_without_eigenvalues():
@@ -363,7 +373,10 @@ def test_viz_package_exports_public_surface():
 
     for name in (
         "plot_continuation", "plot_bifurcation_diagram", "plot_all_states",
-        "plot_phase_portrait", "plot_eigenvalues", "EigenvalueReference",
+        "plot_branch_states", "plot_phase_portrait", "plot_eigenvalues",
+        "EigenvalueReference", "plot_phase_plane", "plot_nullclines",
+        "plot_vector_field", "plot_streamlines", "plot_equilibria",
+        "plot_trajectory",
     ):
         assert hasattr(viz, name), f"jaxcont.viz missing {name}"
 

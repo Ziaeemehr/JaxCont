@@ -5,6 +5,20 @@ All notable changes to JaxCont will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- 2D phase-plane visualization in `jaxcont.viz`: `plot_phase_plane`, `plot_nullclines`,
+  `plot_vector_field`, `plot_streamlines`, `plot_equilibria`, and `plot_trajectory`.
+  Supports 2D autonomous systems only; trajectories integrate with `scipy.integrate.solve_ivp`
+  (already a dependency) or accept a precomputed `(n_steps, 2)` array from any solver.
+- Example: FitzHugh–Nagumo phase plane (`example_12`).
+
+### Changed
+- `plot_phase_portrait` is renamed to `plot_branch_states`, which describes what it does:
+  scatter branch points in state space. The old name remains as a deprecated alias and will be
+  removed in v0.4.0.
+
 ## [0.2.0] - 2026-07-24
 
 First PyPI release: `pip install jaxcont`. Adds periodic-orbit (limit-cycle) continuation,
