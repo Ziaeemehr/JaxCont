@@ -678,7 +678,10 @@ def test_equilibria_at_marks_the_positive_branch_unstable():
 
     states, stable_flags = _equilibria_at(result.branch, -0.5)
 
-    by_x = dict(zip(np.round(states[:, 0], 3), stable_flags))
+    # Key through plain Python floats: states is float32 (this project never
+    # enables jax_enable_x64), and an np.float32 key can compare equal to a
+    # Python float while hashing differently, breaking dict lookup.
+    by_x = {round(float(x), 3): flag for x, flag in zip(states[:, 0], stable_flags)}
     assert by_x[round(float(np.sqrt(0.5)), 3)] is False
     assert by_x[round(float(-np.sqrt(0.5)), 3)] is True
 
@@ -796,19 +799,18 @@ def _equilibria_at(branch, p, atol: Optional[float] = None):
     if params.size == 0:
         return np.empty((0, states.shape[-1])), []
 
-    steps = np.abs(np.diff(params))
-    if atol is None:
-        atol = 0.25 * float(np.median(steps)) if steps.size else 0.0
-
     d = params - p
     found = []
     flags = []
+    crossing_indices = set()
 
     # Interior crossings, linearly interpolated.
     for i in range(len(d) - 1):
         if d[i] * d[i + 1] < 0.0:
             theta = d[i] / (d[i] - d[i + 1])
             found.append(states[i] + theta * (states[i + 1] - states[i]))
+            crossing_indices.add(i)
+            crossing_indices.add(i + 1)
             if stable is None:
                 flags.append(None)
             elif bool(stable[i]) == bool(stable[i + 1]):
@@ -819,7 +821,21 @@ def _equilibria_at(branch, p, atol: Optional[float] = None):
                 flags.append(False)
 
     # Points sitting on p without a sign change (e.g. a branch endpoint).
+    # Skip indices already claimed by an interior crossing above -- a point
+    # adjacent to a crossing is that crossing's own equilibrium, not a second
+    # one, and treating it as "sitting on p" would double-count it. The
+    # default atol comes from the *local* minimum step, not a trajectory-wide
+    # median: a branch that overshoots far past p_span after reversing
+    # through a fold (pseudo_arclength_scan has no stop condition for the
+    # reversed direction) inflates a global median to the point where it
+    # spans the local spacing near p, which is exactly the failure mode this
+    # exclusion plus the local-step default both close off.
+    if atol is None:
+        steps = np.abs(np.diff(params))
+        atol = 0.25 * float(np.min(steps)) if steps.size else 0.0
     for i in np.flatnonzero(np.abs(d) <= atol):
+        if i in crossing_indices:
+            continue
         found.append(states[i])
         flags.append(None if stable is None else bool(stable[i]))
 
@@ -865,7 +881,8 @@ def plot_equilibria(
             output; it does not solve for equilibria itself.
         p: Parameter value at which to mark equilibria.
         atol: Tolerance for treating a branch point as sitting exactly on
-            ``p``. Defaults to a quarter of the median parameter step.
+            ``p``, excluding points already claimed by an interior crossing.
+            Defaults to a quarter of the local minimum parameter step.
         ax: Matplotlib axes (creates a new figure if None).
         figsize: Figure size when ``ax`` is not supplied.
         **kwargs: Additional options forwarded to ``ax.plot``.
