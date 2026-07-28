@@ -431,3 +431,56 @@ def test_state_names_falls_back_when_problem_has_none():
 
     assert _state_names(problem) == ("state[0]", "state[1]")
     assert _state_names(_linear_spiral_problem()) == ("x", "y")
+
+
+from jaxcont.viz.phase_plane import plot_nullclines
+
+
+def test_plot_nullclines_zero_set_matches_analytic_lines():
+    """For dx/dt = y - x the x-nullcline is exactly y = x."""
+    problem = _linear_spiral_problem()
+
+    X, Y, F = _evaluate_field(problem, 0.0, (-2.0, 2.0), (-2.0, 2.0), resolution=41)
+
+    on_diagonal = np.isclose(X, Y)
+    assert np.all(np.abs(F[..., 0][on_diagonal]) < 1e-6)
+    on_antidiagonal = np.isclose(X, -Y)
+    assert np.all(np.abs(F[..., 1][on_antidiagonal]) < 1e-6)
+
+
+def test_plot_nullclines_draws_onto_supplied_ax_and_returns_its_figure():
+    problem = _linear_spiral_problem()
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.set_title("placeholder")
+
+    returned_fig = plot_nullclines(
+        problem, 0.0, (-2.0, 2.0), (-2.0, 2.0), resolution=25, ax=ax2
+    )
+
+    assert returned_fig is fig
+    assert len(ax2.get_children()) > len(ax1.get_children())
+    assert ax1.get_title() == "placeholder"
+
+
+def test_plot_nullclines_creates_own_figure_when_no_ax_given():
+    fig = plot_nullclines(
+        _linear_spiral_problem(), 0.0, (-2.0, 2.0), (-2.0, 2.0), resolution=25
+    )
+    assert len(fig.axes) == 1
+
+
+def test_plot_nullclines_labels_axes_from_state_names():
+    fig = plot_nullclines(
+        _linear_spiral_problem(), 0.0, (-2.0, 2.0), (-2.0, 2.0), resolution=25
+    )
+    ax = fig.axes[0]
+
+    assert ax.get_xlabel() == "x"
+    assert ax.get_ylabel() == "y"
+    legend_labels = [text.get_text() for text in ax.get_legend().get_texts()]
+    assert len(legend_labels) == 2
+
+
+def test_plot_nullclines_rejects_three_state_problem():
+    with pytest.raises(NotImplementedError, match="n=3"):
+        plot_nullclines(_three_state_problem(), 0.0, (-1.0, 1.0), (-1.0, 1.0))

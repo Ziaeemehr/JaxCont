@@ -78,3 +78,73 @@ def _evaluate_field(problem, p, xlim, ylim, resolution: int):
     field = jax.vmap(problem.as_rhs(p))(points)
     F = field.reshape(X.shape + (2,))
     return np.asarray(X), np.asarray(Y), np.asarray(F)
+
+
+def plot_nullclines(
+    problem,
+    p,
+    xlim: Tuple[float, float],
+    ylim: Tuple[float, float],
+    *,
+    resolution: int = 200,
+    colors: Optional[Tuple[str, str]] = None,
+    labels: bool = True,
+    ax: Optional[plt.Axes] = None,
+    figsize: Tuple[float, float] = DEFAULT_FIGSIZE,
+    **kwargs,
+) -> plt.Figure:
+    """
+    Plot the nullclines of a 2D autonomous system at parameter ``p``.
+
+    The nullclines are the zero level sets of each right-hand-side component;
+    their intersections are the equilibria.
+
+    Args:
+        problem: A 2D :class:`~jaxcont.api.BifProblem`.
+        p: Value of the continuation parameter to freeze the system at.
+        xlim: ``(min, max)`` range for the first state component.
+        ylim: ``(min, max)`` range for the second state component.
+        resolution: Grid points per axis. Raise it if a nullcline looks jagged.
+        colors: ``(x_nullcline_color, y_nullcline_color)``; defaults to the
+            module's colorblind-safe pair.
+        labels: Whether to set axis labels and draw the legend.
+        ax: Matplotlib axes (creates a new figure if None).
+        figsize: Figure size when ``ax`` is not supplied.
+        **kwargs: Additional options forwarded to ``ax.contour``.
+
+    Returns:
+        Matplotlib figure.
+
+    Raises:
+        NotImplementedError: If the problem is not two-dimensional.
+    """
+    X, Y, F = _evaluate_field(problem, p, xlim, ylim, resolution)
+    fig, ax = _prepare_axes(ax, figsize)
+
+    if colors is None:
+        colors = (X_NULLCLINE_COLOR, Y_NULLCLINE_COLOR)
+    names = _state_names(problem)
+
+    contour_options = {"linewidths": 2.0}
+    contour_options.update(kwargs)
+
+    for index, color in enumerate(colors):
+        ax.contour(X, Y, F[..., index], levels=[0.0], colors=[color], **contour_options)
+        if labels:
+            # A ContourSet carries no legend handle, so add an invisible proxy
+            # line whose only job is to appear in the legend.
+            ax.plot(
+                [], [],
+                color=color,
+                linewidth=contour_options["linewidths"],
+                label=r"$\dot{%s} = 0$" % names[index],
+            )
+
+    if labels:
+        ax.set_xlabel(names[0], fontsize=12)
+        ax.set_ylabel(names[1], fontsize=12)
+        ax.legend()
+
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    return fig
