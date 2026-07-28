@@ -56,11 +56,11 @@
 \newcommand{\good}{\textcolor{JaxGreen}{\bfseries advantage}}
 \newcommand{\limit}{\textcolor{JaxRed}{\bfseries limitation}}
 
-\title{JaxCont v0.2 Technical Presentation}
-\subtitle{From equilibrium branches to periodic orbits-and why JAX is a useful foundation}
+\title{JaxCont Technical Presentation}
+\subtitle{Equilibrium branches, periodic orbits, phase planes---and why JAX is a useful foundation}
 \author{JaxCont}
 \institute{Aix-Marseille Universit\'e (AMU)}
-\date{v0.2.0 living technical guide}
+\date{v0.2.0 core + current-main visualization features}
 
 \begin{document}
 
@@ -93,6 +93,7 @@
   \item How the same engine follows equilibria and collocated periodic orbits.
   \item How eigenvalues, Floquet multipliers and event tests reveal stability changes.
   \item What automatic differentiation, JIT, \texttt{vmap}, PyTrees and custom VJPs contribute.
+  \item How branch diagrams and 2D phase planes answer complementary questions.
   \item How to plan, run, validate, visualize and interpret a continuation study.
 \end{enumerate}
 \begin{alertblock}{Important naming clarification}
@@ -148,6 +149,33 @@ Presentation & Consolidated \texttt{jaxcont.viz} tools & Consistent diagrams, an
 \bottomrule
 \end{tabular}
 \end{center}
+\end{frame}
+
+\begin{frame}{What is new on current main after v0.2?}
+\small
+\begin{columns}[T]
+\column{.49\textwidth}
+\begin{block}{A composed 2D phase plane}
+\begin{itemize}
+  \item nullcline contours;
+  \item normalized vector fields or streamlines;
+  \item every continued equilibrium at a chosen parameter;
+  \item integrated or precomputed trajectories;
+  \item one \texttt{plot\_phase\_plane} convenience layer.
+\end{itemize}
+\end{block}
+\column{.49\textwidth}
+\begin{block}{Why this changes the workflow}
+A bifurcation diagram says how solutions change with a parameter. A phase
+plane freezes one parameter and shows the local state-space geometry behind
+that branch point.
+\end{block}
+\begin{alertblock}{Release status}
+These functions are in the changelog's \emph{Unreleased} section. The installed
+package version is still 0.2.0; use a current source checkout until the next
+release.
+\end{alertblock}
+\end{columns}
 \end{frame}
 
 \begin{frame}{A capability map: two kinds of branch}
@@ -798,9 +826,11 @@ The phase condition pins one representative of that equivalence class.
 \end{tikzpicture}
 \vspace{7mm}
 \begin{alertblock}{Division of responsibility}
-JaxCont does not time-integrate the ODE. The user supplies a coarse trajectory
-guess; the factory resamples it onto the fixed mesh and refines it with a
-differentiable Newton root solve before continuation starts.
+The periodic-problem factory does not simulate to discover a cycle. The user
+supplies a coarse trajectory guess; the factory resamples it onto the fixed
+mesh and refines it with a differentiable Newton root solve before
+continuation starts. The newer phase-plane \texttt{plot\_trajectory} helper is
+diagnostic visualization, not automatic cycle initialization.
 \end{alertblock}
 \begin{block}{Practical input rule}
 \texttt{t\_trajectory} must start at zero. The factory evaluates the guess at
@@ -1246,6 +1276,95 @@ batch size while monitoring memory and convergence.
 \end{block}
 \end{frame}
 
+\section{2D phase-plane visualization}
+
+\begin{frame}{One model, three complementary views}
+\small
+\begin{center}
+\begin{tabular}{>{\raggedright\arraybackslash}p{.25\textwidth}
+                >{\raggedright\arraybackslash}p{.30\textwidth}
+                >{\raggedright\arraybackslash}p{.34\textwidth}}
+\toprule
+View & Question answered & What it does not establish\\
+\midrule
+Bifurcation diagram & How equilibria or cycles change with $p$ & Flow geometry or basins at one fixed $p$\\
+Eigenvalue/Floquet plot & How local stability changes & Nonlinear trajectories far from the solution\\
+2D phase plane & Where nullclines, equilibria and trajectories lie at one $p$ & A higher-dimensional portrait or automatic branch discovery\\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{block}{The bridge}
+Continuation and phase-plane plotting consume the same
+\texttt{BifProblem}. The diagram traverses $p$; the phase plane calls
+\texttt{problem.as\_rhs(p)} to freeze one value.
+\end{block}
+\end{frame}
+
+\begin{frame}{Phase-plane architecture stays outside the solver core}
+\centering
+\begin{tikzpicture}[scale=.88,transform shape,node distance=7mm and 10mm,>=Latex,
+ box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+             minimum width=35mm,minimum height=10mm,align=center},
+ render/.style={rounded corners,draw=JaxOrange,thick,fill=JaxOrange!9,
+                minimum width=37mm,minimum height=10mm,align=center}]
+\node[box] (problem) {\texttt{BifProblem}\\$f(u,p,\mathrm{args})$};
+\node[box,right=of problem] (freeze) {\texttt{as\_rhs(p)}\\frozen $u\mapsto f(u)$};
+\node[box,right=of freeze] (grid) {\texttt{jax.vmap}\\grid evaluation};
+\node[render,right=of grid] (mpl) {NumPy conversion\\+ Matplotlib};
+\draw[->,thick] (problem)--(freeze);
+\draw[->,thick] (freeze)--(grid);
+\draw[->,thick] (grid)--(mpl);
+\node[render,below=of freeze] (branch) {\texttt{ContinuationResult}\\equilibria + stability};
+\node[render,below=of grid] (traj) {\texttt{solve\_ivp} or\\precomputed trajectory};
+\draw[->,thick] (branch)--(mpl);
+\draw[->,thick] (traj)--(mpl);
+\end{tikzpicture}
+\vspace{4mm}
+\begin{alertblock}{Deliberately strict}
+The public functions accept only autonomous systems with exactly two states.
+A slice of a higher-dimensional field does not generally have true
+nullclines or equilibria, so JaxCont refuses to label such a projection as a
+phase plane.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}[fragile]{Example 12: compose the FitzHugh--Nagumo view}
+\begin{lstlisting}
+from jaxcont.viz import plot_phase_plane
+
+result = jc.continuation(
+    problem,
+    p_span=(0.0, 1.0),
+    settings=jc.ContinuationPar(ds=0.01, max_steps=400),
+    events=[jc.Hopf()],
+)
+
+plot_phase_plane(
+    problem, p=0.5,
+    xlim=(-2.5, 2.5), ylim=(-1.0, 2.0),
+    result=result,
+    trajectories=[(jnp.array([-1.0, -0.5]),
+                   (0.0, 200.0))],
+)
+\end{lstlisting}
+\begin{itemize}
+  \item Nullcline intersections identify equilibrium locations.
+  \item Filled/open markers use continuation stability at the selected $p$.
+  \item A trajectory can be integrated through \texttt{solve\_ivp} or supplied
+        as a precomputed \texttt{(n\_steps, 2)} array.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{FitzHugh--Nagumo: parameter view and state-space view}
+\centering
+\includegraphics[width=.96\textwidth]{../../examples/images/example_12_fitzhugh_nagumo_phase_plane.jpg}
+\vspace{-1mm}
+\scriptsize
+At $I\approx0.331$ the continued equilibrium changes stability. At $I=0.5$,
+the hollow marker and outward trajectory provide a state-space interpretation;
+they do not replace residual, spectrum, or event-refinement checks.
+\end{frame}
+
 \section{Research applications and workflow}
 
 \begin{frame}{What continuation can answer}
@@ -1290,7 +1409,7 @@ calculation is more valuable than a large unexplained diagram.
 \end{frame}
 
 \begin{frame}{The package examples form a learning path}
-\small
+\scriptsize
 \begin{columns}[T]
 \column{.48\textwidth}
 \begin{block}{Foundations and JAX workflows}
@@ -1310,15 +1429,18 @@ calculation is more valuable than a large unexplained diagram.
 \end{description}
 \end{block}
 \end{columns}
-\begin{block}{Recommended order}
-Learn branch geometry first, then batching/differentiation, then periodic
-orbits. Use the analytic PD/NS cases to check event semantics.
+\begin{block}{Current-main visualization and recommended order}
+\textbf{12} combines a FitzHugh--Nagumo branch, Hopf marker, nullclines,
+vector field, equilibrium and trajectory. Learn branch geometry first,
+batching/differentiation second, periodic orbits next, then use Example 12 to
+connect the parameter and state-space views.
 \end{block}
 \end{frame}
 
 \begin{frame}[fragile]{Visualization is now one consistent module}
+\small
 \begin{lstlisting}
-from jaxcont.viz import plot_eigenvalues
+from jaxcont.viz import plot_eigenvalues, plot_phase_plane
 
 fig = result.plot(
     state_index=0,
@@ -1328,15 +1450,15 @@ fig = result.plot(
 fig = plot_eigenvalues(result)
 \end{lstlisting}
 \begin{itemize}
-  \item Stable and unstable branch segments use consistent styles.
-  \item Event markers share one style table across plots.
+  \item Branch segments and event markers share consistent styles.
   \item \texttt{annotate=True} adds event labels and numerical coordinates.
-  \item Multi-state, phase-portrait and generalized eigenvalue plots live in
-        \texttt{jaxcont.viz}; \texttt{plot\_continuation} also has a top-level export.
+  \item \texttt{plot\_branch\_states} scatters a branch in state coordinates.
+  \item \texttt{plot\_phase\_plane} draws the actual 2D flow geometry at one $p$.
 \end{itemize}
-\begin{alertblock}{Periodic plotting detail}
-The packed collocation vector needs a chosen observable-for example period,
-maximum amplitude, or selected mesh state-rather than a naïve state index.
+\begin{alertblock}{API migration}
+\texttt{plot\_phase\_portrait} was an inaccurate name for a branch-state
+scatter. It remains as a deprecated alias and is scheduled for removal in
+v0.4.0; use \texttt{plot\_branch\_states}.
 \end{alertblock}
 \end{frame}
 
@@ -1376,6 +1498,7 @@ physical branch ends.
 \end{frame}
 
 \begin{frame}{Current capability boundaries}
+\small
 \begin{itemize}
   \item Event detection is not transformation-safe inside \texttt{jit}/\texttt{vmap}.
   \item Event classes rely on branch-kind conventions; mixing Hopf with
@@ -1384,8 +1507,12 @@ physical branch ends.
   \item Natural continuation is intentionally unable to pass folds.
   \item Reverse-mode gradients require implicit/custom rules rather than backpropagation through the scan loop.
   \item Periodic orbits use a fixed mesh; adaptive mesh redistribution is not implemented.
-  \item JaxCont refines a supplied cycle guess but does not integrate the ODE to find it.
+  \item The periodic factory refines a supplied cycle guess but does not
+        integrate to discover it; phase-plane trajectory plotting is separate.
   \item Branch switching and discovery of disconnected branches require additional analysis.
+  \item Phase-plane functions are strict 2D visualization; they do not draw
+        higher-dimensional slices, discover roots, classify basins, or become
+        JIT/differentiable through Matplotlib.
 \end{itemize}
 \begin{block}{Use the tool within its scope}
 JaxCont is a numerical aid for structured exploration. Combine its output with
@@ -1408,12 +1535,14 @@ Jacobians, batching and accelerator execution; a custom VJP supplies implicit
 root sensitivities. Equilibrium stability uses Jacobian eigenvalues, while
 cycle stability uses Floquet multipliers. These tools accelerate and organize
 the analysis, but a study still needs a valid start, diagnostics and
-independent validation.
+independent validation. For a 2D autonomous model, the same problem can also
+be frozen at one parameter to connect the branch diagram with nullclines,
+continued equilibria, vector fields and trajectories.
 \end{quote}
 \end{frame}
 
 \begin{frame}{Vocabulary checklist}
-\small
+\scriptsize
 \begin{description}
   \item[Continuation] following a connected family of solutions.
   \item[Predictor] a local guess for the next branch point.
@@ -1425,6 +1554,9 @@ independent validation.
   \item[Phase condition] one equation that removes arbitrary time shift of a cycle.
   \item[Floquet multiplier] eigenvalue of the one-period linearized map.
   \item[Monodromy matrix] the linear map advancing perturbations by one period.
+  \item[Nullcline] a curve where one component of a 2D vector field is zero.
+  \item[Phase plane] the true state-space flow of a two-state autonomous
+        system at one fixed parameter.
   \item[JIT] trace and compile array code for later reuse.
   \item[\texttt{lax.while\_loop}] JAX's compiled, traceable dynamic loop primitive.
   \item[\texttt{vmap}] automatic batching of one function across an array axis.
@@ -1442,6 +1574,8 @@ independent validation.
         sensitivities composable in one numerical codebase.
   \item Fixed buffers, static mesh shapes and eager-only events are deliberate
         transformation trade-offs.
+  \item For 2D models, phase planes connect branch and stability results to
+        nullclines and trajectories without changing the solver core.
   \item A trustworthy study begins with a verified solution and ends with
         residual, resolution and independent validation.
 \end{enumerate}
@@ -1516,10 +1650,12 @@ The real code uses JAX arrays, \texttt{NamedTuple} carry state, \texttt{jnp.wher
         \texttt{core/collocation.py} and \texttt{problems/periodic.py}
   \item Floquet and event logic in \texttt{stability/floquet.py} and
         \texttt{bifurcations/events.py}
-  \item v0.2 design specs and implementation plans in
+  \item phase-plane composition in \texttt{viz/phase\_plane.py}, built on
+        \texttt{BifProblem.as\_rhs(p)}
+  \item v0.2 and phase-plane design specs and implementation plans in
         \texttt{docs/superpowers/}
-  \item tests and Examples 04, 06--11 for folds, batching, differentiation,
-        periodic continuation, PD and NS
+  \item tests and Examples 04, 06--12 for folds, batching, differentiation,
+        periodic continuation, PD/NS and FitzHugh--Nagumo phase planes
 \end{itemize}
 \begin{block}{Reproducibility note}
 Re-run numerical examples and benchmarks with the current implementation,

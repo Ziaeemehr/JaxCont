@@ -119,7 +119,7 @@
 \title{\Huge From Dynamical System to\\[2mm]Practical Bifurcation Analysis\\[7mm]
        \Large A beginner-friendly workflow with JaxCont}
 \author{JaxCont project}
-\date{v0.2 tutorial edition: equilibria, periodic orbits, and JAX workflows}
+\date{v0.2 core + current-main phase-plane tutorial edition}
 
 \begin{document}
 
@@ -140,15 +140,19 @@ what comes next, how do I check the result, and when should I stop?}
 \end{quote}
 
 The method is broadly applicable to continuation packages, while executable
-examples use JaxCont v0.2. This edition covers two supported numerical
-workflows:
+examples use the JaxCont v0.2 core plus the current source tree. This edition
+covers two supported numerical workflows and one diagnostic visualization
+workflow:
 
 \begin{enumerate}
   \item continuation of equilibria with natural or pseudo-arclength methods,
         equilibrium eigenvalues, and fold/Hopf event screening;
   \item fixed-mesh collocation continuation of periodic orbits, Floquet
         stability, and fold-of-cycles, period-doubling, or Neimark--Sacker
-        event screening.
+        event screening;
+  \item 2D phase-plane visualization with nullclines, vector fields,
+        streamlines, continued equilibria, and integrated or precomputed
+        trajectories.
 \end{enumerate}
 
 The guide deliberately goes beyond a list of API calls. Each practical chapter
@@ -165,6 +169,13 @@ kept as explicit placeholders so this guide can grow without pretending those
 commands already exist.
 \end{warningbox}
 
+\begin{workflowbox}
+The phase-plane functions and Example 12 are present on current
+\texttt{main}, but the changelog lists them under \emph{Unreleased}; the
+package version remains 0.2.0. Install from a current source checkout to run
+those sections before the next release.
+\end{workflowbox}
+
 \section*{Capability map for this edition}
 
 \begin{tabularx}{\textwidth}{>{\bfseries}p{.25\textwidth}p{.20\textwidth}X}
@@ -175,6 +186,8 @@ Equilibrium continuation & Supported & Chapters~4--10 and Examples 01--07\\
 Equilibrium fold/Hopf screening & Supported, eager events & Chapters~6--10\\
 Periodic-orbit collocation & Supported & Chapter~12 and Examples 10--11\\
 Floquet stability, PD, NS & Supported & Chapter~12 and Examples 08--09\\
+2D phase-plane visualization & Current main, unreleased & Chapters~7 and 10,
+Example 12\\
 Branch switching & Future & Chapter~11 placeholder\\
 Two-parameter/global analysis & Future & Chapter~13 placeholder\\
 \bottomrule
@@ -194,6 +207,9 @@ The book is cumulative, but it supports several routes:
         execution and validation checklist.
   \item[Periodic orbit.] Read the stability distinction in Chapter~2 and the
         equilibrium workflow once, then follow Chapter~12 in order.
+  \item[Two-state model.] After Chapters~4--6, use Chapter~7 and the
+        FitzHugh--Nagumo case in Chapter~10 to connect a parameter diagram to
+        fixed-parameter state-space geometry.
   \item[JAX study.] After one validated scalar run, use the ensemble and
         differentiability material in Chapters~9--10.
 \end{description}
@@ -991,16 +1007,145 @@ underlying compatibility object for utilities that still expect the older
 solution representation:
 
 \begin{lstlisting}
-from jaxcont.viz import plot_all_states, plot_eigenvalues
+from jaxcont.viz import (
+    plot_all_states,
+    plot_branch_states,
+    plot_eigenvalues,
+)
 
 solution = result._solution  # v0.2 compatibility bridge
 fig_states = plot_all_states(solution)
+fig_branch_xy = plot_branch_states(solution)
 fig_spectrum = plot_eigenvalues(result, show_events=True)
 \end{lstlisting}
 
 The leading underscore is a reminder that this bridge may evolve. Prefer
 \texttt{result.branch} and \texttt{result.events} for new numerical analysis,
 and use the plotting helpers as presentation utilities.
+
+\begin{warningbox}
+\texttt{plot\_phase\_portrait} previously scattered selected continuation
+points in two state coordinates. It is now the deprecated alias of the more
+accurately named \texttt{plot\_branch\_states}, with removal planned for
+v0.4.0. A branch-state scatter is not a phase portrait of the dynamical flow.
+\end{warningbox}
+
+\section{Connect a two-state branch to its phase plane}
+
+A bifurcation diagram and a phase plane answer different questions:
+
+\noindent\begin{tabularx}{\textwidth}{>{\bfseries}p{.25\textwidth}XX}
+\toprule
+View & Parameter treatment & Main question\\
+\midrule
+Bifurcation diagram & varies $p$ along a branch & How do solutions and their
+stability change?\\
+Phase plane & freezes one value of $p$ & How does the vector field organize
+states and trajectories?\\
+\bottomrule
+\end{tabularx}
+
+For a two-state autonomous system
+\[
+  \dot x=f_1(x,y,p),\qquad \dot y=f_2(x,y,p),
+\]
+the $x$-nullcline is $f_1=0$ and the $y$-nullcline is $f_2=0$. Their
+intersections satisfy both equations and are equilibria. The arrow field shows
+the instantaneous direction of motion; trajectories show finite-time behavior
+from selected initial conditions.
+
+\begin{keyidea}
+The continuation branch finds connected equilibria across parameter values.
+The phase plane explains the state-space geometry at one selected parameter.
+Neither view replaces the other.
+\end{keyidea}
+
+\subsection{Compose the standard view}
+
+The current-main convenience function uses the same \texttt{BifProblem} as
+continuation:
+
+\begin{lstlisting}
+from jaxcont.viz import plot_phase_plane
+
+fig = plot_phase_plane(
+    problem,
+    p=0.5,
+    xlim=(-2.5, 2.5),
+    ylim=(-1.0, 2.0),
+    result=result,
+    nullclines=True,
+    vector_field=True,
+    streamlines=False,
+    trajectories=[
+        (jnp.array([-1.0, -0.5]), (0.0, 200.0))
+    ],
+)
+\end{lstlisting}
+
+\texttt{result=} is optional. When provided,
+\texttt{plot\_equilibria} selects every continued equilibrium at the requested
+parameter---including multiple intersections after a fold---and draws stable
+points filled and unstable points hollow. If a transformed result retains a
+fixed buffer, the validity mask is applied before selecting points.
+
+The composed layers are available separately:
+
+\noindent\begin{tabularx}{\textwidth}{>{\ttfamily}p{.29\textwidth}X}
+\toprule
+\normalfont Function & Responsibility\\
+\midrule
+plot\_nullclines & contour $f_1=0$ and $f_2=0$ on a JAX-evaluated grid\\
+plot\_vector\_field & draw arrows; normalization preserves direction and color
+retains speed information\\
+plot\_streamlines & draw smooth Matplotlib streamlines instead of, or beneath,
+the arrow field\\
+plot\_equilibria & consume a result or branch; it does not solve for new roots\\
+plot\_trajectory & integrate through SciPy or draw a precomputed
+\texttt{(n\_steps,2)} state array\\
+plot\_phase\_plane & compose the selected layers in a readable order\\
+\bottomrule
+\end{tabularx}
+
+\subsection{Understand the implementation boundary}
+
+\texttt{problem.as\_rhs(p)} freezes the continuation parameter and returns an
+autonomous function of state. JAX builds the grid and evaluates its
+\texttt{resolution}$^2$ points with one \texttt{vmap}; the result is converted
+to NumPy once for Matplotlib. Trajectory integration uses
+\texttt{scipy.integrate.solve\_ivp}, which is already a dependency, or accepts
+states computed by another integrator.
+
+\begin{warningbox}
+This module deliberately accepts only problems with exactly two states.
+Zero-contours on an arbitrary higher-dimensional slice are not generally
+nullclines of the full system, and their intersections need not be
+equilibria. The plotting calls are also not end-to-end JIT-compatible or
+differentiable: rendering occurs in Matplotlib/NumPy space.
+\end{warningbox}
+
+\section{Worked visual interpretation: FitzHugh--Nagumo}
+
+Example 12 places the equilibrium diagram beside the phase plane. The
+continuation run reports a Hopf candidate near $I=0.331$. At $I=0.5$, the
+continued equilibrium is hollow (unstable), while a trajectory starting away
+from it spirals toward a large oscillation. The diagram locates the stability
+change; the phase plane makes its dynamical consequence visible.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{../../examples/images/example_12_fitzhugh_nagumo_phase_plane.jpg}
+\caption{Repository Example 12. Left: equilibrium voltage against applied
+current. Right: at fixed $I=0.5$, cubic and linear nullclines, normalized
+vector field, unstable continued equilibrium, and a post-Hopf trajectory.}
+\end{figure}
+
+\begin{diagnosticbox}
+The trajectory is complementary evidence, not a proof of the Hopf
+classification or cycle stability. Check the equilibrium residual and
+eigenvalues, refine the event, try multiple initial conditions, and extend the
+integration horizon before interpreting an apparent attracting cycle.
+\end{diagnosticbox}
 
 \section{A validated scalar fold example}
 
@@ -1514,6 +1659,108 @@ count, parameter extrema, event table, residual maximum, and independent
 reference. The plot alone is not a reproducible result.
 \end{diagnosticbox}
 
+\section{Case study E: FitzHugh--Nagumo from branch to phase plane}
+
+Example 12 uses the two-state neuron model
+\[
+  \dot v=v-\frac{v^3}{3}-w+I,\qquad
+  \dot w=\tau(v+a-bw),
+\]
+with $(a,b,\tau)=(0.7,0.8,0.08)$ and applied current $I$ as the continuation
+parameter.
+
+\subsection{Refine the example's approximate start}
+
+\begin{lstlisting}
+from jaxcont.solvers.newton import NewtonSolver
+
+def fitzhugh_nagumo_rhs(u, current, args):
+    v, w = u
+    a, b, tau = args
+    return jnp.array([
+        v - v**3 / 3.0 - w + current,
+        tau * (v + a - b*w),
+    ])
+
+args = (0.7, 0.8, 0.08)
+guess = jnp.array([-1.2, -0.6])
+
+solver = NewtonSolver(tol=1e-7, max_iter=50)
+u0, converged, _ = solver.solve(
+    lambda u: fitzhugh_nagumo_rhs(u, 0.0, args),
+    guess,
+)
+assert converged
+assert jnp.linalg.norm(
+    fitzhugh_nagumo_rhs(u0, 0.0, args), ord=jnp.inf
+) < 1e-6
+\end{lstlisting}
+
+The gallery script's state is a useful hand estimate. Refining it here
+preserves the guide's stricter research workflow: a plotted example should
+still begin from a residual-verified root.
+
+\subsection{Continue first, then freeze a parameter}
+
+\begin{lstlisting}
+problem = jc.bif_problem(
+    fitzhugh_nagumo_rhs,
+    u0=u0, p0=0.0, args=args,
+    state_names=["v", "w"], param_name="I",
+)
+
+result = jc.continuation(
+    problem,
+    p_span=(0.0, 1.0),
+    settings=jc.ContinuationPar(
+        ds=0.01, max_steps=400,
+        compute_stability=True,
+    ),
+    events=[jc.Hopf()],
+)
+
+hopf = [e for e in result.events if e.kind == "hopf"]
+print("Hopf candidates:", [float(e.p) for e in hopf])
+\end{lstlisting}
+
+The repository run finds a candidate near $I=0.3309$. Now select parameter
+values for interpretation rather than asking the phase-plane routine to
+discover them:
+
+\begin{lstlisting}
+from jaxcont.viz import plot_phase_plane
+
+fig_stable = plot_phase_plane(
+    problem, p=0.0,
+    xlim=(-2.5, 2.5), ylim=(-1.0, 2.0),
+    result=result,
+    trajectories=[(jnp.array([1.0, 0.0]),
+                   (0.0, 200.0))],
+)
+
+fig_oscillatory = plot_phase_plane(
+    problem, p=0.5,
+    xlim=(-2.5, 2.5), ylim=(-1.0, 2.0),
+    result=result,
+    trajectories=[(jnp.array([-1.0, -0.5]),
+                   (0.0, 200.0))],
+)
+\end{lstlisting}
+
+Below the crossing, the filled equilibrium marker and inward trajectory should
+agree with local stability. Above it, the equilibrium is hollow and the
+trajectory moves toward a large oscillation. Keep the logical direction
+clear: continuation supplies the equilibrium and local stability; the phase
+plane visualizes geometry; the trajectory samples one initial condition.
+
+\begin{trythis}
+Plot $I=0.30$, $0.34$, and $0.50$ with the same axes. For each value record the
+continued equilibrium, largest eigenvalue real part, trajectory endpoint
+behavior, and distance from the reported Hopf candidate. Then change the
+trajectory initial condition. Which conclusions are local, and which depend
+on finite-time simulation?
+\end{trythis}
+
 \part{Periodic orbits in v0.2 and future extensions}
 
 \chapter{Branch switching}
@@ -1845,7 +2092,7 @@ on the model and the research group’s expertise.
 \node[decision,below=of q] (kind) {Solution object?};
 \node[box,below left=of kind] (eq) {Equilibrium: verified root\\and Jacobian spectrum};
 \node[box,below right=of kind] (po) {Periodic orbit: trajectory,\\period, mesh, multipliers};
-\node[box,below=16mm of kind] (val) {Use the matching JaxCont v0.2 workflow;\\validate residuals, resolution, and events};
+\node[box,below=16mm of kind] (val) {Use the matching continuation workflow;\\add a 2D phase plane when applicable};
 \node[decision,below=of val] (enough) {Question answered?};
 \node[box,below left=of enough] (report) {Report methods, diagnostics,\\and limitations};
 \node[external,below right=of enough] (advanced) {Future/external workflow:\\branch switching, two parameters, global orbits};
@@ -2059,6 +2306,22 @@ Exclude the trivial $+1$ multiplier and compare nontrivial magnitudes with one.\
 First benchmark is much slower &
 JAX tracing and compilation are included &
 Synchronize results and report separate cold and warm times.\\
+\addlinespace
+Only one equilibrium is marked after a fold &
+A nearest-point lookup was used instead of all branch crossings &
+Use \texttt{plot\_equilibria}; verify the branch passes the selected parameter
+on both sides of the fold.\\
+\addlinespace
+A phase-plane call rejects a model &
+The system has other than two states &
+Do not relabel an arbitrary slice as a phase plane; choose another diagnostic
+or state explicitly that a scientifically justified projection is a projection.\\
+\addlinespace
+Trajectory and local stability appear inconsistent &
+Transient is too short; initial condition lies in another basin; event or
+equilibrium was selected incorrectly &
+Extend integration, try several starts, check the frozen parameter, residual,
+and equilibrium eigenvalues.\\
 \bottomrule
 \end{longtable}
 \normalsize
@@ -2067,6 +2330,9 @@ Synchronize results and report separate cold and warm times.\\
 
 \begin{description}
   \item[Branch] A connected family of solutions.
+  \item[Branch-state plot] Selected continuation points shown in state
+        coordinates; unlike a phase plane, it does not display the vector
+        field at one fixed parameter.
   \item[Collocation] A boundary-value discretization that enforces an ODE at
         selected nodes within mesh intervals.
   \item[Continuation parameter] The model parameter varied along a run.
@@ -2082,10 +2348,14 @@ Synchronize results and report separate cold and warm times.\\
         one period of an orbit.
   \item[Neimark--Sacker candidate] A periodic-orbit event where a nontrivial
         complex multiplier pair crosses the unit circle.
+  \item[Nullcline] In a two-state autonomous system, a curve on which one
+        component of the vector field is zero.
   \item[Period doubling] A periodic-orbit event where a nontrivial real
         multiplier crosses $-1$.
   \item[Phase condition] An additional equation that removes the arbitrary
         time origin of an autonomous periodic orbit.
+  \item[Phase plane] The state-space vector field and its geometry for a true
+        two-state autonomous system at one fixed parameter.
   \item[Predictor] A local estimate of the next branch point.
   \item[Pseudo-arclength] Continuation using an approximate curve-distance
         coordinate rather than only the physical parameter.
@@ -2115,6 +2385,9 @@ Synchronize results and report separate cold and warm times.\\
   \item For cycles, time is rebased, periodic residuals are checked, the
         trivial multiplier is excluded, and mesh sensitivity is assessed.
   \item Fixed-buffer validity masks are applied before analysis.
+  \item For a 2D phase plane, the selected parameter, axes, grid resolution,
+        equilibrium source, integration interval, and initial conditions are
+        recorded.
   \item Disconnected branches and unsupported advanced workflows are acknowledged.
   \item Code, software version, precision, hardware, and settings are archived.
 \end{enumerate}
