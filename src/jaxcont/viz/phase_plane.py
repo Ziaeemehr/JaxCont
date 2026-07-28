@@ -56,7 +56,7 @@ def _state_names(problem) -> Tuple[str, str]:
     return (str(names[0]), str(names[1]))
 
 
-def _prepare_axes(ax, figsize) -> Tuple[plt.Figure, plt.Axes]:
+def _prepare_axes(ax: Optional[plt.Axes], figsize) -> Tuple[plt.Figure, plt.Axes]:
     """Return ``(figure, axes)``, creating a figure when ``ax`` is None."""
     if ax is None:
         return plt.subplots(figsize=figsize)
