@@ -433,6 +433,8 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
       not a silent print).
 
 ## v0.3.0+ — Advanced (demand-driven)
+- [x] Phase-plane visualization for 2D autonomous systems: nullclines, vector fields,
+      streamlines, continuation equilibria, and trajectories.
 - [ ] Branch switching
 - [ ] Two-parameter continuation
 - [ ] Normal forms / Lyapunov **coefficient** `l₁` (Hopf criticality — a *bifurcation* invariant,
