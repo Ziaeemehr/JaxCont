@@ -630,6 +630,24 @@ def test_equilibria_at_returns_nothing_outside_the_branch_range():
     assert flags == []
 
 
+def test_plot_equilibria_rejects_a_three_state_branch():
+    branch = Branch(
+        params=jnp.array([0.0, 1.0]),
+        states=jnp.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]),
+    )
+    with pytest.raises(NotImplementedError, match="n=3"):
+        plot_equilibria(branch, 0.5)
+
+
+def test_plot_equilibria_accepts_marker_kwargs_without_colliding():
+    branch = Branch(
+        params=jnp.array([0.0, 1.0]),
+        states=jnp.array([[0.0, 0.0], [1.0, 1.0]]),
+    )
+    fig = plot_equilibria(branch, 0.5, markersize=20)
+    assert fig.axes[0].get_lines()[0].get_markersize() == 20
+
+
 def test_plot_equilibria_marks_both_fold_branches_with_distinct_styles():
     result = _fold_result()
     fig, ax = plt.subplots()
@@ -734,6 +752,14 @@ def test_plot_phase_plane_composes_requested_layers_only():
     # contour artists plus their two invisible legend proxies.
     assert len(ax.collections) >= 1
     assert len(ax.get_lines()) == 2
+
+
+def test_plot_phase_plane_legend_false_removes_any_sublayer_legend():
+    fig = plot_phase_plane(
+        _linear_spiral_problem(), 0.0, (-2.0, 2.0), (-2.0, 2.0),
+        resolution=25, density=7, legend=False,
+    )
+    assert fig.axes[0].get_legend() is None
 
 
 def test_plot_phase_plane_without_any_layer_still_returns_a_figure():

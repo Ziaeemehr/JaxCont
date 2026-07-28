@@ -344,8 +344,18 @@ def _equilibria_at(branch, p, atol: Optional[float] = None):
     # spans the local spacing near p, which is exactly the failure mode this
     # exclusion plus the local-step default both close off.
     if atol is None:
-        steps = np.abs(np.diff(params))
-        atol = 0.25 * float(np.min(steps)) if steps.size else 0.0
+        if len(params) > 1:
+            nearest = int(np.argmin(np.abs(d)))
+            neighbors = [
+                abs(params[nearest] - params[nearest - 1]) if nearest > 0 else None,
+                abs(params[nearest + 1] - params[nearest])
+                if nearest < len(params) - 1
+                else None,
+            ]
+            local_steps = [s for s in neighbors if s is not None]
+            atol = 0.25 * float(min(local_steps)) if local_steps else 0.0
+        else:
+            atol = 0.0
     for i in np.flatnonzero(np.abs(d) <= atol):
         if i in crossing_indices:
             continue
@@ -395,7 +405,7 @@ def plot_equilibria(
         p: Parameter value at which to mark equilibria.
         atol: Tolerance for treating a branch point as sitting exactly on
             ``p``, excluding points already claimed by an interior crossing.
-            Defaults to a quarter of the local minimum parameter step.
+            Defaults to a quarter of the local parameter step nearest ``p``.
         ax: Matplotlib axes (creates a new figure if None).
         figsize: Figure size when ``ax`` is not supplied.
         **kwargs: Additional options forwarded to ``ax.plot``.
@@ -404,8 +414,25 @@ def plot_equilibria(
         Matplotlib figure.
     """
     branch = _branch_of(result)
+    state_dim = branch.states.shape[-1]
+    if state_dim != 2:
+        raise NotImplementedError(
+            "Phase-plane visualization supports 2D autonomous systems; this "
+            f"branch has n={state_dim}. Slices of higher-dimensional systems "
+            "are not drawn because their zero-contours are not nullclines of "
+            "the full system."
+        )
     states, flags = _equilibria_at(branch, p, atol=atol)
     fig, ax = _prepare_axes(ax, figsize)
+
+    marker_options = {
+        "marker": "o",
+        "markersize": 9,
+        "markeredgewidth": 2.0,
+        "linestyle": "none",
+        "zorder": 5,
+    }
+    marker_options.update(kwargs)
 
     seen_labels = set()
     for point, flag in zip(states, flags):
@@ -416,20 +443,13 @@ def plot_equilibria(
         else:
             color, face, label = UNSTABLE_COLOR, "none", "unstable equilibrium"
 
-        marker_options = {
-            "marker": "o",
-            "markersize": 9,
-            "markeredgewidth": 2.0,
-            "linestyle": "none",
-            "zorder": 5,
-        }
-        marker_options.update(kwargs)
+        point_options = dict(marker_options)
+        point_options.setdefault("markeredgecolor", color)
+        point_options.setdefault("markerfacecolor", face)
         ax.plot(
             [point[0]], [point[1]],
-            markeredgecolor=color,
-            markerfacecolor=face,
             label=None if label in seen_labels else label,
-            **marker_options,
+            **point_options,
         )
         seen_labels.add(label)
 
@@ -649,7 +669,11 @@ def plot_phase_plane(
     if title:
         ax.set_title(title, fontsize=13)
 
-    if legend and ax.get_legend_handles_labels()[0]:
+    if not legend:
+        existing = ax.get_legend()
+        if existing is not None:
+            existing.remove()
+    elif ax.get_legend_handles_labels()[0]:
         ax.legend(loc="best", fontsize=9)
 
     return fig
