@@ -1,14 +1,20 @@
 LATEXMK ?= latexmk
+CONVERT ?= convert
 JOB := jaxcont_technical_presentation
 TEX := $(JOB).tex
 PDF := $(JOB).pdf
+LOGO_SVG := ../../docs/images/logo/logo.svg
+LOGO_PNG := jaxcont_logo.png
 
 .PHONY: all clean distclean rebuild help
 
 all: $(PDF)
 
-$(PDF): $(TEX)
+$(PDF): $(TEX) $(LOGO_PNG)
 	$(LATEXMK) -pdf -interaction=nonstopmode -halt-on-error $(TEX)
+
+$(LOGO_PNG): $(LOGO_SVG)
+	$(CONVERT) -background none -density 180 $< -resize 900x $@
 
 # Remove generated LaTeX intermediates while preserving the compiled PDF.
 clean:

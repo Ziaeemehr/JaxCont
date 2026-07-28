@@ -27,13 +27,23 @@ The presentation follows a layered explanation:
    bordered linear system.
 5. Separate the *numerical method* from the *JAX implementation strategy*.
    This is where the ambiguous word “scan” is resolved.
-6. Connect implementation details to concrete research workloads.
-7. Finish with a reproducible workflow, validation, interpretation, and scope.
+6. Reuse the root abstraction to introduce periodic-orbit collocation: an
+   entire cycle and its period become one finite-dimensional unknown.
+7. Contrast equilibrium eigenvalue stability with Floquet-multiplier stability
+   and connect their crossings to the v0.2 event protocol.
+8. Map each JAX feature to a concrete package and user benefit.
+9. Finish with repository examples, a reproducible workflow, validation,
+   interpretation, and current scope.
 
 All branch diagrams are TikZ drawings of the scalar cubic
 `F(u,p)=p+u-u^3/3`; the same example has analytic folds at `p=+/-2/3`. Using
 one example repeatedly reduces the amount of new notation a beginner must
 hold in memory.
+
+Periodic-orbit diagrams remain schematic and editable in TikZ. Numerical claims
+come from the v0.2 collocation, Floquet, event and example implementations,
+including the analytic period-doubling and Neimark–Sacker crossings in Examples
+08 and 09.
 
 ## Terminology decision: “scan”
 

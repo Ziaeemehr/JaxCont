@@ -9,14 +9,16 @@ knows numerical continuation, bifurcation terminology, or JAX transformations.
 ### Short route: 15–20 minutes
 
 Cover the research problem, branch geometry, fold failure, pseudo-arclength
-prediction and correction, the public API, the compiled-loop idea, the research
-workflow, validation, and main takeaways.
+prediction and correction, the v0.2 capability map, the periodic-orbit workflow,
+the JAX benefits table, validation, and main takeaways.
 
-### Full route: 40–50 minutes
+### Full route: 55–70 minutes
 
 Use all main slides. Pause after the bordered Newton system and after the
-fixed-buffer explanation. Use the appendix only for derivations, method
-comparison, or implementation questions.
+collocation residual explanation. Use the appendix only for derivations, method
+comparison, or implementation questions. For a 40-minute version, omit the
+lower-level fixed-buffer/JIT slides or the detailed periodic-event examples
+according to the audience.
 
 ## Teaching sequence
 
@@ -70,17 +72,42 @@ one branch.
 ### 4. Connect features to research applications
 
 Continuation can map equilibria, locate candidate transition thresholds,
-identify multistable regions, follow stability changes, and repeat the same
-analysis over uncertain parameters or design variants.
+identify multistable regions, continue limit-cycle shape and period, follow
+equilibrium or Floquet stability changes, and repeat the same analysis over
+uncertain parameters or design variants.
+
+For periodic orbits, stress the abstraction before the formulas: collocation
+turns one entire cycle into one large root. The continuation engine does not
+need a separate branch-following algorithm; it sees a different residual.
+
+Keep the two stability rules visibly separate:
+
+- equilibria are stable when every Jacobian eigenvalue has negative real part;
+- periodic orbits are stable when every nontrivial Floquet multiplier lies
+  inside the unit circle.
+
+The multiplier nearest +1 is excluded because it represents motion along the
+cycle itself.
+
+### 5. Explain what JAX contributes
+
+Map every JAX mechanism to a package benefit. Automatic differentiation builds
+Jacobians, JIT reduces orchestration overhead, `lax.while_loop` keeps adaptive
+loops on device, `vmap` batches independent branches and stability calculations,
+and the custom VJP differentiates converged roots implicitly.
+
+Do not describe these as accuracy improvements. They make a carefully specified
+numerical program composable and executable across CPU/GPU/TPU backends; they
+do not repair conditioning, precision, initialization, or event semantics.
 
 Do not imply that a bifurcation diagram validates a model or establishes
 causality. It describes mathematical solutions of the supplied model.
 
-### 5. End with a trustworthy workflow
+### 6. End with a trustworthy workflow
 
 Emphasize five habits:
 
-1. verify the starting equilibrium;
+1. verify the starting equilibrium or refined cycle;
 2. begin with a small conservative run;
 3. inspect residuals, termination, and step sizes;
 4. repeat with changed settings or direction;
@@ -120,5 +147,19 @@ non-finite model values, and the attempt budget before interpreting the stop.
 
 ### Does finding a Hopf point give the oscillation amplitude?
 
-No. It identifies a local stability transition of an equilibrium. Following
-the periodic orbit requires an additional periodic-orbit method.
+No. It identifies a local stability transition of an equilibrium. JaxCont v0.2
+can follow a periodic orbit once the user supplies a coarse one-cycle trajectory
+and period guess, but it does not automatically branch-switch from the Hopf
+point or integrate the ODE to find that initial cycle.
+
+### Why does a periodic orbit need a phase condition?
+
+The same closed orbit can be represented with any point chosen as time zero.
+That time-shift freedom makes the collocation Jacobian singular unless one
+extra scalar condition pins a representative phase.
+
+### Why is periodic stability not based on negative real parts?
+
+A Floquet multiplier measures growth over one full period, so stability is a
+magnitude condition: nontrivial multipliers must lie inside the unit circle.
+Negative-real-part tests apply to continuous-time equilibrium eigenvalues.

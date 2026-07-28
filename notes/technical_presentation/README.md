@@ -1,13 +1,17 @@
 # JaxCont technical presentation
 
-This directory contains a beginner-friendly 16:9 Beamer presentation about
-JaxCont's continuation methods, implementation, research applications, and
-practical validation workflow.
+This directory contains a beginner-friendly 16:9 Beamer presentation for
+JaxCont v0.2. It develops continuation from equilibrium branches through
+periodic-orbit collocation, Floquet stability and periodic events, then explains
+how JAX enables automatic derivatives, whole-loop compilation, batching and
+implicit sensitivities.
 
 Files:
 
 - `jaxcont_technical_presentation.tex` — editable Beamer source.
 - `jaxcont_technical_presentation.pdf` — compiled presentation.
+- `jaxcont_logo.png` — transparent title-slide rendering of
+  `docs/images/logo/logo.svg`, generated automatically by `make`.
 - `Makefile` — build and cleanup commands.
 - `SPEAKER_NOTES.md` — suggested explanations and a short/long presentation route.
 - `METHOD.md` — how the presentation was researched and constructed.
