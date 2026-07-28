@@ -543,3 +543,108 @@ def test_vector_field_and_streamlines_reject_three_state_problem():
         plot_vector_field(problem, 0.0, (-1.0, 1.0), (-1.0, 1.0))
     with pytest.raises(NotImplementedError, match="n=3"):
         plot_streamlines(problem, 0.0, (-1.0, 1.0), (-1.0, 1.0))
+
+
+from jaxcont.viz.phase_plane import _equilibria_at, plot_equilibria
+
+
+def _fold_problem():
+    """dx/dt = x^2 + p, dy/dt = -y.
+
+    Equilibria are (+/-sqrt(-p), 0), meeting at a fold at p = 0. The branch
+    with x > 0 is unstable (Jacobian eigenvalues 2x, -1) and the x < 0 branch
+    is stable, so one continuation run produces both stability classes.
+    """
+    def rhs(u, p, args):
+        x, y = u
+        return jnp.array([x**2 + p, -y])
+
+    return jc.bif_problem(
+        rhs, u0=jnp.array([1.0, 0.0]), p0=-1.0,
+        state_names=["x", "y"], param_name="p",
+    )
+
+
+def _fold_result():
+    return jc.continuation(
+        _fold_problem(),
+        p_span=(-1.0, 0.1),
+        settings=jc.ContinuationPar(ds=0.02, max_steps=400),
+    )
+
+
+def test_equilibria_at_returns_both_sides_of_a_fold():
+    """The case Branch.at_param cannot cover: two equilibria at one p."""
+    result = _fold_result()
+
+    states, _ = _equilibria_at(result.branch, -0.5)
+
+    assert states.shape == (2, 2)
+    found = np.sort(states[:, 0])
+    np.testing.assert_allclose(found, [-np.sqrt(0.5), np.sqrt(0.5)], atol=1e-3)
+    np.testing.assert_allclose(states[:, 1], [0.0, 0.0], atol=1e-6)
+
+
+def test_equilibria_at_marks_the_positive_branch_unstable():
+    result = _fold_result()
+
+    states, stable_flags = _equilibria_at(result.branch, -0.5)
+
+    by_x = {round(float(x), 3): flag for x, flag in zip(states[:, 0], stable_flags)}
+    assert by_x[round(float(np.sqrt(0.5)), 3)] is False
+    assert by_x[round(float(-np.sqrt(0.5)), 3)] is True
+
+
+def test_equilibria_lie_on_both_nullclines():
+    """The defining property: an equilibrium is a nullcline intersection."""
+    problem = _fold_problem()
+    result = _fold_result()
+
+    states, _ = _equilibria_at(result.branch, -0.5)
+
+    rhs = problem.as_rhs(-0.5)
+    for point in states:
+        residual = np.asarray(rhs(jnp.asarray(point)))
+        assert np.max(np.abs(residual)) < 1e-3
+
+
+def test_equilibria_at_returns_nothing_outside_the_branch_range():
+    result = _fold_result()
+
+    states, flags = _equilibria_at(result.branch, 5.0)
+
+    assert states.shape[0] == 0
+    assert flags == []
+
+
+def test_plot_equilibria_marks_both_fold_branches_with_distinct_styles():
+    result = _fold_result()
+    fig, ax = plt.subplots()
+
+    returned_fig = plot_equilibria(result, -0.5, ax=ax)
+
+    assert returned_fig is fig
+    lines = ax.get_lines()
+    assert len(lines) == 2
+    face_colors = {line.get_markerfacecolor() for line in lines}
+    # Stable renders filled, unstable renders hollow.
+    assert "none" in face_colors
+    assert len(face_colors) == 2
+
+
+def test_plot_equilibria_uses_neutral_style_without_stability_data():
+    branch = Branch(
+        params=jnp.array([-1.0, 0.0, 1.0]),
+        states=jnp.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]]),
+    )
+    fig, ax = plt.subplots()
+
+    plot_equilibria(branch, 0.5, ax=ax)
+
+    line = ax.get_lines()[0]
+    assert line.get_markeredgecolor() == "#262626"
+
+
+def test_plot_equilibria_rejects_a_problem():
+    with pytest.raises(TypeError, match="ContinuationResult or Branch"):
+        plot_equilibria(_linear_spiral_problem(), 0.0)

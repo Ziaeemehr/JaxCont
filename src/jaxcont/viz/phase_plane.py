@@ -262,3 +262,175 @@ def plot_streamlines(
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     return fig
+
+
+def _branch_of(result):
+    """Accept a ContinuationResult or a bare Branch, return the Branch."""
+    from jaxcont.api import Branch
+
+    if isinstance(result, Branch):
+        return result
+    branch = getattr(result, "branch", None)
+    if branch is None:
+        raise TypeError(
+            "plot_equilibria expects a ContinuationResult or Branch (this "
+            "function consumes continuation output; it does not solve for "
+            f"equilibria itself); got {type(result).__name__}."
+        )
+    return branch
+
+
+def _valid_arrays(branch):
+    """Branch params/states/stability as NumPy, with the buffer mask applied.
+
+    A traced (``jax.vmap``/``jax.jit``) result keeps the full fixed-size engine
+    buffer and marks the real points with ``branch.valid``; an eager one is
+    already trimmed and has ``valid is None``.
+    """
+    params = np.asarray(branch.params)
+    states = np.asarray(branch.states)
+    stable = None if branch.stable is None else np.asarray(branch.stable)
+    if branch.valid is not None:
+        mask = np.asarray(branch.valid)
+        params, states = params[mask], states[mask]
+        if stable is not None:
+            stable = stable[mask]
+    return params, states, stable
+
+
+def _equilibria_at(branch, p, atol: Optional[float] = None):
+    """Every equilibrium on ``branch`` at parameter ``p``.
+
+    Handles a branch that has passed a fold, where two or more points share
+    the same ``p`` -- the case ``Branch.at_param`` cannot cover, since it
+    returns only the single nearest point.
+
+    Returns ``(states, stable_flags)``: states shaped ``(k, 2)`` and a list of
+    ``True``/``False``/``None`` flags, one per state.
+    """
+    params, states, stable = _valid_arrays(branch)
+    if params.size == 0:
+        return np.empty((0, states.shape[-1])), []
+
+    d = params - p
+    found = []
+    flags = []
+    crossing_indices = set()
+
+    # Interior crossings, linearly interpolated.
+    for i in range(len(d) - 1):
+        if d[i] * d[i + 1] < 0.0:
+            theta = d[i] / (d[i] - d[i + 1])
+            found.append(states[i] + theta * (states[i + 1] - states[i]))
+            crossing_indices.add(i)
+            crossing_indices.add(i + 1)
+            if stable is None:
+                flags.append(None)
+            elif bool(stable[i]) == bool(stable[i + 1]):
+                flags.append(bool(stable[i]))
+            else:
+                # A stability change between adjacent points means a
+                # bifurcation lies in between; draw the conservative style.
+                flags.append(False)
+
+    # Points sitting on p without a sign change (e.g. a branch endpoint).
+    # Skip indices already claimed by an interior crossing above -- a point
+    # adjacent to a crossing is that crossing's own equilibrium, not a second
+    # one, and treating it as "sitting on p" would double-count it. The
+    # default atol comes from the *local* minimum step, not a trajectory-wide
+    # median: a branch that overshoots far past p_span after reversing
+    # through a fold (pseudo_arclength_scan has no stop condition for the
+    # reversed direction) inflates a global median to the point where it
+    # spans the local spacing near p, which is exactly the failure mode this
+    # exclusion plus the local-step default both close off.
+    if atol is None:
+        steps = np.abs(np.diff(params))
+        atol = 0.25 * float(np.min(steps)) if steps.size else 0.0
+    for i in np.flatnonzero(np.abs(d) <= atol):
+        if i in crossing_indices:
+            continue
+        found.append(states[i])
+        flags.append(None if stable is None else bool(stable[i]))
+
+    if not found:
+        return np.empty((0, states.shape[-1])), []
+
+    # Dedupe: an exact hit next to a crossing describes the same equilibrium.
+    scale = float(np.max(np.abs(states))) if states.size else 1.0
+    dedupe_tol = 1e-8 + 1e-6 * max(scale, 1.0)
+    kept_states = []
+    kept_flags = []
+    for point, flag in zip(found, flags):
+        if any(np.linalg.norm(point - seen) <= dedupe_tol for seen in kept_states):
+            continue
+        kept_states.append(point)
+        kept_flags.append(flag)
+
+    return np.asarray(kept_states), kept_flags
+
+
+def plot_equilibria(
+    result,
+    p,
+    *,
+    atol: Optional[float] = None,
+    ax: Optional[plt.Axes] = None,
+    figsize: Tuple[float, float] = DEFAULT_FIGSIZE,
+    **kwargs,
+) -> plt.Figure:
+    """
+    Mark the equilibria a continuation run found at parameter ``p``.
+
+    Stable equilibria render as filled circles, unstable ones as hollow
+    circles -- the convention ``plot_continuation`` already uses. When the
+    branch carries no stability information, all points render neutral.
+
+    Both sides of a fold are marked: this selects every branch point at ``p``,
+    not just the nearest one.
+
+    Args:
+        result: A :class:`~jaxcont.api.ContinuationResult` or
+            :class:`~jaxcont.api.Branch`. This function consumes continuation
+            output; it does not solve for equilibria itself.
+        p: Parameter value at which to mark equilibria.
+        atol: Tolerance for treating a branch point as sitting exactly on
+            ``p``, excluding points already claimed by an interior crossing.
+            Defaults to a quarter of the local minimum parameter step.
+        ax: Matplotlib axes (creates a new figure if None).
+        figsize: Figure size when ``ax`` is not supplied.
+        **kwargs: Additional options forwarded to ``ax.plot``.
+
+    Returns:
+        Matplotlib figure.
+    """
+    branch = _branch_of(result)
+    states, flags = _equilibria_at(branch, p, atol=atol)
+    fig, ax = _prepare_axes(ax, figsize)
+
+    seen_labels = set()
+    for point, flag in zip(states, flags):
+        if flag is None:
+            color, face, label = NEUTRAL_COLOR, NEUTRAL_COLOR, "equilibrium"
+        elif flag:
+            color, face, label = STABLE_COLOR, STABLE_COLOR, "stable equilibrium"
+        else:
+            color, face, label = UNSTABLE_COLOR, "none", "unstable equilibrium"
+
+        marker_options = {
+            "marker": "o",
+            "markersize": 9,
+            "markeredgewidth": 2.0,
+            "linestyle": "none",
+            "zorder": 5,
+        }
+        marker_options.update(kwargs)
+        ax.plot(
+            [point[0]], [point[1]],
+            markeredgecolor=color,
+            markerfacecolor=face,
+            label=None if label in seen_labels else label,
+            **marker_options,
+        )
+        seen_labels.add(label)
+
+    return fig
