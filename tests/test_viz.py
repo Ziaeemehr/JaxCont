@@ -702,3 +702,70 @@ def test_plot_trajectory_rejects_three_state_problem():
         plot_trajectory(
             _three_state_problem(), u0=jnp.ones(3), p=0.0, t_span=(0.0, 1.0)
         )
+
+
+from jaxcont.viz.phase_plane import plot_phase_plane
+
+
+def test_plot_phase_plane_composes_requested_layers_only():
+    problem = _linear_spiral_problem()
+
+    fig = plot_phase_plane(
+        problem, 0.0, (-2.0, 2.0), (-2.0, 2.0),
+        resolution=25, density=7,
+        nullclines=True, vector_field=True, streamlines=False,
+    )
+    ax = fig.axes[0]
+
+    # One quiver collection from the vector field; the two nullclines add
+    # contour artists plus their two invisible legend proxies.
+    assert len(ax.collections) >= 1
+    assert len(ax.get_lines()) == 2
+
+
+def test_plot_phase_plane_without_any_layer_still_returns_a_figure():
+    fig = plot_phase_plane(
+        _linear_spiral_problem(), 0.0, (-2.0, 2.0), (-2.0, 2.0),
+        nullclines=False, vector_field=False, streamlines=False,
+    )
+
+    assert len(fig.axes) == 1
+    assert fig.axes[0].get_xlim() == (-2.0, 2.0)
+
+
+def test_plot_phase_plane_draws_equilibria_when_given_a_result():
+    result = _fold_result()
+    problem = _fold_problem()
+
+    fig = plot_phase_plane(
+        problem, -0.5, (-2.0, 2.0), (-2.0, 2.0),
+        resolution=25, density=7, vector_field=False, result=result,
+    )
+    ax = fig.axes[0]
+
+    # Two nullcline legend proxies plus one marker per fold branch.
+    assert len(ax.get_lines()) == 4
+
+
+def test_plot_phase_plane_accepts_trajectory_pairs_and_arrays():
+    problem = _linear_spiral_problem()
+    precomputed = np.column_stack(
+        [np.linspace(0.0, 1.0, 20), np.linspace(1.0, 0.0, 20)]
+    )
+
+    fig = plot_phase_plane(
+        problem, 0.0, (-2.0, 2.0), (-2.0, 2.0),
+        resolution=25, nullclines=False, vector_field=False,
+        trajectories=[(jnp.array([1.5, 0.0]), (0.0, 10.0)), precomputed],
+    )
+
+    assert len(fig.axes[0].get_lines()) == 2
+
+
+def test_plot_phase_plane_titles_with_the_parameter_name():
+    fig = plot_phase_plane(
+        _linear_spiral_problem(), 0.25, (-2.0, 2.0), (-2.0, 2.0),
+        resolution=25, density=7,
+    )
+
+    assert fig.axes[0].get_title() == "mu = 0.25"

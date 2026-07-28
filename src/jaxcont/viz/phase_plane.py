@@ -559,3 +559,97 @@ def plot_trajectory(
         ax.set_xlabel(names[0], fontsize=12)
         ax.set_ylabel(names[1], fontsize=12)
     return fig
+
+
+def plot_phase_plane(
+    problem,
+    p,
+    xlim: Tuple[float, float],
+    ylim: Tuple[float, float],
+    *,
+    result=None,
+    nullclines: bool = True,
+    vector_field: bool = True,
+    streamlines: bool = False,
+    trajectories=None,
+    resolution: int = 200,
+    density: int = 20,
+    title: Optional[str] = None,
+    legend: bool = True,
+    ax: Optional[plt.Axes] = None,
+    figsize: Tuple[float, float] = DEFAULT_FIGSIZE,
+) -> plt.Figure:
+    """
+    Compose a phase plane for a 2D autonomous system at parameter ``p``.
+
+    A convenience wrapper over :func:`plot_streamlines`,
+    :func:`plot_vector_field`, :func:`plot_nullclines`,
+    :func:`plot_trajectory`, and :func:`plot_equilibria`, drawn in that order
+    so the most informative layers sit on top. Call those directly when you
+    need finer control.
+
+    Args:
+        problem: A 2D :class:`~jaxcont.api.BifProblem`.
+        p: Value of the continuation parameter to freeze the system at.
+        xlim: ``(min, max)`` range for the first state component.
+        ylim: ``(min, max)`` range for the second state component.
+        result: Optional :class:`~jaxcont.api.ContinuationResult` whose
+            equilibria at ``p`` are marked. Omit to draw no equilibria.
+        nullclines: Draw the nullclines.
+        vector_field: Draw the vector-field arrows.
+        streamlines: Draw streamlines. Off by default, since they overlap
+            visually with the vector field.
+        trajectories: Sequence of orbits, each either an ``(u0, t_span)``
+            pair to integrate or a precomputed ``(n_steps, 2)`` array. Bare
+            initial conditions are deliberately not accepted: no default
+            ``t_span`` is defensible across models.
+        resolution: Grid points per axis for nullclines and streamlines.
+        density: Arrows per axis for the vector field.
+        title: Axes title. Defaults to ``"<param_name> = <p>"``; pass ``None``
+            for that default and an empty string to omit it.
+        legend: Draw the legend when labeled artists are present.
+        ax: Matplotlib axes (creates a new figure if None).
+        figsize: Figure size when ``ax`` is not supplied.
+
+    Returns:
+        Matplotlib figure.
+
+    Raises:
+        NotImplementedError: If the problem is not two-dimensional.
+    """
+    _require_2d(problem)
+    fig, ax = _prepare_axes(ax, figsize)
+
+    if streamlines:
+        plot_streamlines(problem, p, xlim, ylim, resolution=resolution, ax=ax)
+    if vector_field:
+        plot_vector_field(problem, p, xlim, ylim, density=density, ax=ax)
+    if nullclines:
+        plot_nullclines(problem, p, xlim, ylim, resolution=resolution, ax=ax)
+
+    for trajectory in trajectories or ():
+        if isinstance(trajectory, tuple) and len(trajectory) == 2:
+            u0, t_span = trajectory
+            plot_trajectory(problem, u0=u0, p=p, t_span=t_span, ax=ax)
+        else:
+            plot_trajectory(trajectory, ax=ax)
+
+    if result is not None:
+        plot_equilibria(result, p, ax=ax)
+
+    names = _state_names(problem)
+    ax.set_xlabel(names[0], fontsize=12)
+    ax.set_ylabel(names[1], fontsize=12)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+    if title is None:
+        param_name = getattr(problem, "param_name", None) or "p"
+        title = f"{param_name} = {float(p):g}"
+    if title:
+        ax.set_title(title, fontsize=13)
+
+    if legend and ax.get_legend_handles_labels()[0]:
+        ax.legend(loc="best", fontsize=9)
+
+    return fig
