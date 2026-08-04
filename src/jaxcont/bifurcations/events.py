@@ -23,6 +23,7 @@ import jax.numpy as jnp
 from jax import Array, jacfwd
 
 from jaxcont.bifurcations.fold_solve import fold_point
+from jaxcont.bifurcations.hopf_normal_form import hopf_point, lyapunov_coefficient
 from jaxcont.stability.eigenvalue import compute_eigenvalues
 from jaxcont.stability.floquet import floquet_multipliers
 
@@ -132,6 +133,7 @@ class Hopf(Event):
 
     kind: str = "hopf"
     tolerance: float = 1e-6
+    l1_tolerance: float = 1e-6
 
     def test_function(self, point: BranchPoint) -> float:
         eigs = point.eigenvalues
@@ -143,33 +145,21 @@ class Hopf(Event):
         return float(jnp.real(complex_eigs[idx]))
 
     def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
-        p_left, p_right = left.p, right.p
-        u_left, u_right = left.u, right.u
-        t_left = self.test_function(left)
-        t_right = self.test_function(right)
-        for _ in range(max_iterations):
-            if abs(p_right - p_left) < tolerance:
-                break
-            p_mid = (p_left + p_right) / 2
-            alpha = (p_mid - p_left) / (p_right - p_left)
-            u_mid = u_left + alpha * (u_right - u_left)
-            mid_point = BranchPoint(
-                p=p_mid, u=u_mid, eigenvalues=_eigenvalues_at(rhs, u_mid, p_mid),
-            )
-            t_mid = self.test_function(mid_point)
-            # Three-way branch, not "left-half or else": a two-way version
-            # degenerates (marches toward the wrong endpoint) whenever
-            # t_mid lands on an exact zero -- see Global Constraints.
-            if t_left * t_mid < 0:
-                p_right, u_right, t_right = p_mid, u_mid, t_mid
-            elif t_mid * t_right < 0:
-                p_left, u_left, t_left = p_mid, u_mid, t_mid
-            else:
-                break
-        p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
+        u_guess = (left.u + right.u) / 2
+        p_guess = (left.p + right.p) / 2
+        u, p, q1, q2, omega0 = hopf_point(
+            lambda u, p, _args: rhs(u, p), u_guess, p_guess,
+            tol=tolerance, max_iter=max_iterations,
+        )
+        l1 = lyapunov_coefficient(lambda u, p, _args: rhs(u, p), u, p, q1, q2, omega0)
+        if abs(l1) < self.l1_tolerance:
+            criticality = "degenerate"
+        else:
+            criticality = "supercritical" if l1 < 0 else "subcritical"
         return EventHit(
-            kind="hopf", p=float(p_bif), u=u_bif, index=index,
-            info={"method": "bisection"},
+            kind="hopf", p=float(p), u=u, index=index,
+            info={"omega0": float(omega0), "l1": float(l1),
+                  "criticality": criticality, "method": "extended_system"},
         )
 
 

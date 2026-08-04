@@ -139,7 +139,7 @@ class TestHopf:
         hopf = [event for event in sol.events if event.kind == "hopf"]
         assert len(hopf) == 1
         assert abs(hopf[0].p) < 1e-4
-        assert hopf[0].info["method"] == "bisection"
+        assert hopf[0].info["method"] == "extended_system"
 
 
 # --- scan engine: vmap + boundedness -------------------------------------

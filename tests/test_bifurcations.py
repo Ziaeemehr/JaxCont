@@ -69,10 +69,10 @@ def test_detect_events_ignores_real_to_complex_transition_far_from_axis():
     assert hits == []
 
 
-def test_hopf_refine_converges_to_exact_zero_via_three_way_bisection():
-    # Regression for the two-way-bisection bug found during design: a
-    # midpoint landing on an exact zero must not make refine() converge to
-    # the wrong bracket endpoint.
+def test_hopf_refine_converges_via_extended_system():
+    # This rhs is purely linear in u, so its 2nd/3rd derivatives are zero
+    # everywhere -- l1 must come out exactly 0 (degenerate), giving this
+    # test double duty as the "degenerate" edge case from the design spec.
     def rhs(u, p):
         x, y = u[0], u[1]
         return jnp.array([p * x - 0.1 * y, 0.1 * x + p * y])
@@ -87,7 +87,10 @@ def test_hopf_refine_converges_to_exact_zero_via_three_way_bisection():
     hit = hopf.refine(left, right, (3, 4), rhs, tolerance=1e-8, max_iterations=50)
     assert hit.kind == "hopf"
     assert abs(hit.p) < 1e-6
-    assert hit.info["method"] == "bisection"
+    assert hit.info["method"] == "extended_system"
+    assert jnp.isclose(hit.info["omega0"], 0.1, atol=1e-4)
+    assert jnp.isclose(hit.info["l1"], 0.0, atol=1e-4)
+    assert hit.info["criticality"] == "degenerate"
 
 
 def test_detect_events_finds_hopf_not_fold_synthetic_repro():
