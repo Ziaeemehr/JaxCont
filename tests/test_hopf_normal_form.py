@@ -74,3 +74,24 @@ def test_lyapunov_coefficient_scales_linearly_with_cubic_coefficient():
         )
         l1 = lyapunov_coefficient(hopf_scaled, u, p, q1, q2, omega0, k)
         assert jnp.isclose(float(l1), -k, atol=1e-4)
+
+
+def test_lyapunov_coefficient_grad_matches_finite_difference():
+    # l1(scale) = -scale exactly (see the scaling test above), so
+    # d(l1)/d(scale) = -1 exactly -- a strong, non-trivial gradient check.
+    def hopf_scaled(u, p, scale):
+        x, y = u[0], u[1]
+        r2 = x**2 + y**2
+        return jnp.array([-y + x * (p - scale * r2), x + y * (p - scale * r2)])
+
+    def l1_of_scale(scale):
+        u, p, q1, q2, omega0 = hopf_point(
+            hopf_scaled, jnp.zeros(2), 0.05, scale, tol=1e-10, max_iter=50,
+        )
+        return lyapunov_coefficient(hopf_scaled, u, p, q1, q2, omega0, scale)
+
+    grad = jax.grad(l1_of_scale)(1.0)
+    eps = 1e-4
+    fd = (l1_of_scale(1.0 + eps) - l1_of_scale(1.0 - eps)) / (2 * eps)
+    assert jnp.isclose(grad, fd, atol=1e-2)
+    assert jnp.isclose(grad, -1.0, atol=1e-2)
