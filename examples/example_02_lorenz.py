@@ -123,9 +123,13 @@ for bif in solution.bifurcations:
     print(f"{bif.get('type', '?'):<10} F={bif['parameter']:<14.4f}", end="")
     matches = [r for r in bk_reference if abs(r[1] - bif["parameter"]) < 0.01]
     if matches:
-        print(f" <-> {matches[0][0]:<10} F={matches[0][1]:.6f}")
+        print(f" <-> {matches[0][0]:<10} F={matches[0][1]:.6f}", end="")
     else:
-        print(" <-> (no close match; see note above)")
+        print(" <-> (no close match; see note above)", end="")
+    if bif.get("type") == "hopf" and "criticality" in bif:
+        print(f"  [{bif['criticality']}, l1={bif['l1']:.4f}]")
+    else:
+        print()
 
 # %%
 # Plot the bifurcation diagram (X variable)
