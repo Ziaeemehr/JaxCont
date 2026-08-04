@@ -41,7 +41,7 @@ from __future__ import annotations
 from typing import Any, Callable, Tuple
 
 import jax.numpy as jnp
-from jax import Array, jacfwd, lax
+from jax import Array, jacfwd, jvp, lax
 
 from jaxcont.solvers.implicit import differentiable_root
 
@@ -132,3 +132,75 @@ def hopf_parameter(
     """
     _, p, _, _, _ = hopf_point(f, u_guess, p_guess, args, tol=tol, max_iter=max_iter)
     return p
+
+
+def lyapunov_coefficient(
+    f: Callable[[Array, Array, PyTree], Array],
+    u: Array,
+    p: Array,
+    q1: Array,
+    q2: Array,
+    omega0: Array,
+    args: PyTree = None,
+) -> Array:
+    """
+    First Lyapunov coefficient l1 at a Hopf point (u, p) with critical
+    eigenvector q1 + i*q2 and frequency omega0 -- Kuznetsov's formula
+    (Elements of Applied Bifurcation Theory, 3rd ed., eq. 3.19/10.16).
+    l1 < 0 is supercritical (stable branching limit cycle), l1 > 0 is
+    subcritical. Pure algebra (directional derivatives via jax.jvp plus two
+    linear solves) -- no Newton iteration, differentiable wherever its
+    inputs are, so composes with hopf_point's implicit-diff gradients via
+    ordinary reverse-mode chain-rule composition; never calls
+    jnp.linalg.eig itself.
+
+    The left eigenvector p_left (Aᵀ p_left = -i*omega0*p_left, normalized
+    so conj(p_left)@q == 1) is solved directly in complex arithmetic on the
+    n x n matrix (Aᵀ + i*omega0*I) -- NOT via a real 2n x 2n block
+    representation, which structurally always has repeated singular-value
+    pairs and makes jnp.linalg.svd's gradient nan (found during design,
+    see docs/superpowers/specs/2026-08-04-hopf-normal-form-design.md).
+
+    Verified: the standard supercritical textbook example (f = (-y + x(mu -
+    x^2 - y^2), x + y(mu - x^2 - y^2)), exact l1 = -1 at the origin) and an
+    independent BifurcationKit.jl v0.5.2 cross-check on a less-symmetric
+    example -- see examples/BifurcationKit/04_hopf_normal_form.jl.
+    """
+    n = u.shape[0]
+    complex_dtype = jnp.complex128 if u.dtype == jnp.float64 else jnp.complex64
+    u_c = u.astype(complex_dtype)
+    q = (q1 + 1j * q2).astype(complex_dtype)
+    qbar = jnp.conj(q)
+
+    A = jacfwd(lambda uu: f(uu, p, args))(u)
+    Ac = A.astype(complex_dtype)
+    eye_n = jnp.eye(n, dtype=complex_dtype)
+
+    m_complex = Ac.T + 1j * omega0 * eye_n
+    _, _, vh = jnp.linalg.svd(m_complex)
+    p_left = jnp.conj(vh[-1, :])
+    p_left = p_left / jnp.conj(jnp.vdot(p_left, q))
+
+    def f_c(uu):
+        return f(uu, p, args).astype(complex_dtype)
+
+    def d1(uu, y):
+        return jvp(f_c, (uu,), (y,))[1]
+
+    def d2(uu, y, z):
+        return jvp(lambda uu_: d1(uu_, y), (uu,), (z,))[1]
+
+    def d3(uu, y, z, w):
+        return jvp(lambda uu_: d2(uu_, y, z), (uu,), (w,))[1]
+
+    B = lambda x, y: d2(u_c, x, y)
+    C = lambda x, y, z: d3(u_c, x, y, z)
+
+    term1 = jnp.vdot(p_left, C(q, q, qbar))
+    a_inv_b = jnp.linalg.solve(Ac, B(q, qbar))
+    term2 = 2.0 * jnp.vdot(p_left, B(q, a_inv_b))
+    m2 = 2j * omega0 * eye_n - Ac
+    m2_inv_b = jnp.linalg.solve(m2, B(q, q))
+    term3 = jnp.vdot(p_left, B(qbar, m2_inv_b))
+
+    return jnp.real(term1 - term2 + term3) / (4.0 * omega0)

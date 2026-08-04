@@ -8,7 +8,7 @@ form-design.md.
 import jax
 import jax.numpy as jnp
 
-from jaxcont.bifurcations.hopf_normal_form import hopf_point, hopf_parameter
+from jaxcont.bifurcations.hopf_normal_form import hopf_point, hopf_parameter, lyapunov_coefficient
 
 
 def _textbook_hopf(u, p, args):
@@ -50,3 +50,27 @@ def test_hopf_parameter_grad_matches_finite_difference():
     fd = (p_star(0.1 + eps) - p_star(0.1 - eps)) / (2 * eps)
     assert jnp.isclose(grad, fd, atol=1e-3)
     assert jnp.isclose(grad, 1.0, atol=1e-3)
+
+
+def test_lyapunov_coefficient_matches_exact_textbook_value():
+    u, p, q1, q2, omega0 = hopf_point(
+        _textbook_hopf, jnp.zeros(2), 0.05, tol=1e-10, max_iter=50,
+    )
+    l1 = lyapunov_coefficient(_textbook_hopf, u, p, q1, q2, omega0)
+    assert jnp.isclose(float(l1), -1.0, atol=1e-4)
+
+
+def test_lyapunov_coefficient_scales_linearly_with_cubic_coefficient():
+    # dr/dt = mu*r + k*r^3 in polar form has l1 = k exactly by definition of
+    # normal form -- scaling the cubic term by k must scale l1 by exactly k.
+    def hopf_scaled(u, p, k):
+        x, y = u[0], u[1]
+        r2 = x**2 + y**2
+        return jnp.array([-y + x * (p - k * r2), x + y * (p - k * r2)])
+
+    for k in (1.0, 2.0, 0.5, -1.0):
+        u, p, q1, q2, omega0 = hopf_point(
+            hopf_scaled, jnp.zeros(2), 0.05, k, tol=1e-10, max_iter=50,
+        )
+        l1 = lyapunov_coefficient(hopf_scaled, u, p, q1, q2, omega0, k)
+        assert jnp.isclose(float(l1), -k, atol=1e-4)
