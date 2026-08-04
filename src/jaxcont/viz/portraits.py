@@ -51,9 +51,9 @@ def plot_branch_states(
         param_indices: Which parameter indices to show (None = all)
         ax: Matplotlib axes (creates new figure if None). Previously this
             parameter didn't exist, so a caller-supplied ax (e.g.
-            example_03_van_der_pol.py's ax=ax2) silently landed in **kwargs
-            and was never used -- the function always drew onto its own new
-            figure instead.
+            example_03_van_der_pol.py's ax=ax2) silently landed in
+            ``**kwargs`` and was never used -- the function always drew onto
+            its own new figure instead.
         **kwargs: Additional plotting options
 
     Returns:
