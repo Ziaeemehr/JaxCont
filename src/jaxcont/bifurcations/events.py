@@ -20,11 +20,10 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, List, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
 import jax.numpy as jnp
-from jax import Array, jacfwd
+from jax import Array
 
 from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.bifurcations.hopf_normal_form import hopf_point, lyapunov_coefficient
-from jaxcont.stability.eigenvalue import compute_eigenvalues
 from jaxcont.stability.floquet import floquet_multipliers
 
 PyTree = Any
@@ -71,12 +70,6 @@ class EventHit:
     u: Array
     index: Optional[Tuple[int, int]] = None
     info: dict = field(default_factory=dict)
-
-
-def _eigenvalues_at(rhs: Callable[[Array, float], Array], u: Array, p: float) -> Array:
-    """Eigenvalues of df/du at (u, p)."""
-    jac = jacfwd(lambda u_eval: rhs(u_eval, p))(u)
-    return compute_eigenvalues(jac)
 
 
 @dataclass(frozen=True)
@@ -133,6 +126,14 @@ class Hopf(Event):
 
     kind: str = "hopf"
     tolerance: float = 1e-6
+    # Absolute threshold on a scale-dependent, float32-computed quantity
+    # (the first Lyapunov coefficient): l1's magnitude depends on the
+    # system's own units/normalization, so a genuinely-degenerate Hopf point
+    # in one system may have |l1| well above 1e-6 while a healthy, clearly
+    # non-degenerate point in another (differently scaled) system may sit
+    # well below it. The default is a reasonable starting point, not a
+    # universal constant -- tune per-system if "degenerate" is triggering
+    # too eagerly or too rarely.
     l1_tolerance: float = 1e-6
 
     def test_function(self, point: BranchPoint) -> float:
@@ -152,7 +153,21 @@ class Hopf(Event):
             tol=tolerance, max_iter=max_iterations,
         )
         l1 = lyapunov_coefficient(lambda u, p, _args: rhs(u, p), u, p, q1, q2, omega0)
-        if abs(l1) < self.l1_tolerance:
+        # hopf_point's Newton solve (via differentiable_root) has no
+        # convergence guarantee: if the bracket's sign change wasn't a real
+        # Hopf point (a known occurrence -- see the "no close match --
+        # spurious" branches in examples/example_05_neural_mass.py), p/l1/
+        # omega0 can come back non-finite (e.g. p=-inf, l1=nan). Both
+        # `abs(nan) < tol` and `nan < 0` are False, so without this guard a
+        # non-convergent solve would silently fall through to the
+        # "subcritical" else-branch below -- a confident-looking label for
+        # a result that isn't a Hopf point at all. Check finiteness (and
+        # omega0 > 0, since a genuine Hopf point always has a nonzero
+        # critical frequency) before trusting the sign of l1.
+        finite = jnp.isfinite(p) & jnp.isfinite(l1) & jnp.isfinite(omega0)
+        if not bool(finite) or not (float(omega0) > 0.0):
+            criticality = "unknown"
+        elif abs(l1) < self.l1_tolerance:
             criticality = "degenerate"
         else:
             criticality = "supercritical" if l1 < 0 else "subcritical"

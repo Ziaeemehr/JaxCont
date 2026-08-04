@@ -93,6 +93,116 @@ def test_hopf_refine_converges_via_extended_system():
     assert hit.info["criticality"] == "degenerate"
 
 
+def test_hopf_refine_marks_non_finite_result_as_unknown(monkeypatch):
+    # Regression for the "silent subcritical mislabel" finding: hopf_point's
+    # Newton solve (via differentiable_root) has no convergence guarantee --
+    # if a bracket's test-function sign change wasn't actually a real Hopf
+    # point (a known occurrence, see the "no close match -- spurious"
+    # branches printed by examples/example_05_neural_mass.py), p/l1/omega0
+    # can come back non-finite (e.g. p=-inf, l1=nan). Both `abs(nan) < tol`
+    # and `nan < 0` are False in Python/NumPy/JAX, so without a finiteness
+    # guard, refine()'s sign-based classifier would silently fall through to
+    # the "subcritical" else-branch for a result that isn't a Hopf point at
+    # all. Directly control hopf_point/lyapunov_coefficient's return values
+    # (rather than trying to engineer a genuinely non-convergent bracket, an
+    # awkward and less deterministic route) to exercise the real refine()
+    # code path with a controlled non-finite result.
+    import jaxcont.bifurcations.events as events_mod
+
+    def fake_hopf_point(f, u_guess, p_guess, args=None, **kwargs):
+        return (
+            jnp.zeros(2), jnp.array(-jnp.inf),
+            jnp.array([1.0, 0.0]), jnp.array([0.0, 1.0]), jnp.array(1.0),
+        )
+
+    def fake_lyapunov_coefficient(f, u, p, q1, q2, omega0, args=None):
+        return jnp.array(jnp.nan)
+
+    monkeypatch.setattr(events_mod, "hopf_point", fake_hopf_point)
+    monkeypatch.setattr(events_mod, "lyapunov_coefficient", fake_lyapunov_coefficient)
+
+    def rhs(u, p):
+        return u
+
+    hopf = Hopf()
+    left = BranchPoint(p=-0.05, u=jnp.zeros(2))
+    right = BranchPoint(p=0.05, u=jnp.zeros(2))
+    hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-8, max_iterations=50)
+    assert hit.info["criticality"] == "unknown"
+
+
+def test_hopf_refine_zero_omega_marks_unknown(monkeypatch):
+    # omega0 <= 0 is also not a genuine Hopf point (a real Hopf point always
+    # has a nonzero critical frequency); it must not be trusted even if it
+    # happens to be finite.
+    import jaxcont.bifurcations.events as events_mod
+
+    def fake_hopf_point(f, u_guess, p_guess, args=None, **kwargs):
+        return (
+            jnp.zeros(2), jnp.array(0.02),
+            jnp.array([1.0, 0.0]), jnp.array([0.0, 0.0]), jnp.array(0.0),
+        )
+
+    def fake_lyapunov_coefficient(f, u, p, q1, q2, omega0, args=None):
+        return jnp.array(0.3)
+
+    monkeypatch.setattr(events_mod, "hopf_point", fake_hopf_point)
+    monkeypatch.setattr(events_mod, "lyapunov_coefficient", fake_lyapunov_coefficient)
+
+    def rhs(u, p):
+        return u
+
+    hopf = Hopf()
+    left = BranchPoint(p=-0.05, u=jnp.zeros(2))
+    right = BranchPoint(p=0.05, u=jnp.zeros(2))
+    hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-8, max_iterations=50)
+    assert hit.info["criticality"] == "unknown"
+
+
+def test_hopf_refine_supercritical_label_end_to_end():
+    # The feature's headline output, end-to-end: the textbook example
+    # (l1=-1 exactly, see test_hopf_normal_form.py's
+    # test_lyapunov_coefficient_matches_exact_textbook_value) must produce
+    # criticality == "supercritical" through Hopf().refine(), not just a
+    # correctly-signed l1 float that nothing asserts the label of.
+    def rhs(u, p):
+        x, y = u[0], u[1]
+        r2 = x**2 + y**2
+        return jnp.array([-y + x * (p - r2), x + y * (p - r2)])
+
+    def eigs_at(u, p):
+        jac = jacfwd(lambda u_: rhs(u_, p))(u)
+        return jnp.linalg.eigvals(jac)
+
+    hopf = Hopf()
+    left = BranchPoint(p=-0.05, u=jnp.zeros(2), eigenvalues=eigs_at(jnp.zeros(2), -0.05))
+    right = BranchPoint(p=0.05, u=jnp.zeros(2), eigenvalues=eigs_at(jnp.zeros(2), 0.05))
+    hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-10, max_iterations=50)
+    assert jnp.isclose(hit.info["l1"], -1.0, atol=1e-4)
+    assert hit.info["criticality"] == "supercritical"
+
+
+def test_hopf_refine_subcritical_label_end_to_end():
+    # Same family with the cubic term negated (k=-1 in the existing scaling
+    # test's parametrization in test_hopf_normal_form.py) has l1=+1 exactly,
+    # so refine() must label it "subcritical".
+    def rhs(u, p):
+        x, y = u[0], u[1]
+        r2 = x**2 + y**2
+        return jnp.array([-y + x * (p + r2), x + y * (p + r2)])
+
+    def eigs_at(u, p):
+        jac = jacfwd(lambda u_: rhs(u_, p))(u)
+        return jnp.linalg.eigvals(jac)
+
+    hopf = Hopf()
+    left = BranchPoint(p=-0.05, u=jnp.zeros(2), eigenvalues=eigs_at(jnp.zeros(2), -0.05))
+    right = BranchPoint(p=0.05, u=jnp.zeros(2), eigenvalues=eigs_at(jnp.zeros(2), 0.05))
+    hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-10, max_iterations=50)
+    assert jnp.isclose(hit.info["l1"], 1.0, atol=1e-4)
+    assert hit.info["criticality"] == "subcritical"
+
+
 def test_detect_events_finds_hopf_not_fold_synthetic_repro():
     # The exact issue #7 mechanism: eigenvalues p +/- 0.1i (a Hopf pair
     # crossing Re=0 at p=0) plus a third eigenvalue fixed at -5. Near p=0

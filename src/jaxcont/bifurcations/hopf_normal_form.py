@@ -32,8 +32,9 @@ differentiated quantity, so cutting its gradient path is correct, not a
 workaround.
 
 Public entry points:
-- :func:`hopf_point`     -> (u*, p*, q1*, q2*, omega0*), differentiable in ``args``
-- :func:`hopf_parameter` -> p*,                          differentiable in ``args``
+- :func:`hopf_point`           -> (u*, p*, q1*, q2*, omega0*), differentiable in ``args``
+- :func:`hopf_parameter`       -> p*,                          differentiable in ``args``
+- :func:`lyapunov_coefficient` -> l1,                           differentiable in its inputs
 """
 
 from __future__ import annotations
@@ -58,13 +59,48 @@ def _unpack(x, n):
 
 def _seed(f, u, p, args, n):
     """Undifferentiated Newton seed: eigenvector of J(u,p) with smallest
-    |Re(eigenvalue)|, matching bifurcations.events.Hopf's own selection
-    rule. jnp.linalg.eig (not just eigvals) is needed for the eigenvector;
-    like fold_solve.py's SVD-based null-vector seed, this is never itself
-    differentiated."""
+    |Re(eigenvalue)| AMONG THE GENUINELY COMPLEX EIGENVALUES, matching
+    bifurcations.events.Hopf.test_function's own selection rule (mask to
+    |Im| > tolerance first, then argmin |Re| within that mask) -- NOT a
+    bare argmin over all eigenvalues, which could select a real eigenvalue
+    (e.g. a slow real mode near the origin) and hand differentiable_root a
+    seed with omega=0 and a real eigenvector, producing nan/inf downstream.
+    jnp.linalg.eig (not just eigvals) is needed for the eigenvector; like
+    fold_solve.py's SVD-based null-vector seed, this is never itself
+    differentiated.
+
+    Among the complex candidates, entries with Im > 0 are preferred (falling
+    back to whichever of the conjugate pair survives the mask if none has
+    Im > 0) so the seed's orientation consistently matches ``J q = +i*omega
+    q`` -- this is what ``omega = jnp.abs(jnp.imag(evals[idx]))`` below
+    already assumes (a positive frequency).
+
+    If NO eigenvalue is genuinely complex, this is a "no good seed"
+    situation: hopf_point is a public function callable with an arbitrary
+    (u_guess, p_guess), and this heuristic only makes sense when that guess
+    is actually near a Hopf point (a complex-conjugate pair near the
+    imaginary axis). We deliberately do not add elaborate error handling
+    here -- the mask below just falls back to the full (real) evals so the
+    argmin is still well-defined, but callers must supply a guess near an
+    actual Hopf point for the seed to be meaningful; a real-eigenvalue
+    fallback here would silently produce garbage exactly as before, so this
+    is a documented caller contract, not a runtime-checked one."""
     jac = jacfwd(f, argnums=0)(u, p, args)
     evals, evecs = jnp.linalg.eig(jac)
-    idx = jnp.argmin(jnp.abs(jnp.real(evals)))
+
+    complex_mask = jnp.abs(jnp.imag(evals)) > 1e-8
+    has_complex = jnp.any(complex_mask)
+    # Fall back to the unmasked set only in the "no good seed" case (see
+    # docstring); when has_complex is True this fallback value is unused.
+    safe_mask = jnp.where(has_complex, complex_mask, jnp.ones_like(complex_mask))
+
+    pos_im_mask = safe_mask & (jnp.imag(evals) > 0.0)
+    has_pos_im = jnp.any(pos_im_mask)
+    select_mask = jnp.where(has_pos_im, pos_im_mask, safe_mask)
+
+    re_for_argmin = jnp.where(select_mask, jnp.abs(jnp.real(evals)), jnp.inf)
+    idx = jnp.argmin(re_for_argmin)
+
     vec = evecs[:, idx]
     vec = vec / jnp.linalg.norm(vec)
     q1 = jnp.real(vec)
@@ -76,6 +112,11 @@ def _seed(f, u, p, args, n):
 def _extended_residual(x, f, args, n, u_guess, p_guess):
     """G(x, args) for the Hopf extended system."""
     u, p, q1, q2, omega = _unpack(x, n)
+    # Recomputing the seed (including jnp.linalg.eig) on every Newton
+    # iteration is deliberate, not an oversight: differentiable_root's
+    # documented contract requires theta-dependent seeds to be computed
+    # inside the traced primal (here, under stop_gradient), not hoisted out
+    # as a loop-invariant -- see differentiable_root's own docstring.
     q1_seed, q2_seed, _ = _seed(f, u_guess, p_guess, lax.stop_gradient(args), n)
     jac = jacfwd(f, argnums=0)(u, p, args)
     g1 = f(u, p, args)
@@ -153,6 +194,16 @@ def lyapunov_coefficient(
     inputs are, so composes with hopf_point's implicit-diff gradients via
     ordinary reverse-mode chain-rule composition; never calls
     jnp.linalg.eig itself.
+
+    ``f`` must be complex-analytic (holomorphic) in ``u`` for this formula
+    to be correct: the derivatives above are evaluated at a complexified
+    ``u`` (real ``u`` cast to complex, then perturbed along complex
+    directions via ``jax.jvp``). Polynomial, ``exp``, ``tanh``, ``sigmoid``
+    right-hand sides are all fine (everything in this repo's examples), but
+    an RHS with an ``abs``/``clip``/comparison-based ``jnp.where`` that is
+    actually active in ``u`` near the Hopf point is not holomorphic there
+    and may produce silently wrong derivatives (and hence a silently wrong
+    ``l1``).
 
     The left eigenvector p_left (Aᵀ p_left = -i*omega0*p_left, normalized
     so conj(p_left)@q == 1) is solved directly in complex arithmetic on the
