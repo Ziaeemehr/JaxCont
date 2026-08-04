@@ -115,3 +115,11 @@ def test_lyapunov_coefficient_matches_bifurcationkit_jl_independent_run():
     bk_l1_reference = -0.8750005392241293
     assert jnp.isclose(float(omega0), 1.0, atol=1e-6)
     assert jnp.isclose(float(l1), bk_l1_reference, atol=1e-4)
+
+
+def test_hopf_normal_form_functions_are_exported_at_top_level():
+    import jaxcont as jc
+
+    assert jc.hopf_point is hopf_point
+    assert jc.hopf_parameter is hopf_parameter
+    assert jc.lyapunov_coefficient is lyapunov_coefficient

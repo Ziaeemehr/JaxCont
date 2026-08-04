@@ -44,6 +44,12 @@ from jaxcont.problems.equilibrium import EquilibriumProblem
 # implicit function theorem -- see examples/example_07_differentiable.py)
 from jaxcont.bifurcations.fold_solve import fold_point, fold_parameter
 
+# Differentiable Hopf-point solver + first Lyapunov coefficient (Hopf
+# criticality) -- see docs/superpowers/specs/2026-08-04-hopf-normal-form-design.md
+from jaxcont.bifurcations.hopf_normal_form import (
+    hopf_point, hopf_parameter, lyapunov_coefficient,
+)
+
 # Solvers
 from jaxcont.solvers.newton import NewtonSolver
 from jaxcont.solvers.corrector import Corrector
@@ -87,6 +93,9 @@ __all__ = [
     "ContinuationResult",
     "fold_point",
     "fold_parameter",
+    "hopf_point",
+    "hopf_parameter",
+    "lyapunov_coefficient",
     # Core
     "ContinuationProblem",
     "ContinuationSolution",
