@@ -74,11 +74,15 @@ set `q1, q2 = Re(vec), Im(vec)` (normalized), `ω = |Im(eigval)|`.
 ### `lyapunov_coefficient`: Kuznetsov's formula
 
 Needs a **left** eigenvector `p ∈ ℂⁿ` with `Aᵀp = -iωp`, normalized so `p̄ᵀq = 1` (a different
-vector from `q̄` in general — equal only if `A` is normal). Solved as a plain null-space problem:
-`jnp.linalg.svd` on the real 2n×2n block form of `(Aᵀ + iωI)`, smallest singular vector, then
-rescaled by division so `p̄ᵀq=1` holds exactly — this division removes the SVD's arbitrary
-phase/sign ambiguity, so the result is a well-defined differentiable function of `(A, q1, q2, ω)`;
-no `custom_vjp` needed for this step.
+vector from `q̄` in general — equal only if `A` is normal). Solved as a plain null-space problem
+**directly in complex arithmetic**: `jnp.linalg.svd` on the complex `n×n` matrix `M = Aᵀ + iωI`
+(smallest right singular vector), then rescaled by division so `p̄ᵀq=1` holds exactly — this
+division removes the SVD's arbitrary phase/sign ambiguity, so the result is a well-defined
+differentiable function of `(A, q1, q2, ω)`; no `custom_vjp` needed for this step. (An earlier
+draft used the real `2n×2n` block representation of `M` instead — found during verification to be
+non-differentiable: that block form structurally always has repeated singular-value pairs, and
+`jnp.linalg.svd`'s gradient is `nan` under repetition. See "Implementation notes verified during
+planning" below.)
 
 `B(x,y)`/`C(x,y,z)` (bilinear/trilinear parts of `f`'s 2nd/3rd derivatives) are computed as
 directional derivatives via nested `jax.jvp` — never forming the full n²/n³ tensor:
@@ -134,6 +138,48 @@ generic `rhs` is 2-arg, `hopf_point` wants the 3-arg `f(u,p,args)` shape.)
   interpolation. Both scripts must be re-run after the change and their existing
   `BifurcationKit.jl` comparison tables re-verified to still match — required, not optional, since
   those numbers are cited elsewhere in the roadmap.
+
+## Implementation notes verified during planning (2026-08-04)
+
+Before writing the implementation plan, the extended system and the l1 formula were prototyped and
+run end-to-end (including through the real `solvers/implicit.py:differentiable_root`) against the
+closed-form example and an independent BifurcationKit.jl v0.5.2 run. Two real, non-obvious bugs
+were found and fixed this way — recorded here since they're now settled, not still-open risks:
+
+1. **G5's phase constraint must anchor to a *fixed* seed, not the live `(q1, q2)`.** The
+   naive `g5 = q1·q2` (used in an earlier draft of this spec) has a Jacobian, with respect to
+   `(q1, q2)`, that is exactly zero along the phase-rotation tangent whenever `|q1| ≈ |q2|` —
+   which happened at the very first seed tried, producing a singular 8×8 Newton Jacobian (verified
+   via direct SVD: one singular value at `~1e-16`). Fixed by anchoring to the fixed seed instead:
+   `g5 = q1_seed·q2 − q2_seed·q1` (i.e. `Im(⟨q_seed, q⟩) = 0`), whose gradient is the *constant*
+   vector `(q2_seed, −q1_seed)`, which cannot vanish. Inside `G(x, theta)`, the seed must be
+   recomputed as `_seed(f, u_guess, p_guess, jax.lax.stop_gradient(theta), n)` — **not** bare
+   `theta` — because `_seed` calls `jnp.linalg.eig`, and JAX has no gradient rule for
+   non-symmetric eigenvectors (`NotImplementedError: derivatives of non-symmetric eigenvectors are
+   not supported`). Without `stop_gradient`, `jax.grad(hopf_parameter)` raises this error directly
+   (reproduced, then fixed) — the seed is meant to be an arbitrary fixed reference, not a
+   differentiated quantity, so cutting its gradient path is the mathematically correct fix, not a
+   workaround.
+2. **The left eigenvector must be solved as a direct complex `n×n` null-space problem, not via the
+   real `2n×2n` block-matrix SVD trick.** The block form `[[Aᵀ, −ωI], [ωI, Aᵀ]]` is the real
+   representation of the complex matrix `(Aᵀ + iωI)`, and any such real block representation of a
+   complex matrix has singular values that come in *exactly repeated pairs* by construction — this
+   is a structural fact about the construction, not a coincidence of one test case, confirmed by
+   direct SVD inspection (`[2.0, 2.0, ~0, 0]` — the top two singular values exactly equal, always).
+   `jnp.linalg.svd`'s gradient rule divides by differences of squared singular values, so it is
+   exactly `nan` whenever any pair repeats — reproduced directly (`jax.grad` of the composed
+   `hopf_point → lyapunov_coefficient` pipeline returned `nan` while the value itself was correct
+   and matched finite differences). Fixed by working directly in complex arithmetic:
+   `M = Aᵀ + iωI` (an `n×n` **complex** matrix, generically simple singular values), take its
+   smallest right singular vector via `jnp.linalg.svd(M)` (`p_left = conj(Vh[-1, :])`), then
+   normalize by `p_left /= conj(vdot(p_left, q))` as before. No real-block doubling needed at all.
+
+Both fixes were verified end-to-end after applying them: closed-form `l1 = -0.99999994` (float32,
+expected exactly `-1`), `jax.grad` of both `hopf_parameter` and the composed `lyapunov_coefficient`
+now match finite differences (no more `nan`), the BifurcationKit.jl cross-check
+(`l1 = -0.875`, reference `-0.8750005392241294`) is unaffected by either fix, and the degenerate
+case (the existing linear test system from `tests/test_bifurcations.py`) gives `l1 = 0.0` exactly,
+as expected for a system with no higher-than-linear terms.
 
 ## Testing / verification plan
 
