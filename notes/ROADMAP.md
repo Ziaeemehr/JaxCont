@@ -32,7 +32,7 @@ cannot offer at all. See below for the reasoning.
 | Pseudo-arclength continuation | ✅ Works, tested | Passes fold points |
 | Natural-parameter continuation | ✅ Works, tested | |
 | Newton solver (autodiff) | ✅ Works, 100% cov | Not yet JIT'd on hot loop |
-| Fold + Hopf detection | ✅ Works, tested | With bisection refinement |
+| Fold + Hopf detection | ✅ Works, tested | Both refine via the extended-system Newton solve (implicit diff), not bisection |
 | Stability (eigenvalues) | ✅ Works, 98% cov | Fixed 2026-07-19 (was 51%) |
 | Naming/abbreviation reference | ✅ Works, tested | [bifurcations/taxonomy.py](../src/jaxcont/bifurcations/taxonomy.py) |
 | Plotting | ✅ Works, tested | Consolidated into `jaxcont/viz/` (2026-07-22) |

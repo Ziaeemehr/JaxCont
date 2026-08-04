@@ -46,6 +46,15 @@ Differentiable fold solver
 
 .. autofunction:: jaxcont.fold_parameter
 
+Differentiable Hopf solver
+---------------------------
+
+.. autofunction:: jaxcont.hopf_point
+
+.. autofunction:: jaxcont.hopf_parameter
+
+.. autofunction:: jaxcont.lyapunov_coefficient
+
 Low-level scan engine
 ---------------------
 
