@@ -181,8 +181,10 @@ def validate_periodic_artifacts(reference_dir: Path, case_id: str) -> dict[str, 
     return {"branch_rows": len(branch), "event_rows": len(events), "spectrum_rows": len(spectra)}
 
 
-def validate_reference_metadata(path: Path, case_id: str) -> dict[str, Any]:
-    """Load a reviewed metadata file and enforce its reproducibility contract."""
+def validate_reference_metadata(
+    path: Path, case_id: str, *, require_reviewed: bool = True
+) -> dict[str, Any]:
+    """Load metadata and enforce reproducibility plus optional review state."""
     try:
         metadata = json.loads(Path(path).read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
@@ -196,7 +198,7 @@ def validate_reference_metadata(path: Path, case_id: str) -> dict[str, Any]:
         )
     if metadata["case_id"] != case_id:
         raise ValueError(f"{Path(path).name} contains a different case_id")
-    if metadata["reviewed"] is not True:
+    if require_reviewed and metadata["reviewed"] is not True:
         raise ValueError(f"{Path(path).name} is not marked as a reviewed reference")
     equation_hash = metadata["equation_hash"]
     valid_hash = isinstance(equation_hash, str) and re.fullmatch(

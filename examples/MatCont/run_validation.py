@@ -95,6 +95,16 @@ def resolve_runtime_paths(args: argparse.Namespace) -> argparse.Namespace:
     return args
 
 
+def validate_case_metadata(
+    metadata_path: Path, case_id: str, reference_dir: Path
+) -> dict:
+    """Validate metadata, requiring review only for the committed oracle directory."""
+    require_reviewed = Path(reference_dir).resolve() == _DEFAULT_REFERENCE_DIR.resolve()
+    return validate_reference_metadata(
+        metadata_path, case_id, require_reviewed=require_reviewed
+    )
+
+
 def _matlab_quote(value: Path | str) -> str:
     return str(value).replace("'", "''")
 
@@ -235,7 +245,7 @@ def _validate_case(case: dict, reference_dir: Path) -> tuple[bool, dict]:
     for filename in case["references"]:
         path = reference_dir / filename
         if filename.endswith("_metadata.json"):
-            validate_reference_metadata(path, case["id"])
+            validate_case_metadata(path, case["id"], reference_dir)
         elif not path.is_file():
             raise FileNotFoundError(f"missing MatCont reference artifact: {path}")
     if case["id"].startswith("MC-EQ-"):

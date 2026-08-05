@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import examples.MatCont.run_validation as matcont_runner
 from examples.MatCont.compare import (
     ValidationMismatch,
     interpolate_observable,
@@ -538,6 +539,57 @@ def test_reference_metadata_rejects_malformed_sha256(tmp_path):
         path.write_text(json.dumps(metadata), encoding="utf-8")
         with pytest.raises(ValueError, match="equation_hash"):
             validate_reference_metadata(path, "MC-EQ-001")
+
+
+def test_explicit_generated_reference_accepts_valid_unreviewed_metadata(tmp_path):
+    """Fresh producer output is valid input even though it is not a reviewed oracle."""
+    path = tmp_path / "MC-EQ-001_metadata.json"
+    metadata = _complete_metadata("MC-EQ-001")
+    metadata["reviewed"] = False
+    path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    loaded = matcont_runner.validate_case_metadata(path, "MC-EQ-001", tmp_path)
+
+    assert loaded["reviewed"] is False
+
+
+def test_default_reference_rejects_unreviewed_and_explicit_rejects_malformed_hash(
+    tmp_path, monkeypatch
+):
+    """Relaxing review state must never relax the committed-oracle or hash contracts."""
+    path = tmp_path / "MC-EQ-001_metadata.json"
+    metadata = _complete_metadata("MC-EQ-001")
+    metadata["reviewed"] = False
+    path.write_text(json.dumps(metadata), encoding="utf-8")
+    monkeypatch.setattr(matcont_runner, "_DEFAULT_REFERENCE_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="not marked as a reviewed reference"):
+        matcont_runner.validate_case_metadata(path, "MC-EQ-001", tmp_path)
+
+    metadata["equation_hash"] = "sha256:broken"
+    path.write_text(json.dumps(metadata), encoding="utf-8")
+    monkeypatch.setattr(matcont_runner, "_DEFAULT_REFERENCE_DIR", tmp_path / "committed")
+    with pytest.raises(ValueError, match="equation_hash"):
+        matcont_runner.validate_case_metadata(path, "MC-EQ-001", tmp_path)
+
+
+@pytest.mark.slow
+def test_cli_validates_explicit_generated_reference_directory(tmp_path):
+    """The CLI must run a supported case directly against fresh producer output."""
+    committed = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    generated = tmp_path / "generated"
+    shutil.copytree(committed, generated)
+    metadata_path = generated / "MC-EQ-001_metadata.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["reviewed"] = False
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    completed = _run_matcont_cli(
+        "--case", "MC-EQ-001", "--reference-dir", str(generated)
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "PASS MC-EQ-001" in completed.stdout
 
 
 def test_generated_metadata_is_enriched_with_runtime_and_equation_provenance(tmp_path):
