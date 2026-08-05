@@ -103,6 +103,17 @@ def test_period_doubling_near_unit_circle_filter_prevents_double_detection():
     # hit at p~0.110, where the "closest to -1" argmin silently switched to
     # tracking the unrelated, always-decaying xy multiplier (~3.4e-6)
     # instead of the true transverse candidate.
+    #
+    # This span also found a second, false-*negative* bug (v0.3.0): with the
+    # old near_unit_circle=0.5, the adaptive stepper can sample the true
+    # candidate at magnitude ~1.48 (distance 0.48 from 1, a 0.02 margin
+    # inside the 0.5 window) -- thin enough that ordinary collocation/FP
+    # differences across hardware push it outside the window, turning that
+    # bracket point's test_function to nan and silently dropping the real
+    # crossing (0 events instead of 1; reproduced on CI, not locally).
+    # near_unit_circle=0.9 gives a ~20x wider margin at that same point while
+    # still safely excluding the ~3.4e-6 decaying candidate (distance ~1.0,
+    # comfortably outside 0.9) -- see events.py's near_unit_circle comment.
     sol = _sweep(BETA_PD, jc.PeriodDoubling, span=(-0.1, 0.3))
     assert len(sol.events) == 1
     assert abs(sol.events[0].p) < 1e-4

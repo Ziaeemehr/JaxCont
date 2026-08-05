@@ -261,7 +261,18 @@ class PeriodDoubling(Event):
     mesh: Any
     kind: str = "period_doubling"
     tolerance: float = 1e-6
-    near_unit_circle: float = 0.5
+    # Must stay < 1.0: that's the exact distance-from-1 of a candidate whose
+    # magnitude is ~0 (the always-present decaying/trivial-like multiplier
+    # this filter exists to reject -- see test_period_doubling_near_unit_
+    # circle_filter_excludes_far_multipliers). 0.9 keeps a full 0.1 margin
+    # there while giving the *true* transverse candidate much more room to
+    # move before falling out of the window: an adaptive step that samples it
+    # at magnitude 1.48 (distance 0.48) cleared the old 0.5 threshold by only
+    # 0.02 -- a margin thinner than realistic collocation/FP noise, which is
+    # what let it flip to a false-negative (0 events instead of 1) on some
+    # hardware. See docs/superpowers/specs/2026-07-24-period-doubling-
+    # neimark-sacker-design.md for the filter's original rationale.
+    near_unit_circle: float = 0.9
 
     def test_function(self, point: BranchPoint) -> float:
         mult = point.eigenvalues
@@ -321,7 +332,11 @@ class NeimarkSacker(Event):
     mesh: Any
     kind: str = "neimark_sacker"
     tolerance: float = 1e-6
-    near_unit_circle: float = 0.5
+    # See PeriodDoubling.near_unit_circle for why 0.9 (not the old 0.5): must
+    # stay < 1.0 to keep rejecting a ~0-magnitude decaying candidate, while
+    # giving the true complex-pair candidate much more margin before it's
+    # mistaken for "lost" as it moves away from the unit circle.
+    near_unit_circle: float = 0.9
 
     def test_function(self, point: BranchPoint) -> float:
         mult = point.eigenvalues

@@ -324,7 +324,7 @@ def test_period_doubling_near_unit_circle_filter_excludes_far_multipliers():
     # unrelated multiplier that merely sits near a roughly constant distance
     # from -1 (the decaying xy multiplier ~3.4e-6, |3.4e-6+1|~1.0) must NOT
     # be picked as "closer to -1" just because 1.0 < 1.776 -- both are
-    # outside near_unit_circle=0.5 (|mag-1| = 1.776 and ~1.0 respectively),
+    # outside near_unit_circle=0.9 (|mag-1| = 1.776 and ~1.0 respectively),
     # so nothing should be selected and test_function must return nan, not a
     # spurious finite value that could register a false sign-change.
     pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
@@ -355,8 +355,9 @@ def test_neimark_sacker_test_function_finds_complex_pair_near_unit_circle():
 
 def test_neimark_sacker_test_function_below_unit_circle():
     # magnitude of 0.42+0.56j is exactly 0.7 (0.42^2+0.56^2=0.49=0.7^2), so
-    # |magnitude-1|=0.3 -- comfortably INSIDE near_unit_circle=0.5, not
-    # exactly on the boundary. (An earlier version of this test used
+    # |magnitude-1|=0.3 -- comfortably INSIDE near_unit_circle (now 0.9, was
+    # 0.5 at the time this test was written), not exactly on the boundary.
+    # (An earlier version of this test used
     # 0.3+0.4j, magnitude exactly 0.5, |magnitude-1|=0.5 -- exactly ON the
     # boundary. This was the plan's own bug, found during Task 1 review:
     # with the correct strict "<" filter, that value is excluded, since
