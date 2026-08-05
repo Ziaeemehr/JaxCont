@@ -83,6 +83,9 @@ dmypy.json
 # Git worktrees (isolated workspaces for superpowers plan execution)
 .worktrees/
 
+# Subagent-driven-development scratch (ledgers, task briefs/reports, review packages)
+.superpowers/
+
 # Documentation
 docs/_build/
 docs/source/auto_examples/
