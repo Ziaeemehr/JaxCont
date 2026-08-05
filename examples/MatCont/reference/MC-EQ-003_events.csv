@@ -1,0 +1,2 @@
+case_id,event_index,event_type,point,parameter,frequency,fold_coefficient,first_lyapunov
+MC-EQ-003,0,H,62,0.999997742302781,1.00000056442399,NaN,-0.299999881265773

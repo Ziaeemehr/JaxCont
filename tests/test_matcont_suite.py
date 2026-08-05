@@ -1,6 +1,9 @@
 """Focused contract tests for the MatCont validation-suite foundation."""
 
+import json
+import hashlib
 import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -15,7 +18,12 @@ from examples.MatCont.compare import (
 )
 from examples.MatCont.registry import load_registry, select_cases
 from examples.MatCont.run_validation import build_parser
-from examples.MatCont.artifacts import validate_equilibrium_artifacts
+from examples.MatCont.artifacts import (
+    validate_equilibrium_artifacts,
+    enrich_generated_metadata,
+    validate_reference_metadata,
+    verify_case_references,
+)
 from examples.MatCont.python_cases.codim2 import run_codim2_points
 from examples.MatCont.python_cases.equilibrium import (
     run_adaptive_control_hopf,
@@ -427,3 +435,166 @@ def test_cli_parser_exposes_the_foundation_options_and_environment_defaults(monk
     assert args.include_unsupported
     assert args.matlab_bin == "/custom/matlab"
     assert args.matcont_root == "/custom/matcont"
+
+
+def _run_matcont_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "examples.MatCont.run_validation", *arguments],
+        cwd=Path(__file__).resolve().parents[1],
+        text=True,
+        capture_output=True,
+        timeout=60,
+    )
+
+
+def test_offline_cli_validates_supported_reference_case():
+    """A supported case with reviewed artifacts must execute, not stop at selection."""
+    reference_dir = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+
+    completed = _run_matcont_cli(
+        "--case", "MC-EQ-001", "--reference-dir", str(reference_dir)
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "PASS MC-EQ-001" in completed.stdout
+
+
+def test_unsupported_case_is_explicitly_reported():
+    """Including an unsupported case must never imply JaxCont validated it."""
+    completed = _run_matcont_cli(
+        "--case", "US-BP-001", "--include-unsupported", "--dry-run"
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "UNSUPPORTED_BY_JAXCONT US-BP-001" in completed.stdout
+
+
+def test_unsupported_registry_covers_every_deferred_feature_family():
+    """Omitting a deferred family would make the capability matrix incomplete."""
+    unsupported_features = {
+        feature
+        for case in load_registry()["cases"]
+        if case["support"] == "unsupported"
+        for feature in case["features"]
+    }
+
+    assert {
+        "branch-switching",
+        "two-parameter-fold-curve",
+        "two-parameter-hopf-curve",
+        "two-parameter-pd-curve",
+        "two-parameter-lpc-curve",
+        "two-parameter-ns-curve",
+        "general-bvp-continuation",
+        "homoclinic-continuation",
+        "heteroclinic-continuation",
+        "prc",
+        "dprc",
+    } <= unsupported_features
+
+
+def _complete_metadata(case_id: str) -> dict:
+    return {
+        "case_id": case_id,
+        "provenance": "regenerated with the committed standalone producer",
+        "source": "analytic fixture",
+        "source_section": "validation test",
+        "matlab_version": "9.8.0.1323502 (R2020a)",
+        "matcont_version": "7.6",
+        "jaxcont_version": "0.1.0",
+        "python_version": "3.11.0",
+        "jax_version": "0.4.0",
+        "precision": "double",
+        "mesh": {"ntst": 25, "ncol": 4},
+        "solver_settings": {"MaxNumPoints": 80},
+        "generated_utc": "2026-08-05T00:00:00Z",
+        "equation_hash": "sha256:" + "1" * 64,
+        "reviewed": True,
+    }
+
+
+def test_reference_metadata_requires_complete_reproducibility_provenance(tmp_path):
+    """A reference without an equation hash cannot identify the equations it validates."""
+    path = tmp_path / "MC-EQ-001_metadata.json"
+    metadata = _complete_metadata("MC-EQ-001")
+    del metadata["equation_hash"]
+    path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="equation_hash"):
+        validate_reference_metadata(path, "MC-EQ-001")
+
+    metadata["equation_hash"] = "sha256:" + "1" * 64
+    path.write_text(json.dumps(metadata), encoding="utf-8")
+    assert validate_reference_metadata(path, "MC-EQ-001")["reviewed"] is True
+
+
+def test_generated_metadata_is_enriched_with_runtime_and_equation_provenance(tmp_path):
+    """Promotion must identify the exact equations and Python/JAX runtime used."""
+    metadata_path = tmp_path / "MC-EQ-001_metadata.json"
+    equation_path = tmp_path / "cubic_fold.m"
+    equation_source = "function y = cubic_fold(x)\ny = x;\nend\n"
+    equation_path.write_text(equation_source, encoding="utf-8")
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "case_id": "MC-EQ-001",
+                "source": "analytic cubic fold",
+                "matlab_version": "9.8.0 (R2020a)",
+                "matcont_version": "7.6",
+                "precision": "double",
+                "mesh": {"kind": "equilibrium"},
+                "solver_settings": {"MaxNumPoints": 500},
+                "generated_utc": "2026-08-05T00:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+    case = {
+        "id": "MC-EQ-001",
+        "manual_source": "MatCont manual section 3",
+        "python": "examples.MatCont.python_cases.equilibrium:run_cubic_fold",
+    }
+
+    enriched = enrich_generated_metadata(metadata_path, case, equation_path)
+
+    assert enriched["equation_hash"] == "sha256:" + hashlib.sha256(
+        equation_source.encode()
+    ).hexdigest()
+    assert enriched["source_section"] == "MatCont manual section 3"
+    assert enriched["python_version"]
+    assert enriched["jax_version"]
+    assert enriched["jaxcont_version"]
+    assert enriched["reviewed"] is False
+
+
+def test_reference_verification_is_tolerant_and_never_overwrites_reviewed_files(tmp_path):
+    """Verification must accept roundoff, detect drift, and leave the oracle unchanged."""
+    reviewed = tmp_path / "reviewed"
+    generated = tmp_path / "generated"
+    reviewed.mkdir()
+    generated.mkdir()
+    reference_csv = "case_id,point,parameter\nMC-EQ-001,0,0.6666666667\n"
+    generated_csv = "case_id,point,parameter\nMC-EQ-001,0,0.6666667667\n"
+    (reviewed / "branch.csv").write_text(reference_csv, encoding="utf-8")
+    (generated / "branch.csv").write_text(generated_csv, encoding="utf-8")
+    reviewed_metadata = _complete_metadata("MC-EQ-001")
+    generated_metadata = dict(reviewed_metadata, generated_utc="2026-08-06T00:00:00Z")
+    (reviewed / "metadata.json").write_text(json.dumps(reviewed_metadata), encoding="utf-8")
+    (generated / "metadata.json").write_text(json.dumps(generated_metadata), encoding="utf-8")
+    case = {
+        "id": "MC-EQ-001",
+        "references": ["branch.csv", "metadata.json"],
+        "tolerances": {"parameter_atol": 5e-4},
+    }
+
+    before = (reviewed / "branch.csv").read_bytes()
+    diagnostics = verify_case_references(case, generated, reviewed)
+
+    assert diagnostics["max_numeric_error"] == pytest.approx(1e-7)
+    assert (reviewed / "branch.csv").read_bytes() == before
+
+    (generated / "branch.csv").write_text(
+        "case_id,point,parameter\nMC-EQ-001,0,0.7\n", encoding="utf-8"
+    )
+    with pytest.raises(ValidationMismatch):
+        verify_case_references(case, generated, reviewed)

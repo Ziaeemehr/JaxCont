@@ -6,8 +6,13 @@
       "support": "supported",
       "features": ["equilibrium-continuation", "fold"],
       "python": "examples.MatCont.python_cases.equilibrium:run_cubic_fold",
-      "matlab": "export_equilibrium_run",
-      "references": [],
+      "matlab": "run_cubic_fold",
+      "references": [
+        "MC-EQ-001_branch.csv",
+        "MC-EQ-001_events.csv",
+        "MC-EQ-001_multipliers.csv",
+        "MC-EQ-001_metadata.json"
+      ],
       "manual_source": "Analytic cubic equilibrium folds",
       "tolerances": {"parameter_atol": 0.0005}
     },
@@ -17,8 +22,13 @@
       "support": "supported",
       "features": ["equilibrium-continuation", "hopf", "stability"],
       "python": "examples.MatCont.python_cases.equilibrium:run_vanderpol_hopf",
-      "matlab": "export_equilibrium_run",
-      "references": [],
+      "matlab": "run_vanderpol_hopf",
+      "references": [
+        "MC-EQ-002_branch.csv",
+        "MC-EQ-002_events.csv",
+        "MC-EQ-002_multipliers.csv",
+        "MC-EQ-002_metadata.json"
+      ],
       "manual_source": "Analytic Van der Pol equilibrium Hopf",
       "tolerances": {"parameter_atol": 0.0005, "frequency_atol": 0.0005}
     },
@@ -28,8 +38,13 @@
       "support": "supported",
       "features": ["equilibrium-continuation", "hopf", "normal-form"],
       "python": "examples.MatCont.python_cases.equilibrium:run_adaptive_control_hopf",
-      "matlab": "export_equilibrium_run",
-      "references": [],
+      "matlab": "run_adaptive_control",
+      "references": [
+        "MC-EQ-003_branch.csv",
+        "MC-EQ-003_events.csv",
+        "MC-EQ-003_multipliers.csv",
+        "MC-EQ-003_metadata.json"
+      ],
       "manual_source": "MatCont 7.6 Testruns/testadapt.m and TestSystems/adaptx.m",
       "tolerances": {"parameter_atol": 0.0005, "frequency_atol": 0.0005}
     },
@@ -107,6 +122,105 @@
       "references": [],
       "manual_source": "MatCont 7.6 branch-switching workflow",
       "tolerances": {"parameter_atol": 0.001}
+    },
+    {
+      "id": "US-C2-LP-001",
+      "title": "Two-parameter fold-curve continuation",
+      "support": "unsupported",
+      "features": ["two-parameter-fold-curve"],
+      "python": null,
+      "matlab": "run_two_parameter_fold_curve",
+      "references": [],
+      "manual_source": "MatCont 7.6 Testruns/testLPcataloscill.m",
+      "tolerances": {"parameter_atol": 0.001}
+    },
+    {
+      "id": "US-C2-H-001",
+      "title": "Two-parameter Hopf-curve continuation",
+      "support": "unsupported",
+      "features": ["two-parameter-hopf-curve"],
+      "python": null,
+      "matlab": "run_two_parameter_hopf_curve",
+      "references": [],
+      "manual_source": "MatCont 7.6 Testruns/testLPHopfcataloscill.m",
+      "tolerances": {"parameter_atol": 0.001}
+    },
+    {
+      "id": "US-C2-PD-001",
+      "title": "Two-parameter period-doubling curve continuation",
+      "support": "unsupported",
+      "features": ["two-parameter-pd-curve"],
+      "python": null,
+      "matlab": "run_two_parameter_pd_curve",
+      "references": [],
+      "manual_source": "MatCont 7.6 Testruns/testadapt3.m",
+      "tolerances": {"parameter_atol": 0.001}
+    },
+    {
+      "id": "US-C2-LPC-001",
+      "title": "Two-parameter limit-point-of-cycles continuation",
+      "support": "unsupported",
+      "features": ["two-parameter-lpc-curve"],
+      "python": null,
+      "matlab": "run_two_parameter_lpc_curve",
+      "references": [],
+      "manual_source": "MatCont 7.6 Testruns/testLPCMLfast.m",
+      "tolerances": {"parameter_atol": 0.001}
+    },
+    {
+      "id": "US-C2-NS-001",
+      "title": "Two-parameter Neimark-Sacker curve continuation",
+      "support": "unsupported",
+      "features": ["two-parameter-ns-curve"],
+      "python": null,
+      "matlab": "run_two_parameter_ns_curve",
+      "references": [],
+      "manual_source": "MatCont 7.6 Testruns/testtorBPC2.m",
+      "tolerances": {"parameter_atol": 0.001}
+    },
+    {
+      "id": "US-BVP-001",
+      "title": "General boundary-value-problem continuation",
+      "support": "unsupported",
+      "features": ["general-bvp-continuation"],
+      "python": null,
+      "matlab": "run_general_bvp_continuation",
+      "references": [],
+      "manual_source": "MatCont periodic/general BVP collocation workflow",
+      "tolerances": {"residual_atol": 0.000001}
+    },
+    {
+      "id": "US-HOM-001",
+      "title": "Homoclinic continuation",
+      "support": "unsupported",
+      "features": ["homoclinic-continuation"],
+      "python": null,
+      "matlab": "run_connecting_orbits",
+      "references": [],
+      "manual_source": "MatCont 7.6 Testruns/homoc1.m",
+      "tolerances": {"residual_atol": 0.000001}
+    },
+    {
+      "id": "US-HET-001",
+      "title": "Heteroclinic continuation",
+      "support": "unsupported",
+      "features": ["heteroclinic-continuation"],
+      "python": null,
+      "matlab": "run_heteroclinic_continuation",
+      "references": [],
+      "manual_source": "MatCont 7.6 heteroclinic and HomotopyHet workflows",
+      "tolerances": {"residual_atol": 0.000001}
+    },
+    {
+      "id": "US-PRC-001",
+      "title": "PRC and dPRC calculations",
+      "support": "unsupported",
+      "features": ["prc", "dprc"],
+      "python": null,
+      "matlab": "run_prc_dprc",
+      "references": [],
+      "manual_source": "MatCont 7.6 Testruns/testadaptPRC.m",
+      "tolerances": {"residual_atol": 0.000001}
     }
   ]
 }
