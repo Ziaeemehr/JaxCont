@@ -27,10 +27,12 @@ from __future__ import annotations
 from typing import Any, Callable, Tuple
 
 import jax.numpy as jnp
-from jax import Array, jacfwd
+from jax import Array, jacfwd, lax
 
 from jaxcont.bifurcations.fold_normal_form import fold_coefficient
 from jaxcont.bifurcations.fold_solve import _initial_v
+from jaxcont.bifurcations.hopf_normal_form import _seed as _hopf_seed
+from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
 from jaxcont.solvers.implicit import differentiable_root
 
 PyTree = Any
@@ -245,6 +247,112 @@ def bogdanov_takens_parameters(
     :func:`cusp_parameters`).
     """
     _, p, _, _, _ = bogdanov_takens_point(
+        f, u_guess, p_guess, args, tol=tol, max_iter=max_iter
+    )
+    return p
+
+
+# --------------------------------------------------------------------------
+# GH -- generalized Hopf (Bautin)
+# --------------------------------------------------------------------------
+
+def _gh_unpack(x, n):
+    return (x[:n], x[n:n + 2], x[n + 2:2 * n + 2],
+            x[2 * n + 2:3 * n + 2], x[-1])
+
+
+def _gh_residual(x, f, args, n, u_guess, p_guess):
+    """
+    Generalized-Hopf extended system, ``3n+3`` equations in ``3n+3``
+    unknowns ``(u, p, q1, q2, omega)``: the Hopf system plus ``l1 = 0``.
+    """
+    u, p, q1, q2, omega = _gh_unpack(x, n)
+    # Seed recomputed inside the traced primal on every iteration, exactly
+    # as hopf_normal_form.py does -- differentiable_root's contract requires
+    # theta-dependent seeds to be resolved here, not hoisted out. The seed
+    # comes from jnp.linalg.eig, which has no gradient rule for non-symmetric
+    # eigenvectors, so args is stop_gradient'd here -- matching
+    # hopf_normal_form.py's _extended_residual exactly. Confirmed necessary:
+    # omitting this reproduces `NotImplementedError: Derivatives of
+    # non-symmetric eigenvectors...` in the parameters-grad test.
+    q1_seed, q2_seed, _ = _hopf_seed(f, u_guess, p_guess, lax.stop_gradient(args), n)
+    jac_u = jacfwd(f, argnums=0)(u, p, args)
+    l1 = lyapunov_coefficient(f, u, p, q1, q2, omega, args)
+    return jnp.concatenate([
+        f(u, p, args),                                                   # n
+        jac_u @ q1 + omega * q2,                                         # n
+        jac_u @ q2 - omega * q1,                                         # n
+        jnp.reshape(jnp.dot(q1, q1) + jnp.dot(q2, q2) - 1.0, (1,)),      # 1
+        # Seed-based phase condition, matching hopf_normal_form.py's g5.
+        # The naive `q1 . q2 == 0` alternative is recorded as broken in the
+        # Hopf design spec -- do not substitute it.
+        jnp.reshape(jnp.dot(q1_seed, q2) - jnp.dot(q2_seed, q1), (1,)),  # 1
+        jnp.reshape(l1, (1,)),                                           # 1
+    ])
+
+
+def generalized_hopf_point(
+    f: Callable[[Array, Array, PyTree], Array],
+    u_guess: Array,
+    p_guess: Array,
+    args: PyTree = None,
+    *,
+    tol: float = 1e-6,
+    max_iter: int = 50,
+) -> Tuple[Array, Array, Array, Array, Array, Array]:
+    """
+    Locate a generalized Hopf / Bautin point (``GH``) near
+    ``(u_guess, p_guess)``, differentiable in ``args``. Kuznetsov, 3rd ed.,
+    Sec. 8.3.
+
+    ``GH`` is a Hopf point at which the first Lyapunov coefficient ``l1``
+    also vanishes -- the point separating supercritical from subcritical
+    Hopf along a Hopf curve. Returns
+    ``(u*, p*, q1*, q2*, omega*, converged)``; ``omega* >= 0`` by
+    construction (see :func:`_normalize_omega`) and ``p*`` has shape ``(2,)``.
+
+    ``f`` must be complex-analytic (holomorphic) in ``u`` near the point,
+    inherited from :func:`~jaxcont.bifurcations.hopf_normal_form.lyapunov_coefficient`.
+
+    ``tol`` defaults to ``1e-6``: the achievable float32 residual floor for
+    this system is about ``6e-8`` (measured), so ``1e-8`` would report
+    ``converged=False`` even where the answer is exact, while ``1e-4`` stops
+    early with visible parameter error.
+    """
+    u_guess = jnp.asarray(u_guess)
+    n = u_guess.shape[0]
+    p_guess = jnp.asarray(p_guess, u_guess.dtype)
+
+    def G(x, theta):
+        return _gh_residual(x, f, theta, n, u_guess, p_guess)
+
+    def x0(theta):
+        q1_0, q2_0, omega_0 = _hopf_seed(f, u_guess, p_guess, theta, n)
+        return jnp.concatenate(
+            [u_guess, p_guess, q1_0, q2_0, jnp.reshape(omega_0, (1,))]
+        )
+
+    x_star, converged = _solve_and_check(G, x0, args, tol=tol, max_iter=max_iter)
+    u, p, q1, q2, omega = _gh_unpack(x_star, n)
+    q2, omega = _normalize_omega(q2, omega)
+    return u, p, q1, q2, omega, converged
+
+
+def generalized_hopf_parameters(
+    f: Callable[[Array, Array, PyTree], Array],
+    u_guess: Array,
+    p_guess: Array,
+    args: PyTree = None,
+    *,
+    tol: float = 1e-6,
+    max_iter: int = 50,
+) -> Array:
+    """
+    Parameter pair ``p*`` (shape ``(2,)``) at the generalized Hopf point --
+    differentiable in ``args``, no convergence flag (see
+    :func:`cusp_parameters`).
+    """
+    _, p, _, _, _, _ = generalized_hopf_point(
         f, u_guess, p_guess, args, tol=tol, max_iter=max_iter
     )
     return p

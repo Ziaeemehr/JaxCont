@@ -14,7 +14,9 @@ import jax.numpy as jnp
 from jaxcont.bifurcations.codim2 import (
     cusp_point, cusp_parameters,
     bogdanov_takens_point, bogdanov_takens_parameters,
+    generalized_hopf_point, generalized_hopf_parameters,
 )
+from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
 
 
 def _cusp_shifted(u, p, args):
@@ -154,3 +156,89 @@ def test_bogdanov_takens_parameters_grad_matches_finite_difference():
     fd = (p0_star(0.1 + h) - p0_star(0.1 - h)) / (2 * h)
     assert jnp.isfinite(g)
     assert jnp.isclose(float(g), float(fd), atol=1e-3)
+
+
+def _gh_shifted(u, p, args):
+    # Bautin normal form  r' = r*(b1 + b2*r^2 - r^4),  theta' = 1,  in
+    # Cartesian coordinates. Hopf at b1=0; l1 is proportional to b2, so the
+    # generalized Hopf is at (b1,b2)=(0,0). Shifted to p*=(2,-3).
+    x, y = u[0], u[1]
+    b1 = p[0] - 2.0
+    b2 = p[1] + 3.0
+    r2 = x**2 + y**2
+    g = b1 + b2 * r2 - r2**2
+    return jnp.array([-y + x * g, x + y * g])
+
+
+def test_generalized_hopf_point_recovers_exact_shifted_gh():
+    u, p, q1, q2, omega, ok = generalized_hopf_point(
+        _gh_shifted, jnp.array([0.02, -0.03]), jnp.array([2.05, -2.90]),
+    )
+    assert bool(ok)
+    assert jnp.allclose(u, jnp.zeros(2), atol=1e-4)
+    assert jnp.allclose(p, jnp.array([2.0, -3.0]), atol=1e-4)
+    assert jnp.isclose(float(omega), 1.0, atol=1e-4)
+
+
+def test_generalized_hopf_omega_is_normalized_positive_from_either_seed():
+    # The Hopf block is invariant under (omega, q2) -> (-omega, -q2), so the
+    # raw solve can land on either sign. This is the regression test for
+    # that -- without it the bug reappears invisibly.
+    for seed_u in (jnp.array([0.02, -0.03]), jnp.array([-0.02, 0.03])):
+        _, _, _, _, omega, ok = generalized_hopf_point(
+            _gh_shifted, seed_u, jnp.array([2.05, -2.90]),
+        )
+        assert bool(ok)
+        assert float(omega) > 0.0
+
+
+def test_generalized_hopf_has_vanishing_lyapunov_coefficient():
+    # The defining condition: l1 == 0 at the returned point.
+    u, p, q1, q2, omega, ok = generalized_hopf_point(
+        _gh_shifted, jnp.array([0.02, -0.03]), jnp.array([2.05, -2.90]),
+    )
+    assert bool(ok)
+    l1 = lyapunov_coefficient(_gh_shifted, u, p, q1, q2, omega, None)
+    assert abs(float(l1)) < 1e-4
+
+
+def test_generalized_hopf_parameters_grad_matches_finite_difference():
+    def gh_moving(u, p, shift):
+        x, y = u[0], u[1]
+        b1 = p[0] - 2.0 - shift
+        b2 = p[1] + 3.0
+        r2 = x**2 + y**2
+        g = b1 + b2 * r2 - r2**2
+        return jnp.array([-y + x * g, x + y * g])
+
+    def p0_star(shift):
+        return generalized_hopf_parameters(
+            gh_moving, jnp.array([0.02, -0.03]), jnp.array([2.05, -2.90]), shift
+        )[0]
+
+    g = jax.grad(p0_star)(0.05)
+    h = 1e-3
+    fd = (p0_star(0.05 + h) - p0_star(0.05 - h)) / (2 * h)
+    assert jnp.isfinite(g)
+    assert jnp.isclose(float(g), float(fd), atol=1e-3)
+
+
+def test_generalized_hopf_agrees_with_the_codim1_hopf_solver_there():
+    # Cross-check against the existing scalar-p Hopf solver: a GH IS a Hopf
+    # point, so freezing the second parameter at its GH value and running
+    # hopf_point must land on the same p0 and frequency.
+    from jaxcont.bifurcations.hopf_normal_form import hopf_point
+
+    _, p_g, _, _, om_g, ok = generalized_hopf_point(
+        _gh_shifted, jnp.array([0.02, -0.03]), jnp.array([2.05, -2.90]),
+    )
+    assert bool(ok)
+
+    def f_scalar(u, p, args):
+        return _gh_shifted(u, jnp.array([p, p_g[1]]), args)
+
+    _, p_h, _, _, om_h = hopf_point(
+        f_scalar, jnp.array([0.01, -0.01]), float(p_g[0]) + 0.02, tol=1e-6,
+    )
+    assert jnp.isclose(float(p_h), float(p_g[0]), atol=1e-3)
+    assert jnp.isclose(abs(float(om_h)), float(om_g), atol=1e-3)
