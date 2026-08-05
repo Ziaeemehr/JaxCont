@@ -81,3 +81,23 @@ def test_prc_curve_periodicity_seed_matches_chain_endpoint():
     # around must return Z[0] itself.
     residual = (Phi.T - jnp.eye(n)) @ Z[0]
     assert float(jnp.max(jnp.abs(residual))) < 1e-5
+
+
+def test_branch_prc_matches_per_point_calls():
+    from jaxcont.stability.prc import branch_prc
+
+    prob1, mesh = _circle_problem(rho=1.0)
+    prob2, _ = _circle_problem(rho=1.5)
+    states = jnp.stack([prob1.u0, prob2.u0])
+    params = jnp.stack([prob1.p0, prob2.p0])
+
+    with jax.default_matmul_precision("float32"):
+        batched = branch_prc(_rhs, mesh, states, params)
+        individual = jnp.stack(
+            [
+                prc_curve(_rhs, mesh, prob1.u0, prob1.p0),
+                prc_curve(_rhs, mesh, prob2.u0, prob2.p0),
+            ]
+        )
+    assert batched.shape == (2, mesh.ntst, 2)
+    assert jnp.max(jnp.abs(batched - individual)) < 1e-6

@@ -65,3 +65,18 @@ def prc_curve(
 
     _, Z_rest_rev = jax.lax.scan(step, Z0, M_all[::-1])
     return Z_rest_rev[::-1]
+
+
+def branch_prc(
+    raw_f: Callable[[Array, Array, PyTree], Array],
+    mesh: Collocation,
+    states: Array,
+    params: Array,
+    linear_solver: LinearSolver = Dense(),
+) -> Array:
+    """Vectorized (vmap) iPRC curves along a stored periodic branch --
+    the PRC analogue of ``stability.floquet.branch_floquet_multipliers``."""
+    def at(U, p):
+        return prc_curve(raw_f, mesh, U, p, linear_solver)
+
+    return jax.vmap(at)(states, params)
