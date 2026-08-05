@@ -1,0 +1,7 @@
+MatCont validation suite
+========================
+
+Reproducible cross-validation cases comparing JaxCont against analytic results,
+MATLAB/MatCont 7.6, and BifurcationKit.jl. This directory is a validation
+toolkit, not narrated tutorial scripts -- see ``examples/MatCont/README.md``
+for the case registry, tolerances, and how to run it.
