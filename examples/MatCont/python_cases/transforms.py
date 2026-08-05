@@ -128,6 +128,26 @@ def run_transform_checks() -> CaseResult:
     imperfections = jnp.array([-0.15, 0.0, 0.15])
     batched = jax.vmap(_batched_branch)(imperfections)
     permuted = jax.vmap(_batched_branch)(imperfections[::-1])
+    serial = [_batched_branch(imperfection) for imperfection in imperfections]
+    serial_masks = jnp.stack(
+        [
+            jnp.arange(batched.branch.valid.shape[1]) < result.branch.n_valid
+            for result in serial
+        ]
+    )
+    serial_masks_match = bool(jnp.array_equal(batched.branch.valid, serial_masks))
+    serial_parameters_match = bool(
+        all(
+            jnp.allclose(batched.branch.params[index][serial_masks[index]], result.branch.params)
+            for index, result in enumerate(serial)
+        )
+    )
+    serial_states_match = bool(
+        all(
+            jnp.allclose(batched.branch.states[index][serial_masks[index]], result.branch.states)
+            for index, result in enumerate(serial)
+        )
+    )
     permutation_invariant = bool(
         jnp.allclose(batched.branch.params, permuted.branch.params[::-1])
         and jnp.allclose(batched.branch.states, permuted.branch.states[::-1])
@@ -155,6 +175,9 @@ def run_transform_checks() -> CaseResult:
                 jnp.max(jnp.abs(gradients - finite_differences))
             ),
             "vmap_valid_masks_present": batched.branch.valid is not None,
+            "vmap_valid_masks_match_serial": serial_masks_match,
+            "vmap_valid_parameters_match_serial": serial_parameters_match,
+            "vmap_valid_states_match_serial": serial_states_match,
             "permutation_invariant": permutation_invariant,
             "jit_matches_eager": jit_matches_eager,
         },

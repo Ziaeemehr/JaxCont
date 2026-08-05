@@ -32,7 +32,7 @@ from examples.MatCont.python_cases.equilibrium import (
     run_cubic_fold,
     run_vanderpol_hopf,
 )
-from examples.MatCont.python_cases.transforms import run_transform_checks
+from examples.MatCont.python_cases.transforms import _batched_branch, run_transform_checks
 from examples.MatCont.python_cases.periodic import (
     load_torbpc_reference,
     run_radial_cycle,
@@ -104,6 +104,23 @@ def test_transform_case_matches_analytic_and_finite_difference_gradients():
     assert result.checks["jit_matches_eager"]
     assert result.checks["vmap_valid_masks_present"]
     assert result.checks["permutation_invariant"]
+    assert result.checks["vmap_valid_masks_match_serial"]
+    assert result.checks["vmap_valid_parameters_match_serial"]
+    assert result.checks["vmap_valid_states_match_serial"]
+
+    for batch_index, imperfection in enumerate((-0.15, 0.0, 0.15)):
+        serial = _batched_branch(np.asarray(imperfection))
+        batched_valid = np.asarray(result.artifacts["valid"])[batch_index]
+        serial_valid = np.arange(batched_valid.size) < serial.branch.n_valid
+        assert np.array_equal(batched_valid, serial_valid)
+        assert np.allclose(
+            np.asarray(result.artifacts["parameters"])[batch_index][batched_valid],
+            np.asarray(serial.branch.params),
+        )
+        assert np.allclose(
+            np.asarray(result.artifacts["states"])[batch_index][batched_valid],
+            np.asarray(serial.branch.states),
+        )
 
 
 @pytest.mark.slow
@@ -823,6 +840,99 @@ def test_folded_branch_comparison_accepts_reversed_adaptive_segments(tmp_path):
     assert diagnostics["branch_max_error"] == pytest.approx(0.0)
 
 
+def _write_folded_spectrum_fixture(
+    directory: Path, *, reversed_adaptive: bool, corrupt_second_arm: bool
+) -> None:
+    branch_header = "case_id,point,parameter,period,residual_norm\n"
+    spectrum_header = (
+        "case_id,point,event_index,event_type,spectrum_kind,multiplier_index,real,imag\n"
+    )
+    if reversed_adaptive:
+        branch = [
+            (0, 0.0, 10.0),
+            (1, 0.5, 6.0),
+            (2, 1.0, 2.0),
+            (3, 0.5, 1.5),
+            (4, 0.0, 1.0),
+        ]
+        spectra = [(0, 10.0), (1, 6.0), (2, 2.0), (3, 1.5), (4, 1.0)]
+    else:
+        branch = [(0, 0.0, 1.0), (1, 1.0, 2.0), (2, 0.0, 10.0)]
+        spectra = [(0, 1.0), (1, 2.0), (2, 999.0 if corrupt_second_arm else 10.0)]
+    (directory / "branch.csv").write_text(
+        branch_header
+        + "".join(
+            f"MC-LC-X,{point},{parameter},{period},0\n"
+            for point, parameter, period in branch
+        ),
+        encoding="utf-8",
+    )
+    (directory / "multipliers.csv").write_text(
+        spectrum_header
+        + "".join(
+            f"MC-LC-X,{point},-1,BRANCH,EIGENVALUE,0,{value},0\n"
+            for point, value in spectra
+        ),
+        encoding="utf-8",
+    )
+    metadata = _complete_metadata("MC-LC-X")
+    metadata["reviewed"] = not (reversed_adaptive or corrupt_second_arm)
+    (directory / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+
+
+def test_folded_branch_spectra_reject_change_on_only_one_parameter_arm(tmp_path):
+    """Deduplicating a folded spectrum by parameter must not hide a wrong second arm."""
+    reviewed = tmp_path / "reviewed"
+    generated = tmp_path / "generated"
+    reviewed.mkdir()
+    generated.mkdir()
+    _write_folded_spectrum_fixture(
+        reviewed, reversed_adaptive=False, corrupt_second_arm=False
+    )
+    _write_folded_spectrum_fixture(
+        generated, reversed_adaptive=False, corrupt_second_arm=True
+    )
+    case = {
+        "id": "MC-LC-X",
+        "references": ["branch.csv", "multipliers.csv", "metadata.json"],
+        "tolerances": {
+            "parameter_atol": 1e-9,
+            "period_atol": 1e-9,
+            "spectrum_atol": 1e-9,
+        },
+    }
+
+    with pytest.raises(ValidationMismatch):
+        verify_case_references(case, generated, reviewed)
+
+
+def test_folded_branch_spectra_accept_reversed_adaptive_equivalent_arms(tmp_path):
+    """Segment assignment must accept reversed direction and adaptive spectral meshes."""
+    reviewed = tmp_path / "reviewed"
+    generated = tmp_path / "generated"
+    reviewed.mkdir()
+    generated.mkdir()
+    _write_folded_spectrum_fixture(
+        reviewed, reversed_adaptive=False, corrupt_second_arm=False
+    )
+    _write_folded_spectrum_fixture(
+        generated, reversed_adaptive=True, corrupt_second_arm=False
+    )
+    case = {
+        "id": "MC-LC-X",
+        "references": ["branch.csv", "multipliers.csv", "metadata.json"],
+        "tolerances": {
+            "parameter_atol": 1e-9,
+            "period_atol": 1e-9,
+            "spectrum_atol": 1e-9,
+        },
+    }
+
+    diagnostics = verify_case_references(case, generated, reviewed)
+
+    assert diagnostics["spectrum_max_error"] == pytest.approx(0.0)
+
+
 def test_relative_generated_directory_resolves_before_matlab_changes_directory(
     tmp_path, monkeypatch
 ):
@@ -926,3 +1036,73 @@ def test_offline_cli_rejects_corrupted_radial_branch_schema(tmp_path):
 
     assert completed.returncode != 0
     assert "missing columns" in completed.stderr
+
+
+def _mutate_vanderpol_reference(directory: Path, mutation: str) -> None:
+    if mutation == "stability":
+        path = directory / "MC-EQ-002_branch.csv"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        columns = lines[0].split(",")
+        stable_index = columns.index("stable")
+        unstable_index = columns.index("unstable_dimension")
+        mutated = [lines[0]]
+        for line in lines[1:]:
+            values = line.split(",")
+            originally_stable = values[stable_index] == "1"
+            values[stable_index] = "0" if originally_stable else "1"
+            values[unstable_index] = "2" if originally_stable else "0"
+            mutated.append(",".join(values))
+        path.write_text("\n".join(mutated) + "\n", encoding="utf-8")
+        return
+    if mutation == "spectrum":
+        path = directory / "MC-EQ-002_multipliers.csv"
+        lines = path.read_text(encoding="utf-8").splitlines()
+        columns = lines[0].split(",")
+        real_index = columns.index("real")
+        for index, line in enumerate(lines[1:], start=1):
+            values = line.split(",")
+            if values[3] == "BRANCH":
+                values[real_index] = "999"
+                lines[index] = ",".join(values)
+                break
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return
+    raise ValueError(f"unknown mutation: {mutation}")
+
+
+@pytest.mark.parametrize("mutation", ["stability", "spectrum"])
+def test_reference_verification_rejects_vanderpol_stability_and_spectrum_mutations(
+    tmp_path, mutation
+):
+    """Regeneration review must cover discrete stability and every branch eigenvalue."""
+    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reviewed = tmp_path / "reviewed"
+    generated = tmp_path / "generated"
+    shutil.copytree(reference, reviewed)
+    shutil.copytree(reference, generated)
+    metadata_path = generated / "MC-EQ-002_metadata.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["reviewed"] = False
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    _mutate_vanderpol_reference(generated, mutation)
+    case = next(case for case in load_registry()["cases"] if case["id"] == "MC-EQ-002")
+
+    with pytest.raises(ValidationMismatch):
+        verify_case_references(case, generated, reviewed)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("mutation", ["stability", "spectrum"])
+def test_offline_cli_rejects_vanderpol_stability_and_spectrum_mutations(
+    tmp_path, mutation
+):
+    """Analytic landmarks must not mask corrupted MatCont branch diagnostics."""
+    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    mutated = tmp_path / "reference"
+    shutil.copytree(reference, mutated)
+    _mutate_vanderpol_reference(mutated, mutation)
+
+    completed = _run_matcont_cli("--case", "MC-EQ-002", "--reference-dir", str(mutated))
+
+    assert completed.returncode != 0
+    assert "FAIL MC-EQ-002" in completed.stderr

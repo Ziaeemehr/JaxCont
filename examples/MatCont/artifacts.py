@@ -416,20 +416,14 @@ def _compare_branch_rows(
         if query.size > 201:
             query = np.linspace(lower, upper, 201)
 
-    ignored = {
-        "case_id",
-        "point",
-        coordinate,
-        "residual_norm",
-        "stable",
-        "unstable_dimension",
-    }
+    ignored = {"case_id", "point", coordinate, "residual_norm"}
+    discrete_columns = {"stable", "unstable_dimension"} & actual_set & reference_set
     if case["id"] == "MC-LC-001":
         ignored.update(
             column for column in actual_set | reference_set if column.startswith("state_")
         )
     numeric_columns = []
-    for column in sorted((actual_set & reference_set) - ignored):
+    for column in sorted((actual_set & reference_set) - ignored - discrete_columns):
         try:
             np.asarray([_as_float(row, column) for row in actual_ordered + reference_ordered])
         except ValidationMismatch:
@@ -454,6 +448,17 @@ def _compare_branch_rows(
             rtol=float(tolerances.get("rtol", 1e-9)),
         )
         max_error = max(max_error, diagnostics["max_error"])
+    for column in sorted(discrete_columns):
+        actual_values = np.asarray([int(_as_float(row, column)) for row in actual_ordered])
+        reference_values = np.asarray(
+            [int(_as_float(row, column)) for row in reference_ordered]
+        )
+        actual_nearest = np.abs(actual_x[:, None] - query[None, :]).argmin(axis=0)
+        reference_nearest = np.abs(reference_x[:, None] - query[None, :]).argmin(axis=0)
+        if not np.array_equal(
+            actual_values[actual_nearest], reference_values[reference_nearest]
+        ):
+            raise ValidationMismatch(f"branch {column} labels differ")
     if case["id"] == "MC-LC-001":
         extrema_columns = sorted(
             column
@@ -557,6 +562,101 @@ def _group_spectra(rows: list[dict[str, Any]]) -> dict[tuple[int, str], list[dic
     return grouped
 
 
+def _branch_spectrum_curve(
+    branch_rows: list[dict[str, Any]],
+    spectrum_rows: list[dict[str, Any]],
+    coordinate: str,
+) -> list[dict[str, Any]]:
+    by_point: dict[int, list[dict[str, Any]]] = {}
+    for row in spectrum_rows:
+        by_point.setdefault(int(float(row["point"])), []).append(row)
+    curve = []
+    for branch_row in branch_rows:
+        point = int(float(branch_row["point"]))
+        if point in by_point:
+            curve.append(
+                {
+                    coordinate: _as_float(branch_row, coordinate),
+                    "values": _complex_values(by_point[point]),
+                }
+            )
+    if len(curve) != len(by_point):
+        raise ValidationMismatch("branch spectrum points do not match branch rows")
+    return curve
+
+
+def _unique_spectrum_points(
+    curve: list[dict[str, Any]], coordinate: str
+) -> tuple[np.ndarray, np.ndarray]:
+    ordered = sorted(curve, key=lambda row: _as_float(row, coordinate))
+    coordinates = np.asarray([_as_float(row, coordinate) for row in ordered])
+    unique, indices = np.unique(coordinates, return_index=True)
+    values = np.stack([ordered[int(index)]["values"] for index in indices])
+    return unique, values
+
+
+def _interpolate_spectrum_roots(
+    coordinates: np.ndarray, values: np.ndarray, query: np.ndarray
+) -> list[np.ndarray]:
+    """Interpolate symmetric characteristic coefficients, then recover roots."""
+    coefficients = np.stack([np.poly(point_values) for point_values in values])
+    if coordinates.size == 1:
+        interpolated = np.repeat(coefficients, query.size, axis=0)
+    else:
+        real = interpolate_observable(coordinates, coefficients.real, query)
+        imag = interpolate_observable(coordinates, coefficients.imag, query)
+        interpolated = real + 1j * imag
+    return [np.roots(point_coefficients) for point_coefficients in interpolated]
+
+
+def _compare_spectrum_segments(
+    case: dict[str, Any],
+    actual_curve: list[dict[str, Any]],
+    reference_curve: list[dict[str, Any]],
+    coordinate: str,
+    *,
+    require_same_extent: bool,
+    kind: str,
+) -> dict[str, float]:
+    actual_x, actual_values = _unique_spectrum_points(actual_curve, coordinate)
+    reference_x, reference_values = _unique_spectrum_points(reference_curve, coordinate)
+    if actual_values.shape[1] != reference_values.shape[1]:
+        raise ValidationMismatch("branch spectrum dimensions differ")
+    lower = max(actual_x[0], reference_x[0])
+    upper = min(actual_x[-1], reference_x[-1])
+    if upper < lower:
+        raise ValidationMismatch("branch spectra have no overlapping continuation interval")
+    if actual_x.size == reference_x.size == 1:
+        query = np.asarray([lower])
+    elif require_same_extent:
+        query = np.unique(np.concatenate([actual_x, reference_x]))
+        query = query[(query >= lower) & (query <= upper)]
+        if query.size > 101:
+            query = np.linspace(lower, upper, 101)
+    else:
+        query = actual_x[(actual_x >= lower) & (actual_x <= upper)]
+        if query.size > 101:
+            indices = np.linspace(0, query.size - 1, 101).round().astype(int)
+            query = query[indices]
+    actual_roots = _interpolate_spectrum_roots(actual_x, actual_values, query)
+    reference_roots = _interpolate_spectrum_roots(reference_x, reference_values, query)
+    tolerances = case.get("tolerances", {})
+    atol = float(
+        tolerances.get("spectrum_atol", tolerances.get("multiplier_atol", 1e-9))
+    )
+    max_error = 0.0
+    for actual_at_point, reference_at_point in zip(actual_roots, reference_roots):
+        diagnostics = match_spectrum(
+            actual_at_point,
+            reference_at_point,
+            atol=atol,
+            rtol=float(tolerances.get("rtol", 0.0)),
+            exclude_trivial=kind == "FLOQUET",
+        )
+        max_error = max(max_error, diagnostics["max_error"])
+    return {"max_error": max_error}
+
+
 def _compare_spectrum_rows(
     case: dict[str, Any],
     actual_rows: list[dict[str, Any]],
@@ -568,7 +668,6 @@ def _compare_spectrum_rows(
     reference_branch: list[dict[str, Any]],
     *,
     require_same_extent: bool,
-    compare_branch_spectra: bool = True,
 ) -> dict[str, float]:
     if not actual_rows and not reference_rows:
         return {"max_error": 0.0}
@@ -584,62 +683,55 @@ def _compare_spectrum_rows(
     reference_branch_rows = [
         row for row in reference_rows if int(float(row["event_index"])) == -1
     ]
-    if compare_branch_spectra and bool(actual_branch_rows) != bool(reference_branch_rows):
+    if bool(actual_branch_rows) != bool(reference_branch_rows):
         raise ValidationMismatch("branch spectrum availability differs")
-    if compare_branch_spectra and actual_branch_rows:
+    if actual_branch_rows:
         coordinate = _branch_coordinate(
             case["id"], set(actual_branch[0]) & set(reference_branch[0])
         )
-
-        def spectrum_curve(branch_rows, spectrum_rows):
-            coordinate_by_point = {
-                int(float(row["point"])): _as_float(row, coordinate) for row in branch_rows
-            }
-            by_point: dict[int, list[dict]] = {}
-            for row in spectrum_rows:
-                by_point.setdefault(int(float(row["point"])), []).append(row)
-            points = sorted(by_point, key=lambda point: coordinate_by_point[point])
-            x = np.asarray([coordinate_by_point[point] for point in points])
-            values = np.stack([_complex_values(by_point[point]) for point in points])
-            unique, indices = np.unique(x, return_index=True)
-            return unique, values[indices]
-
-        actual_x, actual_values = spectrum_curve(actual_branch, actual_branch_rows)
-        reference_x, reference_values = spectrum_curve(reference_branch, reference_branch_rows)
-        if actual_values.shape[1] != reference_values.shape[1]:
-            raise ValidationMismatch("branch spectrum dimensions differ")
-        lower = max(actual_x[0], reference_x[0])
-        upper = min(actual_x[-1], reference_x[-1])
-        if require_same_extent:
-            query = np.linspace(lower, upper, min(51, max(2, actual_x.size, reference_x.size)))
-        else:
-            candidates = actual_x[(actual_x >= lower) & (actual_x <= upper)]
-            if candidates.size > 51:
-                indices = np.linspace(0, candidates.size - 1, 51).round().astype(int)
-                candidates = candidates[indices]
-            query = candidates
-
-        def interpolate_complex(x, values):
-            if x.size == 1:
-                return np.repeat(values, query.size, axis=0)
-            real = interpolate_observable(x, values.real, query)
-            imag = interpolate_observable(x, values.imag, query)
-            return real + 1j * imag
-
-        actual_interpolated = interpolate_complex(actual_x, actual_values)
-        reference_interpolated = interpolate_complex(reference_x, reference_values)
         kind = str(reference_branch_rows[0]["spectrum_kind"]).strip().upper()
-        for actual_values_at_point, reference_values_at_point in zip(
-            actual_interpolated, reference_interpolated
+        actual_curve = _branch_spectrum_curve(
+            actual_branch, actual_branch_rows, coordinate
+        )
+        reference_curve = _branch_spectrum_curve(
+            reference_branch, reference_branch_rows, coordinate
+        )
+        actual_segments = _monotone_segments(actual_curve, coordinate)
+        reference_segments = _monotone_segments(reference_curve, coordinate)
+        if len(actual_segments) != len(reference_segments):
+            raise ValidationMismatch("branch spectrum turning-point count differs")
+        segment_count = len(actual_segments)
+        penalty = 1e100
+        costs = np.full((segment_count, segment_count), penalty)
+        pair_diagnostics: dict[tuple[int, int], dict[str, float]] = {}
+        for actual_index, actual_segment in enumerate(actual_segments):
+            for reference_index, reference_segment in enumerate(reference_segments):
+                try:
+                    diagnostics = _compare_spectrum_segments(
+                        case,
+                        actual_segment,
+                        reference_segment,
+                        coordinate,
+                        require_same_extent=require_same_extent,
+                        kind=kind,
+                    )
+                except ValidationMismatch:
+                    continue
+                pair_diagnostics[(actual_index, reference_index)] = diagnostics
+                costs[actual_index, reference_index] = diagnostics["max_error"]
+        actual_indices, reference_indices = linear_sum_assignment(costs)
+        assignments = list(zip(actual_indices.tolist(), reference_indices.tolist()))
+        if any(
+            costs[actual_index, reference_index] >= penalty
+            for actual_index, reference_index in assignments
         ):
-            diagnostics = match_spectrum(
-                actual_values_at_point,
-                reference_values_at_point,
-                atol=atol,
-                rtol=float(case.get("tolerances", {}).get("rtol", 0.0)),
-                exclude_trivial=kind == "FLOQUET",
+            raise ValidationMismatch(
+                "no tolerance-feasible matching for folded branch spectrum segments"
             )
-            max_error = max(max_error, diagnostics["max_error"])
+        max_error = max(
+            max_error,
+            max(pair_diagnostics[assignment]["max_error"] for assignment in assignments),
+        )
     for actual_event_index, reference_event_index in event_assignments:
         actual_event = actual_events[actual_event_index]
         reference_event = reference_events[reference_event_index]
@@ -784,21 +876,34 @@ def _case_result_rows(case: dict[str, Any], result: Any) -> tuple:
     states = np.asarray(artifacts["states"])
     branch_rows: list[dict[str, Any]] = []
     if case["id"].startswith("MC-EQ-"):
-        branch_fields = ["case_id", "point", "parameter", "stable"] + [
+        spectra = np.asarray(artifacts["spectra"])
+        unstable_dimensions = np.sum(np.real(spectra) > 0.0, axis=1)
+        branch_fields = [
+            "case_id",
+            "point",
+            "parameter",
+            "stable",
+            "unstable_dimension",
+        ] + [
             f"state_{index}" for index in range(states.shape[1])
         ]
-        for point, (parameter, state, stable) in enumerate(
-            zip(parameters, states, np.asarray(artifacts["stability"]))
+        for point, (parameter, state, stable, unstable_dimension) in enumerate(
+            zip(
+                parameters,
+                states,
+                np.asarray(artifacts["stability"]),
+                unstable_dimensions,
+            )
         ):
             row = {
                 "case_id": case["id"],
                 "point": point,
                 "parameter": float(parameter),
                 "stable": int(bool(stable)),
+                "unstable_dimension": int(unstable_dimension),
             }
             row.update({f"state_{index}": float(value) for index, value in enumerate(state)})
             branch_rows.append(row)
-        spectra = np.asarray(artifacts["spectra"])
         spectrum_kind = "EIGENVALUE"
     else:
         periods = np.asarray(artifacts["periods"])
@@ -952,7 +1057,6 @@ def compare_case_result_to_reference(
         actual_branch,
         reference_branch,
         require_same_extent=False,
-        compare_branch_spectra=not case["id"].startswith("MC-EQ-"),
     )
     return {
         "branch_max_error": branch["max_error"],

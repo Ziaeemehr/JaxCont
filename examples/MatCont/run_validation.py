@@ -217,6 +217,9 @@ def _case_result_passes(case_id: str, checks: dict) -> bool:
             and checks["max_finite_difference_error"] < 2e-3
             and checks["jit_matches_eager"]
             and checks["vmap_valid_masks_present"]
+            and checks["vmap_valid_masks_match_serial"]
+            and checks["vmap_valid_parameters_match_serial"]
+            and checks["vmap_valid_states_match_serial"]
             and checks["permutation_invariant"]
         ),
         "MC-C2-001": lambda: (
