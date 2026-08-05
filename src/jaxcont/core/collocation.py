@@ -98,24 +98,18 @@ def collocation_matrices(ncol: int):
     return D, E, gauss, gw
 
 
-def monodromy_matrix(raw_f, D: "jnp.ndarray", E: "jnp.ndarray", h: float, mesh_states, coll_states, T, p):
-    """``(n, n)`` monodromy matrix ``Phi(T)`` via a block linear recursion
-    across the ``ntst`` mesh intervals, reusing the local differentiation
-    matrix ``D`` and extrapolation weights ``E`` already built for the
-    collocation residual (see ``collocation_matrices``). ``raw_f(u, p, args)``
-    is the ODE right-hand side (``args=None`` internally) -- NOT the
-    assembled collocation residual. No re-integration of a separate
-    variational-equation IVP: this is a linearization of the same defect/
-    continuity equations the residual already encodes, solved for
-    sensitivity instead of state. Verified during design against the
-    closed-form circle system's Floquet multipliers -- see
-    docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md."""
+def interval_propagators(raw_f, D: "jnp.ndarray", E: "jnp.ndarray", h: float, mesh_states, coll_states, T, p):
+    """``(ntst, n, n)`` per-interval propagator blocks ``M_i``, such that
+    ``Phi(T) = M_{ntst-1} @ ... @ M_0``. Extracted from ``monodromy_matrix``
+    (unchanged math) so ``stability/prc.py`` can adjoint-propagate a vector
+    across each interval individually, not just consume the composed
+    endpoint map -- see
+    docs/superpowers/specs/2026-08-05-prc-dprc-design.md."""
     ntst, n = mesh_states.shape
     ncol = coll_states.shape[1]
     eye_n = jnp.eye(n)
 
     def interval_map(mesh_state_i, coll_states_i):
-        # Jacobian df/du at each of this interval's ncol collocation points.
         Jm = jax.vmap(jax.jacfwd(lambda u: raw_f(u, p, None)))(coll_states_i)  # (ncol, n, n)
 
         def build_A_row(m):
@@ -132,6 +126,16 @@ def monodromy_matrix(raw_f, D: "jnp.ndarray", E: "jnp.ndarray", h: float, mesh_s
         S = jnp.linalg.solve(A, b0).reshape(ncol, n, n)
         return E[0] * eye_n + jnp.sum(E[1:][:, None, None] * S, axis=0)
 
-    M_all = jax.vmap(interval_map)(mesh_states, coll_states)  # (ntst, n, n)
-    Phi, _ = jax.lax.scan(lambda carry, M: (M @ carry, None), eye_n, M_all)
+    return jax.vmap(interval_map)(mesh_states, coll_states)
+
+
+def monodromy_matrix(raw_f, D: "jnp.ndarray", E: "jnp.ndarray", h: float, mesh_states, coll_states, T, p):
+    """``(n, n)`` monodromy matrix ``Phi(T)`` -- see ``interval_propagators``
+    for the per-interval blocks this composes. Behavior/numerics unchanged
+    from before the ``interval_propagators`` extraction; see
+    docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md and
+    docs/superpowers/specs/2026-08-05-prc-dprc-design.md."""
+    n = mesh_states.shape[1]
+    M_all = interval_propagators(raw_f, D, E, h, mesh_states, coll_states, T, p)
+    Phi, _ = jax.lax.scan(lambda carry, M: (M @ carry, None), jnp.eye(n), M_all)
     return Phi

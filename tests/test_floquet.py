@@ -46,6 +46,32 @@ def _circle_problem(rho=1.0):
     return prob, mesh
 
 
+def test_monodromy_matrix_matches_interval_propagators_scan():
+    """interval_propagators must be extractable from monodromy_matrix without
+    changing monodromy_matrix's own numerics -- see
+    docs/superpowers/specs/2026-08-05-prc-dprc-design.md."""
+    from jaxcont.core.collocation import collocation_matrices, interval_propagators, monodromy_matrix
+
+    prob, mesh = _circle_problem(rho=1.0)
+    ntst, ncol = mesh.ntst, mesh.ncol
+    n = 2
+    h = 1.0 / ntst
+    D_np, E_np, _, _ = collocation_matrices(ncol)
+    D, E = jnp.asarray(D_np), jnp.asarray(E_np)
+    mesh_states = prob.u0[: ntst * n].reshape(ntst, n)
+    coll_states = prob.u0[ntst * n : ntst * n + ntst * ncol * n].reshape(ntst, ncol, n)
+    T = prob.u0[-1]
+
+    M_all = interval_propagators(_rhs, D, E, h, mesh_states, coll_states, T, prob.p0)
+    assert M_all.shape == (ntst, n, n)
+
+    Phi_from_blocks, _ = jax.lax.scan(
+        lambda carry, M: (M @ carry, None), jnp.eye(n), M_all
+    )
+    Phi_direct = monodromy_matrix(_rhs, D, E, h, mesh_states, coll_states, T, prob.p0)
+    assert jnp.max(jnp.abs(Phi_from_blocks - Phi_direct)) < 1e-6
+
+
 def test_floquet_multipliers_matches_closed_form_at_rho_1():
     # Verified during design: JAX result [3.4570694e-06, 1.0000001] vs
     # exact {1, exp(-4*pi)} = {1, 3.4873423562089973e-06}.
