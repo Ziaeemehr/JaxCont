@@ -1,0 +1,83 @@
+"""
+Tests for jaxcont.stability.prc: infinitesimal phase response curves (iPRC)
+via the collocation adjoint method, for the periodic orbit
+r' = r*(rho - r^2), theta' = 1 -- the same closed-form circle system
+tests/test_floquet.py uses. Because theta' = 1 independent of r, the
+asymptotic phase is exactly theta, so Z = grad(phase) in Cartesian
+coordinates is closed-form: Z(theta) = (-sin(theta), cos(theta)) / sqrt(rho).
+See docs/superpowers/specs/2026-08-05-prc-dprc-design.md.
+"""
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
+
+from jaxcont.core.collocation import Collocation
+from jaxcont.problems.periodic import periodic_orbit_problem
+from jaxcont.stability.prc import prc_curve
+
+
+def _rhs(u, p, args):
+    x, y = u[0], u[1]
+    r2 = x * x + y * y
+    rho = p
+    return jnp.array([(rho - r2) * x - y, (rho - r2) * y + x])
+
+
+def _coarse_wrong_trajectory():
+    rng = np.random.default_rng(0)
+    t_traj = np.sort(rng.uniform(0, 5.5, size=40))
+    t_traj[0] = 0.0
+    theta = lambda t: 2 * np.pi * t / 5.5 + 0.3
+    u_traj = np.stack(
+        [0.8 * np.cos(theta(t_traj)), 0.8 * np.sin(theta(t_traj))], axis=1
+    )
+    return jnp.asarray(u_traj), jnp.asarray(t_traj)
+
+
+def _circle_problem(rho=1.0):
+    u_traj, t_traj = _coarse_wrong_trajectory()
+    mesh = Collocation(ntst=10, ncol=4)
+    prob = periodic_orbit_problem(_rhs, u_traj, t_traj, 5.5, rho, mesh)
+    return prob, mesh
+
+
+def _expected_Z(prob, mesh, rho):
+    n = 2
+    mesh_states = np.asarray(prob.u0[: mesh.ntst * n]).reshape(mesh.ntst, n)
+    theta = np.arctan2(mesh_states[:, 1], mesh_states[:, 0])
+    return np.stack([-np.sin(theta), np.cos(theta)], axis=1) / np.sqrt(rho)
+
+
+def test_prc_curve_matches_closed_form_at_rho_1():
+    prob, mesh = _circle_problem(rho=1.0)
+    with jax.default_matmul_precision("float32"):
+        Z = prc_curve(_rhs, mesh, prob.u0, prob.p0)
+    assert Z.shape == (mesh.ntst, 2)
+    expected = _expected_Z(prob, mesh, rho=1.0)
+    assert float(jnp.max(jnp.abs(np.asarray(Z) - expected))) < 1e-5
+
+
+def test_prc_curve_periodicity_seed_matches_chain_endpoint():
+    """The backward adjoint chain must land back on its own seed Z(0) --
+    the numerical expression of (Phi(T)^T - I) Z(0) = 0."""
+    from jaxcont.core.collocation import collocation_matrices, interval_propagators
+
+    prob, mesh = _circle_problem(rho=1.0)
+    ntst, ncol, n = mesh.ntst, mesh.ncol, 2
+    h = 1.0 / ntst
+    D_np, E_np, _, _ = collocation_matrices(ncol)
+    D, E = jnp.asarray(D_np), jnp.asarray(E_np)
+    mesh_states = prob.u0[: ntst * n].reshape(ntst, n)
+    coll_states = prob.u0[ntst * n : ntst * n + ntst * ncol * n].reshape(ntst, ncol, n)
+    T = prob.u0[-1]
+
+    with jax.default_matmul_precision("float32"):
+        M_all = interval_propagators(_rhs, D, E, h, mesh_states, coll_states, T, prob.p0)
+        Phi, _ = jax.lax.scan(lambda c, M: (M @ c, None), jnp.eye(n), M_all)
+        Z = prc_curve(_rhs, mesh, prob.u0, prob.p0)
+    # Z[0] is the seed Z(0); chaining M_all^T backward from Z[0] all the way
+    # around must return Z[0] itself.
+    residual = (Phi.T - jnp.eye(n)) @ Z[0]
+    assert float(jnp.max(jnp.abs(residual))) < 1e-5
