@@ -4,14 +4,12 @@ JaxCont documentation
 **Vectorize continuation sweeps with** ``jax.vmap`` **and differentiate fold
 locations with** ``jax.grad``.
 
-JaxCont is an equilibrium continuation and bifurcation-analysis library whose
-default pseudo-arclength engine runs the whole continuation loop as a compiled
-JAX computation. It supports natural and pseudo-arclength continuation, fold
-and Hopf detection with refinement, equilibrium stability, and bifurcation
-diagrams.
-
-The v0.1 API intentionally excludes periodic orbits, Floquet multipliers,
-boundary-value problems, branch switching, and two-parameter continuation.
+JaxCont is a continuation and bifurcation-analysis library whose default
+pseudo-arclength engine runs the whole continuation loop as a compiled JAX
+computation. It supports equilibrium and periodic-orbit continuation,
+principal codimension-one events, and direct codimension-two point solvers.
+Branch switching, continuation of two-parameter curves, general boundary-value
+problems, connecting orbits, and PRC/dPRC calculations remain unsupported.
 
 Start here
 ----------
@@ -32,6 +30,7 @@ differentiable fold locations.
    installation
    quickstart
    auto_examples/index
+   validation
    api/index
 
 .. toctree::
