@@ -1,11 +1,13 @@
 # JaxCont Roadmap — Single Source of Truth
 
-**Last updated:** 2026-07-24
+**Last updated:** 2026-08-05
 **Current version:** 0.2.0 — **published to PyPI** (https://pypi.org/project/jaxcont/), tagged
 `v0.2.0`. Adds periodic-orbit continuation, Floquet multipliers, period-doubling/Neimark–Sacker
 detection, and limit-cycle examples on top of v0.1.0's equilibrium continuation. Zenodo DOI archival
 still deliberately deferred until a more mature release (not a blocker — `CITATION.cff` metadata is
-ready whenever it happens).
+ready whenever it happens). Since the 0.2.0 tag, v0.3.0+ work has started ahead of a release cut:
+phase-plane visualization and the Hopf normal form / `l₁` criticality classifier (see below) are
+both merged to `main` but not yet in a tagged/published version.
 **Scope decision:** Ship a focused **equilibrium continuation** library first. See [PROJECT_REVIEW_2026-07.md](PROJECT_REVIEW_2026-07.md) for the full rationale.
 **API design:** Committed to a functional, diffrax-style surface (`continuation(problem, alg, ...)`).
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provisional v0.2+ API.
@@ -437,9 +439,50 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
       streamlines, continuation equilibria, and trajectories.
 - [ ] Branch switching
 - [ ] Two-parameter continuation
-- [ ] Normal forms / Lyapunov **coefficient** `l₁` (Hopf criticality — a *bifurcation* invariant,
-      NOT the Lyapunov exponent spectrum; see below)
-- [ ] Codim-2 bifurcations (cusp, Bogdanov-Takens, ...)
+- [x] Normal forms / Lyapunov **coefficient** `l₁` (Hopf criticality — a *bifurcation* invariant,
+      NOT the Lyapunov exponent spectrum; see below) — *(done 2026-08-04, see
+      [plan](../docs/superpowers/plans/2026-08-04-hopf-normal-form.md) and its
+      [design spec](../docs/superpowers/specs/2026-08-04-hopf-normal-form-design.md))*. New
+      `bifurcations/hopf_normal_form.py`: `hopf_point`/`hopf_parameter` (a differentiable
+      extended-system Hopf-point solver, mirroring `fold_solve.py`'s `fold_point`/`fold_parameter`
+      via the same `solvers/implicit.py:differentiable_root` primitive) plus `lyapunov_coefficient`
+      (Kuznetsov's first-Lyapunov-coefficient formula, pure algebra via `jax.jvp` directional
+      derivatives — never calls `jnp.linalg.eig` itself, so gradients compose through ordinary
+      chain rule). All three exported top-level (`jc.hopf_point`/`jc.hopf_parameter`/
+      `jc.lyapunov_coefficient`). `Hopf.refine()` (`bifurcations/events.py`) is rewired onto this:
+      it used to bisect and return a linearly-interpolated (not actually converged) `u`; now it
+      solves the real extended system and classifies every detected Hopf point's `EventHit.info`
+      with `omega0`/`l1`/`criticality` (`"supercritical"`/`"subcritical"`/`"degenerate"`, plus a
+      `"unknown"` fallback — see below). `example_02_lorenz.py`/`example_05_neural_mass.py`'s
+      BifurcationKit.jl comparison tables now show criticality/`l1` alongside location.
+      Verified against a closed-form textbook Hopf example (exact `l1`) and independently
+      cross-checked against a real BifurcationKit.jl v0.5.2 run, not just design reasoning.
+      Three real bugs found and fixed during final whole-branch review, before merge (not
+      hypothetical — each had a concrete failure mode):
+      (1) `_seed()`'s eigenvector pick used a bare `argmin |Re(eigenvalue)|` over *all* eigenvalues,
+      so a slow real mode near the origin could out-rank the genuine Hopf pair and seed the solver
+      with `omega=0` — now masks to `|Im| > 1e-8` first (matching `Hopf.test_function`'s own
+      selection rule) and prefers `Im > 0` for a consistent `+iω` orientation;
+      (2) `Hopf.refine()` classified criticality from the sign of `l1` with no finiteness check —
+      a non-convergent `hopf_point` solve (a known occurrence when a detector bracket's sign change
+      isn't a real Hopf point) can return non-finite `p`/`l1`/`omega0`, and `nan < 0` is `False` in
+      Python/NumPy/JAX, so a failed solve silently mislabeled itself `"subcritical"`; fixed with an
+      explicit `isfinite`+`omega0>0` guard reporting `"unknown"` instead;
+      (3) no test previously verified `l1`'s sign actually drives the supercritical/subcritical
+      label end-to-end through `Hopf().refine()` — the feature's headline output — added directly
+      (`tests/test_bifurcations.py`), plus seed-masking and non-finite-guard coverage in
+      `tests/test_hopf_normal_form.py`.
+      `l1_tolerance` (default `1e-6`, the `"degenerate"` cutoff) is documented as scale-dependent —
+      tune per-system, not a universal constant. `lyapunov_coefficient` requires `f` complex-
+      analytic (holomorphic) in `u` near the Hopf point; documented, not runtime-checked (an
+      `abs`/`clip`/active `jnp.where` RHS would silently produce a wrong `l1`).
+      **Deliberately deferred, per the design spec's explicit scope cut:** the fold's own
+      normal-form coefficient `a`, a `jc.normal_form(sol, event)` dispatcher, GH/codim-2 detection
+      (the `GH` taxonomy entry this unblocks), branch switching, two-parameter continuation — each
+      its own future roadmap item.
+- [ ] Codim-2 bifurcations (cusp, Bogdanov-Takens, GH/generalized Hopf, ...) — `hopf_normal_form.py`
+      above is now the prerequisite building block (per its design spec) but no codim-2 detection
+      exists yet.
 
 > **Lyapunov exponents** (trajectory/chaos spectrum) are out of scope — they live in the sibling
 > package **lyapax** (`~/git/lyapunov`). JaxCont interops via a thin `as_rhs(p)` bridge rather
@@ -635,6 +678,24 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
     (non-traced) `ntst`/`ncol` mesh on top of the cleaned-up spine, matching MatCont's own
     `ntst`/`ncol` discretization discipline (manual §7.2) and the fixed-shape-buffer requirement
     the whole-loop-JIT/`vmap` story already depends on (ARCHITECTURE.md §3.1, §4.3).
+12. ✅ **v0.2.0 feature work** — done 2026-07-24: periodic-orbit collocation, Floquet multipliers,
+    period-doubling/Neimark–Sacker detection, limit-cycle examples. Tagged and published to PyPI.
+13. ✅ **Phase-plane visualization** (v0.3.0+, done ahead of a tagged release) — nullclines, vector
+    fields, streamlines, equilibria, trajectories for 2D autonomous systems. See
+    [plan](../docs/superpowers/plans/2026-07-28-phase-plane-visualization.md).
+14. ✅ **Hopf normal form / `l₁` criticality** (v0.3.0+, done 2026-08-04, ahead of a tagged release)
+    — see the v0.3.0+ section above for the full writeup.
+15. **Next up** — no single item is blocking; pick by what's wanted:
+    - **Codim-2 groundwork:** the fold's own normal-form coefficient `a` (small, mirrors the just-
+      shipped `lyapunov_coefficient` pattern) and/or `GH`/Bautin detection (now unblocked by
+      `hopf_normal_form.py` per its design spec) are the natural next step in the normal-form
+      thread just closed.
+    - **Ergonomics:** `bothside` continuation (issue #8) and the legacy `natural_continuation.py`
+      FD/bare-except cleanup (issue #10) are still open, low-severity, non-blocking items.
+    - **Release housekeeping:** confirm a GitHub release exists for the `v0.2.0` tag; a version
+      bump/tag covering the phase-plane + Hopf-normal-form work now sitting on `main` un-tagged.
+    - **Larger v0.3.0+ epics** (bigger, less demand-driven urgency so far): branch switching,
+      two-parameter continuation.
 
 ---
 
