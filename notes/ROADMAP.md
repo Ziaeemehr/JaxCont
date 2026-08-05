@@ -480,9 +480,84 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
       normal-form coefficient `a`, a `jc.normal_form(sol, event)` dispatcher, GH/codim-2 detection
       (the `GH` taxonomy entry this unblocks), branch switching, two-parameter continuation — each
       its own future roadmap item.
-- [ ] Codim-2 bifurcations (cusp, Bogdanov-Takens, GH/generalized Hopf, ...) — `hopf_normal_form.py`
-      above is now the prerequisite building block (per its design spec) but no codim-2 detection
-      exists yet.
+- [x] Codim-2 bifurcations: cusp, Bogdanov-Takens, generalized Hopf, zero-Hopf, double-Hopf —
+      *(done 2026-08-05, see
+      [plan](../docs/superpowers/plans/2026-08-05-codim2-direct-solvers.md) and its
+      [design spec](../docs/superpowers/specs/2026-08-05-codim2-direct-solvers-design.md))*. New
+      `bifurcations/codim2.py` (`cusp_point`/`cusp_parameters`,
+      `bogdanov_takens_point`/`bogdanov_takens_parameters`,
+      `generalized_hopf_point`/`generalized_hopf_parameters`,
+      `zero_hopf_point`/`zero_hopf_parameters`, `double_hopf_point`/`double_hopf_parameters`) plus
+      `bifurcations/fold_normal_form.py: fold_coefficient` (the fold's quadratic normal-form
+      coefficient — needed by CP, also a standalone useful quantity). All eleven functions exported
+      top-level (`jc.cusp_point`, etc.). Each solver is a square extended system `G(x,θ)=0` solved
+      via the same `solvers/implicit.py:differentiable_root` implicit-function-theorem Newton
+      primitive `fold_point`/`hopf_point` already use — no new engine. `p` is generalized from
+      scalar to shape `(2,)` throughout this feature (codim-2 needs two free parameters); every
+      other function is untouched. **Deliberate scope choice:** these are direct point *solves* —
+      refine a point you can already guess at — not the `jc.codim2(prob, event=...)` two-parameter-
+      *continuation* sketch in ARCHITECTURE.md (finding points you can't yet approximate), which
+      remains its own, unstarted roadmap item below.
+      Four real design findings, verified numerically during planning (not just reasoned about) and
+      confirmed correct through implementation:
+      (1) ω's sign is unconstrained — the Hopf block of every extended system (GH, ZH, HH) is
+      exactly invariant under `(ω, q2) → (-ω, -q2)`, and Newton reliably converged to *negative* ω
+      from positive seeds during planning; fixed with a post-solve `_normalize_omega` helper (flip
+      both if ω<0) rather than an extra equation, which would break squareness — this matters
+      because `events.py`'s `Hopf.refine()` already treats `omega0<=0` as a failed solve;
+      (2) HH (double Hopf) is genuinely degenerate when both Hopf blocks get seeded onto the same
+      physical pair — verified during planning to produce `nan`, not a plausible-looking wrong
+      answer — so `double_hopf_point` requires a caller-supplied `seed_b` (keyword-only, no
+      default, unlike every other solver here) and a post-solve pair-separation check
+      (`abs(|omega_a|-|omega_b|) > separation_tolerance`, default `1e-3`) that reports
+      `converged=False` on collapse rather than a bare `nan`;
+      (3) BT's textbook left/right-null-vector formulation (`f=0, Jv=0, Jᵀw=0, |v|=1, |w|=1, w·v=0`)
+      is overdetermined — `3n+3` equations for `3n+2` unknowns, confirmed by direct count — so the
+      Jordan-chain formulation is used instead (`f=0, Jv0=0, Jv1=v0, |v0|=1, v0·v1=0`), which is
+      exactly square;
+      (4) origin-centered test systems have no discriminating power — every standard textbook normal
+      form (cusp, BT, GH, ZH, HH) places its codim-2 point at `u=0, p=(0,0)`, so a stub that simply
+      returns zeros would pass all of them; every test in `tests/test_codim2.py` instead uses an
+      affinely *shifted* system with a non-trivial known answer (verified during planning: a shifted
+      BT recovered `u*=(5,2), p*=(3,-1)` to `6.5e-13` with conditioning unchanged from the
+      origin-centered version).
+      One implementation-time finding, discovered independently three times by three different task
+      implementers (Tasks 4, 5, 6) and each time correctly root-caused rather than worked around:
+      the GH/ZH/HH residuals recompute a Hopf phase-condition seed on every Newton iteration via
+      `_hopf_seed` (from `hopf_normal_form.py`), and that seed's `jnp.linalg.eig` call has no
+      gradient rule for non-symmetric eigenvectors. Wrapping the seed's `args`/`theta` input in
+      `jax.lax.stop_gradient(...)` (matching the pattern `hopf_normal_form.py`'s own
+      `_extended_residual` already used) fixes it — each fix was verified against the actual
+      gradient-vs-finite-difference test failing without it and passing with it, not assumed. Fixed
+      in the shipped code for all three; the plan's own text was also corrected retroactively
+      (commits `fb66b17`, `5213d4d`) so this doesn't recur if the plan is ever reused as a reference.
+      **float32 tolerance calibration:** measured residual floors during planning: BT `0.0` (exact
+      recovery), CP `≈4.4e-8`, GH `≈5.96e-08` (the tightest). All five solvers default to
+      `tol=1e-6` — tight enough to be meaningful, loose enough to be achievable; `1e-8` would make
+      `converged` report `False` forever even on an exact answer (issue #12's pattern, again);
+      `1e-4` stops measurably early.
+      **Independent cross-validation:** `examples/BifurcationKit/05_codim2.jl` runs
+      BifurcationKit.jl v0.5.2's own codim-2 detection on the Lorenz-84 atmospheric model (already
+      used elsewhere in this repo, `examples/BifurcationKit/02_lorenz84.jl` — not a system tuned to
+      fit the answer) and finds a genuine BT point. `bogdanov_takens_point` reproduces it; the test
+      (`tests/test_codim2.py`) asserts agreement against Julia's actual printed output, independently
+      re-verified byte-for-byte during code review, and cross-corroborated against BifurcationKit's
+      own internal test suite values (`nf.a`/`nf.b` in its `test/lorenz84.jl`, matching to 10
+      significant figures). A review-time check deliberately injected a sign bug into the test's
+      model copy and confirmed the test then fails to converge or lands measurably off — real
+      discriminating power, not a tautology. An earlier attempt on a different applied model
+      (Bazykin's predator-prey) found no codim-2 point in the parameter window tried and was
+      correctly abandoned rather than forced.
+      **Explicitly deferred, not forgotten (each its own future roadmap item):** GH-specific
+      BifurcationKit cross-validation (only BT was cross-validated — the design spec's Step 3
+      template was BT-only by scope, not an oversight); codim-2 normal-form coefficients beyond
+      CP/GH's defining conditions (BT's own `(a,b)` pair, GH's second Lyapunov coefficient `l2`);
+      `Event`/`events=[...]` integration (a codim-2 point cannot be detected along a
+      single-parameter branch — it needs a two-parameter curve, which doesn't exist); branch
+      switching; two-parameter continuation itself.
+      Verified: full test suite green throughout implementation — 211 (baseline) → 239 passed by
+      the end (28 new tests across all nine tasks, zero regressions, verified after every single
+      task via `JAX_PLATFORMS=cpu pytest tests/ -n auto`).
 
 > **Lyapunov exponents** (trajectory/chaos spectrum) are out of scope — they live in the sibling
 > package **lyapax** (`~/git/lyapunov`). JaxCont interops via a thin `as_rhs(p)` bridge rather
@@ -685,17 +760,19 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
     [plan](../docs/superpowers/plans/2026-07-28-phase-plane-visualization.md).
 14. ✅ **Hopf normal form / `l₁` criticality** (v0.3.0+, done 2026-08-04, ahead of a tagged release)
     — see the v0.3.0+ section above for the full writeup.
-15. **Next up** — no single item is blocking; pick by what's wanted:
-    - **Codim-2 groundwork:** the fold's own normal-form coefficient `a` (small, mirrors the just-
-      shipped `lyapunov_coefficient` pattern) and/or `GH`/Bautin detection (now unblocked by
-      `hopf_normal_form.py` per its design spec) are the natural next step in the normal-form
-      thread just closed.
+15. ✅ **Codim-2 direct point solvers** (v0.3.0+, done 2026-08-05, ahead of a tagged release) —
+    cusp, Bogdanov-Takens, generalized Hopf, zero-Hopf, double-Hopf, plus the fold's own
+    normal-form coefficient `fold_coefficient` — see the v0.3.0+ section above for the full
+    writeup. This closes the "Codim-2 groundwork" item this list previously pointed at next.
+16. **Next up** — no single item is blocking; pick by what's wanted:
     - **Ergonomics:** `bothside` continuation (issue #8) and the legacy `natural_continuation.py`
       FD/bare-except cleanup (issue #10) are still open, low-severity, non-blocking items.
     - **Release housekeeping:** confirm a GitHub release exists for the `v0.2.0` tag; a version
-      bump/tag covering the phase-plane + Hopf-normal-form work now sitting on `main` un-tagged.
+      bump/tag covering the phase-plane + Hopf-normal-form + codim-2-solvers work now sitting on
+      `main` un-tagged.
     - **Larger v0.3.0+ epics** (bigger, less demand-driven urgency so far): branch switching,
-      two-parameter continuation.
+      two-parameter continuation (which the codim-2 *direct solvers* just shipped are explicitly
+      not a substitute for — see the v0.3.0+ writeup above).
 
 ---
 
