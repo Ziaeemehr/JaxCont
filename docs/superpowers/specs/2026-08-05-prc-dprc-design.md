@@ -88,13 +88,49 @@ regression test (byte-identical Floquet multipliers before/after) guards this.
    see "Design findings from prototyping" below for why the originally-proposed
    `jax.jacfwd(prc_curve, argnums=3)` at fixed `U` was wrong, and the corrected approach:
    `dprc_curve(problem, ...)` takes the periodic orbit's `BifProblem` (residual `problem.f`, seed
-   `problem.u0`, `problem.args`), reconverges `U(p) = differentiable_root(lambda U, p:
-   problem.f(U, p, problem.args), problem.u0, p, tol=1e-5)` — the exact same
-   `solvers/implicit.py:differentiable_root` call `problems/periodic.py:periodic_orbit_problem`
-   already makes internally to build `U0` from a coarse guess — then differentiates
-   `jax.jacfwd(lambda p: prc_curve(raw_f, mesh, U(p), p, linear_solver))(problem.p0)`. This still
-   needs no eigendecomposition and still relies on the bordered-linear-system seed being
-   differentiable, but the differentiation must cross the Newton re-solve, not stop before it.
+   `problem.u0`, `problem.args`), reconverges `U(p)` via `differentiable_root` — the same primitive
+   `problems/periodic.py:periodic_orbit_problem` already uses to build `U0` from a coarse guess —
+   then differentiates the whole re-solve-plus-`prc_curve` composition. Two corrections found
+   during implementation (Task 4's review independently reproduced both numerically, not just
+   accepted the implementer's claim):
+   - **`jax.jacrev`, not `jax.jacfwd`.** `differentiable_root` is built on `jax.custom_vjp`
+     (reverse-mode only, no paired forward-mode rule) — `jax.jacfwd` raises `TypeError: can't apply
+     forward-mode autodiff (jvp) to a custom_vjp function`. `jax.jacrev` is the only usable choice,
+     not a stylistic swap.
+   - **The phase-condition anchor must be recomputed from `p`, not frozen at `problem.args`.**
+     `problem.args`'s `uref_prime_coll` is itself `f(u_ref_coll, p0, None)` — a function of
+     whichever `p0` the original `periodic_orbit_problem` call used (`problems/periodic.py:136`).
+     Reusing `problem.args` unchanged inside the re-solve silently keeps that anchor pinned to the
+     *original* `p0` regardless of the perturbed `p`, which measurably disagrees with "what a fresh
+     `periodic_orbit_problem` call would build at the perturbed `p`" (the finite-difference
+     verification target below) by ~0.2 absolute — 20x the test's tolerance. Recomputing
+     `uref_prime_coll = f(u_ref_coll, p, None)` inside the re-solve (mirroring
+     `periodic_orbit_problem`'s own formula exactly) matches to ~1e-4. This differs from how
+     `jc.continuation()`'s branch-stepping treats `args` (held fixed across an entire scan,
+     `core/scan_continuation.py`/`api.py`) — that is a different code path answering a different
+     question ("sensitivity along one fixed-anchor branch"), not what re-deriving `U(p)` from
+     scratch at a perturbed `p` needs.
+
+   ```python
+   def dprc_curve(problem, linear_solver=Dense(), newton_tol=1e-5):
+       u_ref_coll, _uref_prime_coll0, raw_f, mesh = problem.args
+
+       def anchor_at(p):
+           uref_prime_coll_p = jax.vmap(jax.vmap(lambda u: raw_f(u, p, None)))(u_ref_coll)
+           return (u_ref_coll, uref_prime_coll_p, raw_f, mesh)
+
+       def prc_at(p):
+           U_p = differentiable_root(
+               lambda U, pp: problem.f(U, pp, anchor_at(pp)), problem.u0, p, tol=newton_tol
+           )
+           return prc_curve(raw_f, mesh, U_p, p, linear_solver)
+
+       return jax.jacrev(prc_at)(problem.p0)
+   ```
+
+   This still needs no eigendecomposition and still relies on the bordered-linear-system seed
+   being differentiable — only the AD mode and the re-solve's own phase-anchor formula changed
+   from the original draft above.
 
 ## Design findings from prototyping
 
