@@ -698,6 +698,79 @@ def test_reference_verification_matches_topology_not_row_order_or_mesh(tmp_path)
         verify_case_references(case, generated, reviewed)
 
 
+def test_folded_branch_comparison_preserves_duplicate_parameter_arms(tmp_path):
+    """Sorting/deduplicating parameter values must not hide a wrong folded arm."""
+    reviewed = tmp_path / "reviewed"
+    generated = tmp_path / "generated"
+    reviewed.mkdir()
+    generated.mkdir()
+    header = "case_id,point,parameter,period,residual_norm\n"
+    (reviewed / "branch.csv").write_text(
+        header
+        + "MC-LC-X,0,0,1,0\n"
+        + "MC-LC-X,1,1,2,0\n"
+        + "MC-LC-X,2,0,10,0\n",
+        encoding="utf-8",
+    )
+    (generated / "branch.csv").write_text(
+        header
+        + "MC-LC-X,0,0,1,0\n"
+        + "MC-LC-X,1,1,2,0\n"
+        + "MC-LC-X,2,0,999,0\n",
+        encoding="utf-8",
+    )
+    reviewed_metadata = _complete_metadata("MC-LC-X")
+    generated_metadata = dict(reviewed_metadata, reviewed=False)
+    (reviewed / "metadata.json").write_text(json.dumps(reviewed_metadata), encoding="utf-8")
+    (generated / "metadata.json").write_text(json.dumps(generated_metadata), encoding="utf-8")
+    case = {
+        "id": "MC-LC-X",
+        "references": ["branch.csv", "metadata.json"],
+        "tolerances": {"parameter_atol": 1e-9, "period_atol": 1e-6},
+    }
+
+    with pytest.raises(ValidationMismatch):
+        verify_case_references(case, generated, reviewed)
+
+
+def test_folded_branch_comparison_accepts_reversed_adaptive_segments(tmp_path):
+    """Reversing branch direction and adding points must preserve both folded arms."""
+    reviewed = tmp_path / "reviewed"
+    generated = tmp_path / "generated"
+    reviewed.mkdir()
+    generated.mkdir()
+    header = "case_id,point,parameter,period,residual_norm\n"
+    (reviewed / "branch.csv").write_text(
+        header
+        + "MC-LC-X,0,0,1,0\n"
+        + "MC-LC-X,1,1,2,0\n"
+        + "MC-LC-X,2,0,10,0\n",
+        encoding="utf-8",
+    )
+    (generated / "branch.csv").write_text(
+        header
+        + "MC-LC-X,0,0,10,0\n"
+        + "MC-LC-X,1,0.5,6,0\n"
+        + "MC-LC-X,2,1,2,0\n"
+        + "MC-LC-X,3,0.5,1.5,0\n"
+        + "MC-LC-X,4,0,1,0\n",
+        encoding="utf-8",
+    )
+    reviewed_metadata = _complete_metadata("MC-LC-X")
+    generated_metadata = dict(reviewed_metadata, reviewed=False)
+    (reviewed / "metadata.json").write_text(json.dumps(reviewed_metadata), encoding="utf-8")
+    (generated / "metadata.json").write_text(json.dumps(generated_metadata), encoding="utf-8")
+    case = {
+        "id": "MC-LC-X",
+        "references": ["branch.csv", "metadata.json"],
+        "tolerances": {"parameter_atol": 1e-9, "period_atol": 1e-9},
+    }
+
+    diagnostics = verify_case_references(case, generated, reviewed)
+
+    assert diagnostics["branch_max_error"] == pytest.approx(0.0)
+
+
 def test_relative_generated_directory_resolves_before_matlab_changes_directory(
     tmp_path, monkeypatch
 ):

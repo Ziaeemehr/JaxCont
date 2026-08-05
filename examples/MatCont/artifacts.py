@@ -13,6 +13,7 @@ from typing import Any, Iterable
 
 import numpy as np
 import jax
+from scipy.optimize import linear_sum_assignment
 
 from .compare import (
     ValidationMismatch,
@@ -288,6 +289,28 @@ def _unique_sorted(rows: list[dict[str, Any]], coordinate: str) -> tuple[np.ndar
     return unique, [ordered[int(index)] for index in indices]
 
 
+def _monotone_segments(
+    rows: list[dict[str, Any]], coordinate: str
+) -> list[list[dict[str, Any]]]:
+    """Split continuation order at coordinate turning points, retaining the turn."""
+    if len(rows) < 2:
+        return [rows]
+    values = np.asarray([_as_float(row, coordinate) for row in rows])
+    segments: list[list[dict[str, Any]]] = []
+    start = 0
+    direction = 0
+    for index, difference in enumerate(np.diff(values), start=1):
+        new_direction = int(np.sign(difference))
+        if new_direction == 0:
+            continue
+        if direction and new_direction != direction:
+            segments.append(rows[start:index])
+            start = index - 1
+        direction = new_direction
+    segments.append(rows[start:])
+    return segments
+
+
 def _compare_branch_rows(
     case: dict[str, Any],
     actual_fields: list[str],
@@ -297,6 +320,7 @@ def _compare_branch_rows(
     *,
     require_same_extent: bool,
     require_same_schema: bool,
+    _allow_segments: bool = True,
 ) -> dict[str, float]:
     if not actual_rows or not reference_rows:
         raise ValidationMismatch("branch artifacts must be non-empty")
@@ -307,6 +331,53 @@ def _compare_branch_rows(
     if not reference_set <= actual_set and require_same_schema:
         raise ValidationMismatch("generated branch is missing reviewed columns")
     coordinate = _branch_coordinate(case["id"], actual_set & reference_set)
+    if _allow_segments and coordinate == "parameter":
+        actual_segments = _monotone_segments(actual_rows, coordinate)
+        reference_segments = _monotone_segments(reference_rows, coordinate)
+        if len(actual_segments) != len(reference_segments):
+            raise ValidationMismatch(
+                "branch turning-point count differs: "
+                f"actual has {len(actual_segments)} segments, "
+                f"reference has {len(reference_segments)}"
+            )
+        if len(actual_segments) > 1:
+            count = len(actual_segments)
+            penalty = 1e100
+            costs = np.full((count, count), penalty)
+            pair_diagnostics: dict[tuple[int, int], dict[str, float]] = {}
+            for actual_index, actual_segment in enumerate(actual_segments):
+                for reference_index, reference_segment in enumerate(reference_segments):
+                    try:
+                        diagnostics = _compare_branch_rows(
+                            case,
+                            actual_fields,
+                            actual_segment,
+                            reference_fields,
+                            reference_segment,
+                            require_same_extent=require_same_extent,
+                            require_same_schema=require_same_schema,
+                            _allow_segments=False,
+                        )
+                    except ValidationMismatch:
+                        continue
+                    pair_diagnostics[(actual_index, reference_index)] = diagnostics
+                    costs[actual_index, reference_index] = diagnostics["max_error"]
+            actual_indices, reference_indices = linear_sum_assignment(costs)
+            assignments = list(zip(actual_indices.tolist(), reference_indices.tolist()))
+            infeasible = any(
+                costs[actual_index, reference_index] >= penalty
+                for actual_index, reference_index in assignments
+            )
+            if infeasible:
+                raise ValidationMismatch(
+                    "no tolerance-feasible matching for folded branch segments"
+                )
+            return {
+                "max_error": max(
+                    pair_diagnostics[assignment]["max_error"] for assignment in assignments
+                ),
+                "segment_count": count,
+            }
     actual_x, actual_ordered = _unique_sorted(actual_rows, coordinate)
     reference_x, reference_ordered = _unique_sorted(reference_rows, coordinate)
     tolerances = case.get("tolerances", {})
