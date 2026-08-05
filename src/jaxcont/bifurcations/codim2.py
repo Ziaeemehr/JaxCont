@@ -159,3 +159,92 @@ def cusp_parameters(
     """
     _, p, _, _ = cusp_point(f, u_guess, p_guess, args, tol=tol, max_iter=max_iter)
     return p
+
+
+# --------------------------------------------------------------------------
+# BT -- Bogdanov-Takens
+# --------------------------------------------------------------------------
+
+def _bt_unpack(x: Array, n: int) -> Tuple[Array, Array, Array, Array]:
+    return x[:n], x[n:n + 2], x[n + 2:2 * n + 2], x[2 * n + 2:]
+
+
+def _bt_residual(x, f, args, n):
+    """
+    Bogdanov-Takens extended system, ``3n+2`` equations in ``3n+2`` unknowns
+    ``(u, p, v0, v1)``.
+
+    Uses the JORDAN-CHAIN formulation (``v1`` is the generalized
+    eigenvector). The textbook left/right-null-vector alternative
+    ``f=0, J v=0, J^T w=0, |v|=1, |w|=1, w.v=0`` is OVERDETERMINED -- it has
+    ``3n+3`` equations for ``3n+2`` unknowns -- which is why it is not used
+    here. Confirmed by direct count during planning.
+    """
+    u, p, v0, v1 = _bt_unpack(x, n)
+    jac_u = jacfwd(f, argnums=0)(u, p, args)
+    return jnp.concatenate([
+        f(u, p, args),                              # n
+        jac_u @ v0,                                 # n
+        jac_u @ v1 - v0,                            # n
+        jnp.reshape(jnp.dot(v0, v0) - 1.0, (1,)),   # 1
+        jnp.reshape(jnp.dot(v0, v1), (1,)),         # 1
+    ])
+
+
+def bogdanov_takens_point(
+    f: Callable[[Array, Array, PyTree], Array],
+    u_guess: Array,
+    p_guess: Array,
+    args: PyTree = None,
+    *,
+    tol: float = 1e-6,
+    max_iter: int = 50,
+) -> Tuple[Array, Array, Array, Array, Array]:
+    """
+    Locate a Bogdanov-Takens point (``BT``) near ``(u_guess, p_guess)``,
+    differentiable in ``args``. Kuznetsov, 3rd ed., Sec. 8.4.
+
+    ``BT`` is where ``f_u`` has a double zero eigenvalue with a single
+    eigenvector -- the organizing centre at which fold and Hopf curves meet.
+    Returns ``(u*, p*, v0*, v1*, converged)`` with ``f_u v0 = 0`` and
+    ``f_u v1 = v0`` (the Jordan chain), ``p*`` of shape ``(2,)``.
+    """
+    u_guess = jnp.asarray(u_guess)
+    n = u_guess.shape[0]
+    p_guess = jnp.asarray(p_guess, u_guess.dtype)
+
+    def G(x, theta):
+        return _bt_residual(x, f, theta, n)
+
+    def x0(theta):
+        v0 = _initial_v(f, u_guess, p_guess, theta, n)
+        # A UNIFORM nonzero seed for the generalized eigenvector. Seeding
+        # v1 with zeros makes the very first Newton step produce nan --
+        # verified during planning, and NOT obvious from the residual being
+        # linear in v1. Do not "simplify" this to jnp.zeros(n).
+        v1 = jnp.ones(n, u_guess.dtype) / jnp.sqrt(jnp.asarray(n, u_guess.dtype))
+        return jnp.concatenate([u_guess, p_guess, v0, v1])
+
+    x_star, converged = _solve_and_check(G, x0, args, tol=tol, max_iter=max_iter)
+    u, p, v0, v1 = _bt_unpack(x_star, n)
+    return u, p, v0, v1, converged
+
+
+def bogdanov_takens_parameters(
+    f: Callable[[Array, Array, PyTree], Array],
+    u_guess: Array,
+    p_guess: Array,
+    args: PyTree = None,
+    *,
+    tol: float = 1e-6,
+    max_iter: int = 50,
+) -> Array:
+    """
+    Parameter pair ``p*`` (shape ``(2,)``) at the Bogdanov-Takens point --
+    differentiable in ``args``, no convergence flag (see
+    :func:`cusp_parameters`).
+    """
+    _, p, _, _, _ = bogdanov_takens_point(
+        f, u_guess, p_guess, args, tol=tol, max_iter=max_iter
+    )
+    return p

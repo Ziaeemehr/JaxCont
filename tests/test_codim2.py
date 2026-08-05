@@ -11,7 +11,10 @@ have no discriminating power on their own.
 import jax
 import jax.numpy as jnp
 
-from jaxcont.bifurcations.codim2 import cusp_point, cusp_parameters
+from jaxcont.bifurcations.codim2 import (
+    cusp_point, cusp_parameters,
+    bogdanov_takens_point, bogdanov_takens_parameters,
+)
 
 
 def _cusp_shifted(u, p, args):
@@ -97,3 +100,57 @@ def test_cusp_agrees_with_the_codim1_fold_solver_there():
     u_f, p_f, _ = fold_point(f_scalar, jnp.array([2.1]), float(p_c[0]) + 0.05)
     assert jnp.allclose(u_f, u_c, atol=1e-3)
     assert jnp.isclose(float(p_f), float(p_c[0]), atol=1e-3)
+
+
+def _bt_shifted(u, p, args):
+    # x' = y ; y' = b1 + b2*x + x^2 + x*y  has its BT at u=0, p=(0,0).
+    # Shifted by x -> X-5, y -> Y-2, b1 -> B1-3, b2 -> B2+1, so the BT sits
+    # at u*=(5,2), p*=(3,-1).
+    X, Y = u[0], u[1]
+    x, y = X - 5.0, Y - 2.0
+    b1 = p[0] - 3.0
+    b2 = p[1] + 1.0
+    return jnp.array([y, b1 + b2 * x + x**2 + x * y])
+
+
+def test_bogdanov_takens_point_recovers_exact_shifted_bt():
+    u, p, v0, v1, ok = bogdanov_takens_point(
+        _bt_shifted, jnp.array([5.3, 1.7]), jnp.array([2.6, -0.8]),
+    )
+    assert bool(ok)
+    assert jnp.allclose(u, jnp.array([5.0, 2.0]), atol=1e-4)
+    assert jnp.allclose(p, jnp.array([3.0, -1.0]), atol=1e-4)
+    assert jnp.isclose(float(jnp.linalg.norm(v0)), 1.0, atol=1e-5)
+
+
+def test_bogdanov_takens_jacobian_has_a_genuine_jordan_block():
+    # The defining property: f_u has a DOUBLE zero eigenvalue with only one
+    # eigenvector, i.e. f_u @ v1 == v0 and v0 . v1 == 0.
+    u, p, v0, v1, ok = bogdanov_takens_point(
+        _bt_shifted, jnp.array([5.3, 1.7]), jnp.array([2.6, -0.8]),
+    )
+    assert bool(ok)
+    jac = jax.jacfwd(lambda uu: _bt_shifted(uu, p, None))(u)
+    assert jnp.allclose(jac @ v0, jnp.zeros(2), atol=1e-4)
+    assert jnp.allclose(jac @ v1, v0, atol=1e-4)
+    assert jnp.isclose(float(jnp.dot(v0, v1)), 0.0, atol=1e-5)
+
+
+def test_bogdanov_takens_parameters_grad_matches_finite_difference():
+    def bt_moving(u, p, shift):
+        X, Y = u[0], u[1]
+        x, y = X - 5.0, Y - 2.0
+        b1 = p[0] - 3.0 - shift
+        b2 = p[1] + 1.0
+        return jnp.array([y, b1 + b2 * x + x**2 + x * y])
+
+    def p0_star(shift):
+        return bogdanov_takens_parameters(
+            bt_moving, jnp.array([5.2, 1.8]), jnp.array([2.7, -0.9]), shift
+        )[0]
+
+    g = jax.grad(p0_star)(0.1)
+    h = 1e-3
+    fd = (p0_star(0.1 + h) - p0_star(0.1 - h)) / (2 * h)
+    assert jnp.isfinite(g)
+    assert jnp.isclose(float(g), float(fd), atol=1e-3)
