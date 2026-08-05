@@ -5,6 +5,20 @@ All notable changes to JaxCont will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-08-05
+
+### Fixed
+- `PeriodDoubling`/`NeimarkSacker`'s `near_unit_circle` filter margin widened (0.5 -> 0.9): the
+  old value left as little as a 0.02 margin between a genuine candidate multiplier and the
+  window boundary in some continuations, thin enough that ordinary hardware/collocation
+  floating-point differences could push it outside the window and silently drop a real
+  bifurcation detection. Reproduced deterministically on CI, not on all hardware.
+- Read the Docs build: `examples/MatCont`'s validation-suite modules
+  (`artifacts.py`/`compare.py`/`registry.py`/`run_validation.py`) were being swept into the
+  Sphinx-Gallery scan as title-less example pages, breaking the `fail_on_warning` docs build
+  introduced alongside v0.3.0's MatCont validation suite. Excluded via `ignore_pattern` and
+  given a proper `GALLERY_HEADER.txt`.
+
 ## [0.3.0] - 2026-08-05
 
 Adds normal-form classification for Hopf points and five direct codim-2 bifurcation solvers on
@@ -135,6 +149,7 @@ continuation.
 - Package structure
 - Basic framework design
 
+[0.3.1]: https://github.com/Ziaeemehr/JaxCont/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Ziaeemehr/JaxCont/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Ziaeemehr/JaxCont/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Ziaeemehr/JaxCont/compare/v0.0.1...v0.1.0
