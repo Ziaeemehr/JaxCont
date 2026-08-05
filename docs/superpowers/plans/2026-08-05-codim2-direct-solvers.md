@@ -879,8 +879,14 @@ def _gh_residual(x, f, args, n, u_guess, p_guess):
     u, p, q1, q2, omega = _gh_unpack(x, n)
     # Seed recomputed inside the traced primal on every iteration, exactly
     # as hopf_normal_form.py does -- differentiable_root's contract requires
-    # theta-dependent seeds to be resolved here, not hoisted out.
-    q1_seed, q2_seed, _ = _hopf_seed(f, u_guess, p_guess, args, n)
+    # theta-dependent seeds to be resolved here, not hoisted out. Wrapped in
+    # stop_gradient because jnp.linalg.eig (inside _hopf_seed) has no
+    # gradient rule for non-symmetric eigenvectors, and this seed only feeds
+    # the phase condition -- it must not carry a gradient path. Found and
+    # fixed by Task 4's implementer: an earlier draft of this code was
+    # missing this wrapper and failed the gradient test with
+    # NotImplementedError on eig's vjp.
+    q1_seed, q2_seed, _ = _hopf_seed(f, u_guess, p_guess, lax.stop_gradient(args), n)
     jac_u = jacfwd(f, argnums=0)(u, p, args)
     l1 = lyapunov_coefficient(f, u, p, q1, q2, omega, args)
     return jnp.concatenate([
@@ -1081,7 +1087,12 @@ def _zh_residual(x, f, args, n, u_guess, p_guess):
     fold block and a Hopf block.
     """
     u, p, v, q1, q2, omega = _zh_unpack(x, n)
-    q1_seed, q2_seed, _ = _hopf_seed(f, u_guess, p_guess, args, n)
+    # stop_gradient required here -- see the identical comment in
+    # _gh_residual above. Task 4 found this the hard way (a missing
+    # stop_gradient here fails the gradient test with a NotImplementedError
+    # from jnp.linalg.eig's vjp on non-symmetric eigenvectors); `lax` is
+    # already imported in codim2.py by Task 4's fix, no new import needed.
+    q1_seed, q2_seed, _ = _hopf_seed(f, u_guess, p_guess, lax.stop_gradient(args), n)
     jac_u = jacfwd(f, argnums=0)(u, p, args)
     return jnp.concatenate([
         f(u, p, args),                                                   # n
