@@ -9,6 +9,11 @@
   <a href="https://jaxcont.readthedocs.io/en/latest/"><img src="https://readthedocs.org/projects/jaxcont/badge/?version=latest" alt="Documentation Status"></a>
   <a href="https://pypi.org/project/jaxcont/"><img src="https://img.shields.io/pypi/v/jaxcont.svg" alt="PyPI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
+  <!-- Zenodo DOI badge: once the GitHub-Zenodo integration is enabled and the first
+       archive is minted (see CONTRIBUTING.md / CITATION.cff), add here:
+       <a href="https://doi.org/10.5281/zenodo.XXXXXXX"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg" alt="DOI"></a>
+       Zenodo mints a "concept DOI" that always resolves to the latest archived version --
+       use that one here, not a version-specific DOI. -->
 </p>
 
 JaxCont turns an equilibrium continuation sweep into a JAX program. Follow
@@ -119,7 +124,7 @@ Until the first archive is minted:
   author  = {Ziaeemehr, Abolfazl},
   title   = {JaxCont: Differentiable Continuation and Bifurcation Analysis in JAX},
   year    = {2026},
-  version = {0.1.0},
+  version = {0.3.0},
   url     = {https://github.com/Ziaeemehr/JaxCont}
 }
 ```
