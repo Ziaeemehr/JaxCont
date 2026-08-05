@@ -69,18 +69,18 @@ result = jc.continuation(
     ),
     events=[jc.Hopf()],
 )
-solution = result._solution
+branch = result.branch
 
 print(
-    f"Continuation completed: {solution.n_points} points, "
-    f"mu in [{float(solution.parameters.min()):.3f}, "
-    f"{float(solution.parameters.max()):.3f}]"
+    f"Continuation completed: {branch.n_valid} points, "
+    f"mu in [{float(branch.params.min()):.3f}, "
+    f"{float(branch.params.max()):.3f}]"
 )
 
 # %%
 # Cross-validation against MatCont 7.6
 # ----------------------------------------
-# `validation/matcont/run_vanderpol_hopf.m` continues these same equations
+# `examples/MatCont/matlab/run_vanderpol_hopf.m` continues these same equations
 # from :math:`\mu=-2` and independently reports one `H` event at
 # `(x, y, mu) = (0, 0, 0)`. It also reports first Lyapunov coefficient zero,
 # exposing the degeneracy that a linear eigenvalue-crossing detector alone
@@ -97,7 +97,7 @@ if len(hopf_events) != 1:
 hopf = hopf_events[0]
 max_residual = max(
     float(jnp.linalg.norm(van_der_pol_rhs(u, mu, None), ord=jnp.inf))
-    for u, mu in zip(solution.states, solution.parameters)
+    for u, mu in zip(branch.states, branch.params)
 )
 
 print("\nCross-validation")

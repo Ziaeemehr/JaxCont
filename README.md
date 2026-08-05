@@ -26,8 +26,10 @@ automatic differentiation.
   and eigenvalue trajectories with JaxCont events plus MatCont,
   BifurcationKit, or analytic reference markers.
 
-The supported v0.1 surface focuses deliberately on equilibria. Periodic
-orbits, branch switching, and two-parameter continuation remain future work.
+The current surface supports equilibrium and periodic-orbit continuation,
+their principal codimension-one events, and direct codimension-two point
+solvers. Branch switching, general connecting-orbit/BVP workflows, PRC/dPRC,
+and two-parameter curve continuation remain future work.
 
 ## Installation
 
@@ -90,6 +92,8 @@ plot_eigenvalues(result, shade_stability=True)
   continuation with `vmap`
 - [`example_07_differentiable.py`](examples/example_07_differentiable.py) —
   differentiable bifurcation analysis
+- [`examples/MatCont`](examples/MatCont/README.md) — reproducible analytic,
+  MATLAB/MatCont and JaxCont validation cases
 
 ## Development
 
@@ -102,7 +106,7 @@ python -m pytest
 
 Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md), the
 [roadmap](notes/ROADMAP.md), and the
-[cross-validation plan](validation/VALIDATION_EXAMPLES.md).
+[MatCont validation suite](examples/MatCont/README.md).
 
 ## Citation
 
