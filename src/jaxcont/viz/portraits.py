@@ -366,3 +366,62 @@ def _plot_references(axes, references):
                 linewidth=reference.linewidth,
                 label=reference.label,
             )
+
+
+def plot_prc(
+    curve: Any,
+    ax: Optional[plt.Axes] = None,
+    *,
+    phase: Optional[Any] = None,
+    labels: Optional[Sequence[str]] = None,
+    title: str = "Phase Response Curve",
+    figsize: Tuple[float, float] = (8.0, 5.0),
+    **kwargs,
+) -> plt.Figure:
+    """Plot an iPRC (or dPRC) curve: one line per state component against
+    phase.
+
+    Args:
+        curve: ``(ntst, n)`` array from ``stability.prc.prc_curve`` or
+            ``dprc_curve`` (this function takes plain arrays -- it does not
+            import ``jaxcont.stability``, keeping ``viz`` decoupled).
+        ax: Matplotlib axes (creates a new figure if None).
+        phase: ``(ntst,)`` x-axis coordinates. Defaults to mesh-point index
+            ``0..ntst-1`` (this feature does not reconstruct a phase-fraction
+            axis for the caller -- see the design spec's scope cut on
+            collocation-point resolution).
+        labels: One label per state component; enables the legend.
+        title: Axes title.
+        figsize: Figure size when creating a figure.
+        **kwargs: Passed to every ``ax.plot`` call.
+
+    Returns:
+        Matplotlib figure.
+    """
+    curve = np.asarray(curve)
+    if curve.ndim != 2:
+        raise ValueError(f"curve must be 2-D (ntst, n), got shape {curve.shape}")
+    ntst, n = curve.shape
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.get_figure()
+
+    x = np.arange(ntst) if phase is None else np.asarray(phase)
+    if labels is not None and len(labels) != n:
+        raise ValueError("labels must contain one label per state component")
+
+    for component in range(n):
+        label = labels[component] if labels is not None else None
+        ax.plot(x, curve[:, component], label=label, **kwargs)
+
+    ax.set_xlabel("Phase" if phase is not None else "Mesh point")
+    ax.set_ylabel("Z")
+    ax.set_title(title)
+    ax.grid(True, alpha=0.3)
+    if labels is not None:
+        ax.legend()
+
+    plt.tight_layout()
+    return fig

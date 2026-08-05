@@ -20,6 +20,7 @@ from jaxcont.viz.portraits import (
     plot_branch_states,
     plot_eigenvalues,
     plot_phase_portrait,
+    plot_prc,
 )
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "plot_all_states",
     "plot_branch_states",
     "plot_eigenvalues",
+    "plot_prc",
     "EigenvalueReference",
     # 2D phase planes
     "plot_phase_plane",
