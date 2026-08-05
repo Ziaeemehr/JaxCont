@@ -12,8 +12,10 @@ import sys
 from typing import Sequence
 
 from .artifacts import (
+    compare_case_result_to_reference,
     enrich_generated_metadata,
     validate_equilibrium_artifacts,
+    validate_periodic_artifacts,
     validate_reference_metadata,
     verify_case_references,
 )
@@ -36,7 +38,9 @@ _EQUATION_FILES = {
 def build_parser() -> argparse.ArgumentParser:
     """Build the validation CLI parser without performing any validation work."""
     parser = argparse.ArgumentParser(description="Run JaxCont's MatCont validation suite.")
-    parser.add_argument("--case", action="append", help="Validate only this case ID; may be repeated.")
+    parser.add_argument(
+        "--case", action="append", help="Validate only this case ID; may be repeated."
+    )
     parser.add_argument(
         "--regenerate-matcont",
         action="store_true",
@@ -80,6 +84,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Report case selection without running Python or MATLAB producers.",
     )
     return parser
+
+
+def resolve_runtime_paths(args: argparse.Namespace) -> argparse.Namespace:
+    """Resolve every filesystem override before MATLAB changes its working directory."""
+    args.reference_dir = Path(args.reference_dir).expanduser().resolve()
+    args.generated_dir = Path(args.generated_dir).expanduser().resolve()
+    args.matlab_bin = str(Path(args.matlab_bin).expanduser().resolve())
+    args.matcont_root = str(Path(args.matcont_root).expanduser().resolve())
+    return args
 
 
 def _matlab_quote(value: Path | str) -> str:
@@ -127,6 +140,8 @@ def _regenerate(cases: list[dict], args: argparse.Namespace) -> bool:
             continue
         try:
             if case["support"] == "unsupported":
+                if case.get("unsupported_execution") == "template":
+                    raise RuntimeError("NON_EXECUTABLE_TEMPLATE")
                 _run_matlab_function(
                     function_name,
                     matlab_bin=args.matlab_bin,
@@ -225,10 +240,17 @@ def _validate_case(case: dict, reference_dir: Path) -> tuple[bool, dict]:
             raise FileNotFoundError(f"missing MatCont reference artifact: {path}")
     if case["id"].startswith("MC-EQ-"):
         validate_equilibrium_artifacts(reference_dir, case["id"])
+    elif case["id"] in {"MC-LC-001", "MC-LC-002"}:
+        validate_periodic_artifacts(reference_dir, case["id"])
     function = _load_case_callable(case["python"])
     parameters = inspect.signature(function).parameters
     result = function(reference_dir) if parameters else function()
-    return _case_result_passes(case["id"], result.checks), result.checks
+    checks = dict(result.checks)
+    if case["id"] in {"MC-EQ-001", "MC-EQ-002", "MC-EQ-003", "MC-LC-001"}:
+        checks["matcont_reference"] = compare_case_result_to_reference(
+            case, result, reference_dir
+        )
+    return _case_result_passes(case["id"], checks), checks
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -236,14 +258,34 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Reviewed references are read-only; regeneration always targets ``generated``.
     """
-    args = build_parser().parse_args(argv)
+    args = resolve_runtime_paths(build_parser().parse_args(argv))
+    registry = load_registry()
+    if args.case and not args.include_unsupported:
+        unsupported_requested = sorted(
+            case["id"]
+            for case in registry["cases"]
+            if case["id"] in set(args.case) and case["support"] == "unsupported"
+        )
+        if unsupported_requested:
+            print(
+                "Unsupported case(s) "
+                + ", ".join(unsupported_requested)
+                + " requires --include-unsupported",
+                file=sys.stderr,
+            )
+            return 2
     cases = select_cases(
-        load_registry(), ids=args.case, include_unsupported=args.include_unsupported
+        registry, ids=args.case, include_unsupported=args.include_unsupported
     )
     if args.dry_run:
         for case in cases:
             if case["support"] == "unsupported":
-                print(f"UNSUPPORTED_BY_JAXCONT {case['id']}: {case['title']}")
+                suffix = (
+                    " NON_EXECUTABLE_TEMPLATE"
+                    if case.get("unsupported_execution") == "template"
+                    else ""
+                )
+                print(f"UNSUPPORTED_BY_JAXCONT {case['id']}: {case['title']}{suffix}")
             else:
                 print(f"WOULD_RUN {case['id']}: {case['title']}")
         return 0
@@ -274,6 +316,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     for case in cases:
         if case["support"] == "unsupported":
+            if case.get("unsupported_execution") == "template":
+                print(
+                    f"NON_EXECUTABLE_TEMPLATE {case['id']}: {case['title']}",
+                    file=sys.stderr,
+                )
+                success = False
+                continue
             try:
                 _run_matlab_function(
                     case["matlab"],

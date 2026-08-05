@@ -39,6 +39,13 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
         if missing_fields:
             missing = ", ".join(sorted(missing_fields))
             raise ValueError(f"MatCont registry case is missing required fields: {missing}")
+        if case["support"] == "unsupported" and case.get("unsupported_execution") not in {
+            "executable",
+            "template",
+        }:
+            raise ValueError(
+                "Unsupported MatCont cases require unsupported_execution=executable|template"
+            )
         case_ids.append(case["id"])
 
     if len(case_ids) != len(set(case_ids)):

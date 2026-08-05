@@ -14,7 +14,13 @@
         "MC-EQ-001_metadata.json"
       ],
       "manual_source": "Analytic cubic equilibrium folds",
-      "tolerances": {"parameter_atol": 0.0005}
+      "tolerances": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 0.00002,
+        "fold_coefficient_atol": 0.0005,
+        "spectrum_atol": 0.0005
+      }
     },
     {
       "id": "MC-EQ-002",
@@ -30,7 +36,14 @@
         "MC-EQ-002_metadata.json"
       ],
       "manual_source": "Analytic Van der Pol equilibrium Hopf",
-      "tolerances": {"parameter_atol": 0.0005, "frequency_atol": 0.0005}
+      "tolerances": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 0.00002,
+        "frequency_atol": 0.0005,
+        "first_lyapunov_atol": 0.0001,
+        "spectrum_atol": 0.0005
+      }
     },
     {
       "id": "MC-EQ-003",
@@ -46,7 +59,14 @@
         "MC-EQ-003_metadata.json"
       ],
       "manual_source": "MatCont 7.6 Testruns/testadapt.m and TestSystems/adaptx.m",
-      "tolerances": {"parameter_atol": 0.0005, "frequency_atol": 0.0005}
+      "tolerances": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 0.00002,
+        "frequency_atol": 0.0005,
+        "first_lyapunov_atol": 0.0005,
+        "spectrum_atol": 0.0005
+      }
     },
     {
       "id": "MC-JAX-001",
@@ -87,6 +107,7 @@
       "tolerances": {
         "parameter_atol": 0.0005,
         "period_atol": 0.005,
+        "radius_atol": 0.005,
         "multiplier_atol": 0.005,
         "residual_atol": 0.00002
       }
@@ -109,13 +130,15 @@
         "parameter_atol": 0.002,
         "period_atol": 0.005,
         "extrema_atol": 0.005,
-        "multiplier_atol": 0.005
+        "multiplier_atol": 0.005,
+        "residual_atol": 0.0000001
       }
     },
     {
       "id": "US-BP-001",
       "title": "Bratu branch switching",
       "support": "unsupported",
+      "unsupported_execution": "executable",
       "features": ["boundary-value-problem", "branch-switching"],
       "python": null,
       "matlab": "run_bratu_branch_switching",
@@ -127,6 +150,7 @@
       "id": "US-C2-LP-001",
       "title": "Two-parameter fold-curve continuation",
       "support": "unsupported",
+      "unsupported_execution": "executable",
       "features": ["two-parameter-fold-curve"],
       "python": null,
       "matlab": "run_two_parameter_fold_curve",
@@ -138,6 +162,7 @@
       "id": "US-C2-H-001",
       "title": "Two-parameter Hopf-curve continuation",
       "support": "unsupported",
+      "unsupported_execution": "executable",
       "features": ["two-parameter-hopf-curve"],
       "python": null,
       "matlab": "run_two_parameter_hopf_curve",
@@ -149,6 +174,7 @@
       "id": "US-C2-PD-001",
       "title": "Two-parameter period-doubling curve continuation",
       "support": "unsupported",
+      "unsupported_execution": "executable",
       "features": ["two-parameter-pd-curve"],
       "python": null,
       "matlab": "run_two_parameter_pd_curve",
@@ -160,6 +186,7 @@
       "id": "US-C2-LPC-001",
       "title": "Two-parameter limit-point-of-cycles continuation",
       "support": "unsupported",
+      "unsupported_execution": "executable",
       "features": ["two-parameter-lpc-curve"],
       "python": null,
       "matlab": "run_two_parameter_lpc_curve",
@@ -171,6 +198,7 @@
       "id": "US-C2-NS-001",
       "title": "Two-parameter Neimark-Sacker curve continuation",
       "support": "unsupported",
+      "unsupported_execution": "executable",
       "features": ["two-parameter-ns-curve"],
       "python": null,
       "matlab": "run_two_parameter_ns_curve",
@@ -180,8 +208,9 @@
     },
     {
       "id": "US-BVP-001",
-      "title": "General boundary-value-problem continuation",
+      "title": "General boundary-value-problem setup template",
       "support": "unsupported",
+      "unsupported_execution": "template",
       "features": ["general-bvp-continuation"],
       "python": null,
       "matlab": "run_general_bvp_continuation",
@@ -193,6 +222,7 @@
       "id": "US-HOM-001",
       "title": "Homoclinic continuation",
       "support": "unsupported",
+      "unsupported_execution": "executable",
       "features": ["homoclinic-continuation"],
       "python": null,
       "matlab": "run_connecting_orbits",
@@ -202,8 +232,9 @@
     },
     {
       "id": "US-HET-001",
-      "title": "Heteroclinic continuation",
+      "title": "Heteroclinic continuation setup template",
       "support": "unsupported",
+      "unsupported_execution": "template",
       "features": ["heteroclinic-continuation"],
       "python": null,
       "matlab": "run_heteroclinic_continuation",
@@ -215,6 +246,7 @@
       "id": "US-PRC-001",
       "title": "PRC and dPRC calculations",
       "support": "unsupported",
+      "unsupported_execution": "executable",
       "features": ["prc", "dprc"],
       "python": null,
       "matlab": "run_prc_dprc",

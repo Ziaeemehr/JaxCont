@@ -138,20 +138,35 @@ def match_events(
 
 
 def match_spectrum(
-    actual: Any, reference: Any, *, atol: float, rtol: float = 0.0
+    actual: Any,
+    reference: Any,
+    *,
+    atol: float,
+    rtol: float = 0.0,
+    exclude_trivial: bool = True,
 ) -> dict[str, Any]:
-    """Uniquely match spectra after removing one multiplier nearest to ``+1`` from each."""
+    """Uniquely match spectra, optionally removing one multiplier nearest ``+1``."""
     actual_values = np.asarray(actual, dtype=complex)
     reference_values = np.asarray(reference, dtype=complex)
     if actual_values.ndim != 1 or reference_values.ndim != 1:
         raise ValueError("Spectra must be one-dimensional")
     if not actual_values.size or not reference_values.size:
-        raise ValidationMismatch("Each spectrum must contain a trivial multiplier to exclude")
+        raise ValidationMismatch("Spectra must be non-empty")
 
-    actual_trivial = int(np.argmin(np.abs(actual_values - 1.0)))
-    reference_trivial = int(np.argmin(np.abs(reference_values - 1.0)))
-    actual_indices = np.delete(np.arange(actual_values.size), actual_trivial)
-    reference_indices = np.delete(np.arange(reference_values.size), reference_trivial)
+    actual_trivial = int(np.argmin(np.abs(actual_values - 1.0))) if exclude_trivial else None
+    reference_trivial = (
+        int(np.argmin(np.abs(reference_values - 1.0))) if exclude_trivial else None
+    )
+    actual_indices = (
+        np.delete(np.arange(actual_values.size), actual_trivial)
+        if exclude_trivial
+        else np.arange(actual_values.size)
+    )
+    reference_indices = (
+        np.delete(np.arange(reference_values.size), reference_trivial)
+        if exclude_trivial
+        else np.arange(reference_values.size)
+    )
     reduced_actual = actual_values[actual_indices]
     reduced_reference = reference_values[reference_indices]
     if reduced_actual.size != reduced_reference.size:

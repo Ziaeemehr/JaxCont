@@ -118,6 +118,28 @@ def run_cubic_fold() -> CaseResult:
             "states": branch.states,
             "parameters": branch.params,
             "stability": branch.stable,
+            "spectra": branch.eigenvalues,
+            "events": [
+                {
+                    "kind": "LP",
+                    "parameter": parameter,
+                    "state": [state],
+                    "fold_coefficient": coefficient,
+                }
+                for (state, parameter, _), coefficient in zip(actual, coefficients)
+            ],
+            "event_spectra": [
+                {
+                    "kind": "LP",
+                    "parameter": parameter,
+                    "values": jnp.linalg.eigvals(
+                        jax.jacfwd(_cubic_rhs, argnums=0)(
+                            jnp.array([state]), parameter, None
+                        )
+                    ),
+                }
+                for state, parameter, _ in actual
+            ],
             "natural_states": natural_branch.states,
             "natural_parameters": natural_branch.params,
         },
@@ -187,6 +209,25 @@ def run_vanderpol_hopf() -> CaseResult:
             "states": branch.states,
             "parameters": branch.params,
             "stability": branch.stable,
+            "spectra": branch.eigenvalues,
+            "events": [
+                {
+                    "kind": "H",
+                    "parameter": float(parameter),
+                    "state": state,
+                    "frequency": abs(float(omega)),
+                    "first_lyapunov": float(lyapunov),
+                }
+            ] if hopf_events else [],
+            "event_spectra": [
+                {
+                    "kind": "H",
+                    "parameter": float(parameter),
+                    "values": jnp.linalg.eigvals(
+                        jax.jacfwd(_van_der_pol_rhs, argnums=0)(state, parameter, None)
+                    ),
+                }
+            ] if hopf_events else [],
         },
     )
 
@@ -264,6 +305,25 @@ def run_adaptive_control_hopf() -> CaseResult:
             "states": branch.states,
             "parameters": branch.params,
             "stability": branch.stable,
+            "spectra": branch.eigenvalues,
+            "events": [
+                {
+                    "kind": "H",
+                    "parameter": float(parameter),
+                    "state": state,
+                    "frequency": abs(float(omega)),
+                    "first_lyapunov": matcont_lyapunov,
+                }
+            ] if hopf_events else [],
+            "event_spectra": [
+                {
+                    "kind": "H",
+                    "parameter": float(parameter),
+                    "values": jnp.linalg.eigvals(
+                        jax.jacfwd(_adaptive_control_rhs, argnums=0)(state, parameter, beta)
+                    ),
+                }
+            ] if hopf_events else [],
         },
     )
 

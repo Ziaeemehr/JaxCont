@@ -120,6 +120,9 @@ def run_radial_cycle() -> CaseResult:
             "periods": periods,
             "multipliers": multipliers,
             "stability": branch.stable,
+            "state_min": jnp.min(all_orbit_states, axis=1),
+            "state_max": jnp.max(all_orbit_states, axis=1),
+            "events": [],
         },
     )
 

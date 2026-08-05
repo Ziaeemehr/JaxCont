@@ -7,13 +7,20 @@ import hashlib
 import importlib.metadata
 import json
 import platform
+import re
 from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
 import jax
 
-from .compare import ValidationMismatch
+from .compare import (
+    ValidationMismatch,
+    interpolate_observable,
+    match_events,
+    match_spectrum,
+    scaled_close,
+)
 
 
 _REQUIRED_METADATA_FIELDS = {
@@ -140,6 +147,39 @@ def validate_equilibrium_artifacts(reference_dir: Path, case_id: str) -> dict:
     }
 
 
+def validate_periodic_artifacts(reference_dir: Path, case_id: str) -> dict[str, int]:
+    """Validate the normalized periodic branch/event/Floquet schemas."""
+    reference_dir = Path(reference_dir)
+    branch = _read_rows(
+        reference_dir / f"{case_id}_branch.csv",
+        {"case_id", "point", "parameter", "period", "residual_norm"},
+    )
+    events = _read_rows(
+        reference_dir / f"{case_id}_events.csv",
+        {"case_id", "event_index", "event_type", "point", "parameter", "period"},
+    )
+    spectra = _read_rows(
+        reference_dir / f"{case_id}_multipliers.csv",
+        {
+            "case_id",
+            "point",
+            "event_index",
+            "event_type",
+            "spectrum_kind",
+            "multiplier_index",
+            "real",
+            "imag",
+        },
+    )
+    if not branch or not spectra:
+        raise ValueError(f"{case_id} periodic branch/spectrum must be non-empty")
+    if any(row["case_id"] != case_id for row in branch + events + spectra):
+        raise ValueError(f"{case_id} artifacts contain a different case_id")
+    if any(row["spectrum_kind"].strip().upper() != "FLOQUET" for row in spectra):
+        raise ValueError(f"{case_id} periodic spectrum contains non-Floquet rows")
+    return {"branch_rows": len(branch), "event_rows": len(events), "spectrum_rows": len(spectra)}
+
+
 def validate_reference_metadata(path: Path, case_id: str) -> dict[str, Any]:
     """Load a reviewed metadata file and enforce its reproducibility contract."""
     try:
@@ -158,7 +198,10 @@ def validate_reference_metadata(path: Path, case_id: str) -> dict[str, Any]:
     if metadata["reviewed"] is not True:
         raise ValueError(f"{Path(path).name} is not marked as a reviewed reference")
     equation_hash = metadata["equation_hash"]
-    if not isinstance(equation_hash, str) or not equation_hash.startswith("sha256:"):
+    valid_hash = isinstance(equation_hash, str) and re.fullmatch(
+        r"sha256:[0-9a-fA-F]{64}", equation_hash
+    )
+    if not valid_hash:
         raise ValueError(f"{Path(path).name} has an invalid equation_hash")
     return metadata
 
@@ -187,7 +230,9 @@ def enrich_generated_metadata(
             "reviewed": False,
         }
     )
-    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    metadata_path.write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return metadata
 
 
@@ -196,71 +241,355 @@ def _column_atol(column: str, tolerances: dict[str, float]) -> float:
         return float(tolerances.get("parameter_atol", 1e-9))
     if column == "period":
         return float(tolerances.get("period_atol", 1e-9))
+    if column == "frequency":
+        return float(tolerances.get("frequency_atol", 1e-9))
+    if column == "fold_coefficient":
+        return float(tolerances.get("fold_coefficient_atol", 1e-9))
+    if column == "first_lyapunov":
+        return float(tolerances.get("first_lyapunov_atol", 1e-9))
     if column == "residual_norm":
         return float(tolerances.get("residual_atol", 1e-9))
     if column in {"real", "imag"}:
-        return float(tolerances.get("multiplier_atol", 1e-9))
+        return float(tolerances.get("spectrum_atol", tolerances.get("multiplier_atol", 1e-9)))
     if column.startswith("state_"):
         return float(tolerances.get("extrema_atol", tolerances.get("state_atol", 1e-9)))
     return 0.0 if column in {"point", "event_index", "multiplier_index"} else 1e-9
 
 
-def _verify_csv(
-    generated_path: Path,
-    reviewed_path: Path,
-    tolerances: dict[str, float],
-) -> float:
-    with generated_path.open(newline="", encoding="utf-8") as stream:
-        generated_reader = csv.DictReader(stream)
-        generated_fields = generated_reader.fieldnames
-        generated_rows = list(generated_reader)
-    with reviewed_path.open(newline="", encoding="utf-8") as stream:
-        reviewed_reader = csv.DictReader(stream)
-        reviewed_fields = reviewed_reader.fieldnames
-        reviewed_rows = list(reviewed_reader)
-    if generated_fields != reviewed_fields:
-        raise ValidationMismatch(
-            f"{reviewed_path.name}: generated and reviewed columns differ"
+def _read_table(path: Path) -> tuple[list[str], list[dict[str, str]]]:
+    try:
+        with Path(path).open(newline="", encoding="utf-8") as stream:
+            reader = csv.DictReader(stream)
+            fields = list(reader.fieldnames or ())
+            return fields, list(reader)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"missing validation artifact: {path}") from exc
+
+
+def _as_float(row: dict[str, Any], column: str) -> float:
+    try:
+        return float(row[column])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValidationMismatch(f"invalid numeric {column!r} value") from exc
+
+
+def _branch_coordinate(case_id: str, fields: set[str]) -> str:
+    if case_id == "MC-EQ-001":
+        return "state_0" if "state_0" in fields else "parameter"
+    if "parameter" not in fields:
+        raise ValidationMismatch("branch is missing parameter")
+    return "parameter"
+
+
+def _unique_sorted(rows: list[dict[str, Any]], coordinate: str) -> tuple[np.ndarray, list[dict]]:
+    ordered = sorted(rows, key=lambda row: _as_float(row, coordinate))
+    values = np.asarray([_as_float(row, coordinate) for row in ordered])
+    unique, indices = np.unique(values, return_index=True)
+    return unique, [ordered[int(index)] for index in indices]
+
+
+def _compare_branch_rows(
+    case: dict[str, Any],
+    actual_fields: list[str],
+    actual_rows: list[dict[str, Any]],
+    reference_fields: list[str],
+    reference_rows: list[dict[str, Any]],
+    *,
+    require_same_extent: bool,
+    require_same_schema: bool,
+) -> dict[str, float]:
+    if not actual_rows or not reference_rows:
+        raise ValidationMismatch("branch artifacts must be non-empty")
+    actual_set = set(actual_fields)
+    reference_set = set(reference_fields)
+    if require_same_schema and actual_set != reference_set:
+        raise ValidationMismatch("generated and reviewed branch columns differ")
+    if not reference_set <= actual_set and require_same_schema:
+        raise ValidationMismatch("generated branch is missing reviewed columns")
+    coordinate = _branch_coordinate(case["id"], actual_set & reference_set)
+    actual_x, actual_ordered = _unique_sorted(actual_rows, coordinate)
+    reference_x, reference_ordered = _unique_sorted(reference_rows, coordinate)
+    tolerances = case.get("tolerances", {})
+    coordinate_atol = _column_atol(coordinate, tolerances)
+    coordinate_error = 0.0
+    if require_same_extent:
+        extent_diagnostics = scaled_close(
+            np.asarray([actual_x[0], actual_x[-1]]),
+            np.asarray([reference_x[0], reference_x[-1]]),
+            atol=coordinate_atol,
+            rtol=float(tolerances.get("rtol", 1e-9)),
         )
-    if len(generated_rows) != len(reviewed_rows):
-        raise ValidationMismatch(
-            f"{reviewed_path.name}: generated {len(generated_rows)} rows, "
-            f"reviewed {len(reviewed_rows)}"
+        coordinate_error = extent_diagnostics["max_error"]
+    lower = max(actual_x[0], reference_x[0])
+    upper = min(actual_x[-1], reference_x[-1])
+    if upper < lower:
+        if actual_x.size == reference_x.size == 1 and coordinate_error <= coordinate_atol:
+            lower = upper = actual_x[0]
+        else:
+            raise ValidationMismatch("branches have no overlapping continuation interval")
+    if actual_x.size == reference_x.size == 1:
+        query = np.asarray([lower])
+    else:
+        candidates = (
+            np.unique(np.concatenate([actual_x, reference_x]))
+            if require_same_extent
+            else actual_x
+        )
+        if not require_same_extent and case["id"] == "MC-LC-001":
+            candidates = np.unique(
+                np.concatenate([candidates, [reference_x[0], reference_x[-1]]])
+            )
+        query = candidates[(candidates >= lower) & (candidates <= upper)]
+        if query.size > 201:
+            query = np.linspace(lower, upper, 201)
+
+    ignored = {
+        "case_id",
+        "point",
+        coordinate,
+        "residual_norm",
+        "stable",
+        "unstable_dimension",
+    }
+    if case["id"] == "MC-LC-001":
+        ignored.update(
+            column for column in actual_set | reference_set if column.startswith("state_")
+        )
+    numeric_columns = []
+    for column in sorted((actual_set & reference_set) - ignored):
+        try:
+            np.asarray([_as_float(row, column) for row in actual_ordered + reference_ordered])
+        except ValidationMismatch:
+            continue
+        numeric_columns.append(column)
+    max_error = coordinate_error
+    for column in numeric_columns:
+        actual_values = np.asarray([_as_float(row, column) for row in actual_ordered])
+        reference_values = np.asarray([_as_float(row, column) for row in reference_ordered])
+        if actual_x.size == 1:
+            actual_interpolated = actual_values
+        else:
+            actual_interpolated = interpolate_observable(actual_x, actual_values, query)
+        if reference_x.size == 1:
+            reference_interpolated = reference_values
+        else:
+            reference_interpolated = interpolate_observable(reference_x, reference_values, query)
+        diagnostics = scaled_close(
+            actual_interpolated,
+            reference_interpolated,
+            atol=_column_atol(column, tolerances),
+            rtol=float(tolerances.get("rtol", 1e-9)),
+        )
+        max_error = max(max_error, diagnostics["max_error"])
+    if case["id"] == "MC-LC-001":
+        extrema_columns = sorted(
+            column
+            for column in actual_set & reference_set
+            if column.startswith("state_") and (column.endswith("_min") or column.endswith("_max"))
+        )
+        if not extrema_columns:
+            raise ValidationMismatch("radial branch is missing state extrema")
+        actual_radius = np.asarray(
+            [
+                max(abs(_as_float(row, column)) for column in extrema_columns)
+                for row in actual_ordered
+            ]
+        )
+        reference_radius = np.asarray(
+            [
+                max(abs(_as_float(row, column)) for column in extrema_columns)
+                for row in reference_ordered
+            ]
+        )
+        actual_radius_query = (
+            actual_radius
+            if actual_x.size == 1
+            else interpolate_observable(actual_x, actual_radius, query)
+        )
+        reference_radius_query = (
+            reference_radius
+            if reference_x.size == 1
+            else interpolate_observable(reference_x, reference_radius, query)
+        )
+        diagnostics = scaled_close(
+            actual_radius_query,
+            reference_radius_query,
+            atol=float(tolerances.get("radius_atol", 5e-3)),
+            rtol=float(tolerances.get("rtol", 0.0)),
+        )
+        max_error = max(max_error, diagnostics["max_error"])
+    for rows, label in ((actual_rows, "generated"), (reference_rows, "reviewed")):
+        if "residual_norm" in rows[0] and "residual_atol" in tolerances:
+            maximum = max(abs(_as_float(row, "residual_norm")) for row in rows)
+            if maximum > tolerances["residual_atol"]:
+                raise ValidationMismatch(f"{label} branch residual {maximum:.6g} exceeds tolerance")
+    return {"max_error": max_error}
+
+
+def _normalized_events(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {"kind": str(row["event_type"]).strip(), "parameter": _as_float(row, "parameter")}
+        for row in rows
+    ]
+
+
+def _compare_event_rows(
+    case: dict[str, Any],
+    actual_rows: list[dict[str, Any]],
+    reference_rows: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[tuple[int, int]]]:
+    tolerances = case.get("tolerances", {})
+    diagnostics = match_events(
+        _normalized_events(actual_rows),
+        _normalized_events(reference_rows),
+        atol=float(tolerances.get("parameter_atol", 1e-9)),
+        rtol=float(tolerances.get("rtol", 0.0)),
+    )
+    max_error = diagnostics["max_error"]
+    for actual_index, reference_index in diagnostics["assignments"]:
+        actual = actual_rows[actual_index]
+        reference = reference_rows[reference_index]
+        for column in ("period", "frequency", "fold_coefficient", "first_lyapunov"):
+            if column not in actual or column not in reference:
+                continue
+            actual_value = _as_float(actual, column)
+            reference_value = _as_float(reference, column)
+            if np.isnan(actual_value) and np.isnan(reference_value):
+                continue
+            if not (np.isfinite(actual_value) and np.isfinite(reference_value)):
+                raise ValidationMismatch(f"event {column} availability differs")
+            comparison = scaled_close(
+                actual_value,
+                reference_value,
+                atol=_column_atol(column, tolerances),
+                rtol=float(tolerances.get("rtol", 0.0)),
+            )
+            max_error = max(max_error, comparison["max_error"])
+    diagnostics["max_error"] = max_error
+    return diagnostics, diagnostics["assignments"]
+
+
+def _complex_values(rows: list[dict[str, Any]]) -> np.ndarray:
+    ordered = sorted(rows, key=lambda row: int(float(row["multiplier_index"])))
+    return np.asarray(
+        [complex(_as_float(row, "real"), _as_float(row, "imag")) for row in ordered]
+    )
+
+
+def _group_spectra(rows: list[dict[str, Any]]) -> dict[tuple[int, str], list[dict]]:
+    grouped: dict[tuple[int, str], list[dict]] = {}
+    for row in rows:
+        key = (int(float(row["event_index"])), str(row["event_type"]).strip())
+        grouped.setdefault(key, []).append(row)
+    return grouped
+
+
+def _compare_spectrum_rows(
+    case: dict[str, Any],
+    actual_rows: list[dict[str, Any]],
+    reference_rows: list[dict[str, Any]],
+    actual_events: list[dict[str, Any]],
+    reference_events: list[dict[str, Any]],
+    event_assignments: list[tuple[int, int]],
+    actual_branch: list[dict[str, Any]],
+    reference_branch: list[dict[str, Any]],
+    *,
+    require_same_extent: bool,
+    compare_branch_spectra: bool = True,
+) -> dict[str, float]:
+    if not actual_rows and not reference_rows:
+        return {"max_error": 0.0}
+    actual_groups = _group_spectra(actual_rows)
+    reference_groups = _group_spectra(reference_rows)
+    atol = float(
+        case.get("tolerances", {}).get(
+            "spectrum_atol", case.get("tolerances", {}).get("multiplier_atol", 1e-9)
+        )
+    )
+    max_error = 0.0
+    actual_branch_rows = [row for row in actual_rows if int(float(row["event_index"])) == -1]
+    reference_branch_rows = [
+        row for row in reference_rows if int(float(row["event_index"])) == -1
+    ]
+    if compare_branch_spectra and bool(actual_branch_rows) != bool(reference_branch_rows):
+        raise ValidationMismatch("branch spectrum availability differs")
+    if compare_branch_spectra and actual_branch_rows:
+        coordinate = _branch_coordinate(
+            case["id"], set(actual_branch[0]) & set(reference_branch[0])
         )
 
-    max_error = 0.0
-    for row_index, (generated, reviewed) in enumerate(zip(generated_rows, reviewed_rows)):
-        for column in generated_fields or ():
-            generated_value = generated[column]
-            reviewed_value = reviewed[column]
-            try:
-                generated_number = float(generated_value)
-                reviewed_number = float(reviewed_value)
-            except ValueError:
-                if generated_value != reviewed_value:
-                    raise ValidationMismatch(
-                        f"{reviewed_path.name}:{row_index + 2} {column} differs"
-                    )
-                continue
-            if np.isnan(generated_number) and np.isnan(reviewed_number):
-                continue
-            if not (np.isfinite(generated_number) and np.isfinite(reviewed_number)):
-                if generated_number != reviewed_number:
-                    raise ValidationMismatch(
-                        f"{reviewed_path.name}:{row_index + 2} {column} differs"
-                    )
-                continue
-            error = abs(generated_number - reviewed_number)
-            max_error = max(max_error, error)
-            atol = _column_atol(column, tolerances)
-            rtol = float(tolerances.get("rtol", 1e-9))
-            threshold = atol + rtol * max(abs(generated_number), abs(reviewed_number))
-            if error > threshold:
-                raise ValidationMismatch(
-                    f"{reviewed_path.name}:{row_index + 2} {column} error "
-                    f"{error:.6g} exceeds {threshold:.6g}"
-                )
-    return max_error
+        def spectrum_curve(branch_rows, spectrum_rows):
+            coordinate_by_point = {
+                int(float(row["point"])): _as_float(row, coordinate) for row in branch_rows
+            }
+            by_point: dict[int, list[dict]] = {}
+            for row in spectrum_rows:
+                by_point.setdefault(int(float(row["point"])), []).append(row)
+            points = sorted(by_point, key=lambda point: coordinate_by_point[point])
+            x = np.asarray([coordinate_by_point[point] for point in points])
+            values = np.stack([_complex_values(by_point[point]) for point in points])
+            unique, indices = np.unique(x, return_index=True)
+            return unique, values[indices]
+
+        actual_x, actual_values = spectrum_curve(actual_branch, actual_branch_rows)
+        reference_x, reference_values = spectrum_curve(reference_branch, reference_branch_rows)
+        if actual_values.shape[1] != reference_values.shape[1]:
+            raise ValidationMismatch("branch spectrum dimensions differ")
+        lower = max(actual_x[0], reference_x[0])
+        upper = min(actual_x[-1], reference_x[-1])
+        if require_same_extent:
+            query = np.linspace(lower, upper, min(51, max(2, actual_x.size, reference_x.size)))
+        else:
+            candidates = actual_x[(actual_x >= lower) & (actual_x <= upper)]
+            if candidates.size > 51:
+                indices = np.linspace(0, candidates.size - 1, 51).round().astype(int)
+                candidates = candidates[indices]
+            query = candidates
+
+        def interpolate_complex(x, values):
+            if x.size == 1:
+                return np.repeat(values, query.size, axis=0)
+            real = interpolate_observable(x, values.real, query)
+            imag = interpolate_observable(x, values.imag, query)
+            return real + 1j * imag
+
+        actual_interpolated = interpolate_complex(actual_x, actual_values)
+        reference_interpolated = interpolate_complex(reference_x, reference_values)
+        kind = str(reference_branch_rows[0]["spectrum_kind"]).strip().upper()
+        for actual_values_at_point, reference_values_at_point in zip(
+            actual_interpolated, reference_interpolated
+        ):
+            diagnostics = match_spectrum(
+                actual_values_at_point,
+                reference_values_at_point,
+                atol=atol,
+                rtol=float(case.get("tolerances", {}).get("rtol", 0.0)),
+                exclude_trivial=kind == "FLOQUET",
+            )
+            max_error = max(max_error, diagnostics["max_error"])
+    for actual_event_index, reference_event_index in event_assignments:
+        actual_event = actual_events[actual_event_index]
+        reference_event = reference_events[reference_event_index]
+        actual_key = (
+            int(float(actual_event["event_index"])),
+            str(actual_event["event_type"]).strip(),
+        )
+        reference_key = (
+            int(float(reference_event["event_index"])),
+            str(reference_event["event_type"]).strip(),
+        )
+        if actual_key not in actual_groups or reference_key not in reference_groups:
+            raise ValidationMismatch("event-local spectrum is missing")
+        kind = str(reference_groups[reference_key][0]["spectrum_kind"]).strip().upper()
+        diagnostics = match_spectrum(
+            _complex_values(actual_groups[actual_key]),
+            _complex_values(reference_groups[reference_key]),
+            atol=atol,
+            rtol=float(case.get("tolerances", {}).get("rtol", 0.0)),
+            exclude_trivial=kind == "FLOQUET",
+        )
+        max_error = max(max_error, diagnostics["max_error"])
+    return {"max_error": max_error}
 
 
 def _verify_metadata(generated_path: Path, reviewed_path: Path, case_id: str) -> None:
@@ -285,31 +614,284 @@ def _verify_metadata(generated_path: Path, reviewed_path: Path, case_id: str) ->
 def verify_case_references(
     case: dict[str, Any], generated_dir: Path, reviewed_dir: Path
 ) -> dict[str, Any]:
-    """Compare regenerated text artifacts with reviewed references without writing either."""
+    """Compare regenerated topology with reviewed references without writing either."""
     generated_dir = Path(generated_dir)
     reviewed_dir = Path(reviewed_dir)
     references = case.get("references", [])
     if not references:
         return {"artifact_count": 0, "max_numeric_error": 0.0}
+
+    def named(suffix: str) -> str | None:
+        return next((filename for filename in references if filename.endswith(suffix)), None)
+
+    branch_name = named("_branch.csv") or named("branch.csv")
+    event_name = named("_events.csv") or named("events.csv")
+    spectrum_name = named("_multipliers.csv") or named("multipliers.csv")
+    metadata_name = named("_metadata.json") or named("metadata.json")
     max_numeric_error = 0.0
-    for filename in references:
-        generated_path = generated_dir / filename
-        reviewed_path = reviewed_dir / filename
-        if filename.endswith(".csv"):
-            try:
-                error = _verify_csv(generated_path, reviewed_path, case.get("tolerances", {}))
-            except FileNotFoundError as exc:
-                raise FileNotFoundError(f"missing validation artifact: {exc.filename}") from exc
-            max_numeric_error = max(max_numeric_error, error)
-        elif filename.endswith(".json"):
-            _verify_metadata(generated_path, reviewed_path, case["id"])
-        else:
-            raise ValueError(f"unsupported reference artifact type: {filename}")
-    return {"artifact_count": len(references), "max_numeric_error": max_numeric_error}
+    branch_diagnostics = {"max_error": 0.0}
+    event_diagnostics = {"max_error": 0.0, "assignments": []}
+    spectrum_diagnostics = {"max_error": 0.0}
+    actual_branch: list[dict[str, Any]] = []
+    reference_branch: list[dict[str, Any]] = []
+    actual_events: list[dict[str, Any]] = []
+    reference_events: list[dict[str, Any]] = []
+    if branch_name:
+        actual_fields, actual_branch = _read_table(generated_dir / branch_name)
+        reference_fields, reference_branch = _read_table(reviewed_dir / branch_name)
+        branch_diagnostics = _compare_branch_rows(
+            case,
+            actual_fields,
+            actual_branch,
+            reference_fields,
+            reference_branch,
+            require_same_extent=True,
+            require_same_schema=True,
+        )
+        max_numeric_error = max(max_numeric_error, branch_diagnostics["max_error"])
+    if event_name:
+        actual_event_fields, actual_events = _read_table(generated_dir / event_name)
+        reference_event_fields, reference_events = _read_table(reviewed_dir / event_name)
+        if set(actual_event_fields) != set(reference_event_fields):
+            raise ValidationMismatch("generated and reviewed event columns differ")
+        event_diagnostics, assignments = _compare_event_rows(
+            case, actual_events, reference_events
+        )
+        max_numeric_error = max(max_numeric_error, event_diagnostics["max_error"])
+    else:
+        assignments = []
+    if spectrum_name:
+        actual_spectrum_fields, actual_spectra = _read_table(generated_dir / spectrum_name)
+        reference_spectrum_fields, reference_spectra = _read_table(
+            reviewed_dir / spectrum_name
+        )
+        if set(actual_spectrum_fields) != set(reference_spectrum_fields):
+            raise ValidationMismatch("generated and reviewed spectrum columns differ")
+        spectrum_diagnostics = _compare_spectrum_rows(
+            case,
+            actual_spectra,
+            reference_spectra,
+            actual_events,
+            reference_events,
+            assignments,
+            actual_branch,
+            reference_branch,
+            require_same_extent=True,
+        )
+        max_numeric_error = max(max_numeric_error, spectrum_diagnostics["max_error"])
+    if metadata_name:
+        _verify_metadata(
+            generated_dir / metadata_name, reviewed_dir / metadata_name, case["id"]
+        )
+    return {
+        "artifact_count": len(references),
+        "max_numeric_error": max_numeric_error,
+        "branch_max_error": branch_diagnostics["max_error"],
+        "event_max_error": event_diagnostics["max_error"],
+        "spectrum_max_error": spectrum_diagnostics["max_error"],
+    }
+
+
+def _reference_names(case: dict[str, Any]) -> tuple[str, str, str]:
+    references = case.get("references", [])
+    try:
+        branch = next(name for name in references if name.endswith("_branch.csv"))
+        events = next(name for name in references if name.endswith("_events.csv"))
+        spectra = next(name for name in references if name.endswith("_multipliers.csv"))
+    except StopIteration as exc:
+        raise ValidationMismatch(
+            f"{case['id']} lacks normalized branch/event/spectrum references"
+        ) from exc
+    return branch, events, spectra
+
+
+def _case_result_rows(case: dict[str, Any], result: Any) -> tuple:
+    artifacts = result.artifacts
+    parameters = np.asarray(artifacts["parameters"])
+    states = np.asarray(artifacts["states"])
+    branch_rows: list[dict[str, Any]] = []
+    if case["id"].startswith("MC-EQ-"):
+        branch_fields = ["case_id", "point", "parameter", "stable"] + [
+            f"state_{index}" for index in range(states.shape[1])
+        ]
+        for point, (parameter, state, stable) in enumerate(
+            zip(parameters, states, np.asarray(artifacts["stability"]))
+        ):
+            row = {
+                "case_id": case["id"],
+                "point": point,
+                "parameter": float(parameter),
+                "stable": int(bool(stable)),
+            }
+            row.update({f"state_{index}": float(value) for index, value in enumerate(state)})
+            branch_rows.append(row)
+        spectra = np.asarray(artifacts["spectra"])
+        spectrum_kind = "EIGENVALUE"
+    else:
+        periods = np.asarray(artifacts["periods"])
+        state_min = np.asarray(artifacts["state_min"])
+        state_max = np.asarray(artifacts["state_max"])
+        branch_fields = ["case_id", "point", "parameter", "period"]
+        for dimension in range(state_min.shape[1]):
+            branch_fields.extend([f"state_{dimension}_min", f"state_{dimension}_max"])
+        for point, parameter in enumerate(parameters):
+            row = {
+                "case_id": case["id"],
+                "point": point,
+                "parameter": float(parameter),
+                "period": float(periods[point]),
+            }
+            for dimension in range(state_min.shape[1]):
+                row[f"state_{dimension}_min"] = float(state_min[point, dimension])
+                row[f"state_{dimension}_max"] = float(state_max[point, dimension])
+            branch_rows.append(row)
+        spectra = np.asarray(artifacts["multipliers"])
+        spectrum_kind = "FLOQUET"
+
+    event_fields = [
+        "case_id",
+        "event_index",
+        "event_type",
+        "point",
+        "parameter",
+        "period",
+        "frequency",
+        "fold_coefficient",
+        "first_lyapunov",
+    ]
+    event_rows = []
+    for event_index, event in enumerate(artifacts.get("events", [])):
+        event_rows.append(
+            {
+                "case_id": case["id"],
+                "event_index": event_index,
+                "event_type": event["kind"],
+                "point": -1,
+                "parameter": float(event["parameter"]),
+                "period": float(event.get("period", np.nan)),
+                "frequency": float(event.get("frequency", np.nan)),
+                "fold_coefficient": float(event.get("fold_coefficient", np.nan)),
+                "first_lyapunov": float(event.get("first_lyapunov", np.nan)),
+            }
+        )
+    spectrum_fields = [
+        "case_id",
+        "point",
+        "event_index",
+        "event_type",
+        "spectrum_kind",
+        "multiplier_index",
+        "real",
+        "imag",
+    ]
+    spectrum_rows = []
+    for point, values in enumerate(spectra):
+        for multiplier_index, value in enumerate(values):
+            spectrum_rows.append(
+                {
+                    "case_id": case["id"],
+                    "point": point,
+                    "event_index": -1,
+                    "event_type": "BRANCH",
+                    "spectrum_kind": spectrum_kind,
+                    "multiplier_index": multiplier_index,
+                    "real": float(np.real(value)),
+                    "imag": float(np.imag(value)),
+                }
+            )
+    for event_index, event_spectrum in enumerate(artifacts.get("event_spectra", [])):
+        for multiplier_index, value in enumerate(np.asarray(event_spectrum["values"])):
+            spectrum_rows.append(
+                {
+                    "case_id": case["id"],
+                    "point": -1,
+                    "event_index": event_index,
+                    "event_type": event_spectrum["kind"],
+                    "spectrum_kind": spectrum_kind,
+                    "multiplier_index": multiplier_index,
+                    "real": float(np.real(value)),
+                    "imag": float(np.imag(value)),
+                }
+            )
+    return (
+        branch_fields,
+        branch_rows,
+        event_fields,
+        event_rows,
+        spectrum_fields,
+        spectrum_rows,
+    )
+
+
+def compare_case_result_to_reference(
+    case: dict[str, Any], result: Any, reference_dir: Path
+) -> dict[str, float]:
+    """Numerically compare a Python/JaxCont case result with committed MatCont data."""
+    branch_name, event_name, spectrum_name = _reference_names(case)
+    reference_branch_fields, reference_branch = _read_table(Path(reference_dir) / branch_name)
+    reference_event_fields, reference_events = _read_table(Path(reference_dir) / event_name)
+    reference_spectrum_fields, reference_spectra = _read_table(
+        Path(reference_dir) / spectrum_name
+    )
+    if case["id"].startswith("MC-EQ-"):
+        validate_equilibrium_artifacts(reference_dir, case["id"])
+    else:
+        required_branch = {"case_id", "point", "parameter", "period", "residual_norm"}
+        if not required_branch <= set(reference_branch_fields):
+            raise ValidationMismatch("periodic branch reference schema is incomplete")
+        required_spectrum = {
+            "case_id",
+            "point",
+            "event_index",
+            "event_type",
+            "spectrum_kind",
+            "multiplier_index",
+            "real",
+            "imag",
+        }
+        if not required_spectrum <= set(reference_spectrum_fields):
+            raise ValidationMismatch("periodic spectrum reference schema is incomplete")
+    (
+        actual_branch_fields,
+        actual_branch,
+        _actual_event_fields,
+        actual_events,
+        _actual_spectrum_fields,
+        actual_spectra,
+    ) = _case_result_rows(case, result)
+    branch = _compare_branch_rows(
+        case,
+        actual_branch_fields,
+        actual_branch,
+        reference_branch_fields,
+        reference_branch,
+        require_same_extent=False,
+        require_same_schema=False,
+    )
+    events, assignments = _compare_event_rows(case, actual_events, reference_events)
+    spectra = _compare_spectrum_rows(
+        case,
+        actual_spectra,
+        reference_spectra,
+        actual_events,
+        reference_events,
+        assignments,
+        actual_branch,
+        reference_branch,
+        require_same_extent=False,
+        compare_branch_spectra=not case["id"].startswith("MC-EQ-"),
+    )
+    return {
+        "branch_max_error": branch["max_error"],
+        "event_max_error": events["max_error"],
+        "spectrum_max_error": spectra["max_error"],
+    }
 
 
 __all__ = [
     "validate_equilibrium_artifacts",
+    "validate_periodic_artifacts",
+    "compare_case_result_to_reference",
     "enrich_generated_metadata",
     "validate_reference_metadata",
     "verify_case_references",

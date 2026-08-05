@@ -2,6 +2,7 @@
 
 import json
 import hashlib
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -17,7 +18,7 @@ from examples.MatCont.compare import (
     scaled_close,
 )
 from examples.MatCont.registry import load_registry, select_cases
-from examples.MatCont.run_validation import build_parser
+from examples.MatCont.run_validation import build_parser, resolve_runtime_paths
 from examples.MatCont.artifacts import (
     validate_equilibrium_artifacts,
     enrich_generated_metadata,
@@ -528,6 +529,17 @@ def test_reference_metadata_requires_complete_reproducibility_provenance(tmp_pat
     assert validate_reference_metadata(path, "MC-EQ-001")["reviewed"] is True
 
 
+def test_reference_metadata_rejects_malformed_sha256(tmp_path):
+    """A prefix-only or non-hex equation hash must not identify a reviewed equation."""
+    path = tmp_path / "MC-EQ-001_metadata.json"
+    for malformed in ("sha256:", "sha256:" + "z" * 64, "sha256:" + "1" * 63):
+        metadata = _complete_metadata("MC-EQ-001")
+        metadata["equation_hash"] = malformed
+        path.write_text(json.dumps(metadata), encoding="utf-8")
+        with pytest.raises(ValueError, match="equation_hash"):
+            validate_reference_metadata(path, "MC-EQ-001")
+
+
 def test_generated_metadata_is_enriched_with_runtime_and_equation_provenance(tmp_path):
     """Promotion must identify the exact equations and Python/JAX runtime used."""
     metadata_path = tmp_path / "MC-EQ-001_metadata.json"
@@ -598,3 +610,194 @@ def test_reference_verification_is_tolerant_and_never_overwrites_reviewed_files(
     )
     with pytest.raises(ValidationMismatch):
         verify_case_references(case, generated, reviewed)
+
+
+def _write_topology_fixture(directory: Path, *, reordered: bool, midpoint: bool) -> None:
+    branch_rows = [
+        "MC-EQ-X,0,-1.0,0.0,1,0,-1.0",
+        "MC-EQ-X,1,0.0,0.0,0,1,0.0",
+        "MC-EQ-X,2,1.0,0.0,0,1,1.0",
+    ]
+    if midpoint:
+        branch_rows.insert(2, "MC-EQ-X,8,0.5,0.0,0,1,0.5")
+    if reordered:
+        branch_rows = branch_rows[::-1]
+    (directory / "branch.csv").write_text(
+        "case_id,point,parameter,residual_norm,stable,unstable_dimension,state_0\n"
+        + "\n".join(branch_rows)
+        + "\n",
+        encoding="utf-8",
+    )
+    event_rows = [
+        "MC-EQ-X,0,LP,1,0.0,NaN,1.0,NaN",
+        "MC-EQ-X,1,H,2,1.0,2.0,NaN,-0.3",
+    ]
+    if reordered:
+        event_rows = event_rows[::-1]
+    (directory / "events.csv").write_text(
+        "case_id,event_index,event_type,point,parameter,frequency,fold_coefficient,first_lyapunov\n"
+        + "\n".join(event_rows)
+        + "\n",
+        encoding="utf-8",
+    )
+    spectrum_rows = [
+        "MC-EQ-X,0,-1,BRANCH,EIGENVALUE,0,-1.0,0.0",
+        "MC-EQ-X,1,-1,BRANCH,EIGENVALUE,0,0.0,0.0",
+        "MC-EQ-X,2,-1,BRANCH,EIGENVALUE,0,1.0,0.0",
+        "MC-EQ-X,1,0,LP,EIGENVALUE,0,0.0,0.0",
+        "MC-EQ-X,2,1,H,EIGENVALUE,0,0.0,2.0",
+        "MC-EQ-X,2,1,H,EIGENVALUE,1,0.0,-2.0",
+    ]
+    if midpoint:
+        spectrum_rows.insert(3, "MC-EQ-X,8,-1,BRANCH,EIGENVALUE,0,0.5,0.0")
+    if reordered:
+        spectrum_rows = spectrum_rows[::-1]
+    (directory / "multipliers.csv").write_text(
+        "case_id,point,event_index,event_type,spectrum_kind,multiplier_index,real,imag\n"
+        + "\n".join(spectrum_rows)
+        + "\n",
+        encoding="utf-8",
+    )
+    metadata = _complete_metadata("MC-EQ-X")
+    metadata["reviewed"] = not reordered
+    (directory / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+
+
+def test_reference_verification_matches_topology_not_row_order_or_mesh(tmp_path):
+    """Reordered events/spectra and an adaptive branch point are the same result."""
+    reviewed = tmp_path / "reviewed"
+    generated = tmp_path / "generated"
+    reviewed.mkdir()
+    generated.mkdir()
+    _write_topology_fixture(reviewed, reordered=False, midpoint=False)
+    _write_topology_fixture(generated, reordered=True, midpoint=True)
+    case = {
+        "id": "MC-EQ-X",
+        "references": ["branch.csv", "events.csv", "multipliers.csv", "metadata.json"],
+        "tolerances": {
+            "parameter_atol": 1e-6,
+            "state_atol": 1e-6,
+            "frequency_atol": 1e-6,
+            "fold_coefficient_atol": 1e-6,
+            "first_lyapunov_atol": 1e-6,
+            "spectrum_atol": 1e-6,
+        },
+    }
+
+    diagnostics = verify_case_references(case, generated, reviewed)
+
+    assert diagnostics["event_max_error"] == pytest.approx(0.0)
+    assert diagnostics["spectrum_max_error"] == pytest.approx(0.0)
+
+    event_path = generated / "events.csv"
+    event_path.write_text(
+        event_path.read_text(encoding="utf-8").replace(",1.0,NaN", ",1.1,NaN"),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationMismatch):
+        verify_case_references(case, generated, reviewed)
+
+
+def test_relative_generated_directory_resolves_before_matlab_changes_directory(
+    tmp_path, monkeypatch
+):
+    """A relative artifact path must remain relative to the caller, not matlab/."""
+    monkeypatch.chdir(tmp_path)
+    args = build_parser().parse_args(["--generated-dir", "relative-output"])
+
+    resolve_runtime_paths(args)
+
+    assert args.generated_dir == tmp_path / "relative-output"
+    assert args.reference_dir.is_absolute()
+
+
+def test_explicit_unsupported_case_requires_opt_in():
+    """Silently selecting nothing hides that the requested capability is unsupported."""
+    completed = _run_matcont_cli("--case", "US-BP-001", "--dry-run")
+
+    assert completed.returncode != 0
+    assert "requires --include-unsupported" in completed.stderr
+
+
+def test_unsupported_template_is_never_reported_as_executed():
+    """A setup template must not become a false MatCont execution success."""
+    completed = _run_matcont_cli(
+        "--case",
+        "US-BVP-001",
+        "--include-unsupported",
+        "--matlab-bin",
+        "/definitely/not/matlab",
+    )
+
+    assert completed.returncode != 0
+    assert "NON_EXECUTABLE_TEMPLATE" in completed.stderr
+    assert "wrapper completed" not in completed.stdout
+
+
+@pytest.mark.slow
+def test_executable_unsupported_wrapper_runs_only_after_opt_in():
+    """Executable MatCont-only cases must run and remain labeled unsupported."""
+    matlab = Path("/home/ziaee/prog/Matlab/R2020a/bin/matlab")
+    if not matlab.is_file():
+        pytest.skip("MATLAB R2020a is unavailable")
+
+    completed = _run_matcont_cli(
+        "--case", "US-BP-001", "--include-unsupported", "--matlab-bin", str(matlab)
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "UNSUPPORTED_BY_JAXCONT US-BP-001: MatCont wrapper completed" in completed.stdout
+
+
+@pytest.mark.slow
+def test_offline_cli_rejects_corrupted_matcont_fold_event(tmp_path):
+    """Analytic fold checks must not let a corrupted committed MatCont event pass."""
+    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    mutated = tmp_path / "reference"
+    shutil.copytree(reference, mutated)
+    event_path = mutated / "MC-EQ-001_events.csv"
+    event_path.write_text(
+        event_path.read_text(encoding="utf-8").replace(",0.666666666666084,", ",0.5,"),
+        encoding="utf-8",
+    )
+
+    completed = _run_matcont_cli("--case", "MC-EQ-001", "--reference-dir", str(mutated))
+
+    assert completed.returncode != 0
+    assert "FAIL MC-EQ-001" in completed.stderr
+
+
+@pytest.mark.slow
+def test_offline_cli_rejects_corrupted_radial_matcont_branch(tmp_path):
+    """Exact radial checks must not let a corrupted committed MatCont period pass."""
+    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    mutated = tmp_path / "reference"
+    shutil.copytree(reference, mutated)
+    branch_path = mutated / "MC-LC-001_branch.csv"
+    rows = branch_path.read_text(encoding="utf-8").splitlines()
+    fields = rows[1].split(",")
+    fields[3] = "7.0"
+    rows[1] = ",".join(fields)
+    branch_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    completed = _run_matcont_cli("--case", "MC-LC-001", "--reference-dir", str(mutated))
+
+    assert completed.returncode != 0
+    assert "FAIL MC-LC-001" in completed.stderr
+
+
+def test_offline_cli_rejects_corrupted_radial_branch_schema(tmp_path):
+    """A radial reference without period data must fail before numerical execution."""
+    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    mutated = tmp_path / "reference"
+    shutil.copytree(reference, mutated)
+    branch_path = mutated / "MC-LC-001_branch.csv"
+    branch_path.write_text(
+        branch_path.read_text(encoding="utf-8").replace("period", "missing_period", 1),
+        encoding="utf-8",
+    )
+
+    completed = _run_matcont_cli("--case", "MC-LC-001", "--reference-dir", str(mutated))
+
+    assert completed.returncode != 0
+    assert "missing columns" in completed.stderr

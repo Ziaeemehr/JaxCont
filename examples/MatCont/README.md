@@ -28,7 +28,8 @@ The defaults are
 `/home/ziaee/prog/MatCont/MatCont7p6`. Override them with `--matlab-bin` and
 `--matcont-root`, or the `MATLAB_BIN` and `MATCONT_ROOT` environment variables.
 Use `--reference-dir` and `--generated-dir` for alternate artifact locations.
-`--case` may be repeated.
+`--case` may be repeated. Relative reference/generated overrides are resolved
+against the caller's working directory before MATLAB changes directory.
 
 MATLAB producers are also standalone:
 
@@ -66,9 +67,11 @@ tolerances.
 ## Unsupported matrix
 
 These MatCont-only wrappers live in `matlab/unsupported`. They are excluded by
-default. `--include-unsupported --dry-run` prints the matrix without running
-MATLAB; omitting `--dry-run` executes selected wrappers but reports
-`UNSUPPORTED_BY_JAXCONT`, never `PASS`.
+default, and explicitly requesting one without `--include-unsupported` is an
+error. `--include-unsupported --dry-run` prints the matrix without running
+MATLAB. Executable wrappers report `UNSUPPORTED_BY_JAXCONT`, never `PASS`.
+General-BVP and heteroclinic entries are honest non-executable setup templates:
+selecting one without `--dry-run` exits nonzero with `NON_EXECUTABLE_TEMPLATE`.
 
 | Registry case | MatCont capability not yet supported by JaxCont |
 |---|---|
@@ -78,9 +81,9 @@ MATLAB; omitting `--dry-run` executes selected wrappers but reports
 | `US-C2-PD-001` | Two-parameter period-doubling curves |
 | `US-C2-LPC-001` | Two-parameter limit-point-of-cycles curves |
 | `US-C2-NS-001` | Two-parameter Neimark-Sacker curves |
-| `US-BVP-001` | General BVP continuation beyond supported periodic collocation |
+| `US-BVP-001` | General BVP setup template beyond supported periodic collocation (non-executable) |
 | `US-HOM-001` | Homoclinic continuation |
-| `US-HET-001` | Heteroclinic continuation (requires problem-specific endpoint seeds) |
+| `US-HET-001` | Heteroclinic setup template requiring problem-specific endpoint seeds (non-executable) |
 | `US-PRC-001` | PRC/dPRC calculation |
 
 Direct CP, BT, GH, ZH and HH point solvers are supported and are therefore not
@@ -94,8 +97,10 @@ in this table. Continuation of their two-parameter curves remains unsupported.
 - `reference/` contains reviewed normalized oracles.
 - `generated/` is ignored scratch output.
 
-Branches are compared by interpolation on monotone segments or by scaled
-point-set distance. Events require unique type/location assignments. Spectra
-are matched by a tolerance-feasible assignment after removing exactly one
-trivial multiplier nearest `+1`. Numerical disagreements are failures, not a
-reason to relax the registry tolerances.
+Branches are compared by interpolation on monotone segments. Events require
+unique type/location assignments. Eigenvalues and Floquet spectra are matched
+by tolerance-feasible assignment; exactly one trivial multiplier nearest `+1`
+is removed only for Floquet comparisons. The offline CLI compares the JaxCont
+branch, event and spectrum data numerically with the committed MatCont files;
+analytic self-checks alone cannot make a case pass. Numerical disagreements are
+failures, not a reason to relax the registry tolerances.

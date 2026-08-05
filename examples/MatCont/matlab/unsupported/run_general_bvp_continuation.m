@@ -1,28 +1,27 @@
-function run_general_bvp_continuation()
-%UNSUPPORTED_BY_JAXCONT Exercise MatCont's collocation BVP continuation path.
-% This radial cycle is a compact standalone seed for adapting the wrapper to
-% a user-supplied general boundary-value problem.
+function run_general_bvp_continuation(problem)
+%UNSUPPORTED_BY_JAXCONT NON_EXECUTABLE_TEMPLATE for a general BVP.
+%
+% MatCont's standard limit-cycle curve is a specialized collocation BVP, but
+% it is not a standalone general-BVP API. A genuine general BVP needs a user
+% problem that supplies, at minimum:
+%   problem.curve       - MatCont curve function handle
+%   problem.x0          - assembled initial BVP unknown
+%   problem.v0          - initial tangent (or [])
+%   problem.options     - contset options
+%
+% With those problem-specific pieces the execution step is:
+%   [x,v,s,h,f] = cont(problem.curve, problem.x0, problem.v0, problem.options);
+%
+% This template deliberately refuses to claim a successful validation without
+% such a problem. The radial periodic producer is available separately as
+% run_radial_cycle and must not be mislabeled as a general BVP example.
 setup_matcont();
-script_dir = fileparts(fileparts(mfilename('fullpath')));
-addpath(fullfile(script_dir, 'systems'));
-clear global cds eds lds
-rho = 1;
-ntst = 10;
-ncol = 4;
-tau = linspace(0, 1, ntst * ncol + 1);
-orbit = [cos(2*pi*tau); sin(2*pi*tau)];
-cycle = [orbit(:); 2*pi; rho];
-seed_data.index = 1;
-seed_data.data.ntst = ntst;
-seed_data.data.ncol = ncol;
-seed_data.data.timemesh = linspace(0, 1, ntst + 1);
-seed_data.data.T = 2*pi;
-[seed, tangent] = init_LC_LC(@radial_cycle_system, cycle, [], seed_data, rho, 1, ntst, ncol);
-opt = contset;
-opt = contset(opt, 'MaxNumPoints', 10);
-opt = contset(opt, 'Adapt', 0);
-[curve, ~] = cont(@limitcycle, seed, tangent, opt);
-assert(size(curve, 2) > 1);
-fprintf('UNSUPPORTED_BY_JAXCONT general BVP template: %d collocation points\n', ...
-    size(curve, 2));
+if nargin == 1
+    required = {'curve', 'x0', 'v0', 'options'};
+    assert(all(isfield(problem, required)), ...
+        'General BVP problem must define curve, x0, v0, and options.');
+end
+error('JaxContValidation:NonExecutableTemplate', ...
+    ['NON_EXECUTABLE_TEMPLATE: supply a documented problem-specific BVP ' ...
+     'before calling cont; no standalone MatCont general-BVP seed is bundled.']);
 end
