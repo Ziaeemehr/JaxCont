@@ -12,6 +12,50 @@
       "tolerances": {"parameter_atol": 0.0005}
     },
     {
+      "id": "MC-EQ-002",
+      "title": "Van der Pol equilibrium Hopf",
+      "support": "supported",
+      "features": ["equilibrium-continuation", "hopf", "stability"],
+      "python": "examples.MatCont.python_cases.equilibrium:run_vanderpol_hopf",
+      "matlab": "export_equilibrium_run",
+      "references": [],
+      "manual_source": "Analytic Van der Pol equilibrium Hopf",
+      "tolerances": {"parameter_atol": 0.0005, "frequency_atol": 0.0005}
+    },
+    {
+      "id": "MC-EQ-003",
+      "title": "MatCont adaptive-control equilibrium Hopf",
+      "support": "supported",
+      "features": ["equilibrium-continuation", "hopf", "normal-form"],
+      "python": "examples.MatCont.python_cases.equilibrium:run_adaptive_control_hopf",
+      "matlab": "export_equilibrium_run",
+      "references": [],
+      "manual_source": "MatCont 7.6 Testruns/testadapt.m and TestSystems/adaptx.m",
+      "tolerances": {"parameter_atol": 0.0005, "frequency_atol": 0.0005}
+    },
+    {
+      "id": "MC-JAX-001",
+      "title": "JAX transformation and sensitivity checks",
+      "support": "supported",
+      "features": ["vmap", "autodiff", "fold-normal-form", "hopf-normal-form"],
+      "python": "examples.MatCont.python_cases.transforms:run_transform_checks",
+      "matlab": null,
+      "references": [],
+      "manual_source": "Analytic gradients and centered finite differences",
+      "tolerances": {"gradient_atol": 0.002}
+    },
+    {
+      "id": "MC-C2-001",
+      "title": "Shifted direct codimension-two point solvers",
+      "support": "supported",
+      "features": ["cusp", "bogdanov-takens", "generalized-hopf", "zero-hopf", "double-hopf"],
+      "python": "examples.MatCont.python_cases.codim2:run_codim2_points",
+      "matlab": null,
+      "references": [],
+      "manual_source": "Shifted analytic normal forms and BifurcationKit.jl v0.5.2 Lorenz-84 BT",
+      "tolerances": {"parameter_atol": 0.001}
+    },
+    {
       "id": "US-BP-001",
       "title": "Bratu branch switching",
       "support": "unsupported",

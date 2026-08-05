@@ -12,6 +12,13 @@ from examples.MatCont.compare import (
 )
 from examples.MatCont.registry import load_registry, select_cases
 from examples.MatCont.run_validation import build_parser
+from examples.MatCont.python_cases.codim2 import run_codim2_points
+from examples.MatCont.python_cases.equilibrium import (
+    run_adaptive_control_hopf,
+    run_cubic_fold,
+    run_vanderpol_hopf,
+)
+from examples.MatCont.python_cases.transforms import run_transform_checks
 
 
 REQUIRED_CASE_FIELDS = {
@@ -25,6 +32,51 @@ REQUIRED_CASE_FIELDS = {
     "manual_source",
     "tolerances",
 }
+
+
+def test_cubic_case_finds_both_analytic_folds():
+    """Dropping either turning point would leave half the S-curve unvalidated."""
+    result = run_cubic_fold()
+
+    assert result.checks["fold_count"] == 2
+    assert result.checks["max_fold_error"] < 5e-4
+    assert result.checks["max_residual"] < 2e-5
+
+
+def test_vanderpol_case_recovers_the_analytic_hopf():
+    """A crossing away from mu=0 or omega=1 is not the Van der Pol Hopf."""
+    result = run_vanderpol_hopf()
+
+    assert result.checks["hopf_count"] == 1
+    assert result.checks["max_hopf_error"] < 5e-4
+    assert result.checks["frequency_error"] < 5e-4
+
+
+def test_adaptive_control_case_recovers_the_analytic_hopf():
+    """Changing the adaptx characteristic polynomial must move this check."""
+    result = run_adaptive_control_hopf()
+
+    assert result.checks["hopf_count"] == 1
+    assert result.checks["max_hopf_error"] < 5e-4
+    assert result.checks["frequency_error"] < 5e-4
+
+
+def test_transform_case_matches_analytic_and_finite_difference_gradients():
+    """A broken custom derivative can return right points but wrong sensitivities."""
+    result = run_transform_checks()
+
+    assert result.checks["all_finite"]
+    assert result.checks["max_analytic_gradient_error"] < 2e-3
+    assert result.checks["max_finite_difference_error"] < 2e-3
+
+
+def test_codim2_case_recovers_all_shifted_points():
+    """Returning a seed or zero must not pass shifted codimension-two fixtures."""
+    result = run_codim2_points()
+
+    assert result.checks["all_converged"]
+    assert result.checks["max_parameter_error"] < 1e-3
+    assert result.checks["bt_bifurcationkit_error"] < 1e-3
 
 
 def test_default_selection_excludes_unsupported():
