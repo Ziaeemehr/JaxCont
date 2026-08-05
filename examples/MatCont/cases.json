@@ -56,6 +56,47 @@
       "tolerances": {"parameter_atol": 0.001}
     },
     {
+      "id": "MC-LC-001",
+      "title": "Analytic radial periodic orbit",
+      "support": "supported",
+      "features": ["periodic-orbit", "collocation", "floquet-multipliers", "stability"],
+      "python": "examples.MatCont.python_cases.periodic:run_radial_cycle",
+      "matlab": "run_radial_cycle",
+      "references": [
+        "MC-LC-001_branch.csv",
+        "MC-LC-001_events.csv",
+        "MC-LC-001_multipliers.csv",
+        "MC-LC-001_metadata.json"
+      ],
+      "manual_source": "Analytic polar normal form r'=r(rho-r^2), theta'=1",
+      "tolerances": {
+        "parameter_atol": 0.0005,
+        "period_atol": 0.005,
+        "multiplier_atol": 0.005,
+        "residual_atol": 0.00002
+      }
+    },
+    {
+      "id": "MC-LC-002",
+      "title": "MatCont torBPC1 limit-cycle bifurcations",
+      "support": "supported",
+      "features": ["periodic-orbit", "fold-of-cycles", "neimark-sacker", "period-doubling", "floquet-multipliers"],
+      "python": "examples.MatCont.python_cases.periodic:run_torbpc_cycle",
+      "matlab": "run_torbpc_cycle",
+      "references": [
+        "MC-LC-002_branch.csv",
+        "MC-LC-002_events.csv",
+        "MC-LC-002_multipliers.csv",
+        "MC-LC-002_metadata.json"
+      ],
+      "manual_source": "MatCont 7.6 Testruns/testtorBPC1.m and TestSystems/torBPC.m",
+      "tolerances": {
+        "parameter_atol": 0.002,
+        "period_atol": 0.005,
+        "multiplier_atol": 0.005
+      }
+    },
+    {
       "id": "US-BP-001",
       "title": "Bratu branch switching",
       "support": "unsupported",

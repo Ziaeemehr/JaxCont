@@ -19,6 +19,10 @@ from examples.MatCont.python_cases.equilibrium import (
     run_vanderpol_hopf,
 )
 from examples.MatCont.python_cases.transforms import run_transform_checks
+from examples.MatCont.python_cases.periodic import (
+    run_radial_cycle,
+    run_torbpc_cycle,
+)
 
 
 REQUIRED_CASE_FIELDS = {
@@ -97,6 +101,77 @@ def test_codim2_case_recovers_all_shifted_points():
     assert result.checks["max_finite_difference_error"] < 2e-3
 
 
+def test_radial_cycle_matches_exact_floquet_formula():
+    """Using equilibrium eigenvalues in place of Floquet multipliers must fail."""
+    result = run_radial_cycle()
+
+    assert result.checks["max_radius_error"] < 5e-3
+    assert result.checks["max_period_error"] < 5e-3
+    assert result.checks["max_collocation_residual"] < 2e-5
+    assert result.checks["max_multiplier_error"] < 5e-3
+    assert result.checks["all_stable"]
+
+
+def test_torbpc_cycle_reference_checks_events_periods_extrema_and_multipliers(tmp_path):
+    """Omitting any torBPC1 periodic diagnostic must leave the case incomplete."""
+    (tmp_path / "MC-LC-002_branch.csv").write_text(
+        "case_id,point,parameter,period,residual_norm,state_0_min,state_0_max\n"
+        "MC-LC-002,0,-0.5844928424,6.364613,1e-8,-0.02,0.02\n"
+        "MC-LC-002,1,-0.5957504315,6.283185,1e-8,-0.03,0.03\n"
+        "MC-LC-002,2,-0.6146816596,6.201757,1e-8,-0.04,0.04\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "MC-LC-002_events.csv").write_text(
+        "case_id,event_index,event_type,point,parameter,period\n"
+        "MC-LC-002,0,LPC,0,-0.5844928424,6.364613\n"
+        "MC-LC-002,1,NS,1,-0.5957504315,6.283185\n"
+        "MC-LC-002,2,PD,2,-0.6146816596,6.201757\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "MC-LC-002_multipliers.csv").write_text(
+        "case_id,event_index,event_type,multiplier_index,real,imag\n"
+        "MC-LC-002,0,LPC,0,1.0,0.0\n"
+        "MC-LC-002,0,LPC,1,1.0,0.0\n"
+        "MC-LC-002,1,NS,0,1.0,0.0\n"
+        "MC-LC-002,1,NS,1,0.6,0.8\n"
+        "MC-LC-002,1,NS,2,0.6,-0.8\n"
+        "MC-LC-002,2,PD,0,1.0,0.0\n"
+        "MC-LC-002,2,PD,1,-1.0,0.0\n",
+        encoding="utf-8",
+    )
+
+    result = run_torbpc_cycle(tmp_path)
+
+    assert result.checks["event_count"] == 3
+    assert result.checks["max_event_parameter_error"] < 2e-3
+    assert result.checks["all_periods_finite_positive"]
+    assert result.checks["all_extrema_ordered"]
+    assert result.checks["critical_multipliers_match"]
+    assert result.checks["jaxcont_sweep_completed"]
+    assert set(result.checks["jaxcont_event_parameter_errors"]) == {"LPC", "NS", "PD"}
+    assert result.checks["jaxcont_lpc_parameter_error"] < 2e-3
+    assert result.checks["jaxcont_ns_parameter_error"] < 2e-3
+
+
+def test_cycle_reference_has_normalized_columns(tmp_path):
+    """Renaming a portable branch column must be rejected at the reader boundary."""
+    (tmp_path / "MC-LC-002_branch.csv").write_text(
+        "case_id,point,parameter,period,residual_norm,state_0_min,state_0_max\n"
+        "MC-LC-002,0,-0.5844928424,6.3,1e-8,-0.1,0.1\n",
+        encoding="utf-8",
+    )
+
+    branch = np.genfromtxt(
+        tmp_path / "MC-LC-002_branch.csv",
+        delimiter=",",
+        names=True,
+        dtype=None,
+        encoding="utf-8",
+    )
+
+    assert {"point", "parameter", "period", "residual_norm"} <= set(branch.dtype.names)
+
+
 def test_default_selection_excludes_unsupported():
     """Removing the support filter would select MatCont-only cases by default."""
     selected = select_cases(load_registry())
@@ -113,6 +188,19 @@ def test_registry_cases_have_the_required_comparison_metadata():
     assert all(REQUIRED_CASE_FIELDS <= set(case) for case in cases)
 
 
+def test_registry_exposes_both_periodic_validation_cases():
+    """Dropping either periodic entry would silently remove it from default runs."""
+    periodic = {
+        case["id"]: case
+        for case in load_registry()["cases"]
+        if "periodic-orbit" in case["features"]
+    }
+
+    assert set(periodic) == {"MC-LC-001", "MC-LC-002"}
+    assert periodic["MC-LC-001"]["python"].endswith(":run_radial_cycle")
+    assert periodic["MC-LC-002"]["python"].endswith(":run_torbpc_cycle")
+
+
 def test_select_cases_filters_ids_without_reordering_registry_entries():
     """Replacing ID selection with set-based filtering would lose requested registry order."""
     registry = {
@@ -127,9 +215,7 @@ def test_select_cases_filters_ids_without_reordering_registry_entries():
 
 def test_scaled_close_reports_the_largest_absolute_error():
     """Dropping absolute-error diagnostics would hide the scale of an accepted mismatch."""
-    diagnostics = scaled_close(
-        np.array([1.0, 2.0]), np.array([1.0, 2.001]), atol=0.002
-    )
+    diagnostics = scaled_close(np.array([1.0, 2.0]), np.array([1.0, 2.001]), atol=0.002)
 
     assert diagnostics["max_error"] == pytest.approx(0.001)
 
