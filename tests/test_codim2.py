@@ -408,3 +408,64 @@ def test_codim2_names_are_listed_in_dunder_all():
         "fold_coefficient",
     ):
         assert name in jc.__all__
+
+
+# --------------------------------------------------------------------------
+# Cross-validation against BifurcationKit.jl v0.5.2
+# --------------------------------------------------------------------------
+#
+# Reference values from an independent BifurcationKit.jl v0.5.2 run -- see
+# examples/BifurcationKit/05_codim2.jl. Regenerate with:
+#     julia examples/BifurcationKit/05_codim2.jl
+#
+# Route (a): a real applied model neither implementation was tuned for --
+# the Lorenz-84 atmospheric circulation model (already used in
+# examples/BifurcationKit/02_lorenz84.jl). BifurcationKit.jl's OWN test
+# suite (test/lorenz84.jl, shipped inside the installed BifurcationKit.jl
+# package tree) independently proves this exact model has a genuine
+# Bogdanov-Takens point, reached by continuing the equilibrium branch in F,
+# then following the detected fold into T with codim-2 detection on. These
+# constants are BifurcationKit's Newton-REFINED point (not the coarser
+# bisection-located one printed first by the script), matching the
+# package's own hardcoded normal-form coefficients (nf.a, nf.b) to 10
+# significant figures.
+#
+# (A first route-(a) attempt used Bazykin's predator-prey model continued
+# in (a, b) from (a,b,c) = (1.0, 0.5, 0.4); it only exposed a transcritical
+# point in that parameter window, no fold/Hopf/BT/GH -- abandoned in favor
+# of Lorenz-84 rather than iterating open-endedly on Bazykin's parameters.)
+BK_BT_U = (
+    1.2256404959862783, -0.03632079327106889,
+    0.197288323112333, -0.12339001198518851,
+)  # (X, Y, Z, U) at the BT point
+BK_BT_P = (1.4467167011153617, 0.020940169683322584)  # (F, T) at the BT point
+
+_LOR84_ALPHA = 0.25
+_LOR84_BETA = 1.0
+_LOR84_G = 0.25
+_LOR84_DELTA = 1.04
+_LOR84_GAMMA = 0.987
+
+
+def _bk_model(u, p, args):
+    # The Lorenz-84 atmospheric circulation model -- the same right-hand
+    # side as examples/BifurcationKit/05_codim2.jl's `Lor`, with F and T as
+    # the two free (continuation) parameters and the rest fixed at the
+    # values BifurcationKit.jl's own test suite uses.
+    X, Y, Z, U = u
+    F, T = p[0], p[1]
+    return jnp.array([
+        -Y**2 - Z**2 - _LOR84_ALPHA * X + _LOR84_ALPHA * F - _LOR84_GAMMA * U**2,
+        X * Y - _LOR84_BETA * X * Z - Y + _LOR84_G,
+        _LOR84_BETA * X * Y + X * Z - Z,
+        -_LOR84_DELTA * U + _LOR84_GAMMA * U * X + T,
+    ])
+
+
+def test_bogdanov_takens_matches_bifurcationkit_jl_independent_run():
+    u_guess = jnp.array(BK_BT_U) + jnp.array([0.05, -0.03, 0.02, -0.01])
+    p_guess = jnp.array(BK_BT_P) + jnp.array([0.03, -0.02])
+    u, p, _, _, ok = bogdanov_takens_point(_bk_model, u_guess, p_guess)
+    assert bool(ok)
+    assert jnp.allclose(u, jnp.array(BK_BT_U), atol=1e-3)
+    assert jnp.allclose(p, jnp.array(BK_BT_P), atol=1e-3)
