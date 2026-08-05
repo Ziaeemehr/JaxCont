@@ -1,0 +1,26 @@
+{
+  "cases": [
+    {
+      "id": "MC-EQ-001",
+      "title": "Cubic S-curve equilibrium continuation",
+      "support": "supported",
+      "features": ["equilibrium-continuation", "fold"],
+      "python": "examples.MatCont.python_cases.equilibrium:run_cubic_fold",
+      "matlab": "export_equilibrium_run",
+      "references": [],
+      "manual_source": "Analytic cubic equilibrium folds",
+      "tolerances": {"parameter_atol": 0.0005}
+    },
+    {
+      "id": "US-BP-001",
+      "title": "Bratu branch switching",
+      "support": "unsupported",
+      "features": ["boundary-value-problem", "branch-switching"],
+      "python": null,
+      "matlab": "run_bratu_branch_switching",
+      "references": [],
+      "manual_source": "MatCont 7.6 branch-switching workflow",
+      "tolerances": {"parameter_atol": 0.001}
+    }
+  ]
+}
