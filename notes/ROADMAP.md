@@ -578,8 +578,6 @@ it was simply forgotten:
 - **Homoclinic/heteroclinic orbit continuation.** MatCont devotes ~10 of its ~120 pages and 4
   dedicated global structures (`homds`, `hetds`, invariant-subspace continuation) to this; it is
   its own subfield with its own toolbox lineage (HomCont, DDE-BIFTOOL-adjacent techniques).
-- **Phase response curves (PRC/dPRC).** A MatCont specialty (§7.8 of the manual) with real
-  neuroscience value, but a self-contained feature nobody has asked for here yet.
 - **A GUI.** Actively contradicts this project's own stance (`ARCHITECTURE.md` §1.6: "mine MATCONT
   for its taxonomy, not its API") — JaxCont's whole value proposition is being embedded in a JAX
   script/notebook, not a standalone application.
@@ -610,9 +608,11 @@ difference on differentiability/`vmap`/GPU — the one axis MatCont cannot compe
   literal `return {"a": 0.0, ...}` / `return 0.0` placeholders — worth fixing even before v0.3
   proper, since they're currently silently wrong rather than absent). These matter to a
   minority of users but are moderate, well-understood effort once periodic orbits exist.
-- **Don't chase (v0.4+, listed above):** homoclinic/heteroclinic orbits, PRC, GUI. MatCont's own
+- **Don't chase (v0.4+, listed above):** homoclinic/heteroclinic orbits, GUI. MatCont's own
   page count shows how expensive these are relative to how many users need them; replicating them
   would take years and mostly duplicate an already-excellent, free, actively-maintained tool.
+  (Phase response curves were in this bucket too, on the same "nobody's asked" reasoning — moved to
+  the demand-driven list below once someone did; see the entry there.)
 - **Go further than MatCont, on purpose, everywhere:** every new curve/event type added in v0.2/v0.3
   should ship with a `vmap`-batched example and, where the extended-system pattern applies (see
   `fold_solve.py`), a differentiable variant — because that combination (batched *and*
