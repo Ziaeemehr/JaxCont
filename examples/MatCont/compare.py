@@ -172,7 +172,12 @@ def match_spectrum(
     limits = _scaled_limits(
         reduced_actual[:, None], reduced_reference[None, :], atol, rtol
     )
-    rows, columns = linear_sum_assignment(errors)
+    feasible = np.isfinite(errors) & (errors <= limits)
+    penalty = max(float(np.max(errors)), float(np.max(limits)), 1.0) * (
+        reduced_actual.size + 1
+    )
+    cost = np.where(feasible, errors, penalty)
+    rows, columns = linear_sum_assignment(cost)
     assigned_actual = {column: row for row, column in zip(rows, columns)}
     assignments = [
         (int(actual_indices[assigned_actual[column]]), int(reference_indices[column]))

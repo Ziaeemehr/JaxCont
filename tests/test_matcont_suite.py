@@ -118,6 +118,17 @@ def test_match_spectrum_retains_a_second_unit_multiplier():
         match_spectrum(actual, reference, atol=1e-3)
 
 
+def test_match_spectrum_prefers_a_tolerance_feasible_assignment():
+    """Minimizing raw distance first can reject a spectrum with a valid matching."""
+    actual = np.array([1.0, 0.672222 + 0.870699j, 0.9])
+    reference = np.array([1.0, 0.0, 0.9])
+
+    diagnostics = match_spectrum(actual, reference, atol=1.0)
+
+    assert diagnostics["max_error"] == pytest.approx(0.9, abs=1e-5)
+    assert diagnostics["assignments"] == [(2, 1), (1, 2)]
+
+
 def test_cli_parser_exposes_the_foundation_options_and_environment_defaults(monkeypatch):
     """Removing a CLI option or environment override would block reproducible execution."""
     monkeypatch.setenv("MATLAB_BIN", "/custom/matlab")
