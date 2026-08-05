@@ -12,9 +12,9 @@
 | `MC-LC-001` | Radial periodic orbit radius, period, collocation residual, multipliers, and stability | PASS |
 | `MC-LC-002` | `torBPC1` limit-cycle LPC/NS/PD locations, periods, extrema, and multipliers | FAIL |
 
-`MC-LC-002` is the current limitation: JaxCont is missing the LPC and PD event labels, and its maximum critical-multiplier error is approximately `1.10e-2`.
+`MC-LC-002` is the current limitation: event-location errors remain small, but JaxCont is missing the LPC and PD event labels, and its maximum critical-multiplier error is approximately `1.10e-2`.
 
-The reviewed references were generated with MATLAB R2020a and MatCont 7.6, then committed as normalized CSV/JSON artifacts. Comparisons use the declared case tolerances and the suite's policy for interpolated branch segments, unique event type/location assignments, and tolerance-feasible eigenvalue/Floquet-spectrum matching.
+The reviewed references were generated with MATLAB R2020a and MatCont 7.6, then committed as normalized CSV/JSON artifacts. Comparisons use the declared case tolerances and the suite's policy for interpolated branch segments, unique event type/location assignments, and tolerance-feasible eigenvalue/Floquet-spectrum matching; Floquet comparisons remove exactly one trivial multiplier nearest `+1`.
 
 Reproduce the CPU validation snapshot from the repository root:
 
@@ -22,4 +22,4 @@ Reproduce the CPU validation snapshot from the repository root:
 JAX_PLATFORMS=cpu MPLCONFIGDIR=/tmp/mpl-jaxcont-validation python3 -m examples.MatCont.run_validation
 ```
 
-See the [complete MatCont validation-suite README](https://github.com/Ziaeemehr/JaxCont/blob/main/examples/MatCont/README.md) for case definitions, artifacts, and the full comparison policy.
+Exit status `1` is expected while `MC-LC-002` remains failing. See the [complete MatCont validation-suite README](https://github.com/Ziaeemehr/JaxCont/blob/main/examples/MatCont/README.md) for case definitions, artifacts, the full comparison policy, and the unsupported-capabilities matrix.

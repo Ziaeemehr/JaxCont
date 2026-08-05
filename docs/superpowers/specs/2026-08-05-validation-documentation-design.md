@@ -75,4 +75,3 @@ Verification will include:
 2. Build the Sphinx documentation with warnings treated as errors.
 3. Check that the new page is reachable from the root toctree and that all
    repository links resolve in the generated documentation.
-
