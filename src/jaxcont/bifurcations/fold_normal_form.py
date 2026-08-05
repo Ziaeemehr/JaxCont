@@ -39,7 +39,9 @@ def fold_coefficient(
     derivative of ``f`` in ``u`` and ``w`` is the left null vector
     (``w @ f_u == 0``) normalized so ``w @ v == 1``.
 
-    ``p`` has shape ``(2,)`` — these solvers work in two parameters.
+    ``p`` is passed through to ``f`` unchanged; codim-2 callers use shape
+    ``(2,)``, but this function itself makes no assumption about ``p``'s
+    shape.
     """
     n = u.shape[0]
     jac_u = jacfwd(lambda uu: f(uu, p, args))(u)

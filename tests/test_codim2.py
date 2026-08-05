@@ -17,6 +17,7 @@ from jaxcont.bifurcations.codim2 import (
     generalized_hopf_point, generalized_hopf_parameters,
     zero_hopf_point, zero_hopf_parameters,
     double_hopf_point, double_hopf_parameters,
+    _normalize_omega,
 )
 from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
 
@@ -183,9 +184,13 @@ def test_generalized_hopf_point_recovers_exact_shifted_gh():
 
 
 def test_generalized_hopf_omega_is_normalized_positive_from_either_seed():
-    # The Hopf block is invariant under (omega, q2) -> (-omega, -q2), so the
-    # raw solve can land on either sign. This is the regression test for
-    # that -- without it the bug reappears invisibly.
+    # Both seeds here happen to converge to a positive raw omega (this
+    # system's _seed always prefers Im>0), so this test checks the
+    # identity/no-op path, not the flip path -- see
+    # test_normalize_omega_rephases_to_preserve_the_phase_condition (in
+    # test_codim2.py) for the actual flip-path regression test, and
+    # test_double_hopf_point_recovers_exact_shifted_hh's residual check for
+    # an end-to-end case where the flip genuinely occurs.
     for seed_u in (jnp.array([0.02, -0.03]), jnp.array([-0.02, 0.03])):
         _, _, _, _, omega, ok = generalized_hopf_point(
             _gh_shifted, seed_u, jnp.array([2.05, -2.90]),
@@ -332,6 +337,20 @@ def test_double_hopf_point_recovers_exact_shifted_hh():
     assert jnp.isclose(found[0], 1.0, atol=1e-3)
     assert jnp.isclose(found[1], 2.0, atol=1e-3)
 
+    # Regression for the _normalize_omega phase-row bug (final whole-branch
+    # review): block B's raw solve here actually flips (raw omega_b comes
+    # back negative), so this is the right place to check that the RETURNED
+    # tuple genuinely satisfies the eigenvector relations of the solved
+    # system, not just that the location/frequencies look right. A bare
+    # sign flip (the old, buggy behavior) satisfies these relations too --
+    # what it broke was the phase row, which is covered separately by the
+    # direct _normalize_omega unit tests below.
+    jac = jax.jacfwd(lambda uu: _hh_shifted(uu, p, None))(u)
+    assert jnp.allclose(jac @ q1a + oa * q2a, 0.0, atol=1e-4)
+    assert jnp.allclose(jac @ q2a - oa * q1a, 0.0, atol=1e-4)
+    assert jnp.allclose(jac @ q1b + ob * q2b, 0.0, atol=1e-4)
+    assert jnp.allclose(jac @ q2b - ob * q1b, 0.0, atol=1e-4)
+
 
 def test_double_hopf_reports_not_converged_when_both_pairs_collapse():
     # Seeding block B onto the SAME physical pair as block A makes the
@@ -369,6 +388,72 @@ def test_double_hopf_parameters_grad_matches_finite_difference():
     fd = (p0_star(0.05 + h) - p0_star(0.05 - h)) / (2 * h)
     assert jnp.isfinite(g)
     assert jnp.isclose(float(g), float(fd), atol=1e-3)
+
+
+def test_double_hopf_point_recovers_a_non_two_to_one_frequency_ratio():
+    # The x0 seed guesses omega_b = 2*omega_a as a starting point; this
+    # confirms Newton still converges correctly when the true ratio is NOT
+    # 2:1 (here 1:3), i.e. the seed is a rough starting guess, not something
+    # the result depends on.
+    def hh_one_three(u, p, args):
+        x1, y1, x2, y2 = u[0], u[1], u[2], u[3]
+        b1 = p[0] - 5.0
+        b2 = p[1] + 6.0
+        return jnp.array([
+            b1 * x1 - 1.0 * y1, 1.0 * x1 + b1 * y1,
+            b2 * x2 - 3.0 * y2, 3.0 * x2 + b2 * y2,
+        ])
+
+    u, p, q1a, q2a, oa, q1b, q2b, ob, ok = double_hopf_point(
+        hh_one_three,
+        jnp.array([0.03, -0.02, 0.04, 0.01]),
+        jnp.array([5.05, -5.93]),
+        seed_b=jnp.array([0.0, 0.0, 1.0, 0.0]),
+    )
+    assert bool(ok)
+    assert jnp.allclose(p, jnp.array([5.0, -6.0]), atol=1e-4)
+    found = sorted([float(oa), float(ob)])
+    assert jnp.isclose(found[0], 1.0, atol=1e-3)
+    assert jnp.isclose(found[1], 3.0, atol=1e-3)
+
+
+def test_normalize_omega_rephases_to_preserve_the_phase_condition():
+    # Hand-built: a 2D rotation block J with eigenvector pair at omega=-1.3
+    # (deliberately negative going in), and an arbitrary seed direction.
+    omega_in = jnp.array(-1.3)
+    # Build a genuine eigenvector pair for J = [[0, 1.3], [-1.3, 0]] (so
+    # J q1 + omega q2 = 0, J q2 - omega q1 = 0 hold at omega=-1.3 for the
+    # eigenvector belonging to eigenvalue -1.3i):
+    J = jnp.array([[0.0, 1.3], [-1.3, 0.0]])
+    q1_in = jnp.array([1.0, 0.0])
+    q2_in = jnp.array([0.0, -1.0])
+    norm = jnp.sqrt(jnp.dot(q1_in, q1_in) + jnp.dot(q2_in, q2_in))
+    q1_in, q2_in = q1_in / norm, q2_in / norm
+    assert jnp.allclose(J @ q1_in + omega_in * q2_in, 0.0, atol=1e-6)
+    assert jnp.allclose(J @ q2_in - omega_in * q1_in, 0.0, atol=1e-6)
+
+    seed1 = jnp.array([0.3, 0.7])
+    seed2 = jnp.array([-0.2, 0.5])
+
+    q1_new, q2_new, omega_new = _normalize_omega(q1_in, q2_in, omega_in, seed1, seed2)
+
+    assert float(omega_new) >= 0.0
+    assert jnp.isclose(float(omega_new), 1.3, atol=1e-6)
+    assert jnp.allclose(J @ q1_new + omega_new * q2_new, 0.0, atol=1e-5)
+    assert jnp.allclose(J @ q2_new - omega_new * q1_new, 0.0, atol=1e-5)
+    assert jnp.isclose(float(q1_new @ q1_new + q2_new @ q2_new), 1.0, atol=1e-6)
+    assert jnp.isclose(float(seed1 @ q2_new - seed2 @ q1_new), 0.0, atol=1e-5)
+
+
+def test_normalize_omega_is_identity_when_omega_already_nonnegative():
+    q1_in = jnp.array([1.0, 0.0])
+    q2_in = jnp.array([0.0, 1.0])
+    omega_in = jnp.array(2.0)
+    seed1, seed2 = jnp.array([1.0, 0.0]), jnp.array([0.0, 1.0])
+    q1_new, q2_new, omega_new = _normalize_omega(q1_in, q2_in, omega_in, seed1, seed2)
+    assert jnp.allclose(q1_new, q1_in)
+    assert jnp.allclose(q2_new, q2_in)
+    assert jnp.isclose(float(omega_new), 2.0)
 
 
 def test_codim2_functions_are_exported_at_top_level():

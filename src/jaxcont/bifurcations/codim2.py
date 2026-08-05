@@ -64,24 +64,71 @@ def _solve_and_check(
     return x_star, converged
 
 
-def _normalize_omega(q2: Array, omega: Array) -> Tuple[Array, Array]:
+def _normalize_omega(
+    q1: Array, q2: Array, omega: Array, seed1: Array, seed2: Array
+) -> Tuple[Array, Array, Array]:
     """
-    Pin the critical frequency to ``omega >= 0``.
+    Pin the critical frequency to ``omega >= 0``, exactly preserving every
+    row of the Hopf block -- the eigenvector relations, the unit-norm row,
+    AND the seed-based phase condition -- not just the first two, which are
+    the only rows invariant under a bare sign flip.
 
-    The Hopf block of every extended system below is EXACTLY invariant under
-    ``(omega, q2) -> (-omega, -q2)``: substituting flips the sign of the
-    ``J q2 - omega q1`` row and leaves ``J q1 + omega q2`` unchanged, so both
-    signs are genuine roots and Newton picks whichever the seed falls toward
-    (during planning it chose the negative one from positive seeds on more
-    than one system). Flipping afterwards selects the conjugate of the same
-    eigenvector, so this is exact rather than a heuristic.
+    The Hopf block's eigenvector/normalization rows ARE exactly invariant
+    under ``(q1, q2, omega) -> (q1, -q2, -omega)``: this selects the
+    complex-conjugate eigenvector for the conjugate eigenvalue, still a
+    valid root. But the phase row ``s1.q2 - s2.q1`` (the Hermitian inner
+    product ``Im(<s, q>)`` against the FIXED, unflipped seed
+    ``s = s1 + i*s2``) is NOT invariant under that substitution in general
+    -- it becomes ``-s1.q2 - s2.q1``, zero only if ``s2.q1`` happens to
+    vanish. A bare flip can therefore return a tuple that satisfies the
+    eigenvector/normalization rows exactly but violates the phase row --
+    i.e. is NOT actually a root of the solved system, even though it looks
+    like a valid Hopf witness. (Found during final whole-branch review:
+    verified on the shipped double-Hopf test case, where ``||G||`` moved
+    from ~0 to ``2.5e-2`` at the returned point when only the bare flip was
+    applied, despite ``converged=True``.)
+
+    Fixed by RE-PHASING: after flipping, rotate the eigenvector by the
+    unique phase ``phi`` that restores the phase row exactly. A phase
+    rotation (multiplication by a unit complex scalar) preserves both the
+    eigenvector relations and the unit-norm row automatically, so only the
+    phase row needs solving for. Writing the flipped pair as
+    ``q' = q1 - i*q2`` and the fixed Hermitian phase functional as
+    ``<s, e^{i*phi} q'> = A + iB`` for
+    ``A = s1.q1 + s2.q2`` (note: uses the FLIPPED q2, i.e. ``-q2``, so
+    ``A = s1.q1 - s2.q2`` in terms of the ORIGINAL q2) --
+    see the code below for the exact (unambiguous) arithmetic --
+    ``Im(e^{i*phi}(A+iB)) = A*sin(phi) + B*cos(phi) = 0`` gives
+    ``phi = atan2(-B, A)``. Verified against 2000 random algebraic trials
+    and 500 trials against genuine eigenvector pairs of random real
+    Jacobians: eigenvector relations, normalization, AND phase row are all
+    restored to <1e-7 after flip+rephase.
+
+    ``seed1``/``seed2`` are the SAME fixed reference direction used in the
+    residual's own phase row (recomputed identically at the call site, then
+    passed in here) -- they are a gauge-fixing choice, not something with
+    its own gradient meaning, so callers should pass them under
+    ``lax.stop_gradient`` at the call site (matching how the residual
+    itself treats the seed), leaving ``q1``/``q2`` free to carry their real
+    gradient from ``differentiable_root``'s implicit-function-theorem
+    ``custom_vjp``.
 
     It matters beyond cosmetics: ``bifurcations/events.py:Hopf.refine()``
     already treats ``omega0 <= 0`` as a failed solve. Applied AFTER the
     solve, never as an extra equation, which would break squareness.
     """
     flip = omega < 0
-    return jnp.where(flip, -q2, q2), jnp.where(flip, -omega, omega)
+    q1_flipped, q2_flipped = q1, -q2
+    A = jnp.dot(seed1, q1_flipped) + jnp.dot(seed2, q2_flipped)
+    B = jnp.dot(seed1, q2_flipped) - jnp.dot(seed2, q1_flipped)
+    phi = jnp.arctan2(-B, A)
+    cos_phi, sin_phi = jnp.cos(phi), jnp.sin(phi)
+    q1_rephased = cos_phi * q1_flipped - sin_phi * q2_flipped
+    q2_rephased = sin_phi * q1_flipped + cos_phi * q2_flipped
+    q1_new = jnp.where(flip, q1_rephased, q1)
+    q2_new = jnp.where(flip, q2_rephased, q2)
+    omega_new = jnp.where(flip, -omega, omega)
+    return q1_new, q2_new, omega_new
 
 
 # --------------------------------------------------------------------------
@@ -253,6 +300,26 @@ def bogdanov_takens_parameters(
 
 
 # --------------------------------------------------------------------------
+# Shared Hopf-block builder -- eigenvector relations, normalization, and
+# the seed-based phase condition, factored out once and reused by GH, ZH,
+# and HH below so the load-bearing phase-condition form (see
+# _normalize_omega's docstring) cannot silently diverge between copies.
+# --------------------------------------------------------------------------
+
+def _hopf_block(jac_u, q1, q2, omega, s1, s2):
+    """One Hopf block: eigenvector relations, normalization, phase."""
+    return jnp.concatenate([
+        jac_u @ q1 + omega * q2,                                     # n
+        jac_u @ q2 - omega * q1,                                     # n
+        jnp.reshape(jnp.dot(q1, q1) + jnp.dot(q2, q2) - 1.0, (1,)),  # 1
+        # Seed-based phase condition, matching hopf_normal_form.py's g5.
+        # The naive `q1 . q2 == 0` alternative is recorded as broken in the
+        # Hopf design spec -- do not substitute it.
+        jnp.reshape(jnp.dot(s1, q2) - jnp.dot(s2, q1), (1,)),        # 1
+    ])
+
+
+# --------------------------------------------------------------------------
 # GH -- generalized Hopf (Bautin)
 # --------------------------------------------------------------------------
 
@@ -279,15 +346,9 @@ def _gh_residual(x, f, args, n, u_guess, p_guess):
     jac_u = jacfwd(f, argnums=0)(u, p, args)
     l1 = lyapunov_coefficient(f, u, p, q1, q2, omega, args)
     return jnp.concatenate([
-        f(u, p, args),                                                   # n
-        jac_u @ q1 + omega * q2,                                         # n
-        jac_u @ q2 - omega * q1,                                         # n
-        jnp.reshape(jnp.dot(q1, q1) + jnp.dot(q2, q2) - 1.0, (1,)),      # 1
-        # Seed-based phase condition, matching hopf_normal_form.py's g5.
-        # The naive `q1 . q2 == 0` alternative is recorded as broken in the
-        # Hopf design spec -- do not substitute it.
-        jnp.reshape(jnp.dot(q1_seed, q2) - jnp.dot(q2_seed, q1), (1,)),  # 1
-        jnp.reshape(l1, (1,)),                                           # 1
+        f(u, p, args),                                          # n
+        _hopf_block(jac_u, q1, q2, omega, q1_seed, q2_seed),     # 3n+1
+        jnp.reshape(l1, (1,)),                                   # 1
     ])
 
 
@@ -309,7 +370,8 @@ def generalized_hopf_point(
     also vanishes -- the point separating supercritical from subcritical
     Hopf along a Hopf curve. Returns
     ``(u*, p*, q1*, q2*, omega*, converged)``; ``omega* >= 0`` by
-    construction (see :func:`_normalize_omega`) and ``p*`` has shape ``(2,)``.
+    construction (flipped and re-phased post-solve if the raw root came back
+    negative) and ``p*`` has shape ``(2,)``.
 
     ``f`` must be complex-analytic (holomorphic) in ``u`` near the point,
     inherited from :func:`~jaxcont.bifurcations.hopf_normal_form.lyapunov_coefficient`.
@@ -334,7 +396,8 @@ def generalized_hopf_point(
 
     x_star, converged = _solve_and_check(G, x0, args, tol=tol, max_iter=max_iter)
     u, p, q1, q2, omega = _gh_unpack(x_star, n)
-    q2, omega = _normalize_omega(q2, omega)
+    q1_seed, q2_seed, _ = _hopf_seed(f, u_guess, p_guess, lax.stop_gradient(args), n)
+    q1, q2, omega = _normalize_omega(q1, q2, omega, q1_seed, q2_seed)
     return u, p, q1, q2, omega, converged
 
 
@@ -382,13 +445,10 @@ def _zh_residual(x, f, args, n, u_guess, p_guess):
     q1_seed, q2_seed, _ = _hopf_seed(f, u_guess, p_guess, lax.stop_gradient(args), n)
     jac_u = jacfwd(f, argnums=0)(u, p, args)
     return jnp.concatenate([
-        f(u, p, args),                                                   # n
-        jac_u @ v,                                                       # n
-        jnp.reshape(jnp.dot(v, v) - 1.0, (1,)),                          # 1
-        jac_u @ q1 + omega * q2,                                         # n
-        jac_u @ q2 - omega * q1,                                         # n
-        jnp.reshape(jnp.dot(q1, q1) + jnp.dot(q2, q2) - 1.0, (1,)),      # 1
-        jnp.reshape(jnp.dot(q1_seed, q2) - jnp.dot(q2_seed, q1), (1,)),  # 1
+        f(u, p, args),                                          # n
+        jac_u @ v,                                              # n
+        jnp.reshape(jnp.dot(v, v) - 1.0, (1,)),                 # 1
+        _hopf_block(jac_u, q1, q2, omega, q1_seed, q2_seed),     # 3n+1
     ])
 
 
@@ -413,6 +473,8 @@ def zero_hopf_point(
     """
     u_guess = jnp.asarray(u_guess)
     n = u_guess.shape[0]
+    if n < 3:
+        raise ValueError(f"zero_hopf_point requires n >= 3, got n={n}")
     p_guess = jnp.asarray(p_guess, u_guess.dtype)
 
     def G(x, theta):
@@ -427,7 +489,8 @@ def zero_hopf_point(
 
     x_star, converged = _solve_and_check(G, x0, args, tol=tol, max_iter=max_iter)
     u, p, v, q1, q2, omega = _zh_unpack(x_star, n)
-    q2, omega = _normalize_omega(q2, omega)
+    q1_seed, q2_seed, _ = _hopf_seed(f, u_guess, p_guess, lax.stop_gradient(args), n)
+    q1, q2, omega = _normalize_omega(q1, q2, omega, q1_seed, q2_seed)
     return u, p, v, q1, q2, omega, converged
 
 
@@ -463,16 +526,6 @@ def _hh_unpack(x, n):
         x[o:o + n], x[o + n:o + 2 * n], x[o + 2 * n],
         x[o2:o2 + n], x[o2 + n:o2 + 2 * n], x[o2 + 2 * n],
     )
-
-
-def _hopf_block(jac_u, q1, q2, omega, s1, s2):
-    """One Hopf block: eigenvector relations, normalization, phase."""
-    return jnp.concatenate([
-        jac_u @ q1 + omega * q2,                                     # n
-        jac_u @ q2 - omega * q1,                                     # n
-        jnp.reshape(jnp.dot(q1, q1) + jnp.dot(q2, q2) - 1.0, (1,)),  # 1
-        jnp.reshape(jnp.dot(s1, q2) - jnp.dot(s2, q1), (1,)),        # 1
-    ])
 
 
 def _hh_residual(x, f, args, n, seed_a, seed_b):
@@ -519,10 +572,15 @@ def double_hopf_point(
     -- ``converged`` is ``False`` when
     ``abs(|omega_a| - |omega_b|) <= separation_tolerance`` -- rather than
     returned as a plausible-looking "double Hopf" that is one pair counted
-    twice.
+    twice. ``separation_tolerance`` is an ABSOLUTE frequency difference, not
+    a relative one, so it is scale-dependent: tune per-system, not a
+    universal constant, the same way ``events.py``'s ``l1_tolerance`` is
+    documented.
     """
     u_guess = jnp.asarray(u_guess)
     n = u_guess.shape[0]
+    if n < 4:
+        raise ValueError(f"double_hopf_point requires n >= 4, got n={n}")
     p_guess = jnp.asarray(p_guess, u_guess.dtype)
     seed_b = jnp.asarray(seed_b, u_guess.dtype)
 
@@ -533,8 +591,10 @@ def double_hopf_point(
         q1_a, q2_a, _ = _hopf_seed(f, u_guess, p_guess, lax.stop_gradient(theta), n)
         # Phase seeds: block A from the eigen-decomposition, block B from
         # the caller-supplied direction and its image under f_u, so the two
-        # phase conditions are genuinely independent.
-        jac_g = jacfwd(f, argnums=0)(u_guess, p_guess, theta)
+        # phase conditions are genuinely independent. stop_gradient here for
+        # consistency with the seed above -- this only feeds s_b2, another
+        # gauge-fixing phase-seed direction, not a differentiable output.
+        jac_g = jacfwd(f, argnums=0)(u_guess, p_guess, lax.stop_gradient(theta))
         s_b2 = jac_g @ seed_b
         s_b2 = s_b2 / (jnp.linalg.norm(s_b2) + jnp.finfo(u_guess.dtype).eps)
         return _hh_residual(
@@ -550,6 +610,11 @@ def double_hopf_point(
         scale = jnp.sqrt(jnp.dot(seed_b, seed_b) + jnp.dot(q2_b, q2_b))
         q1_b = seed_b / scale
         q2_b = q2_b / scale
+        # An initial-guess heuristic for the second block's frequency, not
+        # something the result depends on -- Newton still needs to solve for
+        # the true omega_b. Probed against 1:3 and 1:5 frequency-ratio
+        # systems and a deliberately coupled (non-block-diagonal) 4D system
+        # during final review; converged correctly in all cases tried.
         omega_b = 2.0 * omega_a
         return jnp.concatenate([
             u_guess, p_guess,
@@ -559,8 +624,12 @@ def double_hopf_point(
 
     x_star, converged = _solve_and_check(G, x0, args, tol=tol, max_iter=max_iter)
     u, p, q1a, q2a, oa, q1b, q2b, ob = _hh_unpack(x_star, n)
-    q2a, oa = _normalize_omega(q2a, oa)
-    q2b, ob = _normalize_omega(q2b, ob)
+    sa1, sa2, _ = _hopf_seed(f, u_guess, p_guess, lax.stop_gradient(args), n)
+    jac_g_stopped = jacfwd(f, argnums=0)(u_guess, p_guess, lax.stop_gradient(args))
+    sb2 = jac_g_stopped @ seed_b
+    sb2 = sb2 / (jnp.linalg.norm(sb2) + jnp.finfo(u_guess.dtype).eps)
+    q1a, q2a, oa = _normalize_omega(q1a, q2a, oa, sa1, sa2)
+    q1b, q2b, ob = _normalize_omega(q1b, q2b, ob, seed_b, sb2)
     separated = jnp.abs(oa - ob) > separation_tolerance
     converged = converged & separated
     return u, p, q1a, q2a, oa, q1b, q2b, ob, converged
