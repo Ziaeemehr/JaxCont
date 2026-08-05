@@ -356,3 +356,96 @@ def generalized_hopf_parameters(
         f, u_guess, p_guess, args, tol=tol, max_iter=max_iter
     )
     return p
+
+
+# --------------------------------------------------------------------------
+# ZH -- zero-Hopf
+# --------------------------------------------------------------------------
+
+def _zh_unpack(x, n):
+    return (x[:n], x[n:n + 2], x[n + 2:2 * n + 2],
+            x[2 * n + 2:3 * n + 2], x[3 * n + 2:4 * n + 2], x[-1])
+
+
+def _zh_residual(x, f, args, n, u_guess, p_guess):
+    """
+    Zero-Hopf extended system, ``4n+3`` equations in ``4n+3`` unknowns
+    ``(u, p, v, q1, q2, omega)``: one equilibrium condition carrying both a
+    fold block and a Hopf block.
+    """
+    u, p, v, q1, q2, omega = _zh_unpack(x, n)
+    # stop_gradient required here -- see the identical comment in
+    # _gh_residual above. Task 4 found this the hard way (a missing
+    # stop_gradient here fails the gradient test with a NotImplementedError
+    # from jnp.linalg.eig's vjp on non-symmetric eigenvectors); `lax` is
+    # already imported in codim2.py by Task 4's fix, no new import needed.
+    q1_seed, q2_seed, _ = _hopf_seed(f, u_guess, p_guess, lax.stop_gradient(args), n)
+    jac_u = jacfwd(f, argnums=0)(u, p, args)
+    return jnp.concatenate([
+        f(u, p, args),                                                   # n
+        jac_u @ v,                                                       # n
+        jnp.reshape(jnp.dot(v, v) - 1.0, (1,)),                          # 1
+        jac_u @ q1 + omega * q2,                                         # n
+        jac_u @ q2 - omega * q1,                                         # n
+        jnp.reshape(jnp.dot(q1, q1) + jnp.dot(q2, q2) - 1.0, (1,)),      # 1
+        jnp.reshape(jnp.dot(q1_seed, q2) - jnp.dot(q2_seed, q1), (1,)),  # 1
+    ])
+
+
+def zero_hopf_point(
+    f: Callable[[Array, Array, PyTree], Array],
+    u_guess: Array,
+    p_guess: Array,
+    args: PyTree = None,
+    *,
+    tol: float = 1e-6,
+    max_iter: int = 50,
+) -> Tuple[Array, Array, Array, Array, Array, Array, Array]:
+    """
+    Locate a zero-Hopf point (``ZH``) near ``(u_guess, p_guess)``,
+    differentiable in ``args``. Kuznetsov, 3rd ed., Sec. 8.5.
+
+    ``ZH`` is where ``f_u`` simultaneously has a zero eigenvalue and a pair
+    of purely imaginary eigenvalues -- the intersection of a fold curve and
+    a Hopf curve. Requires ``n >= 3``. Returns
+    ``(u*, p*, v*, q1*, q2*, omega*, converged)`` with ``omega* >= 0`` and
+    ``p*`` of shape ``(2,)``.
+    """
+    u_guess = jnp.asarray(u_guess)
+    n = u_guess.shape[0]
+    p_guess = jnp.asarray(p_guess, u_guess.dtype)
+
+    def G(x, theta):
+        return _zh_residual(x, f, theta, n, u_guess, p_guess)
+
+    def x0(theta):
+        v0 = _initial_v(f, u_guess, p_guess, theta, n)
+        q1_0, q2_0, omega_0 = _hopf_seed(f, u_guess, p_guess, theta, n)
+        return jnp.concatenate(
+            [u_guess, p_guess, v0, q1_0, q2_0, jnp.reshape(omega_0, (1,))]
+        )
+
+    x_star, converged = _solve_and_check(G, x0, args, tol=tol, max_iter=max_iter)
+    u, p, v, q1, q2, omega = _zh_unpack(x_star, n)
+    q2, omega = _normalize_omega(q2, omega)
+    return u, p, v, q1, q2, omega, converged
+
+
+def zero_hopf_parameters(
+    f: Callable[[Array, Array, PyTree], Array],
+    u_guess: Array,
+    p_guess: Array,
+    args: PyTree = None,
+    *,
+    tol: float = 1e-6,
+    max_iter: int = 50,
+) -> Array:
+    """
+    Parameter pair ``p*`` (shape ``(2,)``) at the zero-Hopf point --
+    differentiable in ``args``, no convergence flag (see
+    :func:`cusp_parameters`).
+    """
+    _, p, _, _, _, _, _ = zero_hopf_point(
+        f, u_guess, p_guess, args, tol=tol, max_iter=max_iter
+    )
+    return p

@@ -15,6 +15,7 @@ from jaxcont.bifurcations.codim2 import (
     cusp_point, cusp_parameters,
     bogdanov_takens_point, bogdanov_takens_parameters,
     generalized_hopf_point, generalized_hopf_parameters,
+    zero_hopf_point, zero_hopf_parameters,
 )
 from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
 
@@ -242,3 +243,59 @@ def test_generalized_hopf_agrees_with_the_codim1_hopf_solver_there():
     )
     assert jnp.isclose(float(p_h), float(p_g[0]), atol=1e-3)
     assert jnp.isclose(abs(float(om_h)), float(om_g), atol=1e-3)
+
+
+def _zh_shifted(u, p, args):
+    # A fold block decoupled from a Hopf block:
+    #   w' = b1 + w^2                    (zero eigenvalue at w=0, b1=0)
+    #   x' = b2*x - y ; y' = x + b2*y    (pair b2 +- i, imaginary at b2=0)
+    # Zero-Hopf at u=0, p=(0,0); shifted here to u*=(1,0,0), p*=(4,-2).
+    w, x, y = u[0] - 1.0, u[1], u[2]
+    b1 = p[0] - 4.0
+    b2 = p[1] + 2.0
+    return jnp.array([b1 + w**2, b2 * x - y, x + b2 * y])
+
+
+def test_zero_hopf_point_recovers_exact_shifted_zh():
+    u, p, v, q1, q2, omega, ok = zero_hopf_point(
+        _zh_shifted, jnp.array([1.05, 0.03, -0.02]), jnp.array([4.04, -1.94]),
+    )
+    assert bool(ok)
+    assert jnp.allclose(u, jnp.array([1.0, 0.0, 0.0]), atol=1e-4)
+    assert jnp.allclose(p, jnp.array([4.0, -2.0]), atol=1e-4)
+    assert jnp.isclose(float(omega), 1.0, atol=1e-4)
+    assert float(omega) > 0.0
+
+
+def test_zero_hopf_has_both_a_zero_eigenvalue_and_an_imaginary_pair():
+    u, p, v, q1, q2, omega, ok = zero_hopf_point(
+        _zh_shifted, jnp.array([1.05, 0.03, -0.02]), jnp.array([4.04, -1.94]),
+    )
+    assert bool(ok)
+    jac = jax.jacfwd(lambda uu: _zh_shifted(uu, p, None))(u)
+    # zero eigenvalue, witnessed by the null vector
+    assert jnp.allclose(jac @ v, jnp.zeros(3), atol=1e-4)
+    assert jnp.isclose(float(jnp.linalg.norm(v)), 1.0, atol=1e-5)
+    # imaginary pair, witnessed by the eigenvector relations
+    assert jnp.allclose(jac @ q1 + omega * q2, jnp.zeros(3), atol=1e-4)
+    assert jnp.allclose(jac @ q2 - omega * q1, jnp.zeros(3), atol=1e-4)
+
+
+def test_zero_hopf_parameters_grad_matches_finite_difference():
+    def zh_moving(u, p, shift):
+        w, x, y = u[0] - 1.0, u[1], u[2]
+        b1 = p[0] - 4.0 - shift
+        b2 = p[1] + 2.0
+        return jnp.array([b1 + w**2, b2 * x - y, x + b2 * y])
+
+    def p0_star(shift):
+        return zero_hopf_parameters(
+            zh_moving, jnp.array([1.05, 0.03, -0.02]),
+            jnp.array([4.04, -1.94]), shift,
+        )[0]
+
+    g = jax.grad(p0_star)(0.05)
+    h = 1e-3
+    fd = (p0_star(0.05 + h) - p0_star(0.05 - h)) / (2 * h)
+    assert jnp.isfinite(g)
+    assert jnp.isclose(float(g), float(fd), atol=1e-3)
