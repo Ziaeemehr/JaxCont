@@ -14,9 +14,9 @@ opt = contset(opt, 'Eigenvalues', 1);
 opt = contset(opt, 'MaxNumPoints', 500);
 opt = contset(opt, 'InitStepsize', 0.01);
 opt = contset(opt, 'MaxStepsize', 0.02);
-[x, ~, s, ~, ~] = cont(@equilibrium, x0, v0, opt);
+[x, ~, s, ~, processor_data] = cont(@equilibrium, x0, v0, opt);
 rhs = @(state, r) r + state(1) - state(1)^3 / 3;
 metadata = struct('producer', mfilename, 'source', 'analytic cubic fold', ...
     'precision', 'double', 'solver_settings', opt);
-export_equilibrium_run('MC-EQ-001', x, s, rhs, output_dir, metadata);
+export_equilibrium_run('MC-EQ-001', x, s, processor_data, rhs, output_dir, metadata);
 end

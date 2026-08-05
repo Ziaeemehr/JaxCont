@@ -1,5 +1,8 @@
 """Focused contract tests for the MatCont validation-suite foundation."""
 
+import subprocess
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -12,6 +15,7 @@ from examples.MatCont.compare import (
 )
 from examples.MatCont.registry import load_registry, select_cases
 from examples.MatCont.run_validation import build_parser
+from examples.MatCont.artifacts import validate_equilibrium_artifacts
 from examples.MatCont.python_cases.codim2 import run_codim2_points
 from examples.MatCont.python_cases.equilibrium import (
     run_adaptive_control_hopf,
@@ -20,6 +24,7 @@ from examples.MatCont.python_cases.equilibrium import (
 )
 from examples.MatCont.python_cases.transforms import run_transform_checks
 from examples.MatCont.python_cases.periodic import (
+    load_torbpc_reference,
     run_radial_cycle,
     run_torbpc_cycle,
 )
@@ -38,6 +43,7 @@ REQUIRED_CASE_FIELDS = {
 }
 
 
+@pytest.mark.slow
 def test_cubic_case_finds_both_analytic_folds():
     """Dropping either turning point would leave half the S-curve unvalidated."""
     result = run_cubic_fold()
@@ -51,6 +57,7 @@ def test_cubic_case_finds_both_analytic_folds():
     assert result.checks["stability_transition_count"] == 2
 
 
+@pytest.mark.slow
 def test_vanderpol_case_recovers_the_analytic_hopf():
     """A crossing away from mu=0 or omega=1 is not the Van der Pol Hopf."""
     result = run_vanderpol_hopf()
@@ -64,6 +71,7 @@ def test_vanderpol_case_recovers_the_analytic_hopf():
     assert result.checks["unstable_for_positive_parameter"]
 
 
+@pytest.mark.slow
 def test_adaptive_control_case_recovers_the_analytic_hopf():
     """Changing the adaptx characteristic polynomial must move this check."""
     result = run_adaptive_control_hopf()
@@ -75,6 +83,7 @@ def test_adaptive_control_case_recovers_the_analytic_hopf():
     assert result.checks["lyapunov_error"] < 5e-4
 
 
+@pytest.mark.slow
 def test_transform_case_matches_analytic_and_finite_difference_gradients():
     """A broken custom derivative can return right points but wrong sensitivities."""
     result = run_transform_checks()
@@ -87,6 +96,7 @@ def test_transform_case_matches_analytic_and_finite_difference_gradients():
     assert result.checks["permutation_invariant"]
 
 
+@pytest.mark.slow
 def test_codim2_case_recovers_all_shifted_points():
     """Returning a seed or zero must not pass shifted codimension-two fixtures."""
     result = run_codim2_points()
@@ -101,6 +111,7 @@ def test_codim2_case_recovers_all_shifted_points():
     assert result.checks["max_finite_difference_error"] < 2e-3
 
 
+@pytest.mark.slow
 def test_radial_cycle_matches_exact_floquet_formula():
     """Using equilibrium eigenvalues in place of Floquet multipliers must fail."""
     result = run_radial_cycle()
@@ -112,45 +123,155 @@ def test_radial_cycle_matches_exact_floquet_formula():
     assert result.checks["all_stable"]
 
 
-def test_torbpc_cycle_reference_checks_events_periods_extrema_and_multipliers(tmp_path):
-    """Omitting any torBPC1 periodic diagnostic must leave the case incomplete."""
-    (tmp_path / "MC-LC-002_branch.csv").write_text(
-        "case_id,point,parameter,period,residual_norm,state_0_min,state_0_max\n"
-        "MC-LC-002,0,-0.5844928424,6.364613,1e-8,-0.02,0.02\n"
-        "MC-LC-002,1,-0.5957504315,6.283185,1e-8,-0.03,0.03\n"
-        "MC-LC-002,2,-0.6146816596,6.201757,1e-8,-0.04,0.04\n",
+def _write_torbpc_reference(path: Path) -> None:
+    (path / "MC-LC-002_branch.csv").write_text(
+        "case_id,point,parameter,period,residual_norm,state_0_min,state_0_max,"
+        "state_1_min,state_1_max,state_2_min,state_2_max\n"
+        "MC-LC-002,0,-0.5844928424,8.411866,1e-8,-0.20,0.20,-0.10,0.10,-0.30,0.30\n"
+        "MC-LC-002,1,-0.5957504315,8.861099,1e-8,-0.30,0.30,-0.20,0.20,-0.40,0.40\n"
+        "MC-LC-002,2,-0.6146816596,9.256846,1e-8,-0.40,0.40,-0.30,0.30,-0.50,0.50\n",
         encoding="utf-8",
     )
-    (tmp_path / "MC-LC-002_events.csv").write_text(
+    (path / "MC-LC-002_events.csv").write_text(
         "case_id,event_index,event_type,point,parameter,period\n"
-        "MC-LC-002,0,LPC,0,-0.5844928424,6.364613\n"
-        "MC-LC-002,1,NS,1,-0.5957504315,6.283185\n"
-        "MC-LC-002,2,PD,2,-0.6146816596,6.201757\n",
+        "MC-LC-002,0,LPC,0,-0.5844928424,8.411866\n"
+        "MC-LC-002,1,NS,1,-0.5957504315,8.861099\n"
+        "MC-LC-002,2,PD,2,-0.6146816596,9.256846\n",
         encoding="utf-8",
     )
-    (tmp_path / "MC-LC-002_multipliers.csv").write_text(
-        "case_id,event_index,event_type,multiplier_index,real,imag\n"
-        "MC-LC-002,0,LPC,0,1.0,0.0\n"
-        "MC-LC-002,0,LPC,1,1.0,0.0\n"
-        "MC-LC-002,1,NS,0,1.0,0.0\n"
-        "MC-LC-002,1,NS,1,0.6,0.8\n"
-        "MC-LC-002,1,NS,2,0.6,-0.8\n"
-        "MC-LC-002,2,PD,0,1.0,0.0\n"
-        "MC-LC-002,2,PD,1,-1.0,0.0\n",
+    (path / "MC-LC-002_multipliers.csv").write_text(
+        "case_id,point,event_index,event_type,spectrum_kind,multiplier_index,real,imag\n"
+        "MC-LC-002,0,0,LPC,FLOQUET,0,2.8,0.0\n"
+        "MC-LC-002,0,0,LPC,FLOQUET,1,1.0,0.0\n"
+        "MC-LC-002,0,0,LPC,FLOQUET,2,1.0,0.0\n"
+        "MC-LC-002,1,1,NS,FLOQUET,0,1.0,0.0\n"
+        "MC-LC-002,1,1,NS,FLOQUET,1,0.6,0.8\n"
+        "MC-LC-002,1,1,NS,FLOQUET,2,0.6,-0.8\n"
+        "MC-LC-002,2,2,PD,FLOQUET,0,1.0,0.0\n"
+        "MC-LC-002,2,2,PD,FLOQUET,1,-1.0,0.0\n"
+        "MC-LC-002,2,2,PD,FLOQUET,2,-0.5,0.0\n",
         encoding="utf-8",
     )
 
-    result = run_torbpc_cycle(tmp_path)
 
-    assert result.checks["event_count"] == 3
-    assert result.checks["max_event_parameter_error"] < 2e-3
-    assert result.checks["all_periods_finite_positive"]
-    assert result.checks["all_extrema_ordered"]
-    assert result.checks["critical_multipliers_match"]
-    assert result.checks["jaxcont_sweep_completed"]
-    assert set(result.checks["jaxcont_event_parameter_errors"]) == {"LPC", "NS", "PD"}
-    assert result.checks["jaxcont_lpc_parameter_error"] < 2e-3
-    assert result.checks["jaxcont_ns_parameter_error"] < 2e-3
+def test_torbpc_reference_schema_covers_events_periods_extrema_and_multipliers(tmp_path):
+    """Missing normalized periodic diagnostics must fail before a slow JaxCont sweep."""
+    _write_torbpc_reference(tmp_path)
+
+    reference = load_torbpc_reference(tmp_path)
+
+    assert set(reference["events_by_type"]) == {"LPC", "NS", "PD"}
+    assert all(len(reference["spectra"][kind]) == 3 for kind in ("LPC", "NS", "PD"))
+    assert all(len(reference["extrema"][kind]) == 3 for kind in ("LPC", "NS", "PD"))
+    assert reference["max_event_parameter_error"] < 2e-3
+    assert reference["all_periods_finite_positive"]
+    assert reference["critical_multipliers_match"]
+
+
+def test_equilibrium_reference_schema_requires_spectra_and_normal_forms(tmp_path):
+    """An empty equilibrium spectrum file must not masquerade as a reviewed reference."""
+    (tmp_path / "MC-EQ-003_branch.csv").write_text(
+        "case_id,point,parameter,residual_norm,stable,unstable_dimension,state_0,state_1,state_2\n"
+        "MC-EQ-003,0,1.0,0.0,0,2,0.0,0.0,0.0\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "MC-EQ-003_events.csv").write_text(
+        "case_id,event_index,event_type,point,parameter,frequency,fold_coefficient,first_lyapunov\n"
+        "MC-EQ-003,0,H,0,1.0,1.0,nan,-0.3\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "MC-EQ-003_multipliers.csv").write_text(
+        "case_id,point,event_index,event_type,spectrum_kind,multiplier_index,real,imag\n"
+        "MC-EQ-003,0,-1,BRANCH,EIGENVALUE,0,0.0,1.0\n"
+        "MC-EQ-003,0,-1,BRANCH,EIGENVALUE,1,0.0,-1.0\n"
+        "MC-EQ-003,0,-1,BRANCH,EIGENVALUE,2,-1.0,0.0\n",
+        encoding="utf-8",
+    )
+
+    diagnostics = validate_equilibrium_artifacts(tmp_path, "MC-EQ-003")
+
+    assert diagnostics["spectrum_rows"] == 3
+    assert diagnostics["hopf_frequency"] == pytest.approx(1.0)
+    assert diagnostics["first_lyapunov"] == pytest.approx(-0.3)
+
+
+@pytest.fixture(scope="module")
+def matcont_generated_dir(tmp_path_factory):
+    matlab = Path("/home/ziaee/prog/Matlab/R2020a/bin/matlab")
+    if not matlab.is_file():
+        pytest.skip("MATLAB R2020a is unavailable")
+    output = tmp_path_factory.mktemp("matcont-generated")
+    matlab_dir = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "matlab"
+    completed = subprocess.run(
+        [str(matlab), "-batch", f"cd('{matlab_dir}'); run_supported('{output}')"],
+        text=True,
+        capture_output=True,
+        timeout=120,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    return output
+
+
+@pytest.mark.slow
+def test_matlab_equilibrium_exporters_preserve_spectra_and_normal_forms(matcont_generated_dir):
+    cubic = validate_equilibrium_artifacts(matcont_generated_dir, "MC-EQ-001")
+    vanderpol = validate_equilibrium_artifacts(matcont_generated_dir, "MC-EQ-002")
+    adaptive = validate_equilibrium_artifacts(matcont_generated_dir, "MC-EQ-003")
+
+    assert cubic["spectrum_rows"] > 0
+    assert sorted(cubic["fold_coefficients"]) == pytest.approx([-1.0, 1.0], abs=5e-4)
+    assert vanderpol["hopf_frequency"] == pytest.approx(1.0, abs=5e-4)
+    assert vanderpol["first_lyapunov"] == pytest.approx(0.0, abs=1e-4)
+    assert adaptive["hopf_frequency"] == pytest.approx(1.0, abs=5e-4)
+    assert adaptive["first_lyapunov"] == pytest.approx(-0.3, abs=5e-4)
+
+
+@pytest.mark.slow
+@pytest.mark.xfail(
+    strict=True,
+    reason="Known JaxCont torBPC LPC/PD event and Floquet comparison mismatch",
+)
+def test_torbpc_jaxcont_matches_all_matcont_diagnostics(torbpc_result):
+    checks = torbpc_result.checks
+
+    assert {
+        "sweep": checks["jaxcont_sweep_completed"],
+        "lpc_parameter": checks["jaxcont_lpc_parameter_error"] < 2e-3,
+        "ns_parameter": checks["jaxcont_ns_parameter_error"] < 2e-3,
+        "pd_parameter": checks["jaxcont_pd_parameter_error"] < 2e-3,
+        "periods": checks["jaxcont_max_period_error"] < 5e-3,
+        "extrema": checks["jaxcont_max_extrema_error"] < 5e-3,
+        "multipliers": checks["jaxcont_critical_multipliers_match"],
+        "events": checks["jaxcont_missing_event_types"] == [],
+        "overall": checks["all_comparisons_pass"],
+    } == {
+        "sweep": True,
+        "lpc_parameter": True,
+        "ns_parameter": True,
+        "pd_parameter": True,
+        "periods": True,
+        "extrema": True,
+        "multipliers": True,
+        "events": True,
+        "overall": True,
+    }
+
+
+@pytest.fixture(scope="module")
+def torbpc_result(matcont_generated_dir):
+    return run_torbpc_cycle(matcont_generated_dir)
+
+
+@pytest.mark.slow
+def test_torbpc_known_disagreements_are_explicit_failures(torbpc_result):
+    checks = torbpc_result.checks
+
+    assert checks["jaxcont_pd_parameter_error"] < 2e-3
+    assert checks["jaxcont_max_period_error"] < 5e-3
+    assert checks["jaxcont_max_extrema_error"] < 5e-3
+    assert not checks["jaxcont_critical_multipliers_match"]
+    assert {"LPC", "PD"} <= set(checks["jaxcont_missing_event_types"])
+    assert not checks["all_comparisons_pass"]
 
 
 def test_cycle_reference_has_normalized_columns(tmp_path):

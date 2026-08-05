@@ -14,9 +14,9 @@ opt = contset(opt, 'Eigenvalues', 1);
 opt = contset(opt, 'MaxNumPoints', 300);
 opt = contset(opt, 'InitStepsize', 0.02);
 opt = contset(opt, 'MaxStepsize', 0.05);
-[x, ~, s, ~, ~] = cont(@equilibrium, x0, v0, opt);
+[x, ~, s, ~, processor_data] = cont(@equilibrium, x0, v0, opt);
 rhs = @(state, mu) [state(2); mu * (1 - state(1)^2) * state(2) - state(1)];
 metadata = struct('producer', mfilename, 'source', 'analytic Van der Pol Hopf', ...
     'precision', 'double', 'solver_settings', opt);
-export_equilibrium_run('MC-EQ-002', x, s, rhs, output_dir, metadata);
+export_equilibrium_run('MC-EQ-002', x, s, processor_data, rhs, output_dir, metadata);
 end

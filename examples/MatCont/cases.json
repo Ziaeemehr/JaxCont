@@ -93,6 +93,7 @@
       "tolerances": {
         "parameter_atol": 0.002,
         "period_atol": 0.005,
+        "extrema_atol": 0.005,
         "multiplier_atol": 0.005
       }
     },

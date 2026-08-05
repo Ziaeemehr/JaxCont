@@ -57,6 +57,7 @@ multiplier_case = {};
 multiplier_point = [];
 multiplier_event = [];
 multiplier_type = {};
+multiplier_kind = {};
 multiplier_index = [];
 multiplier_real = [];
 multiplier_imag = [];
@@ -68,6 +69,7 @@ if size(processor_data, 1) >= lds.ntst + 1 + nphase
             multiplier_point(end+1, 1) = k - 1; %#ok<AGROW>
             multiplier_event(end+1, 1) = -1; %#ok<AGROW>
             multiplier_type{end+1, 1} = 'BRANCH'; %#ok<AGROW>
+            multiplier_kind{end+1, 1} = 'FLOQUET'; %#ok<AGROW>
             multiplier_index(end+1, 1) = j - 1; %#ok<AGROW>
             multiplier_real(end+1, 1) = real(values(j)); %#ok<AGROW>
             multiplier_imag(end+1, 1) = imag(values(j)); %#ok<AGROW>
@@ -87,6 +89,7 @@ for k = 1:nevent
             multiplier_point(end+1, 1) = idx - 1; %#ok<AGROW>
             multiplier_event(end+1, 1) = k - 1; %#ok<AGROW>
             multiplier_type{end+1, 1} = labels{k}; %#ok<AGROW>
+            multiplier_kind{end+1, 1} = 'FLOQUET'; %#ok<AGROW>
             multiplier_index(end+1, 1) = j - 1; %#ok<AGROW>
             multiplier_real(end+1, 1) = real(values(j)); %#ok<AGROW>
             multiplier_imag(end+1, 1) = imag(values(j)); %#ok<AGROW>
@@ -98,8 +101,9 @@ events = table(repmat({case_id}, nevent, 1), event_index, event_type, ...
     {'case_id', 'event_index', 'event_type', 'point', 'parameter', 'period'});
 writetable(events, fullfile(output_dir, [case_id '_events.csv']));
 multipliers = table(multiplier_case, multiplier_point, multiplier_event, multiplier_type, ...
-    multiplier_index, multiplier_real, multiplier_imag, 'VariableNames', ...
-    {'case_id', 'point', 'event_index', 'event_type', 'multiplier_index', 'real', 'imag'});
+    multiplier_kind, multiplier_index, multiplier_real, multiplier_imag, ...
+    'VariableNames', {'case_id', 'point', 'event_index', 'event_type', ...
+    'spectrum_kind', 'multiplier_index', 'real', 'imag'});
 writetable(multipliers, fullfile(output_dir, [case_id '_multipliers.csv']));
 
 metadata.case_id = case_id;
