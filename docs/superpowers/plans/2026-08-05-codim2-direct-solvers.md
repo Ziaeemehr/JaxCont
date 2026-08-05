@@ -1361,7 +1361,14 @@ def double_hopf_point(
     seed_b = jnp.asarray(seed_b, u_guess.dtype)
 
     def G(x, theta):
-        q1_a, q2_a, _ = _hopf_seed(f, u_guess, p_guess, theta, n)
+        # stop_gradient required here -- same reasoning as _gh_residual/
+        # _zh_residual (Tasks 4-5): jnp.linalg.eig (inside _hopf_seed) has
+        # no gradient rule for non-symmetric eigenvectors, and this seed
+        # only feeds the phase condition, recomputed inside the traced
+        # primal on every Newton iteration. Task 6's implementer found this
+        # a third time (same bug class as Tasks 4-5) -- the gradient test
+        # fails with NotImplementedError without it.
+        q1_a, q2_a, _ = _hopf_seed(f, u_guess, p_guess, lax.stop_gradient(theta), n)
         # Phase seeds: block A from the eigen-decomposition, block B from
         # the caller-supplied direction and its image under f_u, so the two
         # phase conditions are genuinely independent.
