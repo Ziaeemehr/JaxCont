@@ -1,13 +1,14 @@
 # JaxCont Roadmap — Single Source of Truth
 
 **Last updated:** 2026-08-05
-**Current version:** 0.2.0 — **published to PyPI** (https://pypi.org/project/jaxcont/), tagged
-`v0.2.0`. Adds periodic-orbit continuation, Floquet multipliers, period-doubling/Neimark–Sacker
-detection, and limit-cycle examples on top of v0.1.0's equilibrium continuation. Zenodo DOI archival
-still deliberately deferred until a more mature release (not a blocker — `CITATION.cff` metadata is
-ready whenever it happens). Since the 0.2.0 tag, v0.3.0+ work has started ahead of a release cut:
-phase-plane visualization and the Hopf normal form / `l₁` criticality classifier (see below) are
-both merged to `main` but not yet in a tagged/published version.
+**Current version:** 0.3.0 — tagged `v0.3.0`, GitHub release cut. Adds phase-plane visualization,
+the Hopf normal form / `l₁` criticality classifier, and five direct codim-2 bifurcation point
+solvers (`CP`/`BT`/`GH`/`ZH`/`HH`) on top of v0.2.0's periodic-orbit continuation. **Zenodo DOI:
+not yet minted** — repo-side prep (`CITATION.cff`, README badge slot) is ready, but archival
+requires enabling the GitHub-Zenodo integration at zenodo.org/account/settings/github/ (an
+account-level action, not something automatable from here); once enabled, this release (or the
+next one) will be the one archived. PyPI publish for v0.3.0 is a separate, independent step, not
+yet done as of this edit.
 **Scope decision:** Ship a focused **equilibrium continuation** library first. See [PROJECT_REVIEW_2026-07.md](PROJECT_REVIEW_2026-07.md) for the full rationale.
 **API design:** Committed to a functional, diffrax-style surface (`continuation(problem, alg, ...)`).
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provisional v0.2+ API.
@@ -239,9 +240,13 @@ Public surface is the functional API — `bif_problem` / `continuation` / `Fold`
 - [x] Clean sdist/wheel build + Twine metadata validation
 - [x] TestPyPI → PyPI — **done 2026-07-21.** Tagged `v0.1.0`, published to PyPI
   (https://pypi.org/project/jaxcont/) via `publish.yml`.
-- [ ] GitHub release — not yet confirmed created from the `v0.1.0` tag.
+- [x] GitHub release — **confirmed 2026-08-05**, this line was stale: a release exists for both
+  `v0.1.0` and `v0.2.0` (`gh release list` shows both, the latter titled `v0.2`), just never
+  checked off here.
 - [ ] Zenodo DOI — **deliberately deferred**, by decision, until a more mature release with more
-  results; not a v0.1.0 blocker. `CITATION.cff` metadata is ready for whenever this happens.
+  results; not a v0.1.0 blocker. `CITATION.cff` metadata is ready. As of v0.3.0 (2026-08-05) this
+  is no longer deferred by choice — repo-side prep is done, blocked only on enabling the
+  GitHub-Zenodo integration (an account-level action) — see the header note above.
 
 **Out of scope (hidden / marked experimental):** periodic orbits, Floquet, BVP,
 normal forms, codim-2, branch switching, two-parameter continuation.
@@ -257,8 +262,9 @@ v0.2 engineering recommendation #4).
 
 **v0.1.0 is published.** Remaining loose ends, non-blocking:
 
-1. Confirm/cut a GitHub release from the `v0.1.0` tag if not already done.
-2. Zenodo DOI archival — intentionally deferred until a more mature release with more results.
+1. ✅ GitHub release confirmed to exist for `v0.1.0` (2026-08-05).
+2. Zenodo DOI archival — no longer deferred by choice as of v0.3.0; blocked only on enabling the
+   GitHub-Zenodo integration (see the header note at the top of this file).
 
 Issues #10 (legacy natural-continuation FD/bare-except) and #8/#9 (bothside, sub-epsilon tol) are
 real but non-blocking for v0.1.0 — they don't affect the default `scan`/`PseudoArclength` path.
@@ -737,8 +743,8 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
 9. ✅ **Trim `__init__.py`** — done: top-level surface is the equilibrium spine; periodic/BVP/
    Floquet/period-doubling stubs are importable only from their submodules.
 10. ✅ **Docs + packaging → ship v0.1.0.** — **done 2026-07-21.** Tagged and published to PyPI
-    (https://pypi.org/project/jaxcont/). GitHub release still to be confirmed; Zenodo DOI
-    deliberately deferred to a more mature release.
+    (https://pypi.org/project/jaxcont/). GitHub release confirmed to exist (2026-08-05); Zenodo DOI
+    no longer deferred by choice as of v0.3.0, blocked only on the GitHub-Zenodo integration.
 11. **v0.2 kickoff — do the engineering cleanup *before* the periodic-orbit feature work**, per
     "Engineering / architecture recommendations for v0.2" above, in this order: (i) consolidate
     the three continuation-engine implementations onto the scan engine (`jc.continuation()`'s
@@ -755,21 +761,24 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
     the whole-loop-JIT/`vmap` story already depends on (ARCHITECTURE.md §3.1, §4.3).
 12. ✅ **v0.2.0 feature work** — done 2026-07-24: periodic-orbit collocation, Floquet multipliers,
     period-doubling/Neimark–Sacker detection, limit-cycle examples. Tagged and published to PyPI.
-13. ✅ **Phase-plane visualization** (v0.3.0+, done ahead of a tagged release) — nullclines, vector
-    fields, streamlines, equilibria, trajectories for 2D autonomous systems. See
+13. ✅ **Phase-plane visualization** (v0.3.0) — nullclines, vector fields, streamlines,
+    equilibria, trajectories for 2D autonomous systems. See
     [plan](../docs/superpowers/plans/2026-07-28-phase-plane-visualization.md).
-14. ✅ **Hopf normal form / `l₁` criticality** (v0.3.0+, done 2026-08-04, ahead of a tagged release)
-    — see the v0.3.0+ section above for the full writeup.
-15. ✅ **Codim-2 direct point solvers** (v0.3.0+, done 2026-08-05, ahead of a tagged release) —
-    cusp, Bogdanov-Takens, generalized Hopf, zero-Hopf, double-Hopf, plus the fold's own
-    normal-form coefficient `fold_coefficient` — see the v0.3.0+ section above for the full
-    writeup. This closes the "Codim-2 groundwork" item this list previously pointed at next.
-16. **Next up** — no single item is blocking; pick by what's wanted:
+14. ✅ **Hopf normal form / `l₁` criticality** (v0.3.0, done 2026-08-04) — see the v0.3.0+ section
+    above for the full writeup.
+15. ✅ **Codim-2 direct point solvers** (v0.3.0, done 2026-08-05) — cusp, Bogdanov-Takens,
+    generalized Hopf, zero-Hopf, double-Hopf, plus the fold's own normal-form coefficient
+    `fold_coefficient` — see the v0.3.0+ section above for the full writeup. This closes the
+    "Codim-2 groundwork" item this list previously pointed at next.
+16. ✅ **v0.3.0 release cut** (2026-08-05) — version bumped, `CHANGELOG.md`/`CITATION.cff`/README
+    updated, tagged `v0.3.0`, GitHub release created. PyPI publish not yet done as a separate step
+    (see below). Zenodo DOI still pending the GitHub-Zenodo integration being enabled — see the
+    header note at the top of this file.
+17. **Next up** — no single item is blocking; pick by what's wanted:
     - **Ergonomics:** `bothside` continuation (issue #8) and the legacy `natural_continuation.py`
       FD/bare-except cleanup (issue #10) are still open, low-severity, non-blocking items.
-    - **Release housekeeping:** confirm a GitHub release exists for the `v0.2.0` tag; a version
-      bump/tag covering the phase-plane + Hopf-normal-form + codim-2-solvers work now sitting on
-      `main` un-tagged.
+    - **PyPI publish** for v0.3.0 via the existing `publish.yml` workflow (matches v0.1.0/v0.2.0's
+      release process) — a separate, independent step from the GitHub release/Zenodo archive.
     - **Larger v0.3.0+ epics** (bigger, less demand-driven urgency so far): branch switching,
       two-parameter continuation (which the codim-2 *direct solvers* just shipped are explicitly
       not a substitute for — see the v0.3.0+ writeup above).
