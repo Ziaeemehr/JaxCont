@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
 
 import jaxcont as jc
@@ -83,6 +84,97 @@ def _lorenz84(u, parameter, args):
     )
 
 
+def _cusp_moving(u, parameter, shift):
+    state = u[0] - 2.0
+    first = parameter[0] - 1.0 - shift
+    second = parameter[1] + 4.0
+    return jnp.array([first + second * state + state**3])
+
+
+def _bt_moving(u, parameter, shift):
+    x, y = u[0] - 5.0, u[1] - 2.0
+    first = parameter[0] - 3.0 - shift
+    second = parameter[1] + 1.0
+    return jnp.array([y, first + second * x + x**2 + x * y])
+
+
+def _gh_moving(u, parameter, shift):
+    x, y = u
+    first = parameter[0] - 2.0 - shift
+    second = parameter[1] + 3.0
+    radius_squared = x**2 + y**2
+    radial = first + second * radius_squared - radius_squared**2
+    return jnp.array([-y + x * radial, x + y * radial])
+
+
+def _zh_moving(u, parameter, shift):
+    w, x, y = u[0] - 1.0, u[1], u[2]
+    first = parameter[0] - 4.0 - shift
+    second = parameter[1] + 2.0
+    return jnp.array([first + w**2, second * x - y, x + second * y])
+
+
+def _hh_moving(u, parameter, shift):
+    x1, y1, x2, y2 = u
+    first = parameter[0] - 5.0 - shift
+    second = parameter[1] + 6.0
+    return jnp.array(
+        [
+            first * x1 - y1,
+            x1 + first * y1,
+            second * x2 - 2.0 * y2,
+            2.0 * x2 + second * y2,
+        ]
+    )
+
+
+def _parameter_gradients():
+    seed_b = jnp.array([0.0, 0.0, 1.0, 0.0])
+    functions = [
+        lambda shift: jc.cusp_parameters(
+            _cusp_moving, jnp.array([2.1]), jnp.array([0.9, -3.8]), shift
+        ),
+        lambda shift: jc.bogdanov_takens_parameters(
+            _bt_moving, jnp.array([5.2, 1.8]), jnp.array([2.7, -0.9]), shift
+        ),
+        lambda shift: jc.generalized_hopf_parameters(
+            _gh_moving, jnp.array([0.02, -0.03]), jnp.array([2.05, -2.90]), shift
+        ),
+        lambda shift: jc.zero_hopf_parameters(
+            _zh_moving,
+            jnp.array([1.05, 0.03, -0.02]),
+            jnp.array([4.04, -1.94]),
+            shift,
+        ),
+        lambda shift: jc.double_hopf_parameters(
+            _hh_moving,
+            jnp.array([0.03, -0.02, 0.04, 0.01]),
+            jnp.array([5.05, -5.93]),
+            shift,
+            seed_b=seed_b,
+        ),
+    ]
+    points = [
+        jnp.array(0.1),
+        jnp.array(0.1),
+        jnp.array(0.05),
+        jnp.array(0.05),
+        jnp.array(0.05),
+    ]
+    step = 1e-3
+    gradients = jnp.stack(
+        [jax.jacrev(function)(point) for function, point in zip(functions, points)]
+    )
+    finite_differences = jnp.stack(
+        [
+            (function(point + step) - function(point - step)) / (2.0 * step)
+            for function, point in zip(functions, points)
+        ]
+    )
+    analytic = jnp.tile(jnp.array([1.0, 0.0]), (len(functions), 1))
+    return gradients, finite_differences, analytic
+
+
 def run_codim2_points() -> CaseResult:
     """Recover shifted CP/BT/GH/ZH/HH points and an independent BT reference."""
     cusp = jc.cusp_point(
@@ -146,6 +238,10 @@ def run_codim2_points() -> CaseResult:
         "ZH": float(zh[5]),
         "HH": sorted([float(hh[4]), float(hh[7])]),
     }
+    gh_lyapunov = jc.lyapunov_coefficient(
+        _gh_shifted, gh[0], gh[1], gh[2], gh[3], gh[4]
+    )
+    gradients, finite_differences, analytic_gradients = _parameter_gradients()
     return CaseResult(
         case_id="MC-C2-001",
         checks={
@@ -158,6 +254,17 @@ def run_codim2_points() -> CaseResult:
                 abs(frequencies["HH"][0] - 1.0),
                 abs(frequencies["HH"][1] - 2.0),
             ),
+            "gh_lyapunov_error": abs(float(gh_lyapunov)),
+            "parameter_gradients_finite": bool(
+                jnp.all(jnp.isfinite(gradients))
+                and jnp.all(jnp.isfinite(finite_differences))
+            ),
+            "max_analytic_gradient_error": float(
+                jnp.max(jnp.abs(gradients - analytic_gradients))
+            ),
+            "max_finite_difference_error": float(
+                jnp.max(jnp.abs(gradients - finite_differences))
+            ),
         },
         observations={
             "parameters": solved_parameters,
@@ -166,6 +273,10 @@ def run_codim2_points() -> CaseResult:
             "frequencies": frequencies,
             "bifurcationkit_bt_state": bk_bt[0],
             "bifurcationkit_bt_parameter": bk_bt[1],
+            "gh_first_lyapunov": gh_lyapunov,
+            "parameter_gradients": gradients,
+            "finite_difference_gradients": finite_differences,
+            "analytic_gradients": analytic_gradients,
         },
         artifacts={},
     )

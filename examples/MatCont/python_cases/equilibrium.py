@@ -42,17 +42,26 @@ def run_cubic_fold() -> CaseResult:
     problem = jc.bif_problem(
         _cubic_rhs, u0=jnp.array([-2.1038034027355366]), p0=-1.0
     )
+    settings = jc.ContinuationPar(
+        ds=0.01,
+        ds_min=1e-5,
+        ds_max=0.05,
+        max_steps=300,
+        newton_tol=1e-6,
+        compute_stability=True,
+    )
     result = jc.continuation(
         problem,
         jc.PseudoArclength(),
         p_span=(-1.0, 1.0),
-        settings=jc.ContinuationPar(
-            ds=0.01,
-            max_steps=300,
-            newton_tol=1e-6,
-            compute_stability=True,
-        ),
+        settings=settings,
         events=[jc.Fold()],
+    )
+    natural_result = jc.continuation(
+        problem,
+        jc.Natural(),
+        p_span=(-1.0, 1.0),
+        settings=settings,
     )
     fold_events = [event for event in result.events if event.kind == "fold"]
     refined = [jc.fold_point(_cubic_rhs, event.u, event.p) for event in fold_events]
@@ -69,26 +78,48 @@ def run_cubic_fold() -> CaseResult:
         float(jc.fold_coefficient(_cubic_rhs, jnp.array([state]), parameter, vector))
         for state, parameter, vector in actual
     ]
-    solution = result._solution
+    expected_coefficients = [1.0, -1.0]
+    coefficient_error = max(
+        abs(actual_value - expected_value)
+        for actual_value, expected_value in zip(coefficients, expected_coefficients)
+    )
+    branch = result.branch
+    natural_branch = natural_result.branch
+    natural_max_parameter = float(jnp.max(natural_branch.params))
+    stability_transitions = int(jnp.sum(branch.stable[1:] != branch.stable[:-1]))
     return CaseResult(
         case_id="MC-EQ-001",
         checks={
             "fold_count": len(fold_events),
             "max_fold_error": max(fold_errors, default=float("inf")),
             "max_residual": _maximum_residual(
-                _cubic_rhs, solution.states, solution.parameters
+                _cubic_rhs, branch.states, branch.params
             ),
-            "fold_coefficients_nonzero": all(abs(value) > 0.1 for value in coefficients),
+            "natural_stalled_at_fold": (
+                abs(natural_max_parameter - 2.0 / 3.0) < 5e-3
+                and natural_max_parameter < 1.0 - 5e-3
+            ),
+            "palc_traversed_both_folds": (
+                len(fold_events) == 2
+                and float(jnp.min(branch.states[:, 0])) < -1.0
+                and float(jnp.max(branch.states[:, 0])) > 1.0
+            ),
+            "max_fold_coefficient_error": coefficient_error,
+            "stability_transition_count": stability_transitions,
         },
         observations={
             "folds": [(state, parameter) for state, parameter, _ in actual],
             "fold_coefficients": coefficients,
-            "n_points": solution.n_points,
+            "n_points": branch.n_valid,
+            "natural_n_points": natural_branch.n_valid,
+            "natural_max_parameter": natural_max_parameter,
         },
         artifacts={
-            "states": solution.states,
-            "parameters": solution.parameters,
-            "stability": solution.stability,
+            "states": branch.states,
+            "parameters": branch.params,
+            "stability": branch.stable,
+            "natural_states": natural_branch.states,
+            "natural_parameters": natural_branch.params,
         },
     )
 
@@ -125,7 +156,9 @@ def run_vanderpol_hopf() -> CaseResult:
         state = jnp.full((2,), jnp.nan)
         parameter = omega = lyapunov = jnp.array(jnp.nan)
         hopf_error = frequency_error = float("inf")
-    solution = result._solution
+    branch = result.branch
+    negative_parameter = branch.params < -0.1
+    positive_parameter = branch.params > 0.1
     return CaseResult(
         case_id="MC-EQ-002",
         checks={
@@ -133,7 +166,14 @@ def run_vanderpol_hopf() -> CaseResult:
             "max_hopf_error": hopf_error,
             "frequency_error": frequency_error,
             "max_residual": _maximum_residual(
-                _van_der_pol_rhs, solution.states, solution.parameters
+                _van_der_pol_rhs, branch.states, branch.params
+            ),
+            "lyapunov_error": abs(float(lyapunov)),
+            "stable_for_negative_parameter": bool(
+                jnp.any(negative_parameter) and jnp.all(branch.stable[negative_parameter])
+            ),
+            "unstable_for_positive_parameter": bool(
+                jnp.any(positive_parameter) and jnp.all(~branch.stable[positive_parameter])
             ),
         },
         observations={
@@ -141,12 +181,12 @@ def run_vanderpol_hopf() -> CaseResult:
             "hopf_parameter": parameter,
             "frequency": omega,
             "first_lyapunov": lyapunov,
-            "n_points": solution.n_points,
+            "n_points": branch.n_valid,
         },
         artifacts={
-            "states": solution.states,
-            "parameters": solution.parameters,
-            "stability": solution.stability,
+            "states": branch.states,
+            "parameters": branch.params,
+            "stability": branch.stable,
         },
     )
 
@@ -193,7 +233,11 @@ def run_adaptive_control_hopf() -> CaseResult:
         state = jnp.full((3,), jnp.nan)
         parameter = omega = lyapunov = jnp.array(jnp.nan)
         hopf_error = frequency_error = float("inf")
-    solution = result._solution
+    branch = result.branch
+    # MatCont reports its cubic Hopf coefficient ``b = 2*l1`` for this
+    # system.  Record both conventions and compare the MatCont value against
+    # the analytic -0.3 reference.
+    matcont_lyapunov = 2.0 * float(lyapunov)
     return CaseResult(
         case_id="MC-EQ-003",
         checks={
@@ -202,22 +246,24 @@ def run_adaptive_control_hopf() -> CaseResult:
             "frequency_error": frequency_error,
             "max_residual": _maximum_residual(
                 _adaptive_control_rhs,
-                solution.states,
-                solution.parameters,
+                branch.states,
+                branch.params,
                 beta,
             ),
+            "lyapunov_error": abs(matcont_lyapunov - (-0.3)),
         },
         observations={
             "hopf_state": state,
             "hopf_parameter": parameter,
             "frequency": omega,
             "first_lyapunov": lyapunov,
-            "n_points": solution.n_points,
+            "matcont_hopf_coefficient": matcont_lyapunov,
+            "n_points": branch.n_valid,
         },
         artifacts={
-            "states": solution.states,
-            "parameters": solution.parameters,
-            "stability": solution.stability,
+            "states": branch.states,
+            "parameters": branch.params,
+            "stability": branch.stable,
         },
     )
 

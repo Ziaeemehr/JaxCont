@@ -41,6 +41,10 @@ def test_cubic_case_finds_both_analytic_folds():
     assert result.checks["fold_count"] == 2
     assert result.checks["max_fold_error"] < 5e-4
     assert result.checks["max_residual"] < 2e-5
+    assert result.checks["natural_stalled_at_fold"]
+    assert result.checks["palc_traversed_both_folds"]
+    assert result.checks["max_fold_coefficient_error"] < 1e-4
+    assert result.checks["stability_transition_count"] == 2
 
 
 def test_vanderpol_case_recovers_the_analytic_hopf():
@@ -50,6 +54,10 @@ def test_vanderpol_case_recovers_the_analytic_hopf():
     assert result.checks["hopf_count"] == 1
     assert result.checks["max_hopf_error"] < 5e-4
     assert result.checks["frequency_error"] < 5e-4
+    assert result.checks["max_residual"] < 2e-5
+    assert result.checks["lyapunov_error"] < 1e-4
+    assert result.checks["stable_for_negative_parameter"]
+    assert result.checks["unstable_for_positive_parameter"]
 
 
 def test_adaptive_control_case_recovers_the_analytic_hopf():
@@ -59,6 +67,8 @@ def test_adaptive_control_case_recovers_the_analytic_hopf():
     assert result.checks["hopf_count"] == 1
     assert result.checks["max_hopf_error"] < 5e-4
     assert result.checks["frequency_error"] < 5e-4
+    assert result.checks["max_residual"] < 2e-5
+    assert result.checks["lyapunov_error"] < 5e-4
 
 
 def test_transform_case_matches_analytic_and_finite_difference_gradients():
@@ -68,6 +78,9 @@ def test_transform_case_matches_analytic_and_finite_difference_gradients():
     assert result.checks["all_finite"]
     assert result.checks["max_analytic_gradient_error"] < 2e-3
     assert result.checks["max_finite_difference_error"] < 2e-3
+    assert result.checks["jit_matches_eager"]
+    assert result.checks["vmap_valid_masks_present"]
+    assert result.checks["permutation_invariant"]
 
 
 def test_codim2_case_recovers_all_shifted_points():
@@ -77,6 +90,11 @@ def test_codim2_case_recovers_all_shifted_points():
     assert result.checks["all_converged"]
     assert result.checks["max_parameter_error"] < 1e-3
     assert result.checks["bt_bifurcationkit_error"] < 1e-3
+    assert result.checks["frequency_error"] < 1e-3
+    assert result.checks["gh_lyapunov_error"] < 1e-4
+    assert result.checks["parameter_gradients_finite"]
+    assert result.checks["max_analytic_gradient_error"] < 2e-3
+    assert result.checks["max_finite_difference_error"] < 2e-3
 
 
 def test_default_selection_excludes_unsupported():

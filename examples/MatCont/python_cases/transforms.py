@@ -133,6 +133,16 @@ def run_transform_checks() -> CaseResult:
         and jnp.allclose(batched.branch.states, permuted.branch.states[::-1])
         and jnp.array_equal(batched.branch.valid, permuted.branch.valid[::-1])
     )
+    eager = _batched_branch(jnp.array(0.1))
+    jitted = jax.jit(_batched_branch)(jnp.array(0.1))
+    jitted_n_valid = int(jitted.stats["n_valid"])
+    jit_matches_eager = bool(
+        jitted.branch.valid is not None
+        and int(jnp.sum(jitted.branch.valid)) == eager.branch.n_valid
+        and jitted_n_valid == eager.branch.n_valid
+        and jnp.allclose(jitted.branch.params[:jitted_n_valid], eager.branch.params)
+        and jnp.allclose(jitted.branch.states[:jitted_n_valid], eager.branch.states)
+    )
     return CaseResult(
         case_id="MC-JAX-001",
         checks={
@@ -146,6 +156,7 @@ def run_transform_checks() -> CaseResult:
             ),
             "vmap_valid_masks_present": batched.branch.valid is not None,
             "permutation_invariant": permutation_invariant,
+            "jit_matches_eager": jit_matches_eager,
         },
         observations={
             "gradients": gradients,
