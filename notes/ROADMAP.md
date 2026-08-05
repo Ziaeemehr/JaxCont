@@ -1,14 +1,16 @@
 # JaxCont Roadmap — Single Source of Truth
 
 **Last updated:** 2026-08-05
-**Current version:** 0.3.0 — tagged `v0.3.0`, GitHub release cut. Adds phase-plane visualization,
-the Hopf normal form / `l₁` criticality classifier, and five direct codim-2 bifurcation point
-solvers (`CP`/`BT`/`GH`/`ZH`/`HH`) on top of v0.2.0's periodic-orbit continuation. **Zenodo DOI:
-not yet minted** — repo-side prep (`CITATION.cff`, README badge slot) is ready, but archival
-requires enabling the GitHub-Zenodo integration at zenodo.org/account/settings/github/ (an
-account-level action, not something automatable from here); once enabled, this release (or the
-next one) will be the one archived. PyPI publish for v0.3.0 is a separate, independent step, not
-yet done as of this edit.
+**Current version:** 0.3.1 — tagged `v0.3.1`, GitHub release cut, published to PyPI
+(https://pypi.org/project/jaxcont/). Patch release fixing a `PeriodDoubling`/`NeimarkSacker`
+detector-margin fragility and a Read the Docs Sphinx-Gallery build break, both found right after
+v0.3.0 (which itself added phase-plane visualization, the Hopf normal form / `l₁` criticality
+classifier, five direct codim-2 bifurcation point solvers (`CP`/`BT`/`GH`/`ZH`/`HH`), and the
+MatCont validation suite on top of v0.2.0's periodic-orbit continuation). **Zenodo DOI: minted**
+2026-08-05 — concept DOI `10.5281/zenodo.21812716` (always resolves to the latest archive, used
+in the README badge), version DOI `10.5281/zenodo.21812717` for this v0.3.1 archive (in
+`CITATION.cff`). The GitHub-Zenodo integration is enabled; every future GitHub release archives
+automatically.
 **Scope decision:** Ship a focused **equilibrium continuation** library first. See [PROJECT_REVIEW_2026-07.md](PROJECT_REVIEW_2026-07.md) for the full rationale.
 **API design:** Committed to a functional, diffrax-style surface (`continuation(problem, alg, ...)`).
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provisional v0.2+ API.
@@ -243,10 +245,8 @@ Public surface is the functional API — `bif_problem` / `continuation` / `Fold`
 - [x] GitHub release — **confirmed 2026-08-05**, this line was stale: a release exists for both
   `v0.1.0` and `v0.2.0` (`gh release list` shows both, the latter titled `v0.2`), just never
   checked off here.
-- [ ] Zenodo DOI — **deliberately deferred**, by decision, until a more mature release with more
-  results; not a v0.1.0 blocker. `CITATION.cff` metadata is ready. As of v0.3.0 (2026-08-05) this
-  is no longer deferred by choice — repo-side prep is done, blocked only on enabling the
-  GitHub-Zenodo integration (an account-level action) — see the header note above.
+- [x] Zenodo DOI — **minted 2026-08-05** against the v0.3.1 archive, once deliberately deferred
+  until a more mature release; see the header note above for the concept/version DOIs.
 
 **Out of scope (hidden / marked experimental):** periodic orbits, Floquet, BVP,
 normal forms, codim-2, branch switching, two-parameter continuation.
@@ -263,8 +263,8 @@ v0.2 engineering recommendation #4).
 **v0.1.0 is published.** Remaining loose ends, non-blocking:
 
 1. ✅ GitHub release confirmed to exist for `v0.1.0` (2026-08-05).
-2. Zenodo DOI archival — no longer deferred by choice as of v0.3.0; blocked only on enabling the
-   GitHub-Zenodo integration (see the header note at the top of this file).
+2. ✅ Zenodo DOI archival — minted 2026-08-05 against v0.3.1 (see the header note at the top of
+   this file).
 
 Issues #10 (legacy natural-continuation FD/bare-except) and #8/#9 (bothside, sub-epsilon tol) are
 real but non-blocking for v0.1.0 — they don't affect the default `scan`/`PseudoArclength` path.
@@ -744,7 +744,7 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
    Floquet/period-doubling stubs are importable only from their submodules.
 10. ✅ **Docs + packaging → ship v0.1.0.** — **done 2026-07-21.** Tagged and published to PyPI
     (https://pypi.org/project/jaxcont/). GitHub release confirmed to exist (2026-08-05); Zenodo DOI
-    no longer deferred by choice as of v0.3.0, blocked only on the GitHub-Zenodo integration.
+    minted 2026-08-05 against the v0.3.1 archive.
 11. **v0.2 kickoff — do the engineering cleanup *before* the periodic-orbit feature work**, per
     "Engineering / architecture recommendations for v0.2" above, in this order: (i) consolidate
     the three continuation-engine implementations onto the scan engine (`jc.continuation()`'s
@@ -771,14 +771,20 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
     `fold_coefficient` — see the v0.3.0+ section above for the full writeup. This closes the
     "Codim-2 groundwork" item this list previously pointed at next.
 16. ✅ **v0.3.0 release cut** (2026-08-05) — version bumped, `CHANGELOG.md`/`CITATION.cff`/README
-    updated, tagged `v0.3.0`, GitHub release created. PyPI publish not yet done as a separate step
-    (see below). Zenodo DOI still pending the GitHub-Zenodo integration being enabled — see the
-    header note at the top of this file.
-17. **Next up** — no single item is blocking; pick by what's wanted:
+    updated, tagged `v0.3.0`, GitHub release created, published to PyPI.
+17. ✅ **v0.3.1 patch release** (2026-08-05) — fixed a `PeriodDoubling`/`NeimarkSacker`
+    `near_unit_circle` detector-margin fragility (found via a CI-only test failure, reproduced
+    deterministically on GitHub's runner but not locally) and a Read the Docs Sphinx-Gallery
+    build break (`examples/MatCont`'s support modules were being swept into the gallery as
+    title-less pages). Tagged, released, published to PyPI.
+18. ✅ **Zenodo DOI archival** (2026-08-05) — GitHub-Zenodo integration enabled; the v0.3.1
+    release was deleted and recreated from the same tag to fire a fresh webhook, since Zenodo
+    only archives releases published after the integration is turned on. Concept DOI
+    `10.5281/zenodo.21812716` in the README badge, version DOI `10.5281/zenodo.21812717` in
+    `CITATION.cff`. Every future GitHub release now archives automatically.
+19. **Next up** — no single item is blocking; pick by what's wanted:
     - **Ergonomics:** `bothside` continuation (issue #8) and the legacy `natural_continuation.py`
       FD/bare-except cleanup (issue #10) are still open, low-severity, non-blocking items.
-    - **PyPI publish** for v0.3.0 via the existing `publish.yml` workflow (matches v0.1.0/v0.2.0's
-      release process) — a separate, independent step from the GitHub release/Zenodo archive.
     - **Larger v0.3.0+ epics** (bigger, less demand-driven urgency so far): branch switching,
       two-parameter continuation (which the codim-2 *direct solvers* just shipped are explicitly
       not a substitute for — see the v0.3.0+ writeup above).

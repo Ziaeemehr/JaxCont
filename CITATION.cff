@@ -10,3 +10,11 @@ url: "https://jaxcont.readthedocs.io"
 license: MIT
 version: 0.3.1
 date-released: "2026-08-05"
+doi: 10.5281/zenodo.21812717
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.21812717
+    description: "Archived snapshot of version 0.3.1"
+  - type: doi
+    value: 10.5281/zenodo.21812716
+    description: "Concept DOI: always resolves to the latest archived version"
