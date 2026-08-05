@@ -16,6 +16,7 @@ from jaxcont.bifurcations.codim2 import (
     bogdanov_takens_point, bogdanov_takens_parameters,
     generalized_hopf_point, generalized_hopf_parameters,
     zero_hopf_point, zero_hopf_parameters,
+    double_hopf_point, double_hopf_parameters,
 )
 from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
 
@@ -292,6 +293,75 @@ def test_zero_hopf_parameters_grad_matches_finite_difference():
         return zero_hopf_parameters(
             zh_moving, jnp.array([1.05, 0.03, -0.02]),
             jnp.array([4.04, -1.94]), shift,
+        )[0]
+
+    g = jax.grad(p0_star)(0.05)
+    h = 1e-3
+    fd = (p0_star(0.05 + h) - p0_star(0.05 - h)) / (2 * h)
+    assert jnp.isfinite(g)
+    assert jnp.isclose(float(g), float(fd), atol=1e-3)
+
+
+def _hh_shifted(u, p, args):
+    # Two decoupled linear rotations with distinct frequencies 1 and 2:
+    #   pair A = b1 +- 1i,  pair B = b2 +- 2i
+    # Double Hopf where both real parts vanish; shifted to p*=(5,-6).
+    x1, y1, x2, y2 = u[0], u[1], u[2], u[3]
+    b1 = p[0] - 5.0
+    b2 = p[1] + 6.0
+    return jnp.array([
+        b1 * x1 - 1.0 * y1,
+        1.0 * x1 + b1 * y1,
+        b2 * x2 - 2.0 * y2,
+        2.0 * x2 + b2 * y2,
+    ])
+
+
+def test_double_hopf_point_recovers_exact_shifted_hh():
+    u, p, q1a, q2a, oa, q1b, q2b, ob, ok = double_hopf_point(
+        _hh_shifted,
+        jnp.array([0.03, -0.02, 0.04, 0.01]),
+        jnp.array([5.05, -5.93]),
+        seed_b=jnp.array([0.0, 0.0, 1.0, 0.0]),
+    )
+    assert bool(ok)
+    assert jnp.allclose(p, jnp.array([5.0, -6.0]), atol=1e-4)
+    # both frequencies normalized positive, and the two distinct pairs found
+    assert float(oa) > 0.0 and float(ob) > 0.0
+    found = sorted([float(oa), float(ob)])
+    assert jnp.isclose(found[0], 1.0, atol=1e-3)
+    assert jnp.isclose(found[1], 2.0, atol=1e-3)
+
+
+def test_double_hopf_reports_not_converged_when_both_pairs_collapse():
+    # Seeding block B onto the SAME physical pair as block A makes the
+    # extended system structurally singular. During planning this produced
+    # nan rather than a plausible wrong answer; the separation check turns
+    # that into an explicit converged=False instead of a bare nan.
+    _, _, _, _, oa, _, _, ob, ok = double_hopf_point(
+        _hh_shifted,
+        jnp.array([0.03, -0.02, 0.04, 0.01]),
+        jnp.array([5.05, -5.93]),
+        seed_b=jnp.array([1.0, 0.0, 0.0, 0.0]),
+    )
+    assert not bool(ok)
+
+
+def test_double_hopf_parameters_grad_matches_finite_difference():
+    def hh_moving(u, p, shift):
+        x1, y1, x2, y2 = u[0], u[1], u[2], u[3]
+        b1 = p[0] - 5.0 - shift
+        b2 = p[1] + 6.0
+        return jnp.array([
+            b1 * x1 - 1.0 * y1, 1.0 * x1 + b1 * y1,
+            b2 * x2 - 2.0 * y2, 2.0 * x2 + b2 * y2,
+        ])
+
+    def p0_star(shift):
+        return double_hopf_parameters(
+            hh_moving, jnp.array([0.03, -0.02, 0.04, 0.01]),
+            jnp.array([5.05, -5.93]), shift,
+            seed_b=jnp.array([0.0, 0.0, 1.0, 0.0]),
         )[0]
 
     g = jax.grad(p0_star)(0.05)
