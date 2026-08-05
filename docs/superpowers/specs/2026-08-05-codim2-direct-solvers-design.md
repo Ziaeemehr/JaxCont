@@ -50,7 +50,7 @@ generalized_hopf_point(f, u_guess, p_guess, args=None, *, tol, max_iter)
     -> (u, p, q1, q2, omega, converged)
 zero_hopf_point(f, u_guess, p_guess, args=None, *, tol, max_iter)
     -> (u, p, v, q1, q2, omega, converged)
-double_hopf_point(f, u_guess, p_guess, args=None, *, tol, max_iter,
+double_hopf_point(f, u_guess, p_guess, args=None, *, seed_b, tol, max_iter,
                   separation_tolerance=1e-3)
     -> (u, p, q1a, q2a, omega_a, q1b, q2b, omega_b, converged)
 
@@ -61,7 +61,7 @@ cusp_parameters(...)              -> p
 bogdanov_takens_parameters(...)   -> p
 generalized_hopf_parameters(...)  -> p
 zero_hopf_parameters(...)         -> p
-double_hopf_parameters(...)       -> p
+double_hopf_parameters(..., *, seed_b, ...) -> p
 
 # Pure algebra, no Newton solve, so no convergence flag.
 fold_coefficient(f, u, p, v, args=None) -> a
@@ -357,7 +357,8 @@ verifiable and leaving the tree green:
 ## References
 
 - Kuznetsov, *Elements of Applied Bifurcation Theory*, 3rd ed. — Ch. 8 (codim-2 equilibrium
-  bifurcations), §8.3 (BT), §8.4 (ZH/HH), §5.4 (normal-form coefficients).
+  bifurcations), §8.2 (CP), §8.3 (GH), §8.4 (BT), §8.5 (ZH), §8.6 (HH), §5.4 (normal-form
+  coefficients).
 - MATCONT manual §4 — the `CP`/`BT`/`ZH`/`HH`/`GH` defining systems and label conventions
   `taxonomy.py` already mirrors.
 - `docs/superpowers/specs/2026-08-04-hopf-normal-form-design.md` — the immediate predecessor;

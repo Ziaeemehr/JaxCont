@@ -46,6 +46,8 @@ Differentiable fold solver
 
 .. autofunction:: jaxcont.fold_parameter
 
+.. autofunction:: jaxcont.fold_coefficient
+
 Differentiable Hopf solver
 ---------------------------
 
@@ -58,13 +60,13 @@ Differentiable Hopf solver
 Codim-2 point solvers
 ---------------------
 
-Direct solvers for codimension-2 equilibrium bifurcations. These take a
-parameter array ``p`` of shape ``(2,)`` (codim-2 needs two free parameters)
-and are differentiable in ``args`` via the implicit function theorem, like
-their codim-1 counterparts above. Each returns a trailing ``converged``
-flag rather than raising.
-
-.. autofunction:: jaxcont.fold_coefficient
+Direct solvers for codimension-2 equilibrium bifurcations, differentiable in
+``args`` via the implicit function theorem, like their codim-1 counterparts
+above. The ``*_point`` functions below take a parameter array ``p`` of
+shape ``(2,)`` (codim-2 needs two free parameters) and return a trailing
+``converged`` flag rather than raising; the corresponding ``*_parameters``
+functions return a bare ``p*`` array with no flag, for direct use under
+``jax.grad``.
 
 .. autofunction:: jaxcont.cusp_point
 
