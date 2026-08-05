@@ -369,3 +369,42 @@ def test_double_hopf_parameters_grad_matches_finite_difference():
     fd = (p0_star(0.05 + h) - p0_star(0.05 - h)) / (2 * h)
     assert jnp.isfinite(g)
     assert jnp.isclose(float(g), float(fd), atol=1e-3)
+
+
+def test_codim2_functions_are_exported_at_top_level():
+    import jaxcont as jc
+
+    from jaxcont.bifurcations.codim2 import (
+        bogdanov_takens_parameters, bogdanov_takens_point,
+        cusp_parameters, cusp_point,
+        double_hopf_parameters, double_hopf_point,
+        generalized_hopf_parameters, generalized_hopf_point,
+        zero_hopf_parameters, zero_hopf_point,
+    )
+    from jaxcont.bifurcations.fold_normal_form import fold_coefficient
+
+    assert jc.cusp_point is cusp_point
+    assert jc.cusp_parameters is cusp_parameters
+    assert jc.bogdanov_takens_point is bogdanov_takens_point
+    assert jc.bogdanov_takens_parameters is bogdanov_takens_parameters
+    assert jc.generalized_hopf_point is generalized_hopf_point
+    assert jc.generalized_hopf_parameters is generalized_hopf_parameters
+    assert jc.zero_hopf_point is zero_hopf_point
+    assert jc.zero_hopf_parameters is zero_hopf_parameters
+    assert jc.double_hopf_point is double_hopf_point
+    assert jc.double_hopf_parameters is double_hopf_parameters
+    assert jc.fold_coefficient is fold_coefficient
+
+
+def test_codim2_names_are_listed_in_dunder_all():
+    import jaxcont as jc
+
+    for name in (
+        "cusp_point", "cusp_parameters",
+        "bogdanov_takens_point", "bogdanov_takens_parameters",
+        "generalized_hopf_point", "generalized_hopf_parameters",
+        "zero_hopf_point", "zero_hopf_parameters",
+        "double_hopf_point", "double_hopf_parameters",
+        "fold_coefficient",
+    ):
+        assert name in jc.__all__

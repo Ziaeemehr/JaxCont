@@ -24,7 +24,9 @@ class BifurcationLabel:
     name: str
     #: "equilibrium" | "cycle" -- which continuation object this label attaches to.
     of: str
-    #: "v0.1" (implemented today), "v0.2"/"v0.3" (planned), or "out of scope".
+    #: The JaxCont version this label lands in ("v0.1", "v0.2", "v0.3"), or
+    #: "out of scope". Not a boolean: "v0.2" entries are implemented today,
+    #: "v0.3" entries are landing in the current development series.
     status: str
 
 

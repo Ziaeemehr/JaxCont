@@ -50,6 +50,20 @@ from jaxcont.bifurcations.hopf_normal_form import (
     hopf_point, hopf_parameter, lyapunov_coefficient,
 )
 
+# Fold normal-form coefficient + direct codim-2 point solvers (cusp,
+# Bogdanov-Takens, generalized Hopf, zero-Hopf, double Hopf). These take p
+# with shape (2,) -- codim-2 needs two free parameters -- and are
+# differentiable in args like their codim-1 siblings above. See
+# docs/superpowers/specs/2026-08-05-codim2-direct-solvers-design.md
+from jaxcont.bifurcations.fold_normal_form import fold_coefficient
+from jaxcont.bifurcations.codim2 import (
+    bogdanov_takens_parameters, bogdanov_takens_point,
+    cusp_parameters, cusp_point,
+    double_hopf_parameters, double_hopf_point,
+    generalized_hopf_parameters, generalized_hopf_point,
+    zero_hopf_parameters, zero_hopf_point,
+)
+
 # Solvers
 from jaxcont.solvers.newton import NewtonSolver
 from jaxcont.solvers.corrector import Corrector
@@ -96,6 +110,17 @@ __all__ = [
     "hopf_point",
     "hopf_parameter",
     "lyapunov_coefficient",
+    "fold_coefficient",
+    "cusp_point",
+    "cusp_parameters",
+    "bogdanov_takens_point",
+    "bogdanov_takens_parameters",
+    "generalized_hopf_point",
+    "generalized_hopf_parameters",
+    "zero_hopf_point",
+    "zero_hopf_parameters",
+    "double_hopf_point",
+    "double_hopf_parameters",
     # Core
     "ContinuationProblem",
     "ContinuationSolution",

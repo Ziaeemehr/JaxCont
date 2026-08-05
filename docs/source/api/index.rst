@@ -55,6 +55,37 @@ Differentiable Hopf solver
 
 .. autofunction:: jaxcont.lyapunov_coefficient
 
+Codim-2 point solvers
+---------------------
+
+Direct solvers for codimension-2 equilibrium bifurcations. These take a
+parameter array ``p`` of shape ``(2,)`` (codim-2 needs two free parameters)
+and are differentiable in ``args`` via the implicit function theorem, like
+their codim-1 counterparts above. Each returns a trailing ``converged``
+flag rather than raising.
+
+.. autofunction:: jaxcont.fold_coefficient
+
+.. autofunction:: jaxcont.cusp_point
+
+.. autofunction:: jaxcont.cusp_parameters
+
+.. autofunction:: jaxcont.bogdanov_takens_point
+
+.. autofunction:: jaxcont.bogdanov_takens_parameters
+
+.. autofunction:: jaxcont.generalized_hopf_point
+
+.. autofunction:: jaxcont.generalized_hopf_parameters
+
+.. autofunction:: jaxcont.zero_hopf_point
+
+.. autofunction:: jaxcont.zero_hopf_parameters
+
+.. autofunction:: jaxcont.double_hopf_point
+
+.. autofunction:: jaxcont.double_hopf_parameters
+
 Low-level scan engine
 ---------------------
 
