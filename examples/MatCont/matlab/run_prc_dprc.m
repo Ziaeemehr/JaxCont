@@ -1,5 +1,11 @@
-function run_prc_dprc()
-%UNSUPPORTED_BY_JAXCONT Compute MatCont's adaptive-control PRC and dPRC.
+function run_prc_dprc(output_dir)
+%RUN_PRC_DPRC Reproduce MatCont 7.6 Testruns/testadaptPRC.m and export
+%normalized PRC/dPRC artifacts for MC-PRC-001.
+script_dir = fileparts(mfilename('fullpath'));
+if nargin < 1 || isempty(output_dir)
+    output_dir = fullfile(script_dir, '..', 'generated');
+end
+addpath(script_dir, fullfile(script_dir, 'systems'));
 setup_matcont();
 [x0, ~] = init_EP_EP(@adaptx, [0; 0; 0], [-10; 1], 1);
 opt = contset;
@@ -22,6 +28,10 @@ opt = contset(opt, 'Input', 1);
 opt = contset(opt, 'MaxNumPoints', 20);
 [~, ~, ~, ~, processor_data] = cont(@limitcycle, seed, tangent, opt);
 assert(~isempty(processor_data) && all(isfinite(processor_data(:, end))));
-fprintf('UNSUPPORTED_BY_JAXCONT PRC/dPRC: %d processor values\n', ...
-    size(processor_data, 1));
+
+metadata = struct('producer', mfilename, ...
+    'source', 'MatCont 7.6 Testruns/testadaptPRC.m', ...
+    'precision', 'double', 'fixed_parameters', p(2)', ...
+    'solver_settings', opt);
+export_prc_run('MC-PRC-001', processor_data, output_dir, metadata);
 end
