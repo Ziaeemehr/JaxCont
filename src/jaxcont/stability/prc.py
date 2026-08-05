@@ -11,7 +11,9 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
+from jaxcont.api import BifProblem
 from jaxcont.core.collocation import Collocation, collocation_matrices, interval_propagators
+from jaxcont.solvers.implicit import differentiable_root
 from jaxcont.solvers.protocols import Dense, LinearSolver
 
 PyTree = Any
@@ -80,3 +82,56 @@ def branch_prc(
         return prc_curve(raw_f, mesh, U, p, linear_solver)
 
     return jax.vmap(at)(states, params)
+
+
+def dprc_curve(
+    problem: "BifProblem",
+    linear_solver: LinearSolver = Dense(),
+    newton_tol: float = 1e-5,
+) -> Array:
+    """Parameter derivative of the iPRC curve, ``d(prc_curve)/dp``, shape
+    ``(ntst, n) + p.shape``. Takes the periodic orbit's ``BifProblem``
+    (residual ``problem.f``, seed ``problem.u0``, collocation bookkeeping
+    ``problem.args``) rather than ``prc_curve``'s ``(raw_f, mesh, U, p)`` --
+    it must differentiate through a re-solve of ``U(p)`` via
+    ``differentiable_root`` (the same call
+    ``problems.periodic.periodic_orbit_problem`` already makes to build its
+    own ``u0``), not through ``prc_curve`` alone at a fixed ``U``: the latter
+    is differentiable but not physically meaningful (see
+    docs/superpowers/specs/2026-08-05-prc-dprc-design.md, "Design findings
+    from prototyping").
+
+    The re-solve's phase-condition anchor (the ``uref_prime_coll`` component
+    of ``problem.args``) is recomputed from ``p`` at every Newton step,
+    exactly the way ``periodic_orbit_problem`` itself derives it
+    (``f(coll_guess, p0, None)``) -- it is *not* held frozen at
+    ``problem.args``'s baked-in value from the original construction (which
+    is how ``jc.continuation()`` treats ``args`` across an ordinary branch,
+    but is not what this function's re-solve needs, since the re-solve is
+    meant to reproduce what a *fresh* ``periodic_orbit_problem`` call would
+    build at the perturbed ``p``). Confirmed empirically: holding the anchor
+    frozen disagrees with a finite difference of independently re-converged
+    orbits by up to ~0.2 absolute; recomputing it from ``p`` matches that
+    finite difference to ~1e-4."""
+    u_ref_coll, _uref_prime_coll0, raw_f, mesh = problem.args
+
+    def anchor_at(p: Array) -> PyTree:
+        uref_prime_coll_p = jax.vmap(jax.vmap(lambda u: raw_f(u, p, None)))(u_ref_coll)
+        return (u_ref_coll, uref_prime_coll_p, raw_f, mesh)
+
+    def prc_at(p: Array) -> Array:
+        U_p = differentiable_root(
+            lambda U, pp: problem.f(U, pp, anchor_at(pp)),
+            problem.u0,
+            p,
+            tol=newton_tol,
+        )
+        return prc_curve(raw_f, mesh, U_p, p, linear_solver)
+
+    # jax.jacrev, not jax.jacfwd: differentiable_root is built on
+    # jax.custom_vjp (reverse-mode only -- see solvers/implicit.py), so
+    # forward-mode AD (what jax.jacfwd needs) raises "can't apply
+    # forward-mode autodiff (jvp) to a custom_vjp function". jacrev gives
+    # the identical Jacobian via the implemented reverse-mode path (p0 is
+    # scalar here, so there's no efficiency loss from the mode switch).
+    return jax.jacrev(prc_at)(problem.p0)

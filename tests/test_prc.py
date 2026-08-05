@@ -101,3 +101,28 @@ def test_branch_prc_matches_per_point_calls():
         )
     assert batched.shape == (2, mesh.ntst, 2)
     assert jnp.max(jnp.abs(batched - individual)) < 1e-6
+
+
+def test_dprc_curve_matches_finite_difference_of_reconverged_orbits():
+    """dprc_curve must differentiate through a re-solve of U(p) -- NOT
+    jax.jacfwd(prc_curve, argnums=p) at a frozen U, which prototyping showed
+    is differentiable but not meaningful (see the design spec's "Design
+    findings from prototyping"). Verified against a central finite
+    difference built from two INDEPENDENTLY re-converged periodic orbits at
+    rho +/- eps (not the naive closed form alone -- that omits the phase
+    condition's own small theta-drift with rho)."""
+    from jaxcont.stability.prc import dprc_curve
+
+    rho0, eps = 1.0, 0.01
+    prob0, mesh = _circle_problem(rho0)
+    prob_hi, _ = _circle_problem(rho0 + eps)
+    prob_lo, _ = _circle_problem(rho0 - eps)
+
+    with jax.default_matmul_precision("float32"):
+        dZ = dprc_curve(prob0)
+        Z_hi = prc_curve(_rhs, mesh, prob_hi.u0, prob_hi.p0)
+        Z_lo = prc_curve(_rhs, mesh, prob_lo.u0, prob_lo.p0)
+
+    dZ_fd = (Z_hi - Z_lo) / (2 * eps)
+    assert dZ.shape == (mesh.ntst, 2)
+    assert float(jnp.max(jnp.abs(np.asarray(dZ) - np.asarray(dZ_fd)))) < 0.01
