@@ -84,11 +84,47 @@ regression test (byte-identical Floquet multipliers before/after) guards this.
    protocol (`solvers/protocols.py`) — no new solver abstraction.
 3. Adjoint-propagates `Z(0)` backward across `M_all` (transposed) to fill in `Z` at every mesh
    point over the period.
-4. `dprc_curve` is `jax.jacfwd(prc_curve, argnums=3)` (`p` is the 4th positional argument) — no
-   separate derivation, because every step above (`jnp.linalg.solve`, matrix-vector chaining) has
-   a JAX gradient rule. This is the reason the bordered-linear-system approach was chosen over
-   eigendecomposition (`jnp.linalg.eig` has no VJP for general non-symmetric matrices — it would
-   have blocked dPRC entirely, not just made it awkward).
+4. `dprc_curve` differentiates through a **re-solve of `U(p)`**, not `prc_curve` at frozen `U` —
+   see "Design findings from prototyping" below for why the originally-proposed
+   `jax.jacfwd(prc_curve, argnums=3)` at fixed `U` was wrong, and the corrected approach:
+   `dprc_curve(problem, ...)` takes the periodic orbit's `BifProblem` (residual `problem.f`, seed
+   `problem.u0`, `problem.args`), reconverges `U(p) = differentiable_root(lambda U, p:
+   problem.f(U, p, problem.args), problem.u0, p, tol=1e-5)` — the exact same
+   `solvers/implicit.py:differentiable_root` call `problems/periodic.py:periodic_orbit_problem`
+   already makes internally to build `U0` from a coarse guess — then differentiates
+   `jax.jacfwd(lambda p: prc_curve(raw_f, mesh, U(p), p, linear_solver))(problem.p0)`. This still
+   needs no eigendecomposition and still relies on the bordered-linear-system seed being
+   differentiable, but the differentiation must cross the Newton re-solve, not stop before it.
+
+## Design findings from prototyping
+
+Per this project's established discipline (and this spec's own Global Constraint requiring
+numerical verification before finalizing an implementation plan — the same discipline the Floquet,
+Hopf-normal-form, and codim-2 specs already applied), the recursion above was prototyped against
+the closed-form circle system before this plan was written. One real, initially-wrong assumption
+was found and corrected:
+
+**`jax.jacfwd(prc_curve, argnums=p)` at a fixed collocation state `U` does not compute a
+physically meaningful dPRC.** The original Architecture draft (directly above, now corrected)
+assumed differentiating `prc_curve` alone — holding `U` fixed at its convergence for `p=p₀` — would
+give `∂Z/∂p`, "free" because every primitive involved is differentiable. It *is* differentiable, and
+matched a float64 central finite difference of the exact same (frozen-`U`) function to `1.4e-5` —
+so the code was doing exactly what it was told. But the *value* it computed was wrong by roughly an
+order of magnitude versus the true sensitivity (entries of magnitude `~1-6` where the real answer is
+`~0.1-0.6`), because freezing `U` while perturbing `p` pushes the collocation state off the manifold
+of genuine periodic orbits for that `p` — `Φ(T)` built there is a Jacobian-chain computation, but not
+a classical monodromy matrix of any real trajectory, and its "eigenvalue-1" sensitivity is an
+artifact, not a phase-response quantity. Confirmed two ways: (1) re-solving fresh, genuinely
+converged periodic orbits at `ρ₀±ε` via independent `periodic_orbit_problem` calls and taking a
+finite difference of `prc_curve` across *those* gave values matching the closed-form
+`-Z(θ)/(2ρ) + (∂Z/∂θ)(dθ/dρ)` — including the circle system's own phase condition's small,
+correctly-signed `θ`-drift with `ρ` — to `<0.01` absolute, versus `>6` disagreement for the
+frozen-`U` version; (2) the fix (differentiate through a `differentiable_root`-based re-solve of
+`U(p)`, not around it) is not new infrastructure — it's the exact primitive
+`periodic_orbit_problem` already uses to build `u0` in the first place, applied one level up.
+**Consequence for the API:** `dprc_curve` cannot share `prc_curve`/`branch_prc`'s
+`(raw_f, mesh, U, p)` signature — it needs the residual function and Newton-seed `periodic_orbit_problem`
+already assembles, so it takes the `BifProblem` itself (see API below).
 
 ## Math
 
@@ -131,10 +167,14 @@ Z(θ) = (−sin θ, cos θ) / √ρ
 `ṙ = 0` there — gives `sin²θ + cos²θ = 1 = ω`. ✓.) This also gives a closed-form dPRC check for
 free: `∂Z/∂ρ = −Z / (2ρ)`.
 
-**Not yet verified against running code** — per this project's established discipline (see the
-Floquet spec's own caveat, which applies identically here), the exact adjoint recursion is
-prototyped and numerically checked against the closed form above *before* being written into an
-implementation plan, not decided by derivation alone.
+**Verified against running code** (not merely derived): the bordered-solve seed and backward-chain
+recursion above were prototyped directly against JaxCont's own `periodic_orbit_problem`/
+`Collocation` machinery for the closed-form circle system at `ρ=1`. `Z` at every mesh point matched
+`Z(θ) = (−sinθ, cosθ)/√ρ` (using each mesh point's *actual* converged phase `θᵢ = atan2(yᵢ, xᵢ)`,
+not an assumed uniform grid — the phase condition anchors the branch's phase arbitrarily, so mesh
+points are not at `θ = 2πi/ntst`) to `5.4e-7` max absolute error, and the periodicity identity
+`Z₀ == Z(0)` (the backward chain landing back on its own seed) held to the same tolerance. See
+"Design findings from prototyping" below for what this prototyping caught on the dPRC side.
 
 ## Validation phase (MatCont cross-check)
 
@@ -204,9 +244,13 @@ failures, not a reason to relax the registry tolerances."
 - **New `src/jaxcont/stability/prc.py`**: `prc_curve(raw_f, mesh, U, p, linear_solver=Dense()) ->
   Array` (shape `(ntst, n)`), `branch_prc(raw_f, mesh, states, params, linear_solver=Dense()) ->
   Array` (shape `(n_valid, ntst, n)`, `vmap`-batched, mirroring `floquet.py`'s
-  `branch_floquet_multipliers`), `dprc_curve(raw_f, mesh, U, p, linear_solver=Dense()) -> Array`
-  (shape `(ntst, n) + p.shape`). None exported from top-level `jaxcont/__init__.py` — matches the
-  existing deliberate non-export of `floquet_multipliers`/`branch_floquet_multipliers`.
+  `branch_floquet_multipliers`). `dprc_curve(problem: BifProblem, linear_solver=Dense(),
+  newton_tol=1e-5) -> Array` (shape `(ntst, n) + p.shape`) — deliberately **not**
+  `(raw_f, mesh, U, p)`-shaped like its siblings; see "Design findings from prototyping": it needs
+  `problem.f` (the residual) and `problem.u0` (the Newton seed) to reconverge `U(p)` via
+  `differentiable_root` before differentiating, not just a frozen point. None exported from
+  top-level `jaxcont/__init__.py` — matches the existing deliberate non-export of
+  `floquet_multipliers`/`branch_floquet_multipliers`.
 - **Modify `src/jaxcont/viz/portraits.py`**: add `plot_prc(curve, ...)`, alongside the existing
   `plot_eigenvalues`; add to `viz/__init__.py`'s exports.
 - **New `examples/example_13_phase_response_curve.py`**: iPRC on an oscillator already used
@@ -230,8 +274,11 @@ Per this project's established standard: empirical verification against a known 
    matches `Z(θ) = (−sinθ, cosθ)` (mesh points sampled at their respective `θ` values) to
    float32-achievable tolerance (calibrated the same way the Floquet suite was — re-verify, don't
    assume the same tolerance transfers automatically).
-3. **dPRC unit test:** at the same branch point, `dprc_curve` matches the closed-form
-   `∂Z/∂ρ = −Z/(2ρ)`.
+3. **dPRC unit test:** at the same branch point, `dprc_curve` matches a finite difference built
+   from two *independently re-converged* `periodic_orbit_problem` solves at `ρ±ε` (not the naive
+   closed form `−Z/(2ρ)` alone — that omits the phase condition's own small `θ`-drift with `ρ`,
+   confirmed during prototyping; see "Design findings from prototyping"). Tolerance `<0.01`
+   absolute, matching what prototyping achieved with `ε=0.01`.
 4. **Branch test:** `branch_prc` over a `ρ` sweep has shape `(n_valid, ntst, n)` and matches the
    closed form at every sampled point.
 5. **Periodicity sanity check:** the backward-adjoint-chain `Z_0` (computed by propagating all the
@@ -258,7 +305,11 @@ Per this project's established standard: empirical verification against a known 
   matching `floquet_multipliers`'s existing precedent.
 - The adjoint recursion must be numerically prototyped and verified against the closed-form circle
   example (iPRC *and* dPRC) before being written into an implementation plan — not decided by
-  derivation alone.
+  derivation alone. **Done** — see "Design findings from prototyping"; iPRC matched closed-form
+  to `5e-7`, and it caught the frozen-`U` dPRC mistake before it reached the plan.
+- `dprc_curve` must differentiate through a re-solve of `U(p)` (via `differentiable_root`, the same
+  primitive `periodic_orbit_problem` already uses), never through `prc_curve` alone at a fixed `U`
+  — the latter is differentiable but not meaningful (see "Design findings from prototyping").
 - `US-PRC-001` must be promoted to a real `MC-PRC-001` validation case (MatCont cross-check), not
   left unsupported — this feature does not ship without it. The MatCont reference data must come
   from an actual MATLAB/MatCont 7.6 run, never hand-edited.
