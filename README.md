@@ -17,6 +17,8 @@ branches through folds with pseudo-arclength continuation, detect and refine
 fold/Hopf events, and compose the analysis with `jax.jit`, `jax.vmap`, and
 automatic differentiation.
 
+📖 **[Read the full documentation](https://jaxcont.readthedocs.io/en/latest/)**
+
 ## Why JaxCont?
 
 - **Transform the whole analysis.** Batch ensembles of branches with `vmap`
@@ -85,6 +87,7 @@ plot_eigenvalues(result, shade_stability=True)
 
 ## Explore
 
+- [Documentation home](https://jaxcont.readthedocs.io/en/latest/)
 - [Quickstart](https://jaxcont.readthedocs.io/en/latest/quickstart.html)
 - [Example gallery](https://jaxcont.readthedocs.io/en/latest/auto_examples/index.html)
 - [`example_03_van_der_pol.py`](examples/example_03_van_der_pol.py) — Hopf
