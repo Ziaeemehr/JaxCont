@@ -101,9 +101,9 @@ docs/_templates/
 
 # Plots
 *.png
+!notes/technical_presentation/assets/*.png
 *.pdf
 *.svg
 !docs/images/*.png
 !docs/images/*.svg
 !docs/images/logo/*.svg
-
