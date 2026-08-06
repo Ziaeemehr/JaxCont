@@ -133,15 +133,26 @@ Keep these distinctions explicit throughout the deck:
 ## Figure and demo provenance
 
 Use TikZ for editable teaching geometry and repository outputs for application
-claims. A committed snapshot must be regenerated from the exact command in
-`assets/README.md`, visually reviewed, copied without hand editing, and recorded
-with source path, source revision/date, intended chapter, and SHA-256.
+claims. Deck-specific snapshots under `assets/` must be regenerated from the
+exact command in `assets/README.md`, visually reviewed, copied without hand
+editing, and recorded with source path, source revision/date, intended chapter,
+and SHA-256.
+
+A directly reused gallery image is a separate provenance class. It must stay
+tracked, carry an explicit origin revision and hash in the presentation README,
+be visually inspected, and have its source example rerun. When the source only
+displays figures, that run verifies current behavior but must not be described
+as byte-for-byte regeneration. Example 12 is the current direct-gallery
+exception. Replacing it requires either a deterministic save/export workflow
+with recorded command/revision/hash or a new reviewed snapshot under `assets/`.
 
 When an example changes, rerun it before editing the slide. Check its printed
-diagnostics and the generated image; a current filename does not prove current
-content. If a slide prints a numerical value, copy it from a fresh run or a
-reviewed validation artifact and identify whether it is a diagnostic, an
-analytic answer, or a result judged against a declared tolerance.
+diagnostics and any generated image; a current filename does not prove current
+content. For a display-only direct-gallery source, retain and hash-check the
+reviewed input until a reproducible export exists. If a slide prints a
+numerical value, copy it from a fresh run or a reviewed validation artifact and
+identify whether it is a diagnostic, an analytic answer, or a result judged
+against a declared tolerance.
 
 For a live demo, keep a reviewed image and captured expected output available.
 Commands that open interactive windows, simulate a long transient, compile a

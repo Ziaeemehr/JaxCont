@@ -68,7 +68,7 @@ array shape can turn a short script into a poor live moment.
 | README saddle-node quick start | Best true live demo after one warm-up run | Paste the root README “Quick start” block. Point to the fold event and annotated branch. If the GUI fails, use the Chapter 2–3 cubic drawings and report the expected fold at `p=0`. |
 | `example_03_van_der_pol.py` | Reliable live after imports/JIT are warm | Run from `examples/` with `MPLBACKEND=Agg`; show the saved `van_der_pol.png` and stdout. Emphasize that `l1=0` makes this a degenerate center crossing. |
 | `example_10_van_der_pol_limit_cycle.py` | Prefer pre-generated output | The script first integrates a transient, locates a cycle, compiles collocation, and continues it. Use the saved gallery figure; show the command and the period trend. |
-| `example_12_fitzhugh_nagumo_phase_plane.py` | Prefer the tracked figure | The script opens interactive figures and does not save them. Use the Chapter 8 snapshot unless the GUI has been rehearsed. |
+| `example_12_fitzhugh_nagumo_phase_plane.py` | Prefer the direct tracked gallery figure | The reused JPEG is the documented gallery exception, not an `assets/README.md` regenerated snapshot. The script opens interactive figures and saves nothing; use the retained Chapter 8 image unless the GUI has been rehearsed. |
 | `example_13_phase_response_curve.py` | Short live option on the current-main checkout | Run with `MPLBACKEND=Agg`; show the saved two-panel image. State the current-main status before the command. |
 | `example_14_prc_shooting_validation.py` | Pre-generate; do not depend on it live | Independent shooting, reconverged finite differences, and plotting make it the slowest route. Use the reviewed four-panel asset and captured exact diagnostics. |
 
@@ -82,9 +82,11 @@ cd examples
 MPLBACKEND=Agg python example_03_van_der_pol.py
 ```
 
-Substitute the selected example filename. Example 12 is the exception: because
-it does not save its figures, headless execution is a command check rather than
-a useful display.
+Substitute the selected example filename. Example 12 is the direct-gallery
+exception: because it does not save its figures, headless execution checks the
+current model/plot path and expected Hopf stdout but does not regenerate the
+JPEG. Verify that retained file's Git tracking and SHA-256 with the commands in
+`README.md`; do not present the headless run as image provenance.
 
 ## Chapter 1 — Orientation and application map
 
@@ -348,9 +350,10 @@ not by which helper is most visually attractive.
    along `I`. Then move to the right panel at `I=0.5`: identify the hollow
    unstable equilibrium, nullclines, arrows, and trajectory.
 
-**Demo cue:** Use the tracked two-panel image. The source script opens two
-interactive figures and does not save them, so do not rely on a headless live
-run for the visual.
+**Demo cue:** Use the direct tracked gallery image. Its source script opens two
+interactive figures and does not save them, so a headless run verifies behavior
+but not the retained JPEG bytes. Follow the exception policy in `README.md`
+rather than claiming that the script regenerated the visual.
 
 **Likely question — “Is a branch-state projection a phase portrait?”** No. It
 plots stored solution coordinates, not the vector field or time-domain flow at

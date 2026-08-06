@@ -110,18 +110,19 @@ target additionally uses Poppler’s `pdfinfo`/`pdftotext` and `rg`.
 
 ## Tracked and generated images
 
-Tracked presentation inputs are source-controlled evidence:
+Tracked presentation inputs use two provenance classes.
+
+The deck-specific snapshots below are governed by
+[`assets/README.md`](assets/README.md):
 
 - `assets/example_08_period_doubling.png`;
 - `assets/example_09_neimark_sacker.png`;
 - `assets/example_13_phase_response_curve.png`;
-- `assets/example_14_prc_shooting_validation.png`;
-- `../../examples/images/example_12_fitzhugh_nagumo_phase_plane.jpg`, reused
-  directly from the example gallery.
+- `assets/example_14_prc_shooting_validation.png`.
 
 The PDF, `jaxcont_logo.png`, LaTeX intermediates, and ordinary example-gallery
 outputs are generated artifacts and are ignored by Git. Never hand-edit a
-reviewed snapshot. When its source example changes:
+reviewed snapshot. When a deck-specific snapshot's source example changes:
 
 1. run the command recorded in `assets/README.md` from `examples/`;
 2. inspect the fresh gallery output and its printed diagnostics;
@@ -129,14 +130,38 @@ reviewed snapshot. When its source example changes:
 4. update the provenance revision/date and SHA-256 in `assets/README.md`;
 5. rebuild and inspect every frame that uses the figure.
 
+The tracked
+`../../examples/images/example_12_fitzhugh_nagumo_phase_plane.jpg` is a
+truthful exception: the deck reuses this gallery JPEG in place, but the current
+`example_12_fitzhugh_nagumo_phase_plane.py` only displays figures with
+`plt.show()` and does not regenerate that file. The retained JPEG was added in
+commit `bd7937a` and has SHA-256
+`5bef74c41825727169dac2bfed33591916ab7c3d16ce2a73dd174aae06792d88`.
+
+Verify this direct gallery input from the repository root with:
+
+```bash
+git ls-files --error-unmatch examples/images/example_12_fitzhugh_nagumo_phase_plane.jpg
+sha256sum examples/images/example_12_fitzhugh_nagumo_phase_plane.jpg
+MPLBACKEND=Agg python examples/example_12_fitzhugh_nagumo_phase_plane.py
+```
+
+The headless run checks current model/plot execution and the expected Hopf
+stdout; it does not reproduce the JPEG bytes. If the Example 12 visual must be
+refreshed, first add a deterministic save/export workflow and record its exact
+command, revision, and hash, or create a deck-specific reviewed snapshot under
+`assets/`. Until then, do not overwrite the retained JPEG or claim that a
+display-only run regenerated it.
+
 ## Chapter-by-chapter authoring workflow
 
 1. Confirm the claim against the evidence order in `METHOD.md`, including the
    release/current-main/future status.
 2. Edit only the chapter that owns the teaching point. Change the master or
    setup file only for truly deck-wide structure or styling.
-3. Refresh every affected repository-generated figure from its source example;
-   do not copy an older plot merely because the filename matches.
+3. Refresh each affected `assets/` snapshot from its recorded command. For the
+   direct Example 12 gallery exception, apply the tracked-file/hash/runtime
+   checks above and add a deterministic export before replacing the image.
 4. Run `make`, scan the LaTeX log, and locate the changed frame by its title in
    extracted PDF text.
 5. Render the affected page range and inspect titles, equations, code, figure
