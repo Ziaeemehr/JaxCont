@@ -243,3 +243,58 @@ autodoc_default_options = {
 
 autodoc_typehints = 'description'
 autodoc_typehints_description_target = 'documented'
+
+# -- Technical presentation build ---------------------------------------------
+# The Beamer technical presentation lives under notes/technical_presentation/
+# and its PDF is repo-wide `.gitignore`d like every other generated artifact.
+# Build a fresh copy into _static/ whenever the docs build so presentation.md
+# can link to and embed it without ever committing a binary to Git. Missing
+# LaTeX tooling degrades to a skipped page rather than a failed docs build,
+# since the rest of the documentation does not depend on it.
+import shutil
+import subprocess
+
+from sphinx.util import logging as _sphinx_logging
+
+_presentation_logger = _sphinx_logging.getLogger(__name__)
+
+
+def _build_technical_presentation(app):
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    presentation_dir = os.path.join(repo_root, 'notes', 'technical_presentation')
+    pdf_name = 'jaxcont_technical_presentation.pdf'
+    built_pdf = os.path.join(presentation_dir, pdf_name)
+    static_dir = os.path.join(app.srcdir, '_static')
+    dest_pdf = os.path.join(static_dir, pdf_name)
+
+    if shutil.which('latexmk') is None or shutil.which('make') is None:
+        _presentation_logger.info(
+            'latexmk/make not found -- skipping technical presentation PDF build; '
+            'presentation.md will link to a missing file.'
+        )
+        return
+
+    result = subprocess.run(
+        ['make', '-C', presentation_dir],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        _presentation_logger.info(
+            'Technical presentation PDF build failed (exit %d); the download '
+            'link on presentation.md may be stale or missing.\n%s',
+            result.returncode,
+            (result.stdout or '') + (result.stderr or ''),
+        )
+
+    if os.path.exists(built_pdf):
+        os.makedirs(static_dir, exist_ok=True)
+        shutil.copy2(built_pdf, dest_pdf)
+    else:
+        _presentation_logger.info(
+            'Technical presentation PDF not found at %s after build attempt', built_pdf
+        )
+
+
+def setup(app):
+    app.connect('builder-inited', _build_technical_presentation)
