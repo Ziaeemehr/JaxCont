@@ -42,7 +42,7 @@ t_traj[0] = 0.0
 theta_guess = 2 * np.pi * t_traj / 5.5 + 0.3
 u_traj = jnp.asarray(np.stack([0.8 * np.cos(theta_guess), 0.8 * np.sin(theta_guess)], axis=1))
 
-mesh = Collocation(ntst=10, ncol=4)
+mesh = Collocation(ntst=40, ncol=4)
 problem = periodic_orbit_problem(rhs, u_traj, jnp.asarray(t_traj), 5.5, 1.0, mesh)
 
 # %%
@@ -61,4 +61,6 @@ fig, (ax_prc, ax_dprc) = plt.subplots(1, 2, figsize=(12, 5))
 plot_prc(Z, ax=ax_prc, labels=["x", "y"], title="iPRC")
 plot_prc(dZ, ax=ax_dprc, labels=["x", "y"], title="dPRC (d/dρ)")
 plt.tight_layout()
+plt.savefig("images/example_13_phase_response_curve.png")
+print("Saved figure to images/example_13_phase_response_curve.png")
 plt.show()
