@@ -1,3 +1,191 @@
 \chapterdivider{7}{Direct codimension-two point solvers}
   {How can two local degeneracy conditions organize a two-parameter model?}
   {Featured application: refine an approximate Bogdanov--Takens point}
+
+\begin{frame}{Five ways two local conditions can meet}
+\releasedbadge
+\small
+\centering
+\begin{tikzpicture}[node distance=2.2mm and 9mm,>=Latex,
+ condition/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+                   minimum width=91mm,minimum height=6.4mm,align=center,
+                   font=\small},
+ label/.style={circle,draw=JaxOrange,thick,fill=JaxOrange!10,
+               minimum size=8mm,font=\bfseries}]
+  \node[condition] (cp) {Fold $+$ vanishing quadratic fold coefficient
+    $a=\texttt{fold\_coefficient}(\cdots)=0$};
+  \node[label,right=of cp] (cpl) {CP};
+  \node[condition,below=of cp] (bt) {Double zero eigenvalue\;/
+    fold--Hopf organizing center};
+  \node[label,right=of bt] (btl) {BT};
+  \node[condition,below=of bt] (gh) {Hopf $+$ first Lyapunov coefficient
+    $l_1=0$};
+  \node[label,right=of gh] (ghl) {GH};
+  \node[condition,below=of gh] (zh) {Zero eigenvalue $+$ one imaginary pair};
+  \node[label,right=of zh] (zhl) {ZH};
+  \node[condition,below=of zh] (hh) {Two \emph{distinct} imaginary pairs};
+  \node[label,right=of hh] (hhl) {HH};
+  \foreach \a/\b in {cp/cpl,bt/btl,gh/ghl,zh/zhl,hh/hhl}
+    \draw[->,very thick,JaxTeal] (\a)--(\b);
+\end{tikzpicture}
+\vspace{2mm}
+\begin{block}{Why codimension two?}
+Two independent scalar conditions generally require two free model
+parameters. Their intersection organizes nearby one-parameter behavior.
+\end{block}
+\end{frame}
+
+\begin{frame}{Choose the solver from the degeneracy}
+\centering
+\renewcommand{\arraystretch}{1.23}
+\setlength{\tabcolsep}{2.5pt}
+\scriptsize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{.12\textwidth}
+                  >{\raggedright\arraybackslash}p{.255\textwidth}
+                  >{\centering\arraybackslash}p{.08\textwidth}
+                  >{\raggedright\arraybackslash}p{.285\textwidth}
+                  >{\raggedright\arraybackslash}p{.18\textwidth}@{}}
+\toprule
+Label / name & Spectral or normal-form condition & Minimum $n$
+  & Extra returned vectors / frequencies & Special seed requirement \\
+\midrule
+CP / cusp & simple zero mode and fold coefficient $a=0$
+  & $n\geq1$ & null vector $v$ & none \\
+BT / Bogdanov--Takens & double zero mode with a Jordan chain
+  & $n\geq2$ & $v_0,v_1$ with $Jv_0=0$, $Jv_1=v_0$ & none \\
+GH / generalized Hopf & imaginary pair and $l_1=0$
+  & $n\geq2$ & $q_1,q_2,\omega$ & none \\
+ZH / zero--Hopf & zero mode and one imaginary pair
+  & $n\geq3$ & $v,q_1,q_2,\omega$ & none \\
+HH / double Hopf & two distinct imaginary pairs
+  & $n\geq4$ & $q_{1a},q_{2a},\omega_a$ and
+    $q_{1b},q_{2b},\omega_b$ & required keyword-only \texttt{seed\_b} \\
+\bottomrule
+\end{tabular}
+\vspace{2mm}
+\begin{alertblock}{HH must represent two physical pairs}
+The result is marked unconverged unless
+$|\omega_a-\omega_b|>\texttt{separation\_tolerance}$ (default $10^{-3}$).
+This is an absolute, model-scaled frequency guard; tune it when necessary.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{One supplied guess is refined into one point}
+\small
+\centering
+\begin{tikzpicture}[node distance=4mm,>=Latex,
+ box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+             minimum width=105mm,minimum height=9mm,align=center}]
+  \node[box] (guess) {approximate state $\state_{\rm g}$ $+$ parameter pair
+    $\bm p_{\rm g}\in\R^2$ $+$ optional model arguments};
+  \node[box,below=of guess,draw=JaxOrange,fill=JaxOrange!9] (newton)
+    {extended-system Newton solve};
+  \node[box,below=of newton,draw=JaxGreen,fill=JaxGreen!10] (result)
+    {refined state $+$ parameter pair $+$ null/eigenvectors
+     $+$ \texttt{converged} flag};
+  \draw[->,very thick,JaxTeal] (guess)--(newton);
+  \draw[->,very thick,JaxTeal] (newton)--(result);
+\end{tikzpicture}
+\vspace{3mm}
+\begin{columns}[T]
+\column{.47\textwidth}
+\begin{block}{Local refinement}
+The supplied guess selects a nearby root of the point-defining extended
+system. Check \texttt{converged} before interpreting the returned data.
+\end{block}
+\column{.49\textwidth}
+\begin{alertblock}{Scope boundary}
+This is point refinement, not continuation of a fold/Hopf curve in two
+parameters. It does not trace the curves meeting at the point.
+\end{alertblock}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Refine a Bogdanov--Takens point}
+\begin{lstlisting}
+u_bt, p_bt, v0, v1, converged = jc.bogdanov_takens_point(
+    rhs,
+    u_guess,
+    jnp.array([p1_guess, p2_guess]),
+    args,
+)
+assert converged
+\end{lstlisting}
+\begin{columns}[T]
+\column{.46\textwidth}
+\begin{block}{The returned Jordan chain}
+At the refined state and parameter pair,
+\[
+  Jv_0=0,\qquad Jv_1=v_0,
+\]
+where $J=f_{\state}(\state_{\rm BT},\bm p_{\rm BT})$.
+\end{block}
+\column{.50\textwidth}
+\begin{block}{How to read the result}
+$v_0$ witnesses the zero eigenvector; $v_1$ witnesses its generalized
+eigenvector. Together they encode the double-zero Jordan structure.
+\end{block}
+\begin{alertblock}{The assertion is part of the workflow}
+A final Newton iterate is returned even when refinement fails, so do not
+interpret $\bm p_{\rm BT}$ before checking \texttt{converged}.
+\end{alertblock}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Differentiate the location only after checking it}
+\small
+\begin{columns}[T]
+\column{.51\textwidth}
+\begin{lstlisting}
+# First establish a trustworthy local root.
+*_, converged = jc.bogdanov_takens_point(
+    rhs, u_guess, p_guess, args
+)
+assert converged
+
+# Then compose the parameter-only wrapper.
+def first_bt_parameter(theta):
+    return jc.bogdanov_takens_parameters(
+        rhs, u_guess, p_guess, theta
+    )[0]
+
+dp1_dtheta = jax.grad(first_bt_parameter)(args)
+\end{lstlisting}
+\column{.45\textwidth}
+\begin{block}{A grad-ready return value}
+Each \texttt{*\_parameters(...)} companion returns only the refined
+parameter pair (shape \texttt{(2,)}) and deliberately omits the convergence
+flag, making it directly composable with JAX transforms.
+\end{block}
+\begin{block}{Available companions}
+\scriptsize
+\texttt{cusp\_parameters},
+\texttt{bogdanov\_takens\_parameters},
+\texttt{generalized\_hopf\_parameters},
+\texttt{zero\_hopf\_parameters}, and
+\texttt{double\_hopf\_parameters}.
+\end{block}
+\end{columns}
+\begin{alertblock}{Exploration comes first}
+Because the wrapper has no flag, use and check the corresponding
+\texttt{*\_point(...)} solver before embedding the location in a gradient.
+For HH, both interfaces still require keyword-only \texttt{seed\_b}.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{What to remember}
+\begin{enumerate}
+  \item CP, BT, GH, ZH, and HH refine supplied two-parameter guesses into
+        isolated local organizing points.
+  \item The returned vectors and frequencies witness the defining spectral
+        or normal-form conditions; \texttt{converged} decides whether to
+        trust that witness.
+  \item Parameter-only companions support differentiable composition after
+        the point solver has been checked.
+\end{enumerate}
+\vspace{3mm}
+\begin{alertblock}{Capability boundary}
+JaxCont does not automatically continue the fold or Hopf curves through
+these points, switch branches there, or construct a two-parameter diagram.
+\end{alertblock}
+\end{frame}
