@@ -489,7 +489,29 @@ def test_unsupported_case_is_explicitly_reported():
 
 
 def test_unsupported_registry_covers_every_deferred_feature_family():
-    """Omitting a deferred family would make the capability matrix incomplete."""
+    """Omitting a deferred family would make the capability matrix incomplete.
+
+    ``prc`` and ``dprc`` are deliberately absent from this set, not omitted
+    by oversight:
+
+    - ``prc`` (infinitesimal PRC, ``prc_curve``) is no longer a deferred
+      MatCont capability: MC-PRC-001 promotes it to ``support: "supported"``
+      and cross-validates it against MatCont 7.6's own PRC processor
+      (``examples/MatCont/matlab/export_prc_run.m`` /
+      ``python_cases/prc.py``).
+    - ``dprc`` was never actually a MatCont capability gap in the sense this
+      registry tracks (a capability *MatCont has that JaxCont lacks*).
+      MatCont's own PRC/dPRC/Input processor does not compute
+      ``d(PRC)/d(alpha)`` (JaxCont's ``dprc_curve``) at all -- its exported
+      ``dPRC`` column is ``d(PRC)/dt``, a different quantity, confirmed by
+      reading ``LimitCycle/calcPRC.m`` directly (see ``python_cases/prc.py``'s
+      module docstring for the full derivation). There is nothing for a
+      "MatCont supports this, JaxCont doesn't" registry row to record here:
+      JaxCont computes ``dprc_curve`` (validated independently by
+      ``tests/test_prc.py``, not by a MatCont cross-check), and MC-PRC-001's
+      own title/observations already document, at the case level, why no
+      MatCont cross-check exists for it.
+    """
     unsupported_features = {
         feature
         for case in load_registry()["cases"]
@@ -507,9 +529,9 @@ def test_unsupported_registry_covers_every_deferred_feature_family():
         "general-bvp-continuation",
         "homoclinic-continuation",
         "heteroclinic-continuation",
-        "prc",
-        "dprc",
     } <= unsupported_features
+    assert "prc" not in unsupported_features
+    assert "dprc" not in unsupported_features
 
 
 def _complete_metadata(case_id: str) -> dict:
