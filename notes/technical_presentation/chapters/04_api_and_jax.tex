@@ -87,28 +87,30 @@ eager-only even though branch and stability arrays are transformation-safe.
 \end{alertblock}
 \end{frame}
 
-\begin{frame}{The public objects hide one compiled branch engine}
+\begin{frame}{One public call selects one of two compiled engines}
 \centering
-\begin{tikzpicture}[node distance=8mm and 10mm,>=Latex,
+\begin{tikzpicture}[node distance=8mm and 9mm,>=Latex,
  box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
              minimum width=31mm,minimum height=11mm,align=center},
  engine/.style={rounded corners,draw=JaxGreen,very thick,fill=JaxGreen!10,
-                minimum width=38mm,minimum height=13mm,align=center}]
+                minimum width=70mm,minimum height=15mm,align=left}]
 \node[box] (model) {\texttt{rhs, u0, p0, args}};
 \node[box,right=of model] (problem) {\texttt{BifProblem}};
-\node[box,right=of problem] (call) {algorithm + settings\\\texttt{continuation(...)}};
-\node[engine,below=of call] (loop) {bounded whole-loop\\JAX engine};
-\node[box,left=of loop] (result) {\texttt{ContinuationResult}};
+\node[box,right=of problem] (call) {\texttt{continuation(...)}};
+\node[engine,below=of call] (backends)
+  {\texttt{Natural()} $\to$ \texttt{natural\_scan}\\
+   \texttt{PseudoArclength()} $\to$ \texttt{pseudo\_arclength\_scan}};
+\node[box,left=of backends] (result) {\texttt{ContinuationResult}};
 \draw[->,thick] (model)--(problem);
 \draw[->,thick] (problem)--(call);
-\draw[->,thick] (call)--(loop);
-\draw[->,thick] (loop)--(result);
+\draw[->,thick] (call)--(backends);
+\draw[->,thick] (backends)--(result);
 \end{tikzpicture}
-\vspace{7mm}
+\vspace{4mm}
 \begin{block}{Why the boundary matters}
-Users compose immutable problem, algorithm, settings, and event values. The
-engine can change its carry representation or post-processing without changing
-how demos construct a problem or read a branch.
+Users compose immutable problem, algorithm, settings, and event values.
+\texttt{continuation} dispatches the algorithm to one of two compiled engines;
+both return the same result contract to demos and downstream analysis.
 \end{block}
 \vfill
 {\scriptsize Carry fields, array-selection mechanics, and reassembly details are implementation-appendix material (Chapter 12).}
