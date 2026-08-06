@@ -261,24 +261,34 @@ class PeriodDoubling(Event):
     mesh: Any
     kind: str = "period_doubling"
     tolerance: float = 1e-6
-    # Must stay < 1.0: that's the exact distance-from-1 of a candidate whose
-    # magnitude is ~0 (the always-present decaying/trivial-like multiplier
-    # this filter exists to reject -- see test_period_doubling_near_unit_
-    # circle_filter_excludes_far_multipliers). 0.9 keeps a full 0.1 margin
-    # there while giving the *true* transverse candidate much more room to
-    # move before falling out of the window: an adaptive step that samples it
-    # at magnitude 1.48 (distance 0.48) cleared the old 0.5 threshold by only
-    # 0.02 -- a margin thinner than realistic collocation/FP noise, which is
-    # what let it flip to a false-negative (0 events instead of 1) on some
-    # hardware. See docs/superpowers/specs/2026-07-24-period-doubling-
-    # neimark-sacker-design.md for the filter's original rationale.
-    near_unit_circle: float = 0.9
+    # Log-magnitude window (|ln|mult|| < near_unit_circle), not a linear
+    # distance from 1: a linear "|mag - 1| < threshold" window is capped
+    # below 1.0 by construction, since a magnitude-~0 decaying multiplier
+    # (the always-present trivial-like candidate this filter exists to
+    # reject -- see test_period_doubling_near_unit_circle_filter_excludes_
+    # far_multipliers) sits at *exactly* distance 1.0 from 1, leaving almost
+    # no room to widen the window for the true transverse candidate's travel.
+    # That ceiling is what caused a recurring false negative: with
+    # ds_max=0.1 (default), the worst-case single accepted step can move a
+    # multiplier by a factor of up to exp(ds_max * T) (T~2*pi here) =~ 1.87x
+    # -- the old linear threshold of 0.9 (magnitude ceiling 1.9) left only
+    # ~1.4% margin over that bound, thin enough that ordinary hardware-
+    # dependent float32 rounding (different Newton iteration counts feed the
+    # adaptive step controller) pushed the post-crossing sample outside the
+    # window on some CI runners but not others -- 0 events instead of 1,
+    # reproduced on CI, not locally. Log space removes the ceiling: a
+    # magnitude-~0 candidate has ln|mult| ~ -12.6 (jnp.log(3.4e-6)), so any
+    # reasonable threshold rejects it, while the true candidate gets far more
+    # room -- e^2.0 =~ 7.4x its magnitude at the crossing -- before falling
+    # out of the window. See docs/superpowers/specs/2026-07-24-period-
+    # doubling-neimark-sacker-design.md for the filter's original rationale.
+    near_unit_circle: float = 2.0
 
     def test_function(self, point: BranchPoint) -> float:
         mult = point.eigenvalues
         trivial_idx = jnp.argmin(jnp.abs(mult - 1.0))
         keep = jnp.arange(mult.shape[0]) != trivial_idx
-        near_unit = jnp.abs(jnp.abs(mult) - 1.0) < self.near_unit_circle
+        near_unit = jnp.abs(jnp.log(jnp.abs(mult) + 1e-30)) < self.near_unit_circle
         candidates_mask = keep & near_unit & (jnp.abs(jnp.imag(mult)) < self.tolerance)
         if not jnp.any(candidates_mask):
             return float("nan")
@@ -332,17 +342,21 @@ class NeimarkSacker(Event):
     mesh: Any
     kind: str = "neimark_sacker"
     tolerance: float = 1e-6
-    # See PeriodDoubling.near_unit_circle for why 0.9 (not the old 0.5): must
-    # stay < 1.0 to keep rejecting a ~0-magnitude decaying candidate, while
-    # giving the true complex-pair candidate much more margin before it's
-    # mistaken for "lost" as it moves away from the unit circle.
-    near_unit_circle: float = 0.9
+    # See PeriodDoubling.near_unit_circle for why this is a log-magnitude
+    # window (not a linear distance from 1, and not 0.9): a linear window is
+    # capped below 1.0 by construction and left too thin a margin against
+    # ordinary hardware-dependent float32 noise, causing a recurring false
+    # negative. Log space rejects a ~0-magnitude decaying candidate just as
+    # reliably (ln|mult| ~ -12.6) while giving the true complex-pair
+    # candidate far more margin before it's mistaken for "lost" as it moves
+    # away from the unit circle.
+    near_unit_circle: float = 2.0
 
     def test_function(self, point: BranchPoint) -> float:
         mult = point.eigenvalues
         trivial_idx = jnp.argmin(jnp.abs(mult - 1.0))
         keep = jnp.arange(mult.shape[0]) != trivial_idx
-        near_unit = jnp.abs(jnp.abs(mult) - 1.0) < self.near_unit_circle
+        near_unit = jnp.abs(jnp.log(jnp.abs(mult) + 1e-30)) < self.near_unit_circle
         candidates_mask = keep & near_unit & (jnp.abs(jnp.imag(mult)) > self.tolerance)
         if not jnp.any(candidates_mask):
             return float("nan")

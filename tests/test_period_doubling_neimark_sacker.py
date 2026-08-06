@@ -114,6 +114,18 @@ def test_period_doubling_near_unit_circle_filter_prevents_double_detection():
     # near_unit_circle=0.9 gives a ~20x wider margin at that same point while
     # still safely excluding the ~3.4e-6 decaying candidate (distance ~1.0,
     # comfortably outside 0.9) -- see events.py's near_unit_circle comment.
+    #
+    # The same false negative resurfaced (v0.3.1) even at near_unit_circle=
+    # 0.9: a *linear* distance-from-1 window is capped below 1.0 by
+    # construction (the decaying candidate sits at exactly distance 1.0), so
+    # 0.9's magnitude ceiling of 1.9 left only ~1.4% margin over the
+    # worst-case single-step jump this test's default ds_max=0.1 allows
+    # (exp(ds_max * T) =~ 1.87x here) -- thin enough that hardware-dependent
+    # float32 rounding (different Newton iteration counts feed the adaptive
+    # step controller) tipped the post-crossing sample outside the window on
+    # some CI runners but not others. Fixed by switching the filter to a
+    # log-magnitude window (|ln|mult|| < near_unit_circle, default 2.0),
+    # which has no such ceiling -- see events.py's near_unit_circle comment.
     sol = _sweep(BETA_PD, jc.PeriodDoubling, span=(-0.1, 0.3))
     assert len(sol.events) == 1
     assert abs(sol.events[0].p) < 1e-4

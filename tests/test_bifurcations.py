@@ -320,17 +320,19 @@ def test_period_doubling_test_function_at_exact_bifurcation():
 
 def test_period_doubling_near_unit_circle_filter_excludes_far_multipliers():
     # Regression for the false-positive bug found during design: once a real
-    # multiplier moves far enough past -1 (here -2.776, |real+1|=1.776), an
-    # unrelated multiplier that merely sits near a roughly constant distance
-    # from -1 (the decaying xy multiplier ~3.4e-6, |3.4e-6+1|~1.0) must NOT
-    # be picked as "closer to -1" just because 1.0 < 1.776 -- both are
-    # outside near_unit_circle=0.9 (|mag-1| = 1.776 and ~1.0 respectively),
-    # so nothing should be selected and test_function must return nan, not a
-    # spurious finite value that could register a false sign-change.
+    # multiplier moves far enough past -1 (here -20, ln(20)=3.0, outside the
+    # log-magnitude window near_unit_circle=2.0), an unrelated multiplier
+    # that merely sits near a roughly constant distance from -1 (the decaying
+    # xy multiplier ~3.4e-6, ln(3.4e-6)~=-12.6, also outside the window) must
+    # NOT be picked as "closer to -1" just because it's linearly nearer --
+    # both are excluded, so nothing should be selected and test_function
+    # must return nan, not a spurious finite value that could register a
+    # false sign-change. See PeriodDoubling.near_unit_circle's docstring for
+    # why the filter is log-magnitude, not linear-distance.
     pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
     point = BranchPoint(
         p=0.0, u=jnp.zeros(1),
-        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, -2.776 + 0j, -2.776 + 0j]),
+        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, -20.0 + 0j, -20.0 + 0j]),
     )
     assert jnp.isnan(pd.test_function(point))
 
@@ -355,8 +357,9 @@ def test_neimark_sacker_test_function_finds_complex_pair_near_unit_circle():
 
 def test_neimark_sacker_test_function_below_unit_circle():
     # magnitude of 0.42+0.56j is exactly 0.7 (0.42^2+0.56^2=0.49=0.7^2), so
-    # |magnitude-1|=0.3 -- comfortably INSIDE near_unit_circle (now 0.9, was
-    # 0.5 at the time this test was written), not exactly on the boundary.
+    # |magnitude-1|=0.3 -- comfortably INSIDE near_unit_circle (a log-
+    # magnitude window since the filter's redesign; ln(0.7)~=-0.357, well
+    # inside the default 2.0), not exactly on the boundary.
     # (An earlier version of this test used
     # 0.3+0.4j, magnitude exactly 0.5, |magnitude-1|=0.5 -- exactly ON the
     # boundary. This was the plan's own bug, found during Task 1 review:
