@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-06  
 **Status:** Approved in conversation; awaiting review of the written specification  
-**Deliverable:** One beginner-friendly technical presentation PDF assembled from modular Beamer chapters
+**Deliverable:** One beginner-friendly “JaxCont v0.3.1+” technical presentation PDF assembled from modular Beamer chapters
 
 ## Purpose
 
@@ -43,7 +43,13 @@ The new or substantially revised material includes:
 - analytic, MatCont, BifurcationKit, and independent shooting validation workflows;
 - the v0.3.1 detector-margin and documentation-build fixes where they affect user expectations.
 
-PRC/dPRC features must be labeled as current-main functionality unless the package version is advanced before the deck is finalized. Release claims must be checked against `src/jaxcont/_version.py` and `CHANGELOG.md` during implementation.
+The deck-wide version label is **“JaxCont v0.3.1+”**. The plus sign means “the published v0.3.1 release plus current-main features intended for v0.4”; it must not imply that v0.4 has already been released. A short legend near the beginning distinguishes three statuses:
+
+- **Released in v0.3.1**;
+- **Current main — planned for v0.4**;
+- **Future work — not implemented**.
+
+PRC/dPRC features must use the current-main/planned-for-v0.4 status unless the package version is advanced before the deck is finalized. Release claims must be checked against `src/jaxcont/_version.py` and `CHANGELOG.md` during implementation. After v0.4 is published, maintainers should be able to update the deck by changing the global version label and removing obsolete current-main markers without rewriting the teaching narrative.
 
 ## Source architecture
 
@@ -216,6 +222,7 @@ The work is complete when:
 
 - the final presentation builds as one PDF from the modular source;
 - the existing style is recognizably preserved;
+- the title and status legend use “JaxCont v0.3.1+” without presenting v0.4 as released;
 - all post-2026-07-28 supported features in scope are accurately represented;
 - every major application feature has a visual explanation or real output figure;
 - the guided demos are reproducible from repository commands;
