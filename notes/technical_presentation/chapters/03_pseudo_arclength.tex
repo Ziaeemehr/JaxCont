@@ -2,28 +2,24 @@
   {How can a branch follower pass a point where the physical parameter turns around?}
   {Featured application: predictor--corrector continuation through a saddle-node fold}
 
-\begin{frame}{Natural parameter continuation}
-Natural continuation treats $p$ as the independent coordinate.
+\begin{frame}{Natural continuation fixes the next parameter}
 \[
-  p_{\mathrm{pred}}=p_k+\operatorname{sign}(p_{\mathrm{end}}-p_k)\,\Delta s,
-  \qquad \state_{\mathrm{pred}}=\state_k.
-\]
-Then Newton solves only
-\[
+  p_{\mathrm{pred}}
+    =p_k+\operatorname{sign}(p_{\mathrm{end}}-p_k)\,\Delta s,
+  \qquad
   F(\state,p_{\mathrm{pred}})=0
+  \quad\text{with $p_{\mathrm{pred}}$ fixed.}
 \]
-with $p_{\mathrm{pred}}$ fixed.
-\begin{block}{Advantages}
-Simple, cheap, intuitive, and effective on branches that are single-valued as $\state(p)$.
+\begin{block}{When it works well}
+Natural continuation is simple and inexpensive when the branch is locally a
+single-valued function $\state(p)$ and folds are not part of the question.
 \end{block}
-\begin{alertblock}{Limitation}
-At a fold, Newton must invert $F_{\state}$, which becomes singular. Shrinking the step can approach the fold, but it cannot change this geometry.
-\end{alertblock}
 \end{frame}
 
-\begin{frame}{Why natural continuation stalls at a fold}
+\begin{frame}{A fixed-parameter slice fails at the fold}
 \centering
-\begin{tikzpicture}[x=1.5cm,y=1.05cm,>=Latex]
+\begin{tikzpicture}[x=1.5cm,y=1.05cm,>=Latex,
+  note/.style={fill=white,inner sep=2pt,align=center,font=\small}]
   \draw[->] (-2.5,0)--(2.6,0) node[right] {$p$};
   \draw[->] (0,-2.4)--(0,2.4) node[above] {$u$};
   \draw[JaxBlue,very thick,smooth,domain=-2:2,samples=100]
@@ -32,38 +28,35 @@ At a fold, Newton must invert $F_{\state}$, which becomes singular. Shrinking th
   \fill[JaxBlue] (.25,-1.48) circle (2.4pt);
   \fill[JaxBlue] (.25,-.26) circle (2.4pt);
   \fill[JaxBlue] (.25,1.73) circle (2.4pt);
+  \node[note,anchor=north] at (.25,-2.15) {one $p$, multiple roots};
   \draw[JaxRed,dashed,thick] ({2/3},-2.2)--({2/3},2.2);
-  \node[align=center,anchor=north] at (.25,-2.15) {fixed-$p$\\Newton slice};
-  \node[align=center,anchor=south] at (1.4,.9) {vertical slice becomes\\tangent at the fold};
+  \fill[JaxRed] ({2/3},-1) circle (3pt);
+  \node[note] (tangent) at (1.65,.7) {slice becomes tangent\\no transverse crossing};
+  \draw[->,JaxRed] (tangent.south west)--(.75,-.85);
 \end{tikzpicture}
-\begin{itemize}
-  \item Multiple roots may exist for one $p$.
-  \item The fixed-$p$ slice touches the branch instead of crossing it transversally.
-  \item Newton loses a unique local correction direction.
-\end{itemize}
 \end{frame}
 
-\begin{frame}{Pseudo-arclength continuation: the key idea}
-Introduce an artificial curve coordinate $s$. Seek
-\[
-  (\state(s),p(s)) \quad\text{such that}\quad F(\state(s),p(s))=0.
-\]
-Use the previous unit tangent
-\[
-  \tangent_k=(\dot{\state}_k,\dot p_k),
-  \qquad \|\tangent_k\|_2=1,
-\]
-to predict a new point:
-\[
-  (\state_{\mathrm{pred}},p_{\mathrm{pred}})
-  =(\state_k,p_k)+\Delta s\,\tangent_k.
-\]
-\begin{block}{The conceptual change}
-Both the state and the physical parameter are now unknowns during correction. The algorithm can naturally allow $p$ to turn around.
+\begin{frame}{Pseudo-arclength changes the coordinate}
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{alertblock}{Natural continuation}
+The physical parameter is prescribed. Only the state is corrected, so the
+method inherits every failure of $p$ as a local coordinate.
+\end{alertblock}
+
+\column{.48\textwidth}
+\begin{block}{Pseudo-arclength continuation}
+State and parameter are corrected together. A geometric progress condition
+selects the next point along the curve.
 \end{block}
+\end{columns}
+
+\vfill
+\centering
+The artificial coordinate $s$ keeps increasing even when $p$ turns around.
 \end{frame}
 
-\begin{frame}{Geometry of predictor and corrector}
+\begin{frame}{Predict along the tangent, correct across it}
 \centering
 \begin{tikzpicture}[x=1.5cm,y=1.05cm,>=Latex,
   labelbox/.style={fill=white,inner sep=1.5pt,font=\small}]
@@ -75,13 +68,9 @@ Both the state and the physical parameter are now unknowns during correction. Th
   \coordinate (pred) at (1.00,-1.00);
   \coordinate (new) at (.645,-.85);
 
-  % Short A/B/C markers keep the small correction triangle readable; the
-  % explanations live in the legend at upper right.
   \fill[JaxBlue] (old) circle (3pt) node[below left=1mm] {$A$};
-
   \draw[JaxOrange,very thick,->] (old)--(pred);
   \fill[JaxOrange] (pred) circle (3pt) node[below right=1mm] {$B$};
-
   \draw[JaxGreen,dashed,thick] ($(new)!-.65!(pred)$)--($(new)!1.65!(pred)$);
   \draw[JaxGreen,very thick,->] (pred)--(new);
   \fill[JaxGreen!80!black] (new) circle (3pt) node[above left=1mm] {$C$};
@@ -89,8 +78,8 @@ Both the state and the physical parameter are now unknowns during correction. Th
   \node[draw=black!25,rounded corners,fill=SoftGray,anchor=north west,
         align=left,font=\small,inner sep=4pt] at (1.05,1.82) {
     \textcolor{JaxBlue}{$A$}: previous accepted point\\[1mm]
-    \textcolor{JaxOrange!90!black}{1. predict $A\rightarrow B$ along the tangent}\\[1mm]
-    \textcolor{JaxGreen!60!black}{2. correct $B\rightarrow C$ with Newton}\\[1mm]
+    \textcolor{JaxOrange!90!black}{$A\rightarrow B$}: tangent prediction\\[1mm]
+    \textcolor{JaxGreen!60!black}{$B\rightarrow C$}: Newton correction\\[1mm]
     \textcolor{JaxGreen!60!black}{$C$}: next accepted point};
 
   \node[labelbox,align=center] (plane) at (-1.38,1.55)
@@ -99,8 +88,8 @@ Both the state and the physical parameter are now unknowns during correction. Th
 \end{tikzpicture}
 \end{frame}
 
-\begin{frame}{The extra pseudo-arclength equation}
-The corrector solves $n+1$ equations for the $n+1$ unknowns $(\state,p)$:
+\begin{frame}{One extra equation selects the next point}
+The corrector solves $n+1$ equations for $(\state,p)$:
 \[
 \begin{cases}
 F(\state,p)=0,\\[1mm]
@@ -109,23 +98,13 @@ g(\state,p)=
 +(p-p_k)\dot p_k-\Delta s=0.
 \end{cases}
 \]
-\begin{itemize}
-  \item $F=0$ places the point on the solution branch.
-  \item $g=0$ places it on a hyperplane normal to the previous tangent.
-  \item Their intersection selects one nearby point, even at a fold.
-\end{itemize}
-\begin{block}{Why ``pseudo''?}
-$\Delta s$ approximates geometric arclength locally; it is not the exact integral of speed along the curve.
+\begin{block}{Two geometric roles}
+$F=0$ places the point on the branch; $g=0$ places it on a hyperplane normal
+to the previous unit tangent. Their local intersection isolates one point.
 \end{block}
 \end{frame}
 
-\begin{frame}{How JaxCont computes the tangent}
-The tangent lies in the null space of the total derivative:
-\[
-  \begin{bmatrix}F_{\state} & F_p\end{bmatrix}
-  \begin{bmatrix}\dot{\state}\\ \dot p\end{bmatrix}=0.
-\]
-JaxCont selects and orients a unique tangent with the bordered system
+\begin{frame}{A bordered solve computes the next tangent}
 \[
 \begin{bmatrix}
 F_{\state} & F_p\\
@@ -134,16 +113,18 @@ F_{\state} & F_p\\
 \tangent_k=
 \begin{bmatrix}\bm{0}\\1\end{bmatrix},
 \qquad
-\tangent_k\leftarrow\frac{\tangent_k}{\|\tangent_k\|_2}.
+\tangent_k\leftarrow\frac{\tangent_k}{\|\tangent_k\|_2},
+\qquad
+\tangent_k^T\tangent_{k-1}>0.
 \]
-If $\tangent_k^T\tangent_{k-1}<0$, its sign is flipped.
-\begin{block}{Why align signs?}
-Both $\tangent$ and $-\tangent$ solve the null-vector equation. Sign alignment prevents the continuation direction from alternating randomly.
+\begin{block}{Why the border matters}
+The residual derivative fixes the tangent line; the final row fixes scale and
+orientation. Sign alignment keeps successive predictors moving consistently.
 \end{block}
 \end{frame}
 
-\begin{frame}{The bordered Newton correction}
-One Newton iteration solves
+\begin{frame}{The Newton corrector uses the same geometry}
+One augmented Newton iteration solves
 \[
 \underbrace{\begin{bmatrix}
 F_{\state} & F_p\\
@@ -151,48 +132,94 @@ F_{\state} & F_p\\
 \end{bmatrix}}_{\text{bordered Jacobian}}
 \begin{bmatrix}\delta\state\\\delta p\end{bmatrix}
 =-
-\begin{bmatrix}F(\state,p)\\g(\state,p)\end{bmatrix}.
+\begin{bmatrix}F(\state,p)\\g(\state,p)\end{bmatrix},
+\qquad
+(\state,p)\leftarrow(\state,p)+(\delta\state,\delta p).
 \]
-Then update
-\[
-  \state\leftarrow\state+\delta\state,
-  \qquad p\leftarrow p+\delta p.
-\]
-\begin{alertblock}{The crucial robustness point}
-At a fold, $F_{\state}$ alone is singular, but the full bordered matrix can remain nonsingular. JaxCont solves this full system rather than eliminating through $F_{\state}^{-1}$.
+\begin{alertblock}{The fold is no longer singular to the corrector}
+Although $F_{\state}$ is singular at an ordinary fold, the full bordered
+matrix can remain nonsingular because the parameter direction is included.
 \end{alertblock}
 \end{frame}
 
-\begin{frame}{One pseudo-arclength step}
-\begin{enumerate}
-  \item Start with accepted $(\state_k,p_k)$, tangent $\tangent_k$, and step $\Delta s$.
-  \item Predict $(\state,p)=(\state_k,p_k)+\Delta s\,\tangent_k$.
-  \item Newton-correct the augmented system $(F,g)=0$.
-  \item If finite and converged: store the point and compute $\tangent_{k+1}$.
-  \item If rejected: keep the old point and reduce $\Delta s$.
-  \item Stop at the parameter target, minimum-step failure, non-finite state, or step budget.
-\end{enumerate}
-\begin{block}{State machine view}
-The entire algorithm is a bounded transition from one immutable carry state to the next. That formulation is exactly what JAX control-flow primitives need.
-\end{block}
+\begin{frame}{One step is a small state machine}
+\centering
+\begin{tikzpicture}[scale=.82,transform shape,>=Latex,node distance=8mm and 12mm,
+  flowbox/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+    minimum width=28mm,minimum height=13mm,align=center,font=\small},
+  decision/.style={diamond,aspect=2,draw=JaxOrange,thick,fill=JaxOrange!10,
+    align=center,font=\small}]
+  \node[flowbox] (accepted) {accepted\\$(\state_k,p_k,\tangent_k)$};
+  \node[flowbox,right=of accepted] (predict) {predict};
+  \node[flowbox,right=of predict] (correct) {correct\\$(F,g)=0$};
+  \node[decision,right=of correct] (ok) {converged?};
+  \node[flowbox,above right=7mm and 10mm of ok,draw=JaxGreen,fill=JaxGreen!10]
+    (store) {accept, store,\\update tangent};
+  \node[flowbox,below right=7mm and 10mm of ok,draw=JaxRed,fill=JaxRed!8]
+    (retry) {keep old point,\\shrink $\Delta s$};
+  \draw[->,thick] (accepted)--(predict);
+  \draw[->,thick] (predict)--(correct);
+  \draw[->,thick] (correct)--(ok);
+  \draw[->,thick,JaxGreen!70!black] (ok)--node[above left,font=\scriptsize]{yes}(store);
+  \draw[->,thick,JaxRed] (ok)--node[below left,font=\scriptsize]{no}(retry);
+  \draw[->,thick,JaxGreen!70!black] (store.north) |- ++(-2.0,.6) -| (accepted.north);
+  \draw[->,thick,JaxRed] (retry.south) |- ++(-2.0,-.6) -| (predict.south);
+\end{tikzpicture}
 \end{frame}
 
-\begin{frame}{Adaptive step size in the branch implementation}
-The continuation engine uses Newton effort as a difficulty signal:
+\begin{frame}{Step size responds to Newton effort}
+\small
 \begin{center}
 \begin{tabular}{lll}
 \toprule
-Outcome & Rule & Interpretation\\
+Corrector outcome & Next $\Delta s$ & Signal\\
 \midrule
-Converged in $<3$ iterations & $\Delta s\leftarrow1.5\Delta s$ & branch is easy\\
-Converged in $3$--$6$ & unchanged & suitable step\\
-Converged in $>6$ & $\Delta s\leftarrow0.8\Delta s$ & branch is difficult\\
-Failed & $\Delta s\leftarrow0.5\Delta s$ & retry more cautiously\\
+converged in $<3$ iterations & $1.5\,\Delta s$ & easy local geometry\\
+converged in $3$--$6$ iterations & $\Delta s$ & suitable resolution\\
+converged in $>6$ iterations & $0.8\,\Delta s$ & difficult local geometry\\
+failed & $0.5\,\Delta s$ & retry cautiously\\
 \bottomrule
 \end{tabular}
 \end{center}
-Finally clip to $[\Delta s_{\min},\Delta s_{\max}]$.
-\begin{alertblock}{Subtle implementation trade-off}
-A failed attempt consumes one outer-loop iteration but does not consume an output slot. Therefore \texttt{max\_steps} should include retry headroom.
-\end{alertblock}
+
+\vfill
+\centering
+Every update is clipped to $[\Delta s_{\min},\Delta s_{\max}]$.
+\end{frame}
+
+\begin{frame}{Choose the coordinate that matches the branch}
+\small
+\begin{center}
+\begin{tabular}{p{.24\textwidth}p{.31\textwidth}p{.34\textwidth}}
+\toprule
+Question & Natural & Pseudo-arclength\\
+\midrule
+Corrected unknowns & $\state$ & $(\state,p)$\\
+Local coordinate & physical parameter $p$ & progress along the curve\\
+Ordinary fold & stalls & normally passes through\\
+Linear solve & $n\times n$ & $(n+1)\times(n+1)$ bordered\\
+Best fit & monotone, single-valued branch & folds, turns, exploratory work\\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{frame}
+
+\begin{frame}{What to remember}
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Geometric idea}
+Predict along the branch tangent, then correct on a transverse hyperplane
+while allowing both state and parameter to move.
+\end{block}
+
+\column{.48\textwidth}
+\begin{block}{Numerical consequence}
+The augmented equation and bordered systems replace a singular fixed-$p$
+correction with a regular local curve coordinate.
+\end{block}
+\end{columns}
+
+\vfill
+\centering
+\large\textcolor{JaxTeal}{The engine can now follow any finite-dimensional residual whose input and output shapes match.}
 \end{frame}
