@@ -1,3 +1,301 @@
 \chapterdivider{6}{Hopf refinement and criticality}
   {A Hopf crossing was detected; where is it exactly, and what local oscillation does it organize?}
   {Featured application: refine a Hopf point, recover its frequency, and classify its criticality}
+
+\begin{frame}{Detection is not refinement}
+\releasedbadge
+\small
+\begin{columns}[T]
+\column{.47\textwidth}
+\centering
+\begin{tikzpicture}[x=1.02cm,y=.55cm,>=Latex]
+  \draw[->] (-2.15,0)--(2.2,0) node[right] {$p$};
+  \draw[->] (0,-1.15)--(0,1.25) node[above] {$\operatorname{Re}\lambda$};
+  \draw[JaxOrange,very thick] (-1.85,-.90)--(1.85,.90);
+  \fill[JaxBlue] (-1.15,-.56) circle (2.7pt);
+  \fill[JaxBlue] (1.15,.56) circle (2.7pt);
+  \draw[<->,thick,JaxBlue] (-1.15,-1.02)--(1.15,-1.02);
+  \node[below=.5mm] at (0,-1.02) {detector bracket};
+  \fill[JaxRed] (0,0) circle (2.8pt);
+\end{tikzpicture}
+\begin{block}{Detection}
+A sign change between two computed branch points says that a candidate
+crossing lies in a bracket.
+\end{block}
+\column{.47\textwidth}
+\centering
+\begin{tikzpicture}[node distance=2mm,>=Latex,
+ box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+ minimum width=39mm,minimum height=6mm,align=center,font=\scriptsize}]
+  \node[box] (guess) {midpoint guess\\$(\state_{\rm g},p_{\rm g})$};
+  \node[box,below=of guess] (solve) {coupled extended-system\\Newton solve};
+  \node[box,below=of solve,draw=JaxGreen,fill=JaxGreen!10] (root)
+    {refined root\\$(\state^*,p^*,q_1,q_2,\omega_0)$};
+  \draw[->,thick] (guess)--(solve);
+  \draw[->,thick] (solve)--(root);
+\end{tikzpicture}
+\begin{block}{Refinement}
+The root solve enforces equilibrium and imaginary-eigenpair conditions at
+one parameter value.
+\end{block}
+\end{columns}
+\begin{alertblock}{Why both stages matter}
+Detection locates a neighborhood; refinement produces a state that satisfies
+the defining Hopf equations.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{What the Hopf solve returns}
+\small
+\centering
+\begin{tikzpicture}[node distance=3mm and 5mm,>=Latex,
+ item/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+ minimum width=29mm,minimum height=9mm,align=center}]
+  \node[item] (u) {$\state^*$\\refined equilibrium};
+  \node[item,right=of u] (p) {$p^*$\\refined parameter};
+  \node[item,right=of p] (w) {$\omega_0$\\angular frequency};
+  \node[item,below=of u,xshift=18mm] (q1) {$q_1$\\real part};
+  \node[item,right=of q1] (q2) {$q_2$\\imaginary part};
+  \node[draw=JaxTeal,very thick,rounded corners,fit=(q1)(q2),
+        label=below:{\small $q=q_1+i q_2$: critical right eigenvector}] {};
+\end{tikzpicture}
+\vspace{2mm}
+\begin{block}{One coupled answer}
+At the returned point,
+$f(\state^*,p^*)=0$ and
+$J(\state^*,p^*)q=i\omega_0q$ (up to the solver tolerance and the chosen
+normalization/phase).
+\end{block}
+\begin{alertblock}{Interpretation check}
+A trustworthy Hopf frequency is finite and nonzero. The event refiner reports
+\texttt{criticality = "unknown"} when its refined diagnostics are not usable.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{The extended-system picture}
+\small
+\begin{columns}[T]
+\column{.46\textwidth}
+\centering
+\begin{tikzpicture}[node distance=4mm,>=Latex,
+ box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+ minimum width=48mm,minimum height=8mm,align=center}]
+  \node[box] (eq) {equilibrium block\\$f(\state,p)=0$};
+  \node[box,below=of eq] (real) {first eigenspace block\\$Jq_1+\omega q_2=0$};
+  \node[box,below=of real] (imag) {second eigenspace block\\$Jq_2-\omega q_1=0$};
+  \node[box,below=of imag,draw=JaxTeal,fill=JaxTeal!9] (gauge)
+    {normalization + phase\\two scalar equations};
+  \draw[->,thick] (eq)--(real);
+  \draw[->,thick] (real)--(imag);
+  \draw[->,thick] (imag)--(gauge);
+\end{tikzpicture}
+\column{.50\textwidth}
+\begin{block}{Unknowns}
+\[
+  (\state,p,q_1,q_2,\omega)\in\R^{3n+2}.
+\]
+The residual also has $3n+2$ entries.
+\end{block}
+\begin{block}{Remove eigenvector ambiguity}
+\[
+\begin{aligned}
+q_1^\top q_1+q_2^\top q_2&=1,\\
+q_{1,0}^\top q_2-q_{2,0}^\top q_1&=0.
+\end{aligned}
+\]
+The second equation anchors the phase to the seed
+$q_{1,0}+i q_{2,0}$.
+\end{block}
+\end{columns}
+\begin{alertblock}{Geometric meaning}
+The solve finds the equilibrium and its rotating critical plane together,
+rather than refining only the scalar crossing test.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{What the first Lyapunov coefficient answers}
+\begin{columns}[T]
+\column{.48\textwidth}
+\begin{block}{Local scientific question}
+When the equilibrium loses stability, is the nearby small-amplitude periodic
+orbit locally attracting or repelling?
+\end{block}
+After smooth coordinate changes, the radial dynamics have the form
+\[
+  \dot r=r\bigl(\beta+l_1r^2+\text{higher-order terms}\bigr).
+\]
+Here $\beta$ measures signed distance through the Hopf point.
+\column{.48\textwidth}
+\begin{block}{Sign interpretation}
+\begin{itemize}
+  \item $l_1<0$: supercritical local normal form;
+  \item $l_1>0$: subcritical local normal form;
+  \item $l_1\approx0$: degenerate/GH candidate.
+\end{itemize}
+\end{block}
+\begin{alertblock}{Local, not global}
+The sign describes the local normal form. It does not determine distant
+turning points, global stability, or the fate of a cycle far from Hopf.
+\end{alertblock}
+\end{columns}
+\vspace{2mm}
+{\scriptsize Evidence in this repository: exact textbook test $l_1=-1$ and an
+independent BifurcationKit.jl v0.5.2 cross-check on an asymmetric system.
+Sources: \texttt{tests/test\_hopf\_normal\_form.py} and
+\texttt{examples/BifurcationKit/04\_hopf\_normal\_form.jl}.}
+\end{frame}
+
+\begin{frame}{Supercritical versus subcritical}
+\begin{columns}[T]
+\column{.48\textwidth}
+\centering
+\textbf{Supercritical: $l_1<0$}
+\begin{tikzpicture}[x=1.05cm,y=1cm,>=Latex]
+  \draw[->] (-2.1,0)--(2.15,0) node[right] {$\beta$};
+  \draw[->] (0,-.15)--(0,2.0) node[above] {$r$};
+  \draw[JaxGreen,very thick] (-1.85,0)--(0,0);
+  \draw[JaxRed,very thick,dashed] (0,0)--(1.85,0);
+  \draw[JaxGreen,very thick,->] (0,0)
+    .. controls (.45,.60) and (1.05,1.05) .. (1.75,1.55);
+  \node[JaxGreen!60!black,align=center] at (1.35,1.05)
+    {stable\\small cycle};
+  \node[below,JaxGreen!60!black] at (-1.15,0) {stable eq.};
+  \node[below,JaxRed] at (1.05,0) {unstable eq.};
+\end{tikzpicture}
+\begin{block}{Local reading}
+Stable small cycle on the appropriate side of the crossing.
+\end{block}
+\column{.48\textwidth}
+\centering
+\textbf{Subcritical: $l_1>0$}
+\begin{tikzpicture}[x=1.05cm,y=1cm,>=Latex]
+  \draw[->] (-2.1,0)--(2.15,0) node[right] {$\beta$};
+  \draw[->] (0,-.15)--(0,2.0) node[above] {$r$};
+  \draw[JaxGreen,very thick] (-1.85,0)--(0,0);
+  \draw[JaxRed,very thick,dashed] (0,0)--(1.85,0);
+  \draw[JaxRed,very thick,<-] (-1.75,1.55)
+    .. controls (-1.05,1.05) and (-.45,.60) .. (0,0);
+  \node[JaxRed,align=center] at (-1.35,1.05)
+    {unstable\\small cycle};
+  \node[below,JaxGreen!60!black] at (-1.15,0) {stable eq.};
+  \node[below,JaxRed] at (1.05,0) {unstable eq.};
+\end{tikzpicture}
+\begin{block}{Local reading}
+Unstable small cycle on the appropriate side of the crossing.
+\end{block}
+\end{columns}
+\begin{alertblock}{Do not infer a global branch diagram from $l_1$ alone}
+``Appropriate side'' depends on the unfolding direction; continuation is
+still needed to follow any supplied periodic-orbit branch away from Hopf.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}[fragile]{Minimal Hopf classification API}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+u_h, p_h, q1, q2, omega0 = jc.hopf_point(
+    rhs, u_guess, p_guess, args
+)
+l1 = jc.lyapunov_coefficient(
+    rhs, u_h, p_h, q1, q2, omega0, args
+)
+criticality = "supercritical" if l1 < 0 else "subcritical"
+\end{lstlisting}
+\begin{columns}[T]
+\column{.48\textwidth}
+\begin{block}{When only the location is needed}
+\texttt{jc.hopf\_parameter(...)} returns the refined scalar $p^*$ and remains
+differentiable in \texttt{args}.
+\end{block}
+\column{.48\textwidth}
+\begin{alertblock}{Near zero needs a tolerance}
+The compact sign test is for clearly nonzero $l_1$. A near-zero value is a
+generalized-Hopf candidate and requires tolerance-aware interpretation.
+\end{alertblock}
+\end{columns}
+\vspace{1mm}
+{\scriptsize The right-hand side has signature
+\texttt{rhs(u, p, args)}. The $l_1$ calculation assumes the state dependence
+is smooth and compatible with its complexified directional derivatives.}
+\end{frame}
+
+\begin{frame}{What \texttt{Hopf.refine()} reports}
+\begin{columns}[T]
+\column{.48\textwidth}
+\begin{block}{Automatic event diagnostics}
+The detected event stores these fields in \texttt{hit.info}:
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+field & meaning \\
+\midrule
+\texttt{omega0} & refined critical frequency \\
+\texttt{l1} & first Lyapunov coefficient \\
+\texttt{criticality} & local classification \\
+\texttt{method} & \texttt{extended\_system} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Classification logic}
+\begin{enumerate}
+  \item non-finite diagnostic or $\omega_0\leq0$
+        $\rightarrow$ \texttt{"unknown"};
+  \item $|l_1|<\texttt{l1\_tolerance}$
+        $\rightarrow$ \texttt{"degenerate"};
+  \item otherwise use the sign
+        $\rightarrow$ \texttt{"supercritical"} or
+        \texttt{"subcritical"}.
+\end{enumerate}
+\end{block}
+\end{columns}
+\begin{alertblock}{Tolerance is model-scaled}
+The default \texttt{l1\_tolerance=1e-6} is a starting point, not a universal
+constant: $l_1$ depends on state and parameter scaling.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{What this still does not do}
+\begin{columns}[T]
+\column{.48\textwidth}
+\begin{block}{What is available}
+\begin{itemize}
+  \item refine one Hopf point from a supplied guess or detector bracket;
+  \item recover its critical eigenspace and frequency;
+  \item compute and classify its local $l_1$.
+\end{itemize}
+\end{block}
+\column{.48\textwidth}
+\begin{alertblock}{Separate or unsupported workflows}
+\begin{itemize}
+  \item no automatic branch switching to a periodic orbit;
+  \item no automatic cycle discovery from the Hopf point;
+  \item no two-parameter Hopf-curve continuation;
+  \item no claim about global cycle behavior.
+\end{itemize}
+\end{alertblock}
+\end{columns}
+\begin{block}{If $l_1\approx0$}
+Treat the result as a degenerate/generalized-Hopf candidate. Supply a
+two-parameter guess to the direct GH point solver discussed next; that solver
+refines one point and still does not continue a two-parameter curve.
+\end{block}
+\end{frame}
+
+\begin{frame}{What to remember}
+\begin{enumerate}
+  \item A bracketed eigenvalue crossing detects a candidate; the extended
+        system refines $(\state^*,p^*,q_1,q_2,\omega_0)$ together.
+  \item $l_1<0$ means a supercritical local Hopf normal form with a stable
+        small cycle on the appropriate side.
+  \item $l_1>0$ means a subcritical local Hopf normal form with an unstable
+        small cycle on the appropriate side.
+  \item $l_1\approx0$ is a degenerate/GH candidate; interpret it with a
+        model-aware tolerance and refine it with the two-parameter GH solver.
+\end{enumerate}
+\vspace{3mm}
+\begin{alertblock}{Scope boundary}
+Hopf criticality is local information. It neither constructs a periodic
+orbit nor predicts the global continuation diagram.
+\end{alertblock}
+\end{frame}
