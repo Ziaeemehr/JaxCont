@@ -132,6 +132,13 @@ def dprc_curve(
     # jax.custom_vjp (reverse-mode only -- see solvers/implicit.py), so
     # forward-mode AD (what jax.jacfwd needs) raises "can't apply
     # forward-mode autodiff (jvp) to a custom_vjp function". jacrev gives
-    # the identical Jacobian via the implemented reverse-mode path (p0 is
-    # scalar here, so there's no efficiency loss from the mode switch).
+    # the identical Jacobian via the implemented reverse-mode path -- it is
+    # the only *correct* choice here (jacfwd simply cannot run through this
+    # custom_vjp-only primitive), not a free one: for callers passing a
+    # higher-dimensional ``p`` (e.g. this module's own MC-PRC-001 caller,
+    # which uses a 2-vector ``[alpha, beta]``), jacrev is generically more
+    # expensive per output than jacfwd would have been, since it is one
+    # reverse pass per output component rather than one forward pass per
+    # input component; that cost is accepted because jacfwd is not an
+    # option at all here.
     return jax.jacrev(prc_at)(problem.p0)

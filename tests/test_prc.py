@@ -77,8 +77,15 @@ def test_prc_curve_periodicity_seed_matches_chain_endpoint():
         M_all = interval_propagators(_rhs, D, E, h, mesh_states, coll_states, T, prob.p0)
         Phi, _ = jax.lax.scan(lambda c, M: (M @ c, None), jnp.eye(n), M_all)
         Z = prc_curve(_rhs, mesh, prob.u0, prob.p0)
-    # Z[0] is the seed Z(0); chaining M_all^T backward from Z[0] all the way
-    # around must return Z[0] itself.
+    # Z[0], as returned by prc_curve, is not literally the bordered-solve
+    # seed Z0 before any propagation -- prc_curve's backward jax.lax.scan
+    # starts at Z0 and chains M_i^T through every interval in reverse
+    # order, and Z[0] is that scan's *last* step (after reversing the scan
+    # output back into forward order), i.e. Z0 having already made one
+    # full round trip through Phi^T = M_all[0]^T @ ... @ M_all[-1]^T.
+    # Periodicity (Phi(T)^T Z(0) = Z(0)) means this round-tripped value
+    # should equal Z0 again, which is exactly what this residual checks --
+    # it is not checking Z[0] against itself trivially.
     residual = (Phi.T - jnp.eye(n)) @ Z[0]
     assert float(jnp.max(jnp.abs(residual))) < 1e-5
 
