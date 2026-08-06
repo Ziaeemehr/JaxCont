@@ -2,54 +2,117 @@
   {Which plot answers the scientific question in front of me?}
   {Featured application: FitzHugh--Nagumo before and after a Hopf transition}
 
-\begin{frame}{One model, three complementary views}
-\small
-\begin{center}
-\begin{tabular}{>{\raggedright\arraybackslash}p{.25\textwidth}
-                >{\raggedright\arraybackslash}p{.30\textwidth}
-                >{\raggedright\arraybackslash}p{.34\textwidth}}
+\begin{frame}{Choose the view from the scientific question}
+\scriptsize
+\centering
+\renewcommand{\arraystretch}{1.28}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{.20\textwidth}
+                  >{\raggedright\arraybackslash}p{.34\textwidth}
+                  >{\raggedright\arraybackslash}p{.38\textwidth}@{}}
 \toprule
-View & Question answered & What it does not establish\\
+View & Answers & Does not establish\\
 \midrule
-Bifurcation diagram & How equilibria or cycles change with $p$ & Flow geometry or basins at one fixed $p$\\
-Eigenvalue/Floquet plot & How local stability changes & Nonlinear trajectories far from the solution\\
-2D phase plane & Where nullclines, equilibria and trajectories lie at one $p$ & A higher-dimensional portrait or automatic branch discovery\\
+Branch diagram
+  & How solutions vary with parameter
+  & Basins or full flow geometry\\
+Eigenvalue/Floquet view
+  & How local stability changes
+  & Nonlinear long-time behavior\\
+Branch-state projection
+  & How stored branch states relate
+  & A true phase portrait\\
+2D phase plane
+  & Nullclines, vector field, equilibria, and trajectories at one parameter
+  & Higher-dimensional geometry or automatic branch discovery\\
 \bottomrule
 \end{tabular}
-\end{center}
-\begin{block}{The bridge}
-Continuation and phase-plane plotting consume the same
-\texttt{BifProblem}. The diagram traverses $p$; the phase plane calls
-\texttt{problem.as\_rhs(p)} to freeze one value.
+\vspace{3mm}
+\begin{block}{Two complementary parameter choices}
+Continuation traverses a branch while the parameter changes. A phase plane
+freezes one parameter value and asks how states move there.
 \end{block}
 \end{frame}
 
-\begin{frame}{Phase-plane architecture stays outside the solver core}
+\begin{frame}{Visualization is a composable surface}
+\small
 \centering
-\begin{tikzpicture}[scale=.88,transform shape,node distance=7mm and 10mm,>=Latex,
- box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
-             minimum width=35mm,minimum height=10mm,align=center},
- render/.style={rounded corners,draw=JaxOrange,thick,fill=JaxOrange!9,
-                minimum width=37mm,minimum height=10mm,align=center}]
-\node[box] (problem) {\texttt{BifProblem}\\$f(u,p,\mathrm{args})$};
-\node[box,right=of problem] (freeze) {\texttt{as\_rhs(p)}\\frozen $u\mapsto f(u)$};
-\node[box,right=of freeze] (grid) {\texttt{jax.vmap}\\grid evaluation};
-\node[render,right=of grid] (mpl) {NumPy conversion\\+ Matplotlib};
-\draw[->,thick] (problem)--(freeze);
-\draw[->,thick] (freeze)--(grid);
-\draw[->,thick] (grid)--(mpl);
-\node[render,below=of freeze] (branch) {\texttt{ContinuationResult}\\equilibria + stability};
-\node[render,below=of grid] (traj) {\texttt{solve\_ivp} or\\precomputed trajectory};
-\draw[->,thick] (branch)--(mpl);
-\draw[->,thick] (traj)--(mpl);
+\renewcommand{\arraystretch}{1.32}
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{.17\textwidth}
+                  >{\raggedright\arraybackslash}p{.48\textwidth}
+                  >{\centering\arraybackslash}p{.29\textwidth}@{}}
+\toprule
+Purpose & Exact public names & Status\\
+\midrule
+Branches
+  & \texttt{plot\_continuation}, \texttt{plot\_all\_states}
+  & \releasedbadge\\
+Spectra
+  & \texttt{plot\_eigenvalues}
+  & \releasedbadge\\
+State projections
+  & \texttt{plot\_branch\_states}
+  & \releasedbadge\\
+2D geometry
+  & \texttt{plot\_phase\_plane}, \texttt{plot\_nullclines},
+    \texttt{plot\_vector\_field}, \texttt{plot\_streamlines},
+    \texttt{plot\_equilibria}, \texttt{plot\_trajectory}
+  & \releasedbadge\\
+Phase sensitivity
+  & \texttt{plot\_prc}
+  & \mainbadge\\
+\bottomrule
+\end{tabular}
+\vspace{3mm}
+\begin{block}{Compose only the evidence you need}
+\texttt{plot\_phase\_plane} layers the 2D helpers in a readable order. Call a
+helper directly when the question needs only nullclines, flow, equilibria, or
+a trajectory.
+\end{block}
+\end{frame}
+
+\begin{frame}{From model data to an interpretable figure}
+\small
+\centering
+\begin{tikzpicture}[node distance=4mm and 7mm,>=Latex,
+ source/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+                minimum width=34mm,minimum height=8mm,align=center},
+ process/.style={rounded corners,draw=JaxTeal,thick,fill=JaxTeal!9,
+                 minimum width=39mm,minimum height=8mm,align=center},
+ view/.style={rounded corners,draw=JaxOrange,thick,fill=JaxOrange!9,
+              minimum width=41mm,minimum height=8mm,align=center}]
+  \node[source] (problem) {\texttt{BifProblem}\\model + names};
+  \node[process,right=of problem,yshift=10mm] (continue)
+    {\texttt{continuation(...)}\\branch + stability + events};
+  \node[view,right=of continue] (parameter)
+    {branch, spectrum, or\\branch-state view};
+  \node[process,right=of problem,yshift=-10mm] (freeze)
+    {choose $p$ and bounds\\freeze \texttt{as\_rhs(p)}};
+  \node[view,right=of freeze] (plane)
+    {2D phase plane\\+ optional overlays};
+  \draw[->,very thick] (problem)--(continue);
+  \draw[->,very thick] (continue)--(parameter);
+  \draw[->,very thick] (problem)--(freeze);
+  \draw[->,very thick] (freeze)--(plane);
+  \draw[->,thick,JaxOrange,dashed]
+    (continue.south east) to[bend left=12]
+    node[right,font=\scriptsize,align=left]{equilibrium\\markers} (plane.north west);
 \end{tikzpicture}
-\vspace{4mm}
-\begin{alertblock}{Deliberately strict}
-The public functions accept only autonomous systems with exactly two states.
-A slice of a higher-dimensional field does not generally have true
-nullclines or equilibria, so JaxCont refuses to label such a projection as a
-phase plane.
+\vspace{3mm}
+\begin{columns}[T]
+\column{.48\textwidth}
+\begin{block}{Practical recipe}
+Choose the question, pass the corresponding data object, then label axes and
+inspect stability/event markers before interpreting the picture.
+\end{block}
+\column{.48\textwidth}
+\begin{alertblock}{Visualization is not simulation}
+JaxCont does not own a time integrator. A trajectory layer either calls
+SciPy's \texttt{solve\_ivp} with an explicit time span or draws a supplied
+\texttt{(n\_steps, 2)} state array.
 \end{alertblock}
+\end{columns}
 \end{frame}
 
 \begin{frame}[fragile]{Example 12: compose the FitzHugh--Nagumo view}
@@ -71,20 +134,35 @@ plot_phase_plane(
                    (0.0, 200.0))],
 )
 \end{lstlisting}
-\begin{itemize}
-  \item Nullcline intersections identify equilibrium locations.
-  \item Filled/open markers use continuation stability at the selected $p$.
-  \item A trajectory can be integrated through \texttt{solve\_ivp} or supplied
-        as a precomputed \texttt{(n\_steps, 2)} array.
-\end{itemize}
+\vspace{-3mm}
+\begin{block}{What each input contributes}
+\scriptsize
+\texttt{problem} supplies the frozen vector field and state names;
+\texttt{result} supplies continued equilibria and stability; the explicit
+initial condition and time span request one trajectory overlay.
+\end{block}
 \end{frame}
 
-\begin{frame}{FitzHugh--Nagumo: parameter view and state-space view}
+\begin{frame}{FitzHugh--Nagumo: read both panels together}
 \centering
-\includegraphics[width=.96\textwidth]{../../examples/images/example_12_fitzhugh_nagumo_phase_plane.jpg}
-\vspace{-1mm}
-\scriptsize
-At $I\approx0.331$ the continued equilibrium changes stability. At $I=0.5$,
-the hollow marker and outward trajectory provide a state-space interpretation;
-they do not replace residual, spectrum, or event-refinement checks.
+\includegraphics[width=.96\textwidth]{example_12_fitzhugh_nagumo_phase_plane.jpg}
+\vspace{-3mm}
+\begin{columns}[T,onlytextwidth]
+\column{.32\textwidth}
+{\scriptsize\color{JaxBlue}\bfseries 1. Branch location}\par
+{\tiny The left panel varies $I$ and locates the stability change; the right
+panel freezes $I=0.5$.}
+\column{.32\textwidth}
+{\scriptsize\color{JaxBlue}\bfseries 2. Stability marker}\par
+{\tiny The hollow circle is the continued equilibrium, marked unstable at the
+selected parameter.}
+\column{.32\textwidth}
+{\scriptsize\color{JaxBlue}\bfseries 3. Trajectory + nullclines}\par
+{\tiny The black trajectory follows the arrows; the colored curves mark where
+$\dot v=0$ or $\dot w=0$.}
+\end{columns}
+\vspace{1mm}
+{\tiny\textcolor{JaxTeal}{Tracked source:
+\texttt{examples/example\_12\_fitzhugh\_nagumo\_phase\_plane.py}.}
+The trajectory is complementary evidence, not automatic branch discovery.}
 \end{frame}
