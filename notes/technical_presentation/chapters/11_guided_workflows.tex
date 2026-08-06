@@ -14,8 +14,8 @@
 \node[stage,right=of model] (seed) {trustworthy\\seed};
 \node[stage,below=13mm of seed] (small) {small\\continuation};
 \node[inspect,left=of small] (inspect) {inspect / visualize\\[1mm]
-  residuals; \texttt{n\_valid}/mask; termination\\
-  step size; stability; event diagnostics};
+  re-evaluate $F$; \texttt{n\_valid}/mask; diagnose stop\\
+  configured step bounds; stability; event diagnostics};
 \node[stage,left=of inspect] (repeat) {repeat and\\validate};
 \draw[->,thick] (q)--(model);
 \draw[->,thick] (model)--(seed);
@@ -37,8 +37,9 @@ parameter range, mesh, events, and validation only after that calculation is tru
 \begin{block}{1 \quad README saddle-node quick start}
 \textbf{Objective:} follow $u^2+p=0$ through its fold.\quad
 \textbf{File:} \texttt{README.md}, ``Quick start''.\\
-\textbf{Run:} \texttt{MPLBACKEND=Agg python -}, paste that Python block, then send EOF.\\
-\textbf{Expected:} \texttt{[('fold', 0.0)]} and an annotated branch figure; a
+\textbf{Run:} \texttt{python -}, paste that Python block, then send EOF.\\
+\textbf{Expected:} \texttt{[('fold', 0.0)]} and an interactive annotated branch figure
+(no file is saved); a
 verification run stored 201 points and reached $\max p\approx-1.19\times10^{-3}$.\\
 \textbf{Caution:} no real equilibrium exists for $p>0$; the requested
 \texttt{p\_span} endpoint is not evidence that the branch can reach it.
@@ -72,10 +73,10 @@ does not simulate to discover the initial cycle.
 \begin{block}{4 \quad FitzHugh--Nagumo phase plane}
 \textbf{Objective:} connect a Hopf marker on the branch to 2D flow geometry.\quad
 \textbf{File:} \texttt{examples/example\_12\_fitzhugh\_nagumo\_phase\_plane.py}.\\
-\textbf{Run:} \texttt{cd examples \&\& MPLBACKEND=Agg}\,$\backslash$\\
+\textbf{Run:} \texttt{cd examples \&\&}\,$\backslash$\\
 \hspace*{8mm}\texttt{python example\_12\_fitzhugh\_nagumo\_phase\_plane.py}\\
 \textbf{Expected:} stdout \texttt{hopf at I = 0.3313} and two displayed
-figures (the script does not save them).\\
+interactive figures (the script does not save them).\\
 \textbf{Caution:} the phase-plane API is for two-state autonomous systems at
 one frozen parameter; its trajectories are simulations, not continued cycles.
 \end{block}
@@ -117,14 +118,14 @@ independent periodic-orbit discovery; its orbit seed is still reconverged by Jax
  final/.style={rounded corners,draw=JaxOrange,thick,fill=JaxOrange!10,
    text width=49mm,minimum height=11mm,align=left,font=\scriptsize}]
 \node[q] (stop) {Did continuation\\stop early?};
-\node[box,below left=7mm and 3mm of stop] (yes) {Inspect endpoint coverage and stop
-evidence: residuals, finite values, \texttt{ds\_min}, the \texttt{max\_steps}
-accepted-point budget, and extra rejected-attempt work.};
-\node[box,below right=7mm and 3mm of stop] (no) {Inspect stability and event evidence:
+\node[box,below left=6.5mm and 3mm of stop] (yes) {Re-evaluate $F(U,p)$ on valid
+states; check finite values and endpoint coverage. Review configured
+\texttt{ds\_min}/\texttt{max\_steps}; rejected attempts add unreported work.};
+\node[box,below right=6.5mm and 3mm of stop] (no) {Inspect stability and event evidence:
 eigenvalues or Floquet multipliers, detector diagnostics, and local refinement residuals.};
-\node[final,below=7mm of yes] (important) {\textbf{Important conclusion:}
+\node[final,below=6.5mm of yes] (important) {\textbf{Important conclusion:}
 rerun with changed step bounds, resolution, and direction.};
-\node[final,below=7mm of no] (publish) {\textbf{Publication claim:}
+\node[final,below=6.5mm of no] (publish) {\textbf{Publication claim:}
 add an analytic oracle or an independent method/package.};
 \draw[->,thick] (stop)--node[above left,font=\scriptsize]{yes}(yes);
 \draw[->,thick] (stop)--node[above right,font=\scriptsize]{no}(no);
@@ -134,8 +135,8 @@ add an analytic oracle or an independent method/package.};
 
 \vfill
 \begin{alertblock}{Do not infer a physical branch ending from missing points}
-The public result exposes coverage, residual and validity evidence, but not a
-single explicit termination-reason field; compare the last accepted point with
-the configured endpoint and stop conditions.
+The public result does not store residual norms, accepted step sizes, rejection
+history, or a termination reason. Re-evaluate $F$ on valid states and compare
+the last valid point with the configured endpoint and stop conditions.
 \end{alertblock}
 \end{frame}
