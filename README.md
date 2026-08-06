@@ -30,8 +30,11 @@ automatic differentiation.
   BifurcationKit, or analytic reference markers.
 
 The current surface supports equilibrium and periodic-orbit continuation,
-their principal codimension-one events, and direct codimension-two point
-solvers. Branch switching, general connecting-orbit/BVP workflows, PRC/dPRC,
+their principal codimension-one events, direct codimension-two point
+solvers, and infinitesimal phase response curves (iPRC, `prc_curve`,
+cross-validated against MatCont) plus their parameter-derivative sensitivity
+(dPRC, `dprc_curve`, validated independently -- MatCont does not compute
+this quantity). Branch switching, general connecting-orbit/BVP workflows,
 and two-parameter curve continuation remain future work.
 
 ## Installation
