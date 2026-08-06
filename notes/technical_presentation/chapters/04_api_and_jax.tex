@@ -2,279 +2,153 @@
   {How does a scientific model become a transformable branch computation?}
   {Featured application: one functional API used eagerly, under JIT, and across batches}
 
-\begin{frame}{What does \texttt{pseudo\_arclength\_scan} mean?}
-\begin{columns}[T]
-\column{.47\textwidth}
-\begin{block}{Pseudo-arclength}
-The numerical method: tangent prediction plus augmented Newton correction.
-\end{block}
-\column{.47\textwidth}
-\begin{block}{Scan engine}
-The implementation style: execute the whole bounded branch sweep inside one compiled functional loop.
-\end{block}
-\end{columns}
-\vspace{5mm}
-\begin{alertblock}{Do not say this}
-``JaxCont uses the \texttt{lax.scan} algorithm for arclength continuation.''
-\end{alertblock}
-\begin{block}{Say this instead}
-``JaxCont's scan engine packages the complete continuation sweep into a JIT-compiled \texttt{lax.while\_loop}. The mathematical algorithm inside that loop is pseudo-arclength continuation.''
-\end{block}
-\end{frame}
-
-\begin{frame}{Choosing a continuation method}
-\begin{columns}[T]
-\column{.48\textwidth}
-\begin{block}{Use \texttt{Natural()} when}
-\begin{itemize}
-  \item the branch is expected to be single-valued in $p$;
-  \item folds are not part of the research question;
-  \item a simple reference calculation is useful.
-\end{itemize}
-\end{block}
-\column{.48\textwidth}
-\begin{block}{Use \texttt{PseudoArclength()} when}
-\begin{itemize}
-  \item folds or hysteresis may occur;
-  \item the branch can turn in the parameter;
-  \item robust branch following matters more than the smallest linear system.
-\end{itemize}
-\end{block}
-\end{columns}
-\vspace{4mm}
-\begin{alertblock}{Practical default}
-For exploratory bifurcation analysis, pseudo-arclength is usually the safer
-starting choice. Natural continuation remains useful for simple monotone
-branches and for learning the predictor--corrector idea.
-\end{alertblock}
-\end{frame}
-
-\begin{frame}{From a user request to a computed branch}
-\centering
-\begin{tikzpicture}[scale=.96,transform shape,node distance=8mm and 14mm,>=Latex,
- api/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,minimum width=42mm,minimum height=10mm,align=center},
- eng/.style={rounded corners,draw=JaxGreen,thick,fill=JaxGreen!10,minimum width=42mm,minimum height=11mm,align=center},
- shared/.style={rounded corners,draw=JaxOrange,thick,fill=JaxOrange!10,minimum width=48mm,minimum height=10mm,align=center}]
-\node[api] (call) {\texttt{jc.continuation(...)} };
-\node[api,below left=of call] (nat) {\texttt{jc.Natural()}};
-\node[api,below right=of call] (palc) {\texttt{jc.PseudoArclength()}};
-\node[eng,below=of nat] (ns) {\texttt{natural\_scan}};
-\node[eng,below=of palc] (ps) {\texttt{pseudo\_arclength\_scan}};
-\node[shared,below=13mm of call] (run) {shared \texttt{\_run\_scan}\\reassembly, stability, events};
-\draw[->,thick] (call)--(nat); \draw[->,thick] (call)--(palc);
-\draw[->,thick] (nat)--(ns); \draw[->,thick] (palc)--(ps);
-\draw[->,thick] (ns)--(run); \draw[->,thick] (ps)--(run);
-\end{tikzpicture}
-\vspace{3mm}
-Both methods return the same fixed-shape \texttt{ScanResult}. This gives
-plotting, stability analysis, and event detection one predictable input format.
-\end{frame}
-
-\begin{frame}[fragile]{The public API stays simple}
+\begin{frame}[fragile]{The front door is one functional call}
+\releasedbadge
 \begin{lstlisting}
-import jaxcont as jc
-
-problem = jc.bif_problem(f, u0=u0, p0=p0, args=args)
-settings = jc.ContinuationPar(
-    ds=0.02, ds_min=1e-5, ds_max=0.1,
-    max_steps=300, newton_tol=1e-6,
-    compute_stability=True,
-)
-
+problem = jc.bif_problem(rhs, u0, p0, args=args)
 result = jc.continuation(
     problem,
     jc.PseudoArclength(),
-    p_span=(p0, p_end),
-    settings=settings,
+    p_span=(p_min, p_max),
+    settings=jc.ContinuationPar(ds=0.02, max_steps=300),
     events=[jc.Fold(), jc.Hopf()],
 )
 \end{lstlisting}
-The algorithm object selects the numerical engine; shared result assembly keeps plotting, stability and event consumers independent of the engine.
-\end{frame}
-
-\begin{frame}{Important start-point semantics}
-\begin{block}{The pair that actually starts continuation}
-\[
-  (\state_0,p_{\mathrm{start}})=(\texttt{problem.u0},\;\texttt{p\_span[0]}).
-\]
-The first value of \texttt{p\_span} is a literal starting parameter; it is not
-silently replaced by \texttt{problem.p0}.
+\begin{block}{The call contract}
+The problem holds the model and starting state; the algorithm chooses how to
+follow the branch; settings bound the computation; events request diagnostics.
+The return value is always a \texttt{ContinuationResult}.
 \end{block}
-\begin{itemize}
-  \item Supply an initial state satisfying $F(\state_0,\texttt{p\_span[0]})\approx0$.
-  \item \texttt{problem.p0} records the problem's reference/default parameter, but does not override the continuation interval.
-  \item This became explicit while migrating the final gallery examples from the removed object-oriented API.
-\end{itemize}
-\begin{alertblock}{Common failure mode}
-Pairing an equilibrium computed at \texttt{problem.p0} with a different
-\texttt{p\_span[0]} can make the first correction fail or follow the wrong branch.
+\begin{alertblock}{Starting pair}
+Continuation begins from \texttt{(problem.u0, p\_span[0])}; supply a state that
+solves the model at that starting parameter.
 \end{alertblock}
 \end{frame}
 
-\begin{frame}{What is carried through the compiled loop?}
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-Carry field & Meaning\\
-\midrule
-$\state,p$ & last accepted solution\\
-$\tangent$ & last accepted tangent (pseudo-arclength only)\\
-$\Delta s$ & current positive step magnitude\\
-\texttt{idx} & number of accepted steps / next write position\\
-\texttt{stop} & compiled termination flag\\
-$P,Q,T,C,D$ & state, parameter, tangent, convergence, step-size buffers\\
-\bottomrule
-\end{tabular}
-\end{center}
-Each body call returns a completely new carry. There is no Python object mutation inside the compiled numerical kernel.
-\end{frame}
-
-\begin{frame}{The common \texttt{ScanResult}}
-For state dimension $n$ and maximum $M$ steps:
-\begin{center}
-\begin{tabular}{lll}
-\toprule
-Field & Shape & Content\\
-\midrule
-\texttt{states} & $(M+1,n)$ & accepted states plus unused slots\\
-\texttt{params} & $(M+1)$ & parameter values\\
-\texttt{tangents} & $(M+1,n+1)$ & PALC tangents; zeros for natural\\
-\texttt{converged} & $(M+1)$ & accepted-slot flags\\
-\texttt{ds} & $(M+1)$ & step used to reach each point\\
-\texttt{n\_valid} & scalar & real points occupy \texttt{[:n\_valid]}\\
-\bottomrule
-\end{tabular}
-\end{center}
-\begin{block}{Why share the shape?}
-One result type allows both engines to use the same eager/traced reassembly path without shape-dependent branching.
+\begin{frame}{Read the scientific result as a small tree}
+\centering
+\begin{tikzpicture}[node distance=5mm and 10mm,>=Latex,
+ root/.style={rounded corners,draw=JaxBlue,very thick,fill=SoftBlue,
+              minimum width=34mm,minimum height=11mm,align=center},
+ group/.style={rounded corners,draw=JaxGreen,thick,fill=JaxGreen!10,
+               minimum width=30mm,minimum height=10mm,align=center},
+ leaf/.style={rounded corners,draw=JaxOrange,thick,fill=JaxOrange!10,
+              minimum width=46mm,minimum height=10mm,align=left}]
+\node[root] (result) {\texttt{ContinuationResult}};
+\node[group,right=15mm of result,yshift=14mm] (branch) {\texttt{result.branch}};
+\node[group,right=15mm of result,yshift=-14mm] (events) {\texttt{result.events}};
+\node[leaf,right=of branch,yshift=11mm] (arrays)
+  {\texttt{.states / .params}\\\texttt{.stable / .eigenvalues}};
+\node[leaf,right=of branch,yshift=-11mm] (valid)
+  {\texttt{.valid / .n\_valid}};
+\node[leaf,right=of events] (hit)
+  {each hit: \texttt{.kind / .u / .p / .info}};
+\draw[->,thick] (result)--(branch);
+\draw[->,thick] (result)--(events);
+\draw[->,thick] (branch)--(arrays);
+\draw[->,thick] (branch)--(valid);
+\draw[->,thick] (events)--(hit);
+\end{tikzpicture}
+\vspace{3mm}
+\begin{block}{Translate names once}
+\texttt{stable} is the stability flag; event fields \texttt{u}, \texttt{p},
+and \texttt{info} are the event state, parameter, and diagnostics.
 \end{block}
 \end{frame}
 
-\begin{frame}[fragile]{Pluggable linear algebra without changing the engine}
-\begin{lstlisting}
-solvers = jc.Solvers(
-    linear=jc.Dense(),       # solves A x = b
-    eigen=jc.DenseEigen(),  # computes spectrum(A)
-)
-
-result = jc.continuation(
-    problem, p_span=(p0, p1),
-    settings=settings, solvers=solvers,
-)
-\end{lstlisting}
+\begin{frame}{One result has an eager view and a traced view}
 \begin{columns}[T]
 \column{.48\textwidth}
-\begin{block}{Today}
-\texttt{Dense} delegates to \texttt{jnp.linalg.solve}; \texttt{DenseEigen}
-delegates to \texttt{jnp.linalg.eigvals}.
+\begin{block}{Eager call: convenient arrays}
+Branch arrays are trimmed to the computed points, \texttt{branch.valid} is
+\texttt{None}, and \texttt{branch.n\_valid} is the trimmed length. Event hits
+may be returned as Python objects.
 \end{block}
 \column{.48\textwidth}
-\begin{block}{The architectural benefit}
-The continuation loop depends on small \texttt{LinearSolver} and
-\texttt{EigenSolver} protocols, not on one hard-coded algorithm.
+\begin{block}{Inside \texttt{jit} / \texttt{vmap}: fixed arrays}
+Branch arrays retain all \texttt{max\_steps + 1} slots.
+\texttt{branch.valid} selects real points, while
+\texttt{result.stats["n\_valid"]} records their count.
 \end{block}
 \end{columns}
-\begin{alertblock}{Current scope}
-Dense implementations are the shipped choices. Iterative GMRES/Arnoldi-style
-solvers are extension points, not v0.2 features.
-\end{alertblock}
-\end{frame}
-
-\begin{frame}{The v0.2 event protocol: detect, bracket, refine}
-\centering
-\begin{tikzpicture}[scale=.86,transform shape,node distance=7mm and 6mm,>=Latex,
- box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,minimum width=30mm,minimum height=10mm,align=center}]
-\node[box] (branch) {stored branch\\points};
-\node[box,right=of branch] (test) {evaluate an event\\test function};
-\node[box,right=of test] (bracket) {find a sign-changing\\neighbor pair};
-\node[box,right=of bracket] (refine) {refine and return\\an \texttt{EventHit}};
-\draw[->,thick] (branch)--(test);
-\draw[->,thick] (test)--(bracket);
-\draw[->,thick] (bracket)--(refine);
+\vspace{4mm}
+\begin{center}
+\begin{tikzpicture}[x=.72cm,y=.62cm]
+\foreach \i in {0,...,12} {\draw[fill=SoftGray] (\i,0) rectangle +(0.68,0.72);}
+\foreach \i in {0,...,7} {\draw[fill=JaxBlue!45] (\i,0) rectangle +(0.68,0.72);}
+\draw[JaxGreen,very thick] (-.05,-.12) rectangle (5.72,.84);
+\node[below] at (2.85,-.15) {\texttt{valid = True}};
+\node[below] at (7.3,-.15) {reserved capacity};
 \end{tikzpicture}
-\vspace{6mm}
-\begin{center}
-\begin{tabular}{lll}
-\toprule
-Event & Test function & Refinement idea\\
-\midrule
-\texttt{Fold} & tangent parameter component $\dot p$ & differentiable extended system\\
-\texttt{Hopf} & $\operatorname{Re}\lambda$ of a complex pair & bisection\\
-\texttt{PeriodDoubling} & real multiplier $\mu+1$ & Floquet bisection\\
-\texttt{NeimarkSacker} & complex-pair magnitude $|\mu|-1$ & Floquet bisection\\
-\bottomrule
-\end{tabular}
 \end{center}
-\begin{block}{Why the rewrite matters}
-Each event owns its mathematical test and refinement. Fold detection no longer
-uses an eigenvalue proxy that can confuse a nearby Hopf crossing with a fold.
-\end{block}
-\end{frame}
-
-\begin{frame}{Safe and bounded termination}
-The outer loop stops when any condition becomes true:
-\begin{enumerate}
-  \item at most \texttt{max\_steps} attempts have run;
-  \item the accepted parameter reaches the requested endpoint;
-  \item a failed step shrinks to \texttt{ds\_min};
-  \item a state becomes non-finite.
-\end{enumerate}
-The inner Newton loop stops at convergence, non-finite residual, or \texttt{max\_iter}.
-\begin{block}{Why this matters}
-Bounded loops and explicit finite-value guards prevent a compiled computation from hanging forever on a pathological branch.
-\end{block}
-\end{frame}
-
-
-\begin{frame}{What developing with JAX offers JaxCont}
-\small
-\begin{center}
-\begin{tabular}{>{\raggedright\arraybackslash}p{.22\textwidth}
-                >{\raggedright\arraybackslash}p{.31\textwidth}
-                >{\raggedright\arraybackslash}p{.37\textwidth}}
-\toprule
-JAX feature & Use inside JaxCont & User-facing payoff\\
-\midrule
-Automatic differentiation & residual Jacobians, tangents, Newton systems & no hand-maintained finite-difference derivatives\\
-\texttt{jit} + XLA & compile the bounded branch sweep & lower Python/device orchestration cost on repeated runs\\
-\texttt{lax.while\_loop} & Newton iterations and adaptive continuation attempts & data-dependent loops remain device-executable\\
-\texttt{vmap} & parameter ensembles, spectra and Floquet post-passes & batching without writing a second batched solver\\
-PyTrees / Equinox & structured problems and static collocation mesh fields & transformations understand model data and compile-time structure\\
-\texttt{custom\_vjp} & implicit derivative of a converged root & reverse-mode sensitivities without unrolling Newton iterations\\
-Accelerator arrays & same numerical program on CPU, GPU or TPU backends & one implementation can target different study scales\\
-\bottomrule
-\end{tabular}
-\end{center}
-\end{frame}
-
-\begin{frame}{Why compile the complete continuation loop?}
-Small systems perform many tiny operations per point:
-\[
-\text{Python step}\to F\to \text{Jacobian}\to\text{solve}\to F\to\cdots
-\]
-Each arrow can cause Python orchestration and device dispatch.
-\begin{block}{Optimization target}
-Place prediction, Newton correction, step adaptation, buffer writes, and
-termination inside one compiled program. The mathematics remains sequential,
-but the device executes the sequence without returning to Python at every step.
-\end{block}
-\begin{alertblock}{What this does not mean}
-Compilation does not improve an ill-conditioned model or repair a poor initial
-equilibrium. It reduces execution overhead; numerical validity still depends on
-the continuation setup.
+\begin{alertblock}{Current transformation boundary}
+Use \texttt{events=()} inside \texttt{jit}/\texttt{vmap}; event orchestration is
+eager-only even though branch and stability arrays are transformation-safe.
 \end{alertblock}
 \end{frame}
 
-\begin{frame}{Whole-loop JIT}
+\begin{frame}{The public objects hide one compiled branch engine}
 \centering
-\begin{tikzpicture}[node distance=6mm and 8mm,>=Latex,
- stage/.style={draw=JaxBlue,fill=SoftBlue,rounded corners,minimum width=25mm,
+\begin{tikzpicture}[node distance=8mm and 10mm,>=Latex,
+ box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+             minimum width=31mm,minimum height=11mm,align=center},
+ engine/.style={rounded corners,draw=JaxGreen,very thick,fill=JaxGreen!10,
+                minimum width=38mm,minimum height=13mm,align=center}]
+\node[box] (model) {\texttt{rhs, u0, p0, args}};
+\node[box,right=of model] (problem) {\texttt{BifProblem}};
+\node[box,right=of problem] (call) {algorithm + settings\\\texttt{continuation(...)}};
+\node[engine,below=of call] (loop) {bounded whole-loop\\JAX engine};
+\node[box,left=of loop] (result) {\texttt{ContinuationResult}};
+\draw[->,thick] (model)--(problem);
+\draw[->,thick] (problem)--(call);
+\draw[->,thick] (call)--(loop);
+\draw[->,thick] (loop)--(result);
+\end{tikzpicture}
+\vspace{7mm}
+\begin{block}{Why the boundary matters}
+Users compose immutable problem, algorithm, settings, and event values. The
+engine can change its carry representation or post-processing without changing
+how demos construct a problem or read a branch.
+\end{block}
+\vfill
+{\scriptsize Carry fields, array-selection mechanics, and reassembly details are implementation-appendix material (Chapter 12).}
+\end{frame}
+
+\begin{frame}{``Scan'' names the engine, not the loop primitive}
+\begin{columns}[T]
+\column{.47\textwidth}
+\begin{block}{Pseudo-arclength}
+The numerical method: tangent prediction followed by augmented Newton
+correction, so an ordinary fold can be passed.
+\end{block}
+\column{.47\textwidth}
+\begin{block}{Scan engine}
+The implementation style: package the bounded branch sweep into one compiled,
+functional array program.
+\end{block}
+\end{columns}
+\vspace{5mm}
+\begin{alertblock}{Precise statement}
+\texttt{pseudo\_arclength\_scan} uses \texttt{jax.lax.while\_loop} for the
+outer continuation loop; it does not implement the branch sweep with
+\texttt{jax.lax.scan}.
+\end{alertblock}
+\begin{block}{Nested work is bounded too}
+Each continuation attempt calls a Newton loop with a finite iteration budget;
+the outer loop has a fixed maximum number of accepted steps.
+\end{block}
+\end{frame}
+
+\begin{frame}{Whole-loop JIT changes orchestration, not mathematics}
+\centering
+\begin{tikzpicture}[node distance=6mm and 7mm,>=Latex,
+ stage/.style={draw=JaxBlue,fill=SoftBlue,rounded corners,minimum width=24mm,
               minimum height=9mm,align=center},
  boundary/.style={draw=JaxGreen,very thick,rounded corners,inner sep=5mm}]
 \node[stage] (tan) {compute\\tangent};
 \node[stage,right=of tan] (pred) {predict};
 \node[stage,right=of pred] (corr) {Newton\\correct};
-\node[stage,right=of corr] (adapt) {accept, store,\\and adapt};
+\node[stage,right=of corr] (adapt) {accept, store,\\adapt};
 \draw[->,thick] (tan)--(pred);
 \draw[->,thick] (pred)--(corr);
 \draw[->,thick] (corr)--(adapt);
@@ -282,216 +156,143 @@ the continuation setup.
 \node[boundary,fit=(tan)(pred)(corr)(adapt),
       label={[text=JaxGreen!60!black,font=\bfseries]above:one compiled continuation program}] {};
 \end{tikzpicture}
-\vspace{5mm}
-\begin{block}{The JIT boundary}
-\small
-\texttt{@partial(jax.jit, static\_argnums=(0, 8))} wraps the full engine.
-The model function and buffer length are static, so compatible later calls
-reuse the compiled executable.
-\end{block}
-\end{frame}
-
-\begin{frame}{Compilation versus execution}
-\begin{enumerate}
-  \item \textbf{Trace:} JAX observes array operations and control-flow primitives.
-  \item \textbf{Compile:} XLA optimizes a device program for shapes/dtypes/static values.
-  \item \textbf{Execute:} later compatible calls reuse the compiled program.
-\end{enumerate}
+\vspace{4mm}
 \begin{columns}[T]
 \column{.48\textwidth}
 \begin{alertblock}{Cold call}
-Includes compilation; can be slower and should not be compared directly with an already-warm Python implementation.
+Tracing and compilation are included. Report this cost separately and wait for
+device completion before timing.
 \end{alertblock}
 \column{.48\textwidth}
 \begin{block}{Warm call}
-Reuses the executable; this measures steady-state throughput.
+A compatible call reuses the executable and measures steady-state execution.
 \end{block}
 \end{columns}
-\vspace{3mm}
-Always call \texttt{block\_until\_ready()} when timing asynchronous JAX work.
+\vspace{2mm}
+{\small The model function, \texttt{max\_steps}, and linear solver are static;
+changing them or array shapes/dtypes may trigger recompilation.}
 \end{frame}
 
-\begin{frame}{Static values versus traced values}
-In the engine decorator, arguments 0 and 8 are static:
-\begin{itemize}
-  \item \texttt{f}: the Python model function defines the compiled program;
-  \item \texttt{max\_steps}: determines buffer shapes.
-\end{itemize}
-Traced array values include $\state_0,p_0,p_{end},\Delta s$, tolerances and Newton limits.
-\begin{block}{Practical consequence}
-Changing array values usually reuses a compilation. Changing state shape, dtype, model function, or static step budget can trigger recompilation.
-\end{block}
-\begin{alertblock}{Performance rule}
-Do not vary static configuration unnecessarily inside a sweep; group runs by compatible shapes and static settings.
-\end{alertblock}
-\end{frame}
-
-\begin{frame}{Fixed-size buffers unlock transformations}
-Python would normally append each accepted point to a growing list. JAX transformations require predictable array shapes.
-\begin{center}
-\begin{tikzpicture}[x=.85cm,y=.7cm]
-\foreach \i in {0,...,11} {
-  \draw[fill=SoftGray] (\i,0) rectangle +(0.82,0.75);
-}
-\foreach \i in {0,...,7} {
-  \draw[fill=JaxBlue!45] (\i,0) rectangle +(0.82,0.75);
-}
-\draw[JaxGreen,very thick] (-.08,-.15) rectangle (6.8,.9);
-\node[below] at (3.35,-.18) {\texttt{valid = True}};
-\node[below] at (8.6,-.18) {unused capacity};
-\end{tikzpicture}
-\end{center}
-Return all $M+1$ slots plus \texttt{n\_valid} or a boolean \texttt{valid} mask.
-\begin{block}{The trade-off}
-Some memory is reserved for unused points, but output shapes become compatible with JIT, batching, accelerators and PyTrees.
-\end{block}
-\end{frame}
-
-\begin{frame}{Branch-free array control}
-Inside traced code, Python decisions such as
-\begin{center}
-\texttt{if converged: append(new\_state)}
-\end{center}
-cannot depend on a runtime tracer. The engine uses array selection:
-\[
-\state_{\mathrm{next}}=\operatorname{where}
-(\text{converged},\state_{\mathrm{new}},\state_{\mathrm{old}}).
-\]
-Likewise, the buffer write, tangent update, index advance and step-size rule use \texttt{jnp.where} and logical array operations.
-\begin{block}{Strategy}
-Compute candidates in a uniform program, then select the valid state with array primitives. This makes control flow traceable and device-friendly.
-\end{block}
-\end{frame}
-
-\begin{frame}[fragile]{\texttt{vmap}: many branches, one batched program}
+\begin{frame}[fragile]{\texttt{vmap} batches independent branches}
 \begin{lstlisting}
 def run_one(design_value):
-    prob_i = problem.at(args=design_value)
+    problem = jc.bif_problem(
+        rhs, u0, p0, args=design_value
+    )
     return jc.continuation(
-        prob_i, jc.PseudoArclength(),
-        p_span=(p0, p1), settings=settings,
+        problem, jc.PseudoArclength(),
+        p_span=(p_min, p_max), settings=settings,
+        events=(),
     )
 
 branches = jax.vmap(run_one)(design_values)
 \end{lstlisting}
-\begin{itemize}
-  \item No explicit Python loop over designs.
-  \item Batch axes propagate through Jacobians, linear solves and buffers.
-  \item Particularly valuable on GPUs and for parameter ensembles.
-\end{itemize}
-\begin{alertblock}{Shape requirement}
-Every batched run returns the same buffer shape; each run's \texttt{valid} mask identifies its actual branch length.
+\begin{block}{What is parallel}
+Each batch element owns one sequential continuation history. Fixed buffers give
+every branch the same outer shape; \texttt{branches.branch.valid} identifies
+the actual points in each history.
+\end{block}
+\begin{alertblock}{What is not parallel}
+\texttt{vmap} does not parallelize the predictor--corrector steps within one
+branch, because step $k+1$ depends on the accepted point at step $k$.
 \end{alertblock}
 \end{frame}
 
-\begin{frame}{Stability is a vectorized, kind-aware post-pass}
+\begin{frame}{Autodiff serves local equations and converged roots}
 \begin{columns}[T]
 \column{.48\textwidth}
-\begin{block}{Equilibrium branch}
-\[
-  J_k=f_{\state}(\state_k,p_k),\qquad
-  \operatorname{Re}\lambda_i(J_k)<0.
-\]
-\texttt{branch\_eigenvalues} is mapped over accepted branch points.
+\begin{block}{During branch computation}
+Automatic Jacobians provide $F_{\state}$ and $F_p$ for tangents, Newton
+systems, stability, and forward sensitivities through the bounded sweep.
 \end{block}
 \column{.48\textwidth}
-\begin{block}{Periodic branch}
+\begin{block}{At a selected implicit root}
+A custom VJP differentiates the converged equation $G(x^*,\theta)=0$ without
+reverse-mode backpropagation through Newton iterations:
 \[
-  \mu_i=\operatorname{eigvals}(\Phi_k(T)),\qquad
-  |\mu_i|<1
+  \frac{dx^*}{d\theta}=-G_x^{-1}G_\theta.
 \]
-after excluding the trivial multiplier nearest $+1$.
-\texttt{branch\_floquet\_multipliers} is mapped over the branch.
 \end{block}
 \end{columns}
 \vspace{4mm}
-\begin{block}{Why outside the sequential loop?}
-Continuation steps depend on previous steps, but stability evaluations of already stored points are independent and therefore naturally parallel.
-\end{block}
-\end{frame}
-
-\begin{frame}{Automatic differentiation has several roles}
-\begin{enumerate}
-  \item \textbf{Inside continuation:} \texttt{jacfwd} computes $F_{\state}$ and $F_p$ for tangents and Newton corrections.
-  \item \textbf{Inside stability:} Jacobians of the raw dynamics build equilibrium spectra and the periodic variational problem.
-  \item \textbf{Around the sweep:} forward-mode differentiation can propagate through the whole \texttt{while\_loop}.
-  \item \textbf{At a converged root:} a custom VJP uses implicit differentiation for reverse-mode sensitivities.
-\end{enumerate}
-\begin{block}{Why forward mode here?}
-Continuation often differentiates outputs with respect to a small number of design parameters; forward mode is structurally compatible with \texttt{lax.while\_loop}.
-\end{block}
-\begin{alertblock}{Not magic}
-Automatic differentiation produces derivatives of the implemented discrete algorithm. Conditioning, convergence and branch identity still determine whether those derivatives are scientifically meaningful.
+\begin{alertblock}{Derivatives inherit numerical quality}
+Autodiff differentiates the implemented equations. It does not repair poor
+conditioning, select the intended branch, or make a failed root solve converge.
 \end{alertblock}
 \end{frame}
 
-\begin{frame}{Reverse mode through a reusable differentiable root}
-Reverse-mode differentiation through dynamic \texttt{lax.while\_loop} is not generally supported in the desired way.
-The internal \texttt{differentiable\_root} primitive instead:
-\begin{enumerate}
-  \item solves any square system $G(x,\theta)=0$ with Newton iterations;
-  \item stores only the converged root and parameters for the reverse pass;
-  \item solves an adjoint linear system from the implicit function theorem.
-\end{enumerate}
-\[
-  \frac{dx^*}{d\theta}=-G_x^{-1}G_{\theta}.
-\]
-\begin{block}{Distinction to remember}
-The scan engine provides the branch. A selected root problem-currently fold
-refinement and periodic initial refinement-can reuse the custom-VJP primitive.
-\texttt{fold\_parameter} exposes the differentiable fold-location workflow publicly;
-wrapping periodic-problem \emph{construction} itself in an outer gradient is not guaranteed.
+\begin{frame}{Solver protocols isolate numerical policy}
+\centering
+\begin{tikzpicture}[node distance=12mm and 18mm,>=Latex,
+ box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+             minimum width=40mm,minimum height=12mm,align=center},
+ seam/.style={rounded corners,draw=JaxGreen,thick,fill=JaxGreen!10,
+              minimum width=45mm,minimum height=12mm,align=center}]
+\node[box] (engine) {continuation correction};
+\node[box,below=of engine] (stable) {stability post-pass};
+\node[seam,right=of engine] (linear)
+  {\texttt{LinearSolver(A, b)} $\to x$\\shipped default: \texttt{Dense()}};
+\node[seam,right=of stable] (eigen)
+  {\texttt{EigenSolver(A)} $\to \lambda$\\shipped default: \texttt{DenseEigen()}};
+\draw[->,thick] (engine)--(linear);
+\draw[->,thick] (stable)--(eigen);
+\end{tikzpicture}
+\vspace{6mm}
+\begin{block}{Architectural payoff}
+The branch engine depends on small callable contracts rather than hard-coding
+linear solves or eigensolvers. The public \texttt{jc.Solvers} bundle supplies
+the two strategies to \texttt{jc.continuation}.
 \end{block}
 \end{frame}
 
-\begin{frame}{The eager and traced result paths}
+\begin{frame}{Bounded termination is part of the execution contract}
 \begin{columns}[T]
 \column{.48\textwidth}
-\begin{block}{Eager call}
-Convert \texttt{n\_valid} to a Python integer, trim buffers, run existing event detection, and build convenient Python metadata.
+\begin{block}{The outer branch loop stops when}
+\begin{itemize}
+  \item the requested parameter endpoint is reached;
+  \item the accepted-step budget is exhausted;
+  \item a failed correction reaches \texttt{ds\_min};
+  \item the accepted state becomes non-finite.
+\end{itemize}
 \end{block}
 \column{.48\textwidth}
-\begin{block}{Inside JIT / \texttt{vmap}}
-The length is a tracer. Return full buffers and a \texttt{valid} mask; avoid Python lists, \texttt{float()}, sorting and variable-length trimming.
+\begin{block}{Each Newton loop stops when}
+\begin{itemize}
+  \item the residual meets tolerance;
+  \item a residual becomes non-finite;
+  \item \texttt{newton\_max\_iter} is reached.
+\end{itemize}
 \end{block}
 \end{columns}
-\vspace{5mm}
-\begin{alertblock}{Current boundary}
-\texttt{events=[...]} is not supported inside \texttt{jax.vmap}/\texttt{jax.jit};
-the v0.2 \texttt{Event} orchestrator brackets, sorts and deduplicates with
-Python-level control flow. Branch and stability arrays are transformation-safe.
+\vspace{4mm}
+\begin{alertblock}{Bounded does not mean successful}
+Termination prevents an unbounded compiled computation. Scientific success
+still requires inspecting validity, residuals, events, and branch coverage.
 \end{alertblock}
 \end{frame}
 
-\begin{frame}{When acceleration helps a research study}
-\begin{itemize}
-  \item Repeating the same branch calculation for many parameter sets.
-  \item Screening uncertain parameters or candidate model designs.
-  \item Differentiating a selected output with respect to a few design variables.
-  \item Running independent continuation problems as a \texttt{vmap} batch.
-  \item Reusing one compiled program for calls with compatible shapes and settings.
-\end{itemize}
-\begin{alertblock}{Measure the workload you actually care about}
-Record compilation time and warm execution time separately. Document hardware,
-precision, model dimension, \texttt{max\_steps}, branch length, and batch size;
-these determine whether acceleration is scientifically useful.
-\end{alertblock}
-\end{frame}
-
-\begin{frame}{Computational limits to plan for}
-\begin{itemize}
-  \item Dense Jacobians and dense $(n+1)\times(n+1)$ solves dominate as $n$ grows.
-  \item A collocation state is much larger than the physical ODE state.
-  \item Fixed buffers cost memory proportional to \texttt{max\_steps}.
-  \item Changing static shapes/settings can cause recompilation.
-  \item Event detection currently requires the eager Python result path.
-  \item Fixed periodic meshes do not adapt to sharp waveform features.
-  \item The first call pays tracing and compilation cost.
-  \item A sequential branch cannot parallelize across its own steps; batching parallelizes \emph{across branches}.
-\end{itemize}
-\begin{block}{Planning implication}
-Estimate state dimension, number of branch points, and ensemble size before a
-large study. Start with a small validated run, then increase resolution or
-batch size while monitoring memory and convergence.
+\begin{frame}{JAX mechanisms enable capabilities, not guarantees}
+\scriptsize
+\begin{center}
+\begin{tabular}{>{\raggedright\arraybackslash}p{.20\textwidth}
+                >{\raggedright\arraybackslash}p{.31\textwidth}
+                >{\raggedright\arraybackslash}p{.38\textwidth}}
+\toprule
+JAX mechanism & Enables & Does not guarantee\\
+\midrule
+autodiff & Jacobians and sensitivities & good conditioning\\
+JIT + \texttt{while\_loop} & compiled branch execution & a more accurate method\\
+fixed shapes & transformation compatibility & every event path is batchable\\
+\texttt{vmap} & independent ensemble branches & parallel steps within one branch\\
+custom VJP root & implicit reverse-mode gradients & convergence from a poor seed\\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{4mm}
+\begin{block}{The practical reading}
+JAX removes derivative bookkeeping and Python/device orchestration from a
+well-posed computation. Numerical method choice, convergence, conditioning,
+and validation remain scientific responsibilities.
 \end{block}
 \end{frame}
