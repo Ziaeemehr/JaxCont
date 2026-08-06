@@ -147,6 +147,22 @@ def _run_adaptx_jaxcont(alpha: float, period: float):
     return problem, mesh
 
 
+def _circular_interp(
+    query_phase: np.ndarray, reference_phase: np.ndarray, reference_values: np.ndarray
+) -> np.ndarray:
+    """Interpolate a phase-periodic reference curve (``reference_phase`` in
+    ``[0, 1)``) at arbitrary query phases, wrapping around the period
+    boundary -- shared by ``_best_phase_shift``'s per-shift search and
+    ``run_adaptx_prc_dprc``'s final aligned-curve lookups, which would
+    otherwise repeat the same circular-extension-then-``np.interp``
+    pattern three times."""
+    extended_phase = np.concatenate(
+        [reference_phase - 1.0, reference_phase, reference_phase + 1.0]
+    )
+    extended_values = np.tile(reference_values, 3)
+    return np.interp(query_phase, extended_phase, extended_values)
+
+
 def _best_phase_shift(
     jaxcont_phase: np.ndarray,
     jaxcont_prc: np.ndarray,
@@ -181,14 +197,10 @@ def _best_phase_shift(
     afterward, and the search window is bounded to about one JaxCont mesh
     spacing (``1/ntst``), not an unconstrained fit.
     """
-    extended_phase = np.concatenate(
-        [reference_phase - 1.0, reference_phase, reference_phase + 1.0]
-    )
-    extended_prc = np.concatenate([reference_prc, reference_prc, reference_prc])
 
     def worst_margin(delta: float) -> float:
         query = (jaxcont_phase + delta) % 1.0
-        aligned = np.interp(query, extended_phase, extended_prc)
+        aligned = _circular_interp(query, reference_phase, reference_prc)
         errors = np.abs(jaxcont_prc - aligned)
         limits = atol + rtol * np.maximum(np.abs(jaxcont_prc), np.abs(aligned))
         return float(np.max(errors - limits))
@@ -242,17 +254,16 @@ def run_adaptx_prc_dprc(reference_dir: Path) -> CaseResult:
     )
     aligned_phase = (jaxcont_phase + phase_shift) % 1.0
 
-    extended_phase = np.concatenate(
-        [reference["phase_fraction"] - 1.0, reference["phase_fraction"], reference["phase_fraction"] + 1.0]
+    reference_prc_aligned = _circular_interp(
+        aligned_phase, reference["phase_fraction"], reference["prc"]
     )
-    extended_prc = np.tile(reference["prc"], 3)
-    extended_dprc = np.tile(reference["dprc"], 3)
-    reference_prc_aligned = np.interp(aligned_phase, extended_phase, extended_prc)
     # Reference dPRC is aligned the same way purely so it can sit alongside
     # jaxcont_dprc in artifacts for anyone inspecting the case (e.g. to see
     # for themselves that the two curves have different shapes, not just
     # different scales) -- not used in any check.
-    reference_dprc_aligned = np.interp(aligned_phase, extended_phase, extended_dprc)
+    reference_dprc_aligned = _circular_interp(
+        aligned_phase, reference["phase_fraction"], reference["dprc"]
+    )
 
     prc_diagnostics = _diagnose(jaxcont_prc, reference_prc_aligned, atol=_PRC_ATOL, rtol=_PRC_RTOL)
 

@@ -85,7 +85,6 @@ selecting one without `--dry-run` exits nonzero with `NON_EXECUTABLE_TEMPLATE`.
 | `US-BVP-001` | General BVP setup template beyond supported periodic collocation (non-executable) |
 | `US-HOM-001` | Homoclinic continuation |
 | `US-HET-001` | Heteroclinic setup template requiring problem-specific endpoint seeds (non-executable) |
-| `US-PRC-001` | PRC/dPRC calculation |
 
 Direct CP, BT, GH, ZH and HH point solvers are supported and are therefore not
 in this table. Continuation of their two-parameter curves remains unsupported.
