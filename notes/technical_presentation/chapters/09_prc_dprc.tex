@@ -4,33 +4,50 @@
 
 \begin{frame}{Why phase sensitivity matters}
 \mainbadge
-\vspace{2mm}
-\begin{block}{One kick can have three different effects}
-The state-space impulse is identical; only the phase at which it arrives changes.
+\vspace{1mm}
+\begin{block}{Same kick, different arrival phase $\Rightarrow$ different timing response}
+The orange impulse $\delta x$ is unchanged. Only its arrival phase on the oscillation changes.
 \end{block}
 \centering
-\begin{tikzpicture}[>=Latex,scale=.82,
- orbit/.style={draw=JaxBlue,very thick},
- kick/.style={->,very thick,JaxOrange},
- phaseshift/.style={->,very thick,JaxTeal}]
-  \foreach \cx/\ang/\lab/\shiftang/\kicklabelpos in {
-    0/25/early/18/{below right},
-    4.8/145/middle/52/{below right},
-    9.6/265/late/-25/{above left}}{
-    \draw[orbit] (\cx,0) circle (1.25);
-    \draw[->,JaxBlue,thick] (\cx+1.25,0) arc[start angle=0,end angle=55,radius=1.25];
-    \coordinate (hit) at ({\cx+1.25*cos(\ang)},{1.25*sin(\ang)});
-    \fill[JaxBlue] (hit) circle (2.2pt);
-    \draw[kick] ($(hit)+(-.75,-.55)$) -- (hit)
-      node[midway,\kicklabelpos,font=\scriptsize] {$\delta x$};
-    \draw[phaseshift] (hit) arc[start angle=\ang,end angle={\ang+\shiftang},radius=1.25];
-    \node[font=\small\bfseries] at (\cx,-1.65) {\lab{} phase};
-    \node[font=\scriptsize,JaxTeal] at (\cx,-2.03) {$\Delta\phi$ differs};
+\begin{tikzpicture}[>=Latex,x=.92cm,y=.62cm]
+  % One reference rhythm: the three arrows are deliberately identical.
+  \draw[->,JaxBlue!65,thick] (0,-.05) -- (11.25,-.05)
+    node[right,font=\scriptsize] {time};
+  \draw[JaxBlue,very thick,domain=0:11,samples=150,smooth]
+    plot (\x,{.72*sin(36*\x)});
+  \foreach \xx/\lab in {1.35/early,5.05/middle,8.75/late}{
+    \pgfmathsetmacro{\yy}{.72*sin(36*\xx)}
+    \draw[->,very thick,JaxOrange] (\xx,{\yy-1.0}) -- (\xx,\yy);
+    \fill[JaxOrange] (\xx,\yy) circle (2pt);
+    \node[font=\scriptsize\bfseries,JaxOrange,below=1mm]
+      at (\xx,{\yy-1.0}) {\lab{} phase};
+  }
+  \node[font=\scriptsize,JaxOrange,anchor=west] at (9.35,1.08)
+    {same $\delta x$ each time};
+
+  \foreach \cx/\title/\response/\shift in {
+    1.85/ADVANCE/next peak earlier/-0.42,
+    5.60/LITTLE CHANGE/next peak nearly unchanged/0.0,
+    9.35/DELAY/next peak later/0.42}{
+    \draw[rounded corners=2pt,draw=JaxBlue!45,fill=SoftBlue]
+      (\cx-1.62,-4.35) rectangle (\cx+1.62,-2.55);
+    \node[font=\scriptsize\bfseries,JaxTeal] at (\cx,-2.84) {\title};
+    \draw[->,gray!70,thick] (\cx-1.25,-3.48) -- (\cx+1.25,-3.48);
+    \draw[JaxBlue,very thick] (\cx+.35,-3.82) -- (\cx+.35,-3.14);
+    \draw[JaxTeal,very thick] ({\cx+.35+\shift},-3.82)
+      -- ({\cx+.35+\shift},-3.14);
+    \node[font=\tiny,align=center] at (\cx,-4.08) {\response};
   }
 \end{tikzpicture}
-\vspace{1mm}
+\vspace{.5mm}
 
-{\small The iPRC maps a small state perturbation to its first-order phase shift.}
+\begin{beamercolorbox}[rounded=true,sep=1mm,wd=.91\textwidth]{block body}
+\centering
+{\small $\displaystyle \Delta\phi \approx Z(\phi)^{\mathsf T}\delta x$
+\qquad Same $\delta x$; phase-dependent $Z(\phi)$ changes the response.}\\[-.2mm]
+{\scriptsize \textcolor{JaxBlue}{blue tick: reference peak}
+\qquad \textcolor{JaxTeal}{teal tick: peak after kick}}
+\end{beamercolorbox}
 \end{frame}
 
 \begin{frame}{The iPRC is a gradient of asymptotic phase}
