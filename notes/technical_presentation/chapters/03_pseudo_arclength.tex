@@ -64,9 +64,13 @@ The artificial coordinate $s$ keeps increasing even when $p$ turns around.
   \draw[->] (0,-2.35)--(0,2.35) node[above] {$u$};
   \draw[JaxBlue,very thick,smooth,domain=-2:2,samples=100]
       plot ({\x^3/3-\x},{\x});
+  % At A the cubic tangent is parallel to (dp/du,1)=(1.25,1).
+  % C uses u=-0.85, hence p=u^3/3-u=0.64529167.  B is the
+  % orthogonal projection of C onto the tangent through A, so
+  % (B-A) dot (C-B)=0 and the dashed line is the correction hyperplane.
   \coordinate (old) at (.375,-1.50);
-  \coordinate (pred) at (1.00,-1.00);
-  \coordinate (new) at (.645,-.85);
+  \coordinate (pred) at (.856885162602,-1.114491869919);
+  \coordinate (new) at (.645291666667,-.85);
 
   \fill[JaxBlue] (old) circle (3pt) node[below left=1mm] {$A$};
   \draw[JaxOrange,very thick,->] (old)--(pred);
