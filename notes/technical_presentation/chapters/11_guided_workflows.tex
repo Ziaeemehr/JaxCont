@@ -1,0 +1,133 @@
+\chapterdivider{11}{Guided application workflows}
+  {How should a newcomer plan, run, inspect, and validate a JaxCont study?}
+  {Featured applications: six reproducible paths through the example gallery}
+
+\begin{frame}{What continuation can answer}
+\small
+\begin{center}
+\begin{tabular}{>{\raggedright\arraybackslash}p{.29\textwidth}
+                >{\raggedright\arraybackslash}p{.59\textwidth}}
+\toprule
+Research question & Continuation output\\
+\midrule
+Where do equilibria exist? & A connected branch of steady states over a parameter range.\\
+Where can abrupt transitions occur? & Fold candidates and multistable parameter regions.\\
+When does an equilibrium lose stability? & Stability changes and candidate local bifurcations.\\
+How does an oscillation change? & A branch of periodic-orbit shapes, amplitudes and periods.\\
+When does a cycle lose stability? & Floquet multipliers and candidate fold-of-cycles, PD or NS events.\\
+How robust is a conclusion? & Batches of branches over uncertain parameters or model variants.\\
+How does a threshold move? & Sensitivity of a selected, well-defined bifurcation point.\\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{alertblock}{Interpretation boundary}
+A bifurcation diagram describes mathematical solutions and local stability;
+it does not by itself establish causality or validate the model.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{A beginner-friendly research workflow}
+\begin{enumerate}
+  \item State the scientific question and choose one continuation parameter.
+  \item Implement a deterministic, smooth ODE right-hand side.
+  \item Build a verified start: one equilibrium, or one simulated cycle plus period guess.
+  \item Run a short continuation with conservative settings.
+  \item Inspect residuals, branch geometry, stability, and possible events.
+  \item Repeat in the opposite direction or from another known solution.
+  \item Refine interesting regions and validate them independently.
+  \item Save code, settings, precision, hardware, and diagnostic information.
+\end{enumerate}
+\begin{block}{Start small}
+Use a reduced model or narrow parameter interval first. A trustworthy small
+calculation is more valuable than a large unexplained diagram.
+\end{block}
+\end{frame}
+
+\begin{frame}{The package examples form a learning path}
+\scriptsize
+\begin{columns}[T]
+\column{.48\textwidth}
+\begin{block}{Foundations and JAX workflows}
+\begin{description}
+  \item[04] Natural stalls at a fold; PALC follows the turn.
+  \item[06] \texttt{vmap} batches a parameter sweep using fixed buffers.
+  \item[07] \texttt{jax.grad} measures how a fold parameter moves.
+\end{description}
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Periodic-orbit workflows}
+\begin{description}
+  \item[08] Analytic period-doubling crossing at $\alpha=0$.
+  \item[09] Analytic Neimark--Sacker crossing at $\alpha=0$.
+  \item[10] Van der Pol period growth and waveform sharpening.
+  \item[11] Brusselator limit-cycle amplitude growth.
+\end{description}
+\end{block}
+\end{columns}
+\begin{block}{Current-main visualization and recommended order}
+\textbf{12} combines a FitzHugh--Nagumo branch, Hopf marker, nullclines,
+vector field, equilibrium and trajectory. Learn branch geometry first,
+batching/differentiation second, periodic orbits next, then use Example 12 to
+connect the parameter and state-space views.
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{Visualization is now one consistent module}
+\small
+\begin{lstlisting}
+from jaxcont.viz import plot_eigenvalues, plot_phase_plane
+
+fig = result.plot(
+    state_index=0,
+    annotate=True,
+)
+
+fig = plot_eigenvalues(result)
+\end{lstlisting}
+\begin{itemize}
+  \item Branch segments and event markers share consistent styles.
+  \item \texttt{annotate=True} adds event labels and numerical coordinates.
+  \item \texttt{plot\_branch\_states} scatters a branch in state coordinates.
+  \item \texttt{plot\_phase\_plane} draws the actual 2D flow geometry at one $p$.
+\end{itemize}
+\begin{alertblock}{API migration}
+\texttt{plot\_phase\_portrait} was an inaccurate name for a branch-state
+scatter. It remains as a deprecated alias and is scheduled for removal in
+v0.4.0; use \texttt{plot\_branch\_states}.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{How to validate a computed branch}
+\begin{itemize}
+  \item Check $\|F(\state_k,p_k)\|$ at accepted points, not only a success flag.
+  \item Repeat with smaller and larger step-size bounds.
+  \item For periodic orbits, repeat with a finer \texttt{ntst}/\texttt{ncol} mesh.
+  \item Continue from both directions and compare overlapping branch segments.
+  \item Compare simple cases with an analytic solution when one exists.
+  \item Confirm important events with spectra or multipliers and a refined local solve.
+  \item Compare selected results with simulation or another continuation tool.
+  \item Test scientific conclusions under plausible parameter and model changes.
+\end{itemize}
+\begin{block}{Software tests and research validation are different}
+Repository tests check implementation behavior. Researchers must additionally
+check that their model, starting solution, parameter range, and interpretation
+are appropriate for the scientific question.
+\end{block}
+\end{frame}
+
+\begin{frame}{How to read the result}
+\begin{itemize}
+  \item Use only entries selected by \texttt{valid} or \texttt{[:n\_valid]}.
+  \item Plot a scientifically meaningful state observable against $p$.
+  \item Interpret \texttt{branch.eigenvalues} by kind: equilibrium eigenvalues
+        or periodic Floquet multipliers.
+  \item Treat detected events as candidates until they are refined and checked.
+  \item Inspect step sizes and residuals near sharp turns or failed regions.
+  \item Keep separate branches separate; one run may not reveal every solution.
+\end{itemize}
+\begin{alertblock}{A missing point is not necessarily a missing solution}
+Continuation can stop because of settings, conditioning, non-finite model
+values, or the attempt budget. Diagnose termination before concluding that a
+physical branch ends.
+\end{alertblock}
+\end{frame}

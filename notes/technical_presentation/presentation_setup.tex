@@ -1,0 +1,81 @@
+\usetheme{Madrid}
+\usecolortheme{default}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,shapes.geometric}
+
+\graphicspath{{assets/}{../../examples/images/}}
+
+\definecolor{JaxBlue}{HTML}{1261A0}
+\definecolor{JaxTeal}{HTML}{138A8A}
+\definecolor{JaxOrange}{HTML}{E07A1F}
+\definecolor{JaxGreen}{HTML}{2E8B57}
+\definecolor{JaxRed}{HTML}{B64040}
+\definecolor{SoftBlue}{HTML}{EAF3FA}
+\definecolor{SoftGray}{HTML}{F3F5F7}
+\definecolor{CodeBg}{HTML}{F7F7F7}
+
+\setbeamercolor{structure}{fg=JaxBlue}
+\setbeamercolor{frametitle}{bg=JaxBlue,fg=white}
+\setbeamercolor{title}{fg=white,bg=JaxBlue}
+\setbeamercolor{subtitle}{fg=white}
+\setbeamercolor{block title}{bg=JaxBlue!88,fg=white}
+\setbeamercolor{block body}{bg=SoftBlue}
+\setbeamercolor{alerted text}{fg=JaxRed}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{%
+  \leavevmode\hbox{%
+  \begin{beamercolorbox}[wd=.78\paperwidth,ht=2.5ex,dp=1.1ex,leftskip=1em]{author in head/foot}%
+    JaxCont technical presentation
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.22\paperwidth,ht=2.5ex,dp=1.1ex,rightskip=1em plus1fil]{date in head/foot}%
+    \insertframenumber{} / \inserttotalframenumber
+  \end{beamercolorbox}}}
+
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  backgroundcolor=\color{CodeBg},
+  frame=single,
+  rulecolor=\color{black!20},
+  keywordstyle=\color{JaxBlue}\bfseries,
+  commentstyle=\color{JaxGreen!80!black},
+  stringstyle=\color{JaxOrange!90!black},
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  language=Python
+}
+
+\newcommand{\state}{\bm{u}}
+\newcommand{\tangent}{\bm{t}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\good}{\textcolor{JaxGreen}{\bfseries advantage}}
+\newcommand{\limit}{\textcolor{JaxRed}{\bfseries limitation}}
+
+\newcommand{\releasedbadge}{%
+  \colorbox{JaxGreen!16}{\strut\textcolor{JaxGreen!55!black}{\scriptsize\bfseries Available in v0.3.1}}}
+\newcommand{\mainbadge}{%
+  \colorbox{JaxOrange!16}{\strut\textcolor{JaxOrange!80!black}{\scriptsize\bfseries Current main --- planned for v0.4}}}
+\newcommand{\futurebadge}{%
+  \colorbox{JaxRed!12}{\strut\textcolor{JaxRed}{\scriptsize\bfseries Future work --- not implemented}}}
+
+\newcommand{\chapterdivider}[4]{%
+  \section{#2}
+  \begin{frame}[plain]
+    \vfill
+    {\color{JaxBlue}\Large\bfseries Chapter #1\par}
+    \vspace{2mm}
+    {\huge\bfseries #2\par}
+    \vspace{5mm}
+    \begin{beamercolorbox}[sep=8pt,rounded=true]{block body}
+      \textbf{Question:} #3
+    \end{beamercolorbox}
+    \vspace{3mm}
+    {\small\textcolor{JaxTeal}{#4}\par}
+    \vfill
+  \end{frame}
+}

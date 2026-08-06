@@ -3,6 +3,9 @@ CONVERT ?= convert
 JOB := jaxcont_technical_presentation
 TEX := $(JOB).tex
 PDF := $(JOB).pdf
+SETUP := presentation_setup.tex
+CHAPTERS := $(wildcard chapters/*.tex)
+ASSETS := $(wildcard assets/*)
 LOGO_SVG := ../../docs/images/logo/logo.svg
 LOGO_PNG := jaxcont_logo.png
 
@@ -10,7 +13,7 @@ LOGO_PNG := jaxcont_logo.png
 
 all: $(PDF)
 
-$(PDF): $(TEX) $(LOGO_PNG)
+$(PDF): $(TEX) $(SETUP) $(CHAPTERS) $(ASSETS) $(LOGO_PNG)
 	$(LATEXMK) -pdf -interaction=nonstopmode -halt-on-error $(TEX)
 
 $(LOGO_PNG): $(LOGO_SVG)
