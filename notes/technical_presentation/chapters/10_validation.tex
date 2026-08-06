@@ -1,3 +1,221 @@
 \chapterdivider{10}{Validation: from residuals to independent evidence}
   {What evidence makes a continuation or sensitivity result trustworthy?}
   {Featured application: collocation PRC/dPRC checked by analytic formulas and independent shooting}
+
+\begin{frame}{Validation is a ladder, not a pass/fail sticker}
+\small
+\begin{tikzpicture}[>=Latex,scale=.92,transform shape,
+  rung/.style={rounded corners,draw=JaxBlue!65,thick,minimum height=7.5mm,
+               text width=10.4cm,align=left,font=\small},
+  level/.style={circle,fill=JaxBlue,text=white,font=\bfseries\scriptsize,
+                minimum size=6.5mm}]
+  \draw[->,very thick,JaxTeal] (-.15,-.25) -- (-.15,5.0)
+    node[above,font=\scriptsize,align=center]{more independent\\evidence};
+  \node[level] at (.55,.20) {1};
+  \node[rung,fill=SoftGray,anchor=west] at (1.05,.20)
+    {\textbf{Run health:} convergence, residual, finite values, validity, termination.};
+  \node[level] at (.55,1.15) {2};
+  \node[rung,fill=SoftBlue,anchor=west] at (1.05,1.15)
+    {\textbf{Numerical repeat:} change mesh, tolerances, step size, and direction.};
+  \node[level] at (.55,2.10) {3};
+  \node[rung,fill=JaxTeal!9,anchor=west] at (1.05,2.10)
+    {\textbf{Analytic oracle:} compare with a root, spectrum, or curve known in closed form.};
+  \node[level] at (.55,3.05) {4};
+  \node[rung,fill=JaxGreen!10,anchor=west] at (1.05,3.05)
+    {\textbf{Independent algorithm:} for example, shooting versus collocation.};
+  \node[level] at (.55,4.00) {5};
+  \node[rung,fill=JaxOrange!11,anchor=west] at (1.05,4.00)
+    {\textbf{Independent package/reference artifacts:} compare only after conventions align.};
+\end{tikzpicture}
+\vspace{1mm}
+\begin{alertblock}{Higher levels supplement lower levels}
+Agreement with another package does not excuse a failed residual; a small residual does not prove that the branch, event label, or scientific interpretation is correct.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Choose evidence for the capability being claimed}
+\scriptsize
+\centering
+\renewcommand{\arraystretch}{1.25}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{.20\textwidth}
+                  >{\raggedright\arraybackslash}p{.32\textwidth}
+                  >{\raggedright\arraybackslash}p{.40\textwidth}@{}}
+\toprule
+Capability & Evidence shown & Important qualification\\
+\midrule
+folds / branch topology
+  & analytic + MatCont / BifurcationKit cases
+  & align traversal and ordering before pointwise comparison\\
+periodic orbits / Floquet
+  & analytic + MatCont cases
+  & remove the trivial multiplier consistently\\
+Hopf $l_1$
+  & BifurcationKit cross-check + gradient tests
+  & local normal-form result\\
+selected codim-2 points
+  & analytic systems + BifurcationKit BT
+  & point refinement, not curve continuation\\
+iPRC
+  & analytic + MatCont + shooting
+  & align phase origin and phase units\\
+dPRC
+  & analytic / reconverged finite difference + shooting
+  & MatCont's ``dPRC'' is a different derivative\\
+\bottomrule
+\end{tabular}
+\vspace{2mm}
+
+{\small Software tests support implementation behaviour; the research question determines which extra rung the conclusion needs.}
+\end{frame}
+
+\begin{frame}{Sheared circle: closed form, collocation, and shooting}
+\mainbadge\par
+\vspace{1mm}
+\centering
+\includegraphics[width=.84\textwidth,trim=0 284 0 0,clip]{example_14_prc_shooting_validation.png}
+\vspace{1mm}
+
+\begin{columns}[T,onlytextwidth]
+\column{.49\textwidth}
+\scriptsize
+\raggedright
+\textcolor{JaxBlue}{\bfseries Three-way iPRC check}\par
+Fresh max $|\mathrm{error}|$: closed form \texttt{1.7881393432617188e-06};
+shooting \texttt{3.263568385203364e-05}.
+\column{.49\textwidth}
+\scriptsize
+\raggedright
+\textcolor{JaxBlue}{\bfseries Parameter derivative check}\par
+\texttt{dprc\_curve} versus reconverged shooting finite difference:
+\texttt{4.453244448487936e-05}.
+\end{columns}
+\vspace{1mm}
+{\tiny Fresh run of \texttt{examples/example\_14\_prc\_shooting\_validation.py}; exact printed diagnostics, not declared pass thresholds.}
+\end{frame}
+
+\begin{frame}{Van der Pol: an independent numerical comparison}
+\mainbadge\par
+\vspace{1mm}
+\centering
+\includegraphics[width=.84\textwidth,trim=0 0 0 284,clip]{example_14_prc_shooting_validation.png}
+\vspace{1mm}
+
+\begin{columns}[T,onlytextwidth]
+\column{.49\textwidth}
+\scriptsize
+\raggedright
+\textcolor{JaxBlue}{\bfseries iPRC diagnostic}\par
+Collocation versus shooting, max $|\mathrm{error}|$:
+\texttt{0.00018673146762904214}.
+\column{.49\textwidth}
+\scriptsize
+\raggedright
+\textcolor{JaxBlue}{\bfseries dPRC diagnostic}\par
+JaxCont versus shooting finite difference, max $|\mathrm{error}|$:
+\texttt{0.0005534735843981675}.
+\end{columns}
+\vspace{1mm}
+{\tiny Van der Pol has no closed-form PRC here. Shooting independently integrates the variational and adjoint IVPs, but starts from JaxCont's reconverged orbit.}
+\end{frame}
+
+\begin{frame}{Read diagnostics before declaring success or failure}
+\scriptsize
+\centering
+\renewcommand{\arraystretch}{1.27}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{.24\textwidth}
+                  >{\raggedright\arraybackslash}p{.31\textwidth}
+                  >{\raggedright\arraybackslash}p{.37\textwidth}@{}}
+\toprule
+Observation & What it can mean & Next action\\
+\midrule
+non-convergence, large residual, invalid points, early termination
+  & no accepted numerical solution for the requested step
+  & inspect the seed and method; reduce the step or revise tolerances with justification\\
+answer moves under mesh, tolerance, step, or direction changes
+  & discretization or branch-tracking sensitivity
+  & refine and compare the repeated runs before interpreting events\\
+shape agrees only after a shift, reorder, or rescale
+  & conventions differ; this is not automatically a solver bug
+  & align phase, units, state order, orientation, and interpolation first\\
+one metric passes while another fails
+  & partial agreement, not a global pass
+  & report both: \texttt{MC-LC-002} has small event-location errors but misses LPC/PD labels and has critical-multiplier error $\approx1.10\times10^{-2}>5\times10^{-3}$\\
+curves appear to overlap
+  & a useful visual sanity check only
+  & compute a declared metric against a declared tolerance\\
+\bottomrule
+\end{tabular}
+\end{frame}
+
+\begin{frame}{Align conventions before comparing numbers}
+\small
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Model and branch coordinates}
+\begin{itemize}
+  \item \textbf{state ordering} --- compare the same variables;
+  \item \textbf{parameter units} --- convert before differencing;
+  \item \textbf{branch orientation} --- reverse traversal if needed;
+  \item \textbf{interpolation grid} --- compare on a common monotone segment.
+\end{itemize}
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Cycle and spectrum coordinates}
+\begin{itemize}
+  \item \textbf{phase origin} --- remove circular shifts;
+  \item \textbf{phase units} --- radians versus cycle fractions;
+  \item \textbf{eigenvalue/multiplier matching} --- match uniquely, not by file order;
+  \item \textbf{trivial multiplier removal} --- remove exactly one nearest $+1$.
+\end{itemize}
+\end{block}
+\end{columns}
+\vspace{2mm}
+\begin{alertblock}{Alignment is part of the method}
+Changing conventions to minimize an error after seeing the answer is not validation; document the alignment rule and apply it reproducibly.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Know the scope and status of each comparison}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\releasedbadge
+\begin{block}{Reviewed released evidence}
+\begin{itemize}
+  \item analytic and MatCont cases cover equilibrium branches, folds, Hopf points, periodic orbits, and Floquet quantities;
+  \item BifurcationKit v0.5.2 artifacts cross-check Hopf $l_1$ and a Lorenz--84 BT point;
+  \item the known \texttt{MC-LC-002} mismatch remains a failure, not a relaxed tolerance.
+\end{itemize}
+\end{block}
+\column{.48\textwidth}
+\mainbadge
+\begin{block}{Current-main PRC evidence}
+\begin{itemize}
+  \item \texttt{MC-PRC-001} compares iPRC with MatCont after phase/unit alignment;
+  \item Example 14 adds analytic and shooting checks for iPRC and shooting finite differences for dPRC;
+  \item Example 14 is a one-off validation script, not a CI test.
+\end{itemize}
+\end{block}
+\end{columns}
+\vspace{2mm}
+\begin{alertblock}{Narrow claim}
+The shooting example validates the adjoint/PRC computation on JaxCont-reconverged orbits. It does not independently validate orbit finding, the scientific model, global dynamics, or unsupported continuation families.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{What to remember}
+\large
+\begin{enumerate}
+  \item Start with run health, then repeat the computation before seeking an external oracle.
+  \item Analytic, shooting, MatCont, and BifurcationKit comparisons become meaningful only after conventions are aligned reproducibly.
+  \item A metric needs a declared tolerance; partial failures stay visible, and a convincing plot is not proof of correctness.
+\end{enumerate}
+\vfill
+\centering
+\releasedbadge\qquad\mainbadge
+
+\vspace{2mm}
+{\small Tests establish implementation behaviour, not the truth of a research model or interpretation.}
+\end{frame}

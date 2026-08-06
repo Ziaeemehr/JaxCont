@@ -312,4 +312,9 @@ for ax in axes.flat:
     ax.axhline(0.0, color="gray", linewidth=0.8, linestyle="--", zorder=0)
 
 plt.tight_layout()
+plt.savefig(
+    "images/example_14_prc_shooting_validation.png",
+    dpi=180,
+    bbox_inches="tight",
+)
 plt.show()

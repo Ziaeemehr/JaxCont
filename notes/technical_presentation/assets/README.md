@@ -11,6 +11,11 @@ working tree based on source revision
 `f2b8d8c9564e29f18f9dafb5628ef679236bd108`, by running `MPLBACKEND=Agg python
 example_13_phase_response_curve.py` from `examples/`.
 
+The PRC shooting-validation snapshot was regenerated and reviewed on
+2026-08-06 from the Task 11 working tree based on source revision
+`c0c5b92162eb7bc269b1d5ad500b7bda21e3a502`, by running
+`MPLBACKEND=Agg python example_14_prc_shooting_validation.py` from `examples/`.
+
 | Asset | Produced from | Regeneration command | Used in |
 |---|---|---|---|
 | `example_08_period_doubling.png` | `examples/example_08_period_doubling.py` | `MPLBACKEND=Agg python example_08_period_doubling.py` from `examples/` | periodic-orbit chapter |
@@ -25,3 +30,4 @@ example_13_phase_response_curve.py` from `examples/`.
 | `example_08_period_doubling.png` | `47f36c955acae5d88761b108ccb72512eea182c6c2ab77989a3ca0b045e37ee3` |
 | `example_09_neimark_sacker.png` | `5892bd7f9cd4fb6f39149d8f007770d9b1709a85edc9ebf50ffb1ec11d7098c5` |
 | `example_13_phase_response_curve.png` | `ebebf73b2bf77ce8735b6b983cdfed1c09f2adc6c2e82873cc8a7505e1ddac0f` |
+| `example_14_prc_shooting_validation.png` | `bfba008e049602d6687f8a69dad76d4e10b09d92dc9e08cc88d42589c762f1f3` |
