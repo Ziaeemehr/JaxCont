@@ -69,6 +69,34 @@ def test_detect_events_ignores_real_to_complex_transition_far_from_axis():
     assert hits == []
 
 
+def test_detect_events_bridges_nan_gaps_between_finite_sign_changes():
+    # Regression for periodic-orbit event scans: if one interior branch point's
+    # test value is nan (e.g. temporary candidate-filter dropout), detect_events
+    # must still detect the crossing between the surrounding finite points.
+    @dataclass(frozen=True)
+    class _NanGapEvent:
+        kind: str = "nan_gap"
+
+        def test_function(self, point: BranchPoint) -> float:
+            if abs(point.p) < 1e-12:
+                return float("nan")
+            return point.p
+
+        def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+            return EventHit(kind=self.kind, p=(left.p + right.p) / 2.0, u=left.u, index=index)
+
+    def rhs(u, p):
+        return jnp.zeros_like(u)
+
+    p_grid = jnp.array([-0.1, 0.0, 0.1])
+    states = jnp.zeros((3, 1))
+    hits = detect_events([_NanGapEvent()], p_grid, states, None, None, rhs, ds=0.1)
+
+    assert len(hits) == 1
+    assert hits[0].index == (0, 2)
+    assert abs(hits[0].p) < 1e-12
+
+
 def test_hopf_refine_converges_via_extended_system():
     # This rhs is purely linear in u, so its 2nd/3rd derivatives are zero
     # everywhere -- l1 must come out exactly 0 (degenerate), giving this

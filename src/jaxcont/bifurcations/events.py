@@ -16,6 +16,7 @@ existing NotImplementedError for events=[...] under jax.vmap/jax.jit.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, List, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
@@ -214,12 +215,17 @@ def detect_events(
     hits: List[EventHit] = []
     for event in events:
         test_vals = [event.test_function(pt) for pt in points]
-        for i in range(len(points) - 1):
-            if test_vals[i] * test_vals[i + 1] < 0:
+        prev_idx: Optional[int] = None
+        prev_val: Optional[float] = None
+        for i, val in enumerate(test_vals):
+            if not math.isfinite(val):
+                continue
+            if prev_idx is not None and prev_val is not None and prev_val * val < 0:
                 hits.append(event.refine(
-                    points[i], points[i + 1], (i, i + 1), rhs,
+                    points[prev_idx], points[i], (prev_idx, i), rhs,
                     tolerance=tolerance, max_iterations=max_iterations,
                 ))
+            prev_idx, prev_val = i, val
 
     hits.sort(key=lambda h: h.p)
     merge_window = 2.0 * abs(ds)
