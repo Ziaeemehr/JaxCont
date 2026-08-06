@@ -35,13 +35,13 @@ crossing lies in a bracket.
   \draw[->,thick] (solve)--(root);
 \end{tikzpicture}
 \begin{block}{Refinement}
-The root solve enforces equilibrium and imaginary-eigenpair conditions at
-one parameter value.
+When Newton converges, the root satisfies the equilibrium and
+imaginary-eigenpair conditions at one parameter value.
 \end{block}
 \end{columns}
 \begin{alertblock}{Why both stages matter}
-Detection locates a neighborhood; refinement produces a state that satisfies
-the defining Hopf equations.
+Detection locates a neighborhood. A converged refinement satisfies the
+defining Hopf equations; verify the extended-system residual before trusting it.
 \end{alertblock}
 \end{frame}
 
@@ -61,14 +61,16 @@ the defining Hopf equations.
 \end{tikzpicture}
 \vspace{2mm}
 \begin{block}{One coupled answer}
-At the returned point,
+When Newton converges, the returned point satisfies
 $f(\state^*,p^*)=0$ and
 $J(\state^*,p^*)q=i\omega_0q$ (up to the solver tolerance and the chosen
 normalization/phase).
 \end{block}
 \begin{alertblock}{Interpretation check}
-A trustworthy Hopf frequency is finite and nonzero. The event refiner reports
-\texttt{criticality = "unknown"} when its refined diagnostics are not usable.
+Finite diagnostics are not a convergence certificate. \texttt{Hopf.refine()}
+marks \texttt{"unknown"} only for non-finite diagnostics or $\omega_0\leq0$;
+a finite unconverged iterate can still receive a sign-based label. Verify the
+extended-system residual before trusting \texttt{criticality}.
 \end{alertblock}
 \end{frame}
 
@@ -213,9 +215,10 @@ generalized-Hopf candidate and requires tolerance-aware interpretation.
 \end{alertblock}
 \end{columns}
 \vspace{1mm}
-{\scriptsize The right-hand side has signature
-\texttt{rhs(u, p, args)}. The $l_1$ calculation assumes the state dependence
-is smooth and compatible with its complexified directional derivatives.}
+{\scriptsize The right-hand side \texttt{rhs(u, p, args)} must be
+complex-analytic (holomorphic) in \texttt{u} for $l_1$. Active
+\texttt{abs}, \texttt{clip}, or comparison-based \texttt{jnp.where} near the
+Hopf point can silently produce a wrong $l_1$.}
 \end{frame}
 
 \begin{frame}{What \texttt{Hopf.refine()} reports}
