@@ -1,39 +1,42 @@
-"""MC-PRC-001: adaptx Hopf limit cycle, PRC/dPRC cross-check against MatCont
-7.6's Testruns/testadaptPRC.m. See
-docs/superpowers/specs/2026-08-05-prc-dprc-design.md.
+"""MC-PRC-001: adaptx Hopf limit cycle, PRC cross-check against MatCont 7.6's
+Testruns/testadaptPRC.m. See docs/superpowers/specs/2026-08-05-prc-dprc-design.md.
 
-Two convention mismatches between JaxCont's prc_curve/dprc_curve and
-MatCont's exported PRC/dPRC columns were found and resolved/diagnosed while
-building this validator (see task-8-report.md for the full derivation):
+This case cross-validates ``prc_curve`` only. ``dprc_curve`` (JaxCont's
+``d(PRC)/d(alpha)``) is deliberately **not** compared against MatCont's
+exported ``dPRC`` column here -- they are different mathematical quantities,
+not just different units/phase conventions:
 
-1. **Units.** ``prc_curve`` normalizes ``Z(0) . f(x_0, p) = omega = 2*pi/T``
-   (phase in *radians*, one cycle = 2*pi -- the standard adjoint-PRC
-   convention). MatCont's ``calcPRC.m`` normalizes phase in *cycle
-   fractions* (one cycle = 1 -- matching its own exported ``phase_fraction``
-   column, which runs 0..1). The two differ by exactly a factor of ``2*pi``:
-   ``Z_matcont = Z_jaxcont / (2*pi)``. Applied below before comparison.
+- MatCont's exported ``dPRC`` is ``d(PRC)/dt``, a *time* derivative.
+  Confirmed by reading ``LimitCycle/calcPRC.m`` in the installed MatCont 7.6
+  tree directly: ``dvl(:,i) = -newperiod * J(x_i)' * vl(:,i)`` is the adjoint
+  variational ODE's right-hand side (``dZ/dtau = -T . J(x)^T . Z`` in
+  normalized time), and the final ``dPRC = dPRC / newperiod`` converts it to
+  absolute-time units -- there is no parameter (``alpha``) anywhere in that
+  computation. Confirmed numerically too: a central finite difference of the
+  *reference* ``prc`` column with respect to time matches the reference
+  ``dprc`` column to the same tolerance PRC itself achieves.
+- JaxCont's ``dprc_curve`` is ``d(prc_curve)/dp`` -- the derivative with
+  respect to the continuation parameter ``alpha``. Its correctness is
+  established independently of this case, by ``tests/test_prc.py`` (a
+  closed-form circle-system check and a finite-difference-of-independently-
+  re-converged-orbits check, both from Task 4) -- not by any MatCont
+  cross-check, since MatCont's own PRC/dPRC/Input processor never computes
+  this quantity to check against.
 
-2. **``dPRC`` is not a parameter derivative.** MatCont's exported ``dPRC``
-   column is ``d(PRC)/dt`` (the *time* derivative of the PRC curve),
-   confirmed by reading ``LimitCycle/calcPRC.m`` in the installed MatCont
-   7.6 tree directly: ``dvl(:,i) = -newperiod * J(x_i)' * vl(:,i)`` is the
-   adjoint variational ODE's right-hand side (``dZ/dtau = -T . J(x)^T . Z``
-   in normalized time), and the final ``dPRC = dPRC / newperiod`` converts
-   it to absolute-time units -- there is no parameter (``alpha``) anywhere
-   in that computation. This was confirmed numerically too: a central
-   finite difference of the *reference* ``prc`` column with respect to
-   time matches the reference ``dprc`` column to the same tolerance PRC
-   itself achieves. JaxCont's ``dprc_curve``, by contrast, is
-   ``d(prc_curve)/dp`` -- differentiation with respect to the continuation
-   parameter ``alpha`` (verified independently: matches a finite difference
-   of two independently re-converged ``periodic_orbit_problem`` solves at
-   ``alpha +/- eps`` to ~0.2% relative, and matches the design spec's own
-   closed-form circle-system check). These are two different mathematical
-   objects (a time derivative vs. a parameter derivative) -- no unit or
-   sign convention reconciles them. This validator still performs the
-   literal comparison (dprc_curve's output against MatCont's dprc column)
-   rather than substituting a different quantity, so the mismatch is
-   reported honestly rather than hidden; see task-8-report.md.
+Since no unit or sign convention reconciles a time derivative with a
+parameter derivative, comparing them here would either always fail for the
+wrong reason or (worse) require silently substituting some other quantity
+in place of ``dprc_curve``'s actual output -- which would stop testing the
+function this validator exists to validate. Full derivation:
+task-8-report.md.
+
+**Units (still relevant for PRC itself).** ``prc_curve`` normalizes
+``Z(0) . f(x_0, p) = omega = 2*pi/T`` (phase in *radians*, one cycle =
+``2*pi`` -- the standard adjoint-PRC convention). MatCont's ``calcPRC.m``
+normalizes phase in *cycle fractions* (one cycle = 1 -- matching its own
+exported ``phase_fraction`` column, which runs 0..1). The two differ by
+exactly a factor of ``2*pi``: ``Z_matcont = Z_jaxcont / (2*pi)``. Applied
+below before comparison.
 """
 
 from __future__ import annotations
@@ -54,7 +57,25 @@ from ..compare import ValidationMismatch, scaled_close
 from . import CaseResult
 
 _TWO_PI = 2.0 * np.pi
-_PRC_ATOL = 0.05
+
+# atol widened from the original 0.05 to 0.065 (rtol unchanged at 0.05),
+# human-approved after diagnosing a genuine, small (~1%) residual between
+# JaxCont's PRC curve and MatCont's reference that survives the unit
+# (2*pi) and phase-origin fixes below. This is NOT an arbitrarily loosened
+# number: swept JaxCont's own mesh resolution (ntst in {20, 40, 60, 80})
+# and found the worst-case scaled_close margin plateaus at 0.006-0.0082
+# (not shrinking with resolution the way a discretization error would),
+# and re-ran the whole comparison under JAX_ENABLE_X64=1 (float64
+# throughout) with the margin essentially unchanged (0.00602 vs 0.00600
+# at ntst=20) -- ruling out both discretization error and float32
+# precision as the cause. The residual is best explained as a genuine
+# small representational difference between JaxCont's uniform ntst=20
+# collocation mesh and MatCont's own 'Adapt', 1 non-uniform mesh (see
+# matlab/export_prc_run.m's phase_fraction fix), both 4th-order-accurate
+# (ncol=4) discretizations of the same continuous periodic orbit. 0.065
+# covers the observed worst-case margin (0.0082) with buffer; see
+# task-8-report.md's "Fix 2" section for the full sweep data.
+_PRC_ATOL = 0.065
 _PRC_RTOL = 0.05
 
 
@@ -189,8 +210,11 @@ def _diagnose(actual: np.ndarray, reference: np.ndarray, *, atol: float, rtol: f
 
 
 def run_adaptx_prc_dprc(reference_dir: Path) -> CaseResult:
-    """Compare JaxCont's prc_curve/dprc_curve on the adaptx system against
-    MatCont's own PRC/dPRC processor_data output."""
+    """Compare JaxCont's prc_curve on the adaptx system against MatCont's
+    own PRC processor output. dprc_curve is computed too (returned in
+    observations/artifacts for anyone inspecting the case), but is not
+    checked against MatCont's dPRC column -- see the module docstring for
+    why that comparison would be meaningless."""
     reference = _load_reference_prc(reference_dir)
     alpha, period = _load_converged_point(reference_dir)
 
@@ -199,10 +223,11 @@ def run_adaptx_prc_dprc(reference_dir: Path) -> CaseResult:
         jaxcont_prc_radian = np.asarray(prc_curve(_adaptx_rhs, mesh, problem.u0, problem.p0))
         jaxcont_dprc_radian = np.asarray(dprc_curve(problem))
 
-    # Unit conversion (see module docstring, point 1): MatCont's PRC/dPRC
-    # are in cycle-fraction phase units, JaxCont's are in radian phase
-    # units -- convert JaxCont's output, not MatCont's, since the reference
-    # CSV is the fixed oracle.
+    # Unit conversion (see module docstring): MatCont's PRC is in
+    # cycle-fraction phase units, JaxCont's is in radian phase units --
+    # convert JaxCont's output, not MatCont's, since the reference CSV is
+    # the fixed oracle. dprc_curve is converted the same way purely for
+    # display/diagnostic consistency (it is not compared against MatCont).
     jaxcont_prc = jaxcont_prc_radian[:, 0] / _TWO_PI
     jaxcont_dprc = jaxcont_dprc_radian[:, 0, 0] / _TWO_PI
 
@@ -223,20 +248,18 @@ def run_adaptx_prc_dprc(reference_dir: Path) -> CaseResult:
     extended_prc = np.tile(reference["prc"], 3)
     extended_dprc = np.tile(reference["dprc"], 3)
     reference_prc_aligned = np.interp(aligned_phase, extended_phase, extended_prc)
+    # Reference dPRC is aligned the same way purely so it can sit alongside
+    # jaxcont_dprc in artifacts for anyone inspecting the case (e.g. to see
+    # for themselves that the two curves have different shapes, not just
+    # different scales) -- not used in any check.
     reference_dprc_aligned = np.interp(aligned_phase, extended_phase, extended_dprc)
 
     prc_diagnostics = _diagnose(jaxcont_prc, reference_prc_aligned, atol=_PRC_ATOL, rtol=_PRC_RTOL)
-    # dPRC comparison kept literal (dprc_curve's actual output against
-    # MatCont's actual dprc column) -- see module docstring, point 2: these
-    # are different physical quantities, so this is expected to fail, and
-    # is reported as such rather than papered over.
-    dprc_diagnostics = _diagnose(jaxcont_dprc, reference_dprc_aligned, atol=_PRC_ATOL, rtol=_PRC_RTOL)
 
     return CaseResult(
         case_id="MC-PRC-001",
         checks={
             "prc_matches_matcont": prc_diagnostics["passed"],
-            "dprc_matches_matcont": dprc_diagnostics["passed"],
         },
         observations={
             "converged_alpha": alpha,
@@ -244,13 +267,12 @@ def run_adaptx_prc_dprc(reference_dir: Path) -> CaseResult:
             "phase_shift_applied": phase_shift,
             "prc_max_error": prc_diagnostics["max_error"],
             "prc_max_tolerance": prc_diagnostics["max_tolerance"],
-            "dprc_max_error": dprc_diagnostics["max_error"],
-            "dprc_max_tolerance": dprc_diagnostics["max_tolerance"],
-            "dprc_quantity_mismatch": (
-                "MatCont's dPRC is d(PRC)/dt (time derivative, per "
-                "LimitCycle/calcPRC.m); JaxCont's dprc_curve is "
-                "d(PRC)/d(alpha) (parameter derivative). Not reconcilable "
-                "by rescaling -- see task-8-report.md."
+            "dprc_not_cross_validated": (
+                "dprc_curve is d(PRC)/d(alpha); MatCont's exported dPRC is "
+                "d(PRC)/dt (confirmed via LimitCycle/calcPRC.m). Different "
+                "quantities -- see module docstring and task-8-report.md. "
+                "dprc_curve's own correctness is validated by "
+                "tests/test_prc.py, not by this MatCont cross-check."
             ),
         },
         artifacts={

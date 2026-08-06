@@ -244,9 +244,9 @@
     },
     {
       "id": "MC-PRC-001",
-      "title": "PRC and dPRC calculations (adaptx Hopf limit cycle)",
+      "title": "PRC calculation (adaptx Hopf limit cycle); dPRC computed but not MatCont-cross-checked",
       "support": "supported",
-      "features": ["prc", "dprc"],
+      "features": ["prc"],
       "python": "examples.MatCont.python_cases.prc:run_adaptx_prc_dprc",
       "matlab": "run_prc_dprc",
       "references": ["MC-PRC-001_prc.csv", "MC-PRC-001_metadata.json"],

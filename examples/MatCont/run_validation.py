@@ -242,9 +242,7 @@ def _case_result_passes(case_id: str, checks: dict) -> bool:
             and checks["all_stable"]
         ),
         "MC-LC-002": lambda: bool(checks["all_comparisons_pass"]),
-        "MC-PRC-001": lambda: (
-            checks["prc_matches_matcont"] and checks["dprc_matches_matcont"]
-        ),
+        "MC-PRC-001": lambda: checks["prc_matches_matcont"],
     }
     return bool(predicates[case_id]())
 

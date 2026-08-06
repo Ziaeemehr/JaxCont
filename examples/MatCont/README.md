@@ -57,7 +57,7 @@ verification never promotes or edits reviewed files.
 | `MC-LC-002` | MatCont `torBPC1` LPC/NS/PD locations, periods, extrema and critical multipliers |
 | `MC-JAX-001` | Eager/JIT equivalence, `vmap`, permutation invariance, fold/Hopf gradients and finite differences |
 | `MC-C2-001` | Direct shifted CP/BT/GH/ZH/HH solves, sensitivities, fold/GH normal forms and Lorenz-84 BifurcationKit BT reference |
-| `MC-PRC-001` | adaptx Hopf limit cycle, iPRC/dPRC adjoint-method curves against MatCont's PRC/dPRC/Input processor output |
+| `MC-PRC-001` | adaptx Hopf limit cycle, iPRC adjoint-method curve against MatCont's PRC/Input processor output (phase-in-radians vs. phase-in-cycle-fractions and phase-origin conventions reconciled; dPRC is *not* cross-checked here -- MatCont's exported dPRC is `d(PRC)/dt`, confirmed via `LimitCycle/calcPRC.m`, a different quantity from JaxCont's `dprc_curve` = `d(PRC)/d(alpha)`, which is validated instead by `tests/test_prc.py`) |
 
 `MC-LC-002` deliberately reports the current JaxCont mismatch: MatCont's LPC,
 NS and PD references are retained, while JaxCont presently misses the correctly
