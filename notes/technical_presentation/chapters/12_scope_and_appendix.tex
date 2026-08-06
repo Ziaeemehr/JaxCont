@@ -2,106 +2,125 @@
   {What should you remember, and where are the implementation boundaries?}
   {Reference material: terminology, derivations, engine details, and sources}
 
-\begin{frame}{Current capability boundaries}
-\small
+\begin{frame}{Capability boundaries are source-status boundaries}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\column{.32\textwidth}
+\begin{block}{\releasedbadge}
 \begin{itemize}
-  \item Event detection is not transformation-safe inside \texttt{jit}/\texttt{vmap}.
-  \item Event classes rely on branch-kind conventions; mixing Hopf with
-        periodic data or PD/NS with equilibrium data is not rejected automatically.
-  \item Dense linear/eigen algebra limits scaling to large and collocated systems.
-  \item Natural continuation is intentionally unable to pass folds.
-  \item Reverse-mode gradients require implicit/custom rules rather than backpropagation through the scan loop.
-  \item Periodic orbits use a fixed mesh; adaptive mesh redistribution is not implemented.
-  \item The periodic factory refines a supplied cycle guess but does not
-        integrate to discover it; phase-plane trajectory plotting is separate.
-  \item Branch switching and discovery of disconnected branches require additional analysis.
-  \item Phase-plane functions are strict 2D visualization; they do not draw
-        higher-dimensional slices, discover roots, classify basins, or become
-        JIT/differentiable through Matplotlib.
+  \item natural and pseudo-arclength equilibrium continuation;
+  \item folds, Hopf crossings, stability, JIT and batched branches;
+  \item collocated cycles, Floquet stability, LPC/PD/NS detection;
+  \item Hopf refinement and $l_1$ classification;
+  \item direct CP/BT/GH/ZH/HH point refinement;
+  \item 2D phase planes and validation workflows.
 \end{itemize}
-\begin{block}{Use the tool within its scope}
-JaxCont is a numerical aid for structured exploration. Combine its output with
-model-specific reasoning, diagnostics, independent calculations, and domain
-evidence.
 \end{block}
+
+\column{.32\textwidth}
+\begin{block}{\mainbadge}
+\begin{itemize}
+  \item \texttt{prc\_curve}: one converged orbit's iPRC;
+  \item \texttt{branch\_prc}: batched compatible branch states;
+  \item \texttt{dprc\_curve}: total parameter derivative after re-solving the orbit;
+  \item \texttt{plot\_prc};
+  \item Examples 13--14 and independent shooting evidence.
+\end{itemize}
+\end{block}
+
+\column{.32\textwidth}
+\begin{block}{\futurebadge}
+\begin{itemize}
+  \item branch switching or disconnected-branch discovery;
+  \item automatic cycle discovery from a Hopf point;
+  \item two-parameter bifurcation-curve continuation;
+  \item general BVP continuation;
+  \item connecting-, homoclinic-, or heteroclinic-orbit continuation.
+\end{itemize}
+\end{block}
+\end{columns}
+
+\vfill
+\centering
+\textbf{``v0.3.1+'' = published v0.3.1 plus current-main work intended for v0.4; v0.4 is not released.}
 \end{frame}
 
-\begin{frame}{}
-\begin{quote}
-JaxCont follows roots $F(U,p)=0$ as a curve. For an equilibrium, $U$ is one
-state. For a periodic orbit, $U$ packs the cycle samples and its period after
-collocation turns the orbit into a finite root problem. Natural continuation
-increments $p$ and can stall at a fold. Pseudo-arclength also corrects $p$ and
-adds one geometric constraint, so its bordered system can follow the turn.
-
-The complete predictor--corrector sweep is a bounded
-\texttt{lax.while\_loop} over fixed buffers and is JIT-compiled. JAX supplies
-Jacobians, batching and accelerator execution; a custom VJP supplies implicit
-root sensitivities. Equilibrium stability uses Jacobian eigenvalues, while
-cycle stability uses Floquet multipliers. These tools accelerate and organize
-the analysis, but a study still needs a valid start, diagnostics and
-independent validation. For a 2D autonomous model, the same problem can also
-be frozen at one parameter to connect the branch diagram with nullclines,
-continued equilibria, vector fields and trajectories.
-\end{quote}
-\end{frame}
-
-\begin{frame}{Vocabulary checklist}
+\begin{frame}{Glossary: branches, local events, and refinement}
 \scriptsize
 \begin{description}
-  \item[Continuation] following a connected family of solutions.
-  \item[Predictor] a local guess for the next branch point.
-  \item[Corrector] Newton iterations that return the guess to the branch.
-  \item[Fold] a regular turning point where $F_{\state}$ is singular.
-  \item[Pseudo-arclength] continuation using an approximate curve-distance coordinate.
-  \item[Bordered system] the Jacobian enlarged with parameter and constraint rows/columns.
-  \item[Collocation] enforcing an ODE at selected points of a piecewise-polynomial orbit.
-  \item[Phase condition] one equation that removes arbitrary time shift of a cycle.
-  \item[Floquet multiplier] eigenvalue of the one-period linearized map.
-  \item[Monodromy matrix] the linear map advancing perturbations by one period.
-  \item[Nullcline] a curve where one component of a 2D vector field is zero.
-  \item[Phase plane] the true state-space flow of a two-state autonomous
-        system at one fixed parameter.
-  \item[JIT] trace and compile array code for later reuse.
-  \item[\texttt{lax.while\_loop}] JAX's compiled, traceable dynamic loop primitive.
-  \item[\texttt{vmap}] automatic batching of one function across an array axis.
-  \item[PyTree] a nested data structure JAX knows how to flatten into array leaves.
+  \item[Residual] $F(U,p)$ evaluated at a proposed solution; its norm measures equation defect.
+  \item[Branch] one connected family of roots $F(U,p)=0$.
+  \item[Fold] a regular turning point where the state Jacobian is singular.
+  \item[Hopf] an equilibrium point where a complex-conjugate eigenvalue pair crosses the imaginary axis.
+  \item[Pseudo-arclength] continuation that corrects $(U,p)$ under an added local curve-distance constraint.
+  \item[$l_1$] first Lyapunov coefficient: locally supercritical if negative,
+        subcritical if positive, and degenerate-candidate near zero under the chosen tolerance.
+  \item[Codimension] number of independent conditions, and generically free parameters, needed for an event.
+  \item[CP / BT] cusp: degenerate fold; Bogdanov--Takens: double zero eigenvalue with non-degeneracy conditions.
+  \item[GH / ZH / HH] generalized Hopf: $l_1=0$ at Hopf; zero--Hopf: zero plus imaginary pair;
+        double--Hopf: two distinct imaginary pairs.
+  \item[Implicit differentiation] derivative of a converged equation $G(x^*,\theta)=0$ via
+        $dx^*/d\theta=-G_x^{-1}G_\theta$, not reverse-mode replay of solver iterations.
 \end{description}
 \end{frame}
 
+\begin{frame}{Glossary: periodic orbits, phase, and stored results}
+\scriptsize
+\begin{description}
+  \item[Collocation] a finite root system formed by enforcing the ODE at points of piecewise polynomials.
+  \item[Phase condition] one scalar equation that removes a periodic orbit's arbitrary time shift.
+  \item[Floquet multiplier] eigenvalue of the one-period linearized map; nontrivial multipliers diagnose cycle stability.
+  \item[PD] period-doubling candidate: a real nontrivial multiplier crosses $-1$ under detector conditions.
+  \item[NS] Neimark--Sacker candidate: a complex-conjugate nontrivial pair crosses the unit circle under detector conditions.
+  \item[iPRC] infinitesimal phase-response curve $Z(t)$: first-order phase sensitivity along a stable cycle.
+  \item[dPRC] JaxCont's total parameter derivative $dZ/dp$, including the reconverged orbit's change with $p$.
+  \item[Validity mask] boolean selector for real points within a fixed-size traced result buffer.
+\end{description}
+
+\begin{alertblock}{Conventions are part of the quantity}
+Phase origin, normalization, units, nontrivial-multiplier filtering, and the
+meaning of ``dPRC'' must be aligned before comparing results.
+\end{alertblock}
+\end{frame}
+
 \begin{frame}{Main takeaways}
+\small
 \begin{enumerate}
-  \item One root-based abstraction now covers both equilibria and collocated periodic orbits.
-  \item Pseudo-arclength and the bordered Newton system follow ordinary folds.
-  \item Stability is problem-specific: $\operatorname{Re}\lambda<0$ for
-        equilibria, $|\mu|<1$ for nontrivial Floquet multipliers.
-  \item JAX makes derivatives, whole-loop compilation, batching and implicit
-        sensitivities composable in one numerical codebase.
-  \item Fixed buffers, static mesh shapes and eager-only events are deliberate
-        transformation trade-offs.
-  \item For 2D models, phase planes connect branch and stability results to
-        nullclines and trajectories without changing the solver core.
-  \item A trustworthy study begins with a verified solution and ends with
-        residual, resolution and independent validation.
+  \item Continuation follows connected roots; it is neither time simulation nor disconnected-branch discovery.
+  \item Pseudo-arclength can pass ordinary folds by correcting state and parameter together.
+  \item Equilibrium eigenvalues and periodic Floquet multipliers answer different stability questions.
+  \item Hopf and codimension-two refinements classify supplied candidates; they do not switch branches or trace two-parameter curves.
+  \item Fixed buffers make whole-branch JIT and batching possible; read eager results with \texttt{n\_valid} and traced results with their mask/count.
+  \item Begin with a trustworthy seed, inspect numerical health, repeat, then seek independent evidence.
 \end{enumerate}
+
+\vfill
+\begin{alertblock}{Final interpretation boundary}
+A computed diagram is evidence about the supplied mathematical model, not automatic validation of the model or a causal claim.
+\end{alertblock}
 \end{frame}
 
 \begin{frame}{Appendix: natural versus pseudo-arclength}
 \small
 \begin{center}
-\begin{tabular}{p{.25\textwidth}p{.32\textwidth}p{.32\textwidth}}
+\begin{tabular}{p{.24\textwidth}p{.32\textwidth}p{.32\textwidth}}
 \toprule
  & Natural & Pseudo-arclength\\
 \midrule
-Unknown during correction & $\state$ & $(\state,p)$\\
-Fixed quantity & predicted $p$ & approximate distance from previous point\\
-Newton matrix & $F_{\state}$ & $\begin{bmatrix}F_{\state}&F_p\\\dot\state^T&\dot p\end{bmatrix}$\\[3mm]
-At ordinary fold & singular / stalls & usually remains regular\\
-Cost per Newton step & $n\times n$ solve & $(n+1)\times(n+1)$ solve\\
-JaxCont engine & \texttt{natural\_scan} & \texttt{pseudo\_arclength\_scan}\\
+Corrected unknown & $U$ at fixed $p$ & $(U,p)$\\
+Predictor & $p+\operatorname{sign}(p_{\rm end}-p)\,ds$ & $(U,p)+ds\,t$\\
+Newton matrix & $F_U$ & $\begin{bmatrix}F_U&F_p\\t_U^T&t_p\end{bmatrix}$\\[3mm]
+At an ordinary fold & $F_U$ singular; stalls & bordered system usually regular\\
+Stored tangent & zero-filled shared buffer & normalized branch tangent\\
+Engine name & \texttt{natural\_scan} & \texttt{pseudo\_arclength\_scan}\\
 \bottomrule
 \end{tabular}
 \end{center}
+
+\begin{block}{Shared contract}
+Both engines use fixed buffers of length \texttt{max\_steps + 1}, count
+accepted points with \texttt{idx}, and return the initial point plus accepted corrections.
+\end{block}
 \end{frame}
 
 \begin{frame}{Appendix: scalar cubic fold derivation}
@@ -109,61 +128,148 @@ For
 \[
 F(u,p)=p+u-u^3/3=0,
 \]
-the branch can be written
-\[
-p(u)=u^3/3-u.
-\]
-Folds occur when
+the branch is $p(u)=u^3/3-u$. Its tangent in the parameter direction vanishes when
 \[
 \frac{dp}{du}=u^2-1=0
 \quad\Longrightarrow\quad u=\pm1.
 \]
-Therefore
+Hence
 \[
 (u,p)=(-1,2/3),\qquad(1,-2/3).
 \]
-Also $F_u=1-u^2$, so the same points have a zero scalar Jacobian. This example connects the geometry, the singularity and the detector's expected value.
+The state Jacobian is the scalar $F_u=1-u^2$, so it vanishes at exactly the
+same two points. Natural correction fixes $p$ and encounters this singular
+Jacobian; pseudo-arclength adds the tangent constraint and can follow the turn.
 \end{frame}
 
-\begin{frame}[fragile]{Appendix: simplified engine pseudocode}
+\begin{frame}[fragile]{Appendix: accepted-point engine pseudocode}
 \begin{lstlisting}
-allocate fixed buffers
-tangent = tangent_at(initial_point)
+allocate P, Q, T, C, D with max_steps + 1 slots
+store initial point in slot 0; idx = 0
 
-while attempts < max_steps and not stop:
+while idx < max_steps and not stop:
     predicted = accepted + ds * tangent
-    candidate, ok, nit = bordered_newton(predicted)
-    candidate_tangent = tangent_at(candidate)
+    candidate, converged, iters = correct(predicted)
+    candidate_tangent = tangent_at(candidate)  # always computed
+    write = idx + 1
+    buffers[write] = where(converged, candidate, old_slot)
+    accepted = where(converged, candidate, accepted)
+    tangent = where(converged, candidate_tangent, tangent)
+    idx = idx + int(converged)
+    ds = adapt(ds, iters, converged)  # rejection shrinks ds
+    stop = reached or (not converged and ds <= ds_min) or nonfinite
 
-    buffers = conditional_write(buffers, candidate, ok)
-    accepted = where(ok, candidate, accepted)
-    tangent = where(ok, candidate_tangent, tangent)
-    ds = adapt(ds, nit, ok)
-    stop = reached_target or stalled or nonfinite
-
-return fixed_buffers, n_valid
+return fixed_buffers, n_valid = idx + 1
 \end{lstlisting}
-The real code uses JAX arrays, \texttt{NamedTuple} carry state, \texttt{jnp.where}, and nested \texttt{lax.while\_loop}s.
+\begin{alertblock}{Budget semantics}
+\texttt{max\_steps} budgets accepted points after the initial point.
+A rejected correction leaves \texttt{idx} unchanged, adds computation, and
+shrinks \texttt{ds}; it does not consume the accepted-point budget.
+\end{alertblock}
 \end{frame}
 
-\begin{frame}{Appendix: sources used for this deck}
+\begin{frame}{Appendix: the fixed carry is explicit}
+\scriptsize
+\begin{center}
+\begin{tabular}{>{\ttfamily}p{.18\textwidth}p{.30\textwidth}p{.40\textwidth}}
+\toprule
+Engine & Exact carry fields & Meaning\\
+\midrule
+pseudo\_arclength\_scan &
+u, p, tan, ds, idx, stop, P, Q, T, C, D &
+accepted state/parameter/tangent; positive step magnitude; accepted write
+index; stop flag; state, parameter, tangent, convergence, and accepted-step buffers\\
+\addlinespace
+natural\_scan &
+u, p, ds, idx, stop, P, Q, T, C, D &
+same shared buffers and controls; T is retained but zero-filled because natural continuation has no tangent state\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{block}{Why fixed fields matter}
+Every loop iteration returns the same PyTree structure and array shapes, so
+JAX can compile the bounded dynamic loop and batch independent runs.
+\end{block}
+\end{frame}
+
+\begin{frame}{Appendix: branch-free selection, bounded control}
 \small
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Array selection inside one attempt}
 \begin{itemize}
-  \item implementation in \texttt{src/jaxcont/core/scan\_continuation.py}
-  \item public dispatch and result paths in \texttt{src/jaxcont/api.py}
-  \item collocation and periodic problem construction in
-        \texttt{core/collocation.py} and \texttt{problems/periodic.py}
-  \item Floquet and event logic in \texttt{stability/floquet.py} and
-        \texttt{bifurcations/events.py}
-  \item phase-plane composition in \texttt{viz/phase\_plane.py}, built on
-        \texttt{BifProblem.as\_rhs(p)}
-  \item v0.2 and phase-plane design specs and implementation plans in
-        \texttt{docs/superpowers/}
-  \item tests and Examples 04, 06--12 for folds, batching, differentiation,
-        periodic continuation, PD/NS and FitzHugh--Nagumo phase planes
+  \item compute the candidate tangent even if correction failed;
+  \item use \texttt{jnp.where} for buffer writes and accepted state;
+  \item advance \texttt{idx} by the boolean convergence value;
+  \item retain the prior accepted point after rejection.
 \end{itemize}
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Compiled loop control}
+\begin{itemize}
+  \item the outer primitive is \texttt{lax.while\_loop};
+  \item its condition is \texttt{idx < max\_steps} and not \texttt{stop};
+  \item stop combines endpoint, stalled-at-\texttt{ds\_min}, and non-finite checks.
+\end{itemize}
+\end{block}
+\end{columns}
+
+\begin{alertblock}{What ``scan'' means here}
+\texttt{natural\_scan} and \texttt{pseudo\_arclength\_scan} are historical
+engine names for a bounded branch sweep. Neither function uses \texttt{lax.scan}.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Appendix: eager and traced results reassemble differently}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Eager call}
+\begin{enumerate}
+  \item concretize \texttt{n = int(res.n\_valid)};
+  \item trim states, params, and tangents to \texttt{[:n]};
+  \item compute requested stability and eager event detection;
+  \item build \texttt{ContinuationSolution}, then \texttt{ContinuationResult};
+  \item \texttt{branch.valid is None}; plotting has an underlying solution.
+\end{enumerate}
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Inside \texttt{jit}/\texttt{vmap}}
+\begin{enumerate}
+  \item \texttt{n\_valid} cannot become a Python integer;
+  \item retain full fixed-size buffers;
+  \item set \texttt{branch.valid = arange(buffer\_len) < n\_valid};
+  \item store the true count in \texttt{result.stats["n\_valid"]};
+  \item reject non-empty \texttt{events}; \texttt{\_solution=None}, so eager plotting is unavailable.
+\end{enumerate}
+\end{block}
+\end{columns}
+
+\begin{alertblock}{Do not use traced padding as data}
+In traced results, \texttt{branch.n\_valid} is the buffer length because it is
+derived from array shape; use the validity mask or \texttt{stats["n\_valid"]}.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Appendix: sources and reproducible evidence}
+\scriptsize
+\begin{itemize}
+  \item public dispatch and result reassembly: \texttt{src/jaxcont/api.py};
+  \item fixed-buffer engines and carry semantics: \texttt{src/jaxcont/core/scan\_continuation.py};
+  \item collocation and periodic factories: \texttt{src/jaxcont/core/collocation.py} and
+        \texttt{src/jaxcont/problems/periodic.py};
+  \item event, Hopf, and codimension-two logic: \texttt{src/jaxcont/bifurcations/events.py},
+        \texttt{hopf\_normal\_form.py}, and \texttt{codim2.py};
+  \item Floquet and PRC calculations: \texttt{src/jaxcont/stability/floquet.py} and \texttt{prc.py};
+  \item phase-plane and PRC plotting: \texttt{src/jaxcont/viz/phase\_plane.py} and \texttt{prc.py};
+  \item release evidence: \texttt{src/jaxcont/\_version.py} and \texttt{CHANGELOG.md};
+  \item runnable evidence: README quick start, Examples 03, 10, 12--14,
+        \texttt{examples/MatCont}, \texttt{examples/BifurcationKit}, and the corresponding tests.
+\end{itemize}
+
 \begin{block}{Reproducibility note}
-Re-run numerical examples and benchmarks with the current implementation,
-settings, precision, and target hardware before external publication.
+Record commit, precision, settings, dependency versions, and target hardware;
+rerun examples and validation tolerances before external publication.
 \end{block}
 \end{frame}

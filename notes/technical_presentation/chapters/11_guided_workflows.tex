@@ -2,132 +2,140 @@
   {How should a newcomer plan, run, inspect, and validate a JaxCont study?}
   {Featured applications: six reproducible paths through the example gallery}
 
-\begin{frame}{What continuation can answer}
-\small
-\begin{center}
-\begin{tabular}{>{\raggedright\arraybackslash}p{.29\textwidth}
-                >{\raggedright\arraybackslash}p{.59\textwidth}}
-\toprule
-Research question & Continuation output\\
-\midrule
-Where do equilibria exist? & A connected branch of steady states over a parameter range.\\
-Where can abrupt transitions occur? & Fold candidates and multistable parameter regions.\\
-When does an equilibrium lose stability? & Stability changes and candidate local bifurcations.\\
-How does an oscillation change? & A branch of periodic-orbit shapes, amplitudes and periods.\\
-When does a cycle lose stability? & Floquet multipliers and candidate fold-of-cycles, PD or NS events.\\
-How robust is a conclusion? & Batches of branches over uncertain parameters or model variants.\\
-How does a threshold move? & Sensitivity of a selected, well-defined bifurcation point.\\
-\bottomrule
-\end{tabular}
-\end{center}
-\begin{alertblock}{Interpretation boundary}
-A bifurcation diagram describes mathematical solutions and local stability;
-it does not by itself establish causality or validate the model.
-\end{alertblock}
-\end{frame}
+\begin{frame}{A research study is a six-stage loop}
+\centering
+\begin{tikzpicture}[>=Latex,node distance=4.5mm and 4mm,
+ stage/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+   minimum width=26mm,minimum height=11mm,align=center,font=\small},
+ inspect/.style={rounded corners,draw=JaxOrange,thick,fill=JaxOrange!10,
+   minimum width=38mm,minimum height=20mm,align=center,font=\scriptsize}]
+\node[stage] (q) {scientific\\question};
+\node[stage,right=of q] (model) {model or\\residual};
+\node[stage,right=of model] (seed) {trustworthy\\seed};
+\node[stage,below=13mm of seed] (small) {small\\continuation};
+\node[inspect,left=of small] (inspect) {inspect / visualize\\[1mm]
+  residuals; \texttt{n\_valid}/mask; termination\\
+  step size; stability; event diagnostics};
+\node[stage,left=of inspect] (repeat) {repeat and\\validate};
+\draw[->,thick] (q)--(model);
+\draw[->,thick] (model)--(seed);
+\draw[->,thick] (seed)--(small);
+\draw[->,thick] (small)--(inspect);
+\draw[->,thick] (inspect)--(repeat);
+\draw[->,thick,JaxTeal] (repeat.west) -- ++(-5mm,0) |- (q.west);
+\end{tikzpicture}
 
-\begin{frame}{A beginner-friendly research workflow}
-\begin{enumerate}
-  \item State the scientific question and choose one continuation parameter.
-  \item Implement a deterministic, smooth ODE right-hand side.
-  \item Build a verified start: one equilibrium, or one simulated cycle plus period guess.
-  \item Run a short continuation with conservative settings.
-  \item Inspect residuals, branch geometry, stability, and possible events.
-  \item Repeat in the opposite direction or from another known solution.
-  \item Refine interesting regions and validate them independently.
-  \item Save code, settings, precision, hardware, and diagnostic information.
-\end{enumerate}
-\begin{block}{Start small}
-Use a reduced model or narrow parameter interval first. A trustworthy small
-calculation is more valuable than a large unexplained diagram.
+\vfill
+\begin{block}{Start small, then earn complexity}
+First establish one known solution and a short, diagnosable branch. Expand the
+parameter range, mesh, events, and validation only after that calculation is trustworthy.
 \end{block}
 \end{frame}
 
-\begin{frame}{The package examples form a learning path}
+\begin{frame}{Demo cards 1--2: an equilibrium branch and its stability}
 \scriptsize
-\begin{columns}[T]
-\column{.48\textwidth}
-\begin{block}{Foundations and JAX workflows}
-\begin{description}
-  \item[04] Natural stalls at a fold; PALC follows the turn.
-  \item[06] \texttt{vmap} batches a parameter sweep using fixed buffers.
-  \item[07] \texttt{jax.grad} measures how a fold parameter moves.
-\end{description}
+\begin{block}{1 \quad README saddle-node quick start}
+\textbf{Objective:} follow $u^2+p=0$ through its fold.\quad
+\textbf{File:} \texttt{README.md}, ``Quick start''.\\
+\textbf{Run:} \texttt{MPLBACKEND=Agg python -}, paste that Python block, then send EOF.\\
+\textbf{Expected:} \texttt{[('fold', 0.0)]} and an annotated branch figure; a
+verification run stored 201 points and reached $\max p\approx-1.19\times10^{-3}$.\\
+\textbf{Caution:} no real equilibrium exists for $p>0$; the requested
+\texttt{p\_span} endpoint is not evidence that the branch can reach it.
 \end{block}
-\column{.48\textwidth}
-\begin{block}{Periodic-orbit workflows}
-\begin{description}
-  \item[08] Analytic period-doubling crossing at $\alpha=0$.
-  \item[09] Analytic Neimark--Sacker crossing at $\alpha=0$.
-  \item[10] Van der Pol period growth and waveform sharpening.
-  \item[11] Brusselator limit-cycle amplitude growth.
-\end{description}
-\end{block}
-\end{columns}
-\begin{block}{Current-main visualization and recommended order}
-\textbf{12} combines a FitzHugh--Nagumo branch, Hopf marker, nullclines,
-vector field, equilibrium and trajectory. Learn branch geometry first,
-batching/differentiation second, periodic orbits next, then use Example 12 to
-connect the parameter and state-space views.
+
+\begin{block}{2 \quad Van der Pol equilibrium Hopf crossing}
+\textbf{Objective:} track the origin's stability through $\mu=0$.\quad
+\textbf{File:} \texttt{examples/example\_03\_van\_der\_pol.py}.\\
+\textbf{Run:} \texttt{cd examples \&\& MPLBACKEND=Agg}\,$\backslash$\\
+\hspace*{8mm}\texttt{python example\_03\_van\_der\_pol.py}\\
+\textbf{Expected:} \texttt{van\_der\_pol.png}; 83 points, one Hopf event at
+$\mu=-1.24\times10^{-10}$, and zero equilibrium residual.\\
+\textbf{Caution:} $l_1=0$ here: this is a degenerate center crossing, not a
+generic local birth of a small-amplitude cycle.
 \end{block}
 \end{frame}
 
-\begin{frame}[fragile]{Visualization is now one consistent module}
-\small
-\begin{lstlisting}
-from jaxcont.viz import plot_eigenvalues, plot_phase_plane
+\begin{frame}{Demo cards 3--4: cycles and phase-plane geometry}
+\scriptsize
+\begin{block}{3 \quad Van der Pol periodic orbit}
+\textbf{Objective:} refine a simulated cycle, then continue it from $\mu=1$ to $4$.\quad
+\textbf{File:} \texttt{examples/example\_10\_van\_der\_pol\_limit\_cycle.py}.\\
+\textbf{Run:} \texttt{cd examples \&\& MPLBACKEND=Agg}\,$\backslash$\\
+\hspace*{8mm}\texttt{python example\_10\_van\_der\_pol\_limit\_cycle.py}\\
+\textbf{Expected:} \texttt{images/example\_10\_van\_der\_pol\_limit\_cycle.png};
+138 stable points, $\mu\in[1.000,4.021]$, period $6.6633\to10.2539$.\\
+\textbf{Caution:} JaxCont refines the supplied, time-rebased trajectory; it
+does not simulate to discover the initial cycle.
+\end{block}
 
-fig = result.plot(
-    state_index=0,
-    annotate=True,
-)
-
-fig = plot_eigenvalues(result)
-\end{lstlisting}
-\begin{itemize}
-  \item Branch segments and event markers share consistent styles.
-  \item \texttt{annotate=True} adds event labels and numerical coordinates.
-  \item \texttt{plot\_branch\_states} scatters a branch in state coordinates.
-  \item \texttt{plot\_phase\_plane} draws the actual 2D flow geometry at one $p$.
-\end{itemize}
-\begin{alertblock}{API migration}
-\texttt{plot\_phase\_portrait} was an inaccurate name for a branch-state
-scatter. It remains as a deprecated alias and is scheduled for removal in
-v0.4.0; use \texttt{plot\_branch\_states}.
-\end{alertblock}
-\end{frame}
-
-\begin{frame}{How to validate a computed branch}
-\begin{itemize}
-  \item Check $\|F(\state_k,p_k)\|$ at accepted points, not only a success flag.
-  \item Repeat with smaller and larger step-size bounds.
-  \item For periodic orbits, repeat with a finer \texttt{ntst}/\texttt{ncol} mesh.
-  \item Continue from both directions and compare overlapping branch segments.
-  \item Compare simple cases with an analytic solution when one exists.
-  \item Confirm important events with spectra or multipliers and a refined local solve.
-  \item Compare selected results with simulation or another continuation tool.
-  \item Test scientific conclusions under plausible parameter and model changes.
-\end{itemize}
-\begin{block}{Software tests and research validation are different}
-Repository tests check implementation behavior. Researchers must additionally
-check that their model, starting solution, parameter range, and interpretation
-are appropriate for the scientific question.
+\begin{block}{4 \quad FitzHugh--Nagumo phase plane}
+\textbf{Objective:} connect a Hopf marker on the branch to 2D flow geometry.\quad
+\textbf{File:} \texttt{examples/example\_12\_fitzhugh\_nagumo\_phase\_plane.py}.\\
+\textbf{Run:} \texttt{cd examples \&\& MPLBACKEND=Agg}\,$\backslash$\\
+\hspace*{8mm}\texttt{python example\_12\_fitzhugh\_nagumo\_phase\_plane.py}\\
+\textbf{Expected:} stdout \texttt{hopf at I = 0.3313} and two displayed
+figures (the script does not save them).\\
+\textbf{Caution:} the phase-plane API is for two-state autonomous systems at
+one frozen parameter; its trajectories are simulations, not continued cycles.
 \end{block}
 \end{frame}
 
-\begin{frame}{How to read the result}
-\begin{itemize}
-  \item Use only entries selected by \texttt{valid} or \texttt{[:n\_valid]}.
-  \item Plot a scientifically meaningful state observable against $p$.
-  \item Interpret \texttt{branch.eigenvalues} by kind: equilibrium eigenvalues
-        or periodic Floquet multipliers.
-  \item Treat detected events as candidates until they are refined and checked.
-  \item Inspect step sizes and residuals near sharp turns or failed regions.
-  \item Keep separate branches separate; one run may not reveal every solution.
-\end{itemize}
-\begin{alertblock}{A missing point is not necessarily a missing solution}
-Continuation can stop because of settings, conditioning, non-finite model
-values, or the attempt budget. Diagnose termination before concluding that a
-physical branch ends.
+\begin{frame}{Demo cards 5--6: phase sensitivity and an independent check}
+\scriptsize
+\begin{block}{5 \quad Circle-system iPRC and parameter dPRC \quad \mainbadge}
+\textbf{Objective:} compute $Z(t)$ and its total parameter derivative.\quad
+\textbf{File:} \texttt{examples/example\_13\_phase\_response\_curve.py}.\\
+\textbf{Run:} \texttt{cd examples \&\& MPLBACKEND=Agg}\,$\backslash$\\
+\hspace*{8mm}\texttt{python example\_13\_phase\_response\_curve.py}\\
+\textbf{Expected:} \texttt{images/example\_13\_phase\_response\_curve.png}
+with iPRC and $d/d\rho$ panels.\\
+\textbf{Caution:} \texttt{dprc\_curve} re-solves $U(p)$; it is not a partial
+derivative of \texttt{prc\_curve} at a frozen orbit.
+\end{block}
+
+\begin{block}{6 \quad Independent PRC shooting validation \quad \mainbadge}
+\textbf{Objective:} compare collocation PRCs with IVP shooting and finite differences.\quad
+\textbf{File:} \texttt{examples/example\_14\_prc\_shooting\_validation.py}.\\
+\textbf{Run:} \texttt{cd examples \&\& MPLBACKEND=Agg}\,$\backslash$\\
+\hspace*{8mm}\texttt{python example\_14\_prc\_shooting\_validation.py}\\
+\textbf{Expected:} \texttt{images/example\_14\_prc\_shooting\_validation.png};
+max PRC/dPRC discrepancies $3.27\times10^{-5}/4.46\times10^{-5}$ (circle)
+and $1.87\times10^{-4}/5.54\times10^{-4}$ (Van der Pol).\\
+\textbf{Caution:} this one-off script validates the PRC computation, not
+independent periodic-orbit discovery; its orbit seed is still reconverged by JaxCont.
+\end{block}
+\end{frame}
+
+\begin{frame}{How to read a result}
+\centering
+\begin{tikzpicture}[>=Latex,node distance=5mm and 8mm,
+ q/.style={diamond,aspect=2.4,draw=JaxBlue,thick,fill=SoftBlue,
+   align=center,font=\small,inner sep=1.5pt},
+ box/.style={rounded corners,draw=JaxTeal,thick,fill=JaxTeal!9,
+   text width=51mm,minimum height=13mm,align=left,font=\scriptsize},
+ final/.style={rounded corners,draw=JaxOrange,thick,fill=JaxOrange!10,
+   text width=49mm,minimum height=11mm,align=left,font=\scriptsize}]
+\node[q] (stop) {Did continuation\\stop early?};
+\node[box,below left=7mm and 3mm of stop] (yes) {Inspect endpoint coverage and stop
+evidence: residuals, finite values, \texttt{ds\_min}, the \texttt{max\_steps}
+accepted-point budget, and extra rejected-attempt work.};
+\node[box,below right=7mm and 3mm of stop] (no) {Inspect stability and event evidence:
+eigenvalues or Floquet multipliers, detector diagnostics, and local refinement residuals.};
+\node[final,below=7mm of yes] (important) {\textbf{Important conclusion:}
+rerun with changed step bounds, resolution, and direction.};
+\node[final,below=7mm of no] (publish) {\textbf{Publication claim:}
+add an analytic oracle or an independent method/package.};
+\draw[->,thick] (stop)--node[above left,font=\scriptsize]{yes}(yes);
+\draw[->,thick] (stop)--node[above right,font=\scriptsize]{no}(no);
+\draw[->,thick] (no)--node[left,font=\scriptsize]{important}(important);
+\draw[->,thick] (no)--node[right,font=\scriptsize]{publication}(publish);
+\end{tikzpicture}
+
+\vfill
+\begin{alertblock}{Do not infer a physical branch ending from missing points}
+The public result exposes coverage, residual and validity evidence, but not a
+single explicit termination-reason field; compare the last accepted point with
+the configured endpoint and stop conditions.
 \end{alertblock}
 \end{frame}
