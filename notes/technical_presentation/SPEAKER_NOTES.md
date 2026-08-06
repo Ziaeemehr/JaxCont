@@ -285,8 +285,9 @@ No. It classifies the local Hopf normal form. Distant folds, global stability,
 and far-from-Hopf behavior require a supplied cycle and continuation.
 
 **Likely question — “How small is ‘near zero’?”** There is no universal
-number. The default tolerance is a starting point; state/parameter scaling and
-the extended-system residual must inform the judgment.
+number. The default tolerance is a starting point; state normalization,
+time/vector-field scaling, and the extended-system residual must inform the
+judgment.
 
 **Likely question — “Why can a finite criticality label still be unsafe?”**
 The refinement interface can return a final finite iterate without a separate
@@ -314,7 +315,8 @@ Keep “one point from one supplied guess” visible on every frame.
 5. Explain parameter-only wrappers only after checking the corresponding point
    solver. They omit the convergence flag so they compose with gradients.
 6. For HH, mention `n >= 4`, required keyword-only `seed_b`, and the
-   model-scaled frequency-separation guard. ZH requires `n >= 3`.
+   absolute, scale-dependent frequency-separation guard; tune it per system.
+   ZH requires `n >= 3`.
 
 **Likely question — “Do these solvers draw a two-parameter bifurcation
 diagram?”** No. They refine one nearby root of an extended point-defining

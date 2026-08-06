@@ -9,7 +9,7 @@ ASSETS := $(wildcard assets/*)
 LOGO_SVG := ../../docs/images/logo/logo.svg
 LOGO_PNG := jaxcont_logo.png
 
-.PHONY: all clean distclean rebuild help
+.PHONY: all clean distclean rebuild verify help
 
 all: $(PDF)
 
@@ -29,6 +29,13 @@ distclean: clean
 	$(RM) $(PDF)
 
 rebuild: distclean all
+
+verify: rebuild
+	@test "$$(pdfinfo $(PDF) | awk '/^Pages:/ {print $$2}')" -gt 0
+	@! rg -n "LaTeX Error|Undefined control sequence|File .* not found|There were undefined references" $(JOB).log
+	@pdftotext $(PDF) - | rg -q "JaxCont v0.3.1"
+	@pdftotext $(PDF) - | rg -q "Current main"
+	@pdftotext $(PDF) - | rg -q "Phase-response"
 
 help:
 	@echo "make          Build $(PDF)"

@@ -113,6 +113,9 @@ clamp to a nearly constant, invalid guess.
 
 \begin{frame}[fragile]{Minimal periodic-orbit API}
 \begin{lstlisting}[basicstyle=\ttfamily\tiny]
+import jax.numpy as jnp
+import jaxcont as jc
+
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 

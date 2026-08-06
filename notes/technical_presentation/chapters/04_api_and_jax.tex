@@ -189,7 +189,7 @@ def run_one(design_value):
 
 branches = jax.vmap(run_one)(design_values)
 \end{lstlisting}
-\begin{block}{What is parallel}
+\begin{block}{What is batched}
 Each batch element owns one sequential continuation history. Fixed buffers give
 every branch the same outer shape; \texttt{branches.branch.valid} identifies
 the actual points in each history.

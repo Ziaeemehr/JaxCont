@@ -252,9 +252,10 @@ field & meaning \\
 \end{enumerate}
 \end{block}
 \end{columns}
-\begin{alertblock}{Tolerance is model-scaled}
+\begin{alertblock}{Tolerance is scale-dependent}
 The default \texttt{l1\_tolerance=1e-6} is a starting point, not a universal
-constant: $l_1$ depends on state and parameter scaling.
+constant: $l_1$ depends on state normalization and time/vector-field scaling.
+Tune the threshold in those units.
 \end{alertblock}
 \end{frame}
 
