@@ -3,6 +3,7 @@
   {Featured applications: Van der Pol cycles, period doubling, and Neimark--Sacker crossings}
 
 \begin{frame}{From one equilibrium to one complete orbit}
+\releasedbadge
 \small
 \begin{columns}[T]
 \column{.48\textwidth}
@@ -32,18 +33,18 @@ $U=(\text{states around the cycle},\,T)$.
 \end{columns}
 \begin{alertblock}{The useful abstraction}
 Collocation turns a time-dependent cycle into one large finite root, so the
-existing continuation engine can follow it.
+same continuation engine can follow it.
 \end{alertblock}
 \end{frame}
 
-\begin{frame}{How collocation turns a cycle into equations}
+\begin{frame}{A cycle becomes three residual blocks}
 Split normalized time $\tau\in[0,1]$ into \texttt{ntst} intervals and place
-\texttt{ncol} Gauss--Legendre points inside each interval.
+\texttt{ncol} Gauss--Legendre points inside each interval:
 \[
   \frac{d\state}{d\tau}=T f(\state,p).
 \]
 \begin{center}
-\begin{tikzpicture}[x=1.2cm,y=1cm,>=Latex]
+\begin{tikzpicture}[x=1.05cm,y=1cm,>=Latex]
   \draw[->,thick] (0,0)--(10.3,0) node[right] {$\tau$};
   \foreach \x/\lab in {0/0,2.5/{1/4},5/{1/2},7.5/{3/4},10/1} {
     \draw[very thick,JaxBlue] (\x,-.12)--(\x,.12);
@@ -53,98 +54,95 @@ Split normalized time $\tau\in[0,1]$ into \texttt{ntst} intervals and place
     \foreach \off in {.45,1.25,2.05}
       \fill[JaxOrange] (\base+\off,0) circle (2.3pt);
   }
-  \node[above=4mm,JaxBlue] at (1.25,0) {one mesh interval};
+  \node[above=4mm,JaxBlue] at (1.25,0) {mesh interval};
   \node[above=4mm,JaxOrange!90!black] at (6.25,0) {collocation points};
 \end{tikzpicture}
 \end{center}
 \begin{enumerate}
-  \item \textbf{Defect equations:} the polynomial derivative matches $T f$ at every collocation point.
-  \item \textbf{Continuity equations:} the end of one interval equals the start of the next, including wrap-around.
-  \item \textbf{Phase condition:} one scalar equation removes arbitrary time shift along the cycle.
+  \item \textbf{Defects:} polynomial derivatives match $T f$ at collocation points.
+  \item \textbf{Continuity:} each interval endpoint matches the next, with wrap-around.
+  \item \textbf{Phase:} one scalar condition removes arbitrary time translation.
 \end{enumerate}
 \end{frame}
 
 \begin{frame}{Why the phase condition is necessary}
-If $\state(\tau)$ is a periodic solution, then $\state(\tau+\phi)$ is the same
-geometric orbit for any phase shift $\phi$.
+If $\state(\tau)$ is periodic, then $\state(\tau+\phi)$ traces the same
+geometric orbit for every phase shift $\phi$.
 \begin{center}
 \begin{tikzpicture}[x=1.1cm,y=1.1cm,>=Latex]
   \draw[JaxBlue,very thick] (0,0) ellipse (2.3 and 1.25);
   \fill[JaxOrange] (2.3,0) circle (3pt) node[right] {$\phi=0$};
   \fill[JaxGreen!80!black] (0,1.25) circle (3pt) node[above] {$\phi=\pi/2$};
-  \draw[->,thick,JaxOrange] (1.9,.75) arc[start angle=35,end angle=75,x radius=2.3,y radius=1.25];
+  \draw[->,thick,JaxOrange] (1.9,.75)
+      arc[start angle=35,end angle=75,x radius=2.3,y radius=1.25];
   \node[align=center] at (0,-1.85) {same closed curve, different starting point};
 \end{tikzpicture}
 \end{center}
 \begin{block}{Numerical consequence}
-Without a phase condition, the collocation Jacobian has a neutral direction:
-sliding every sample forward in time changes the vector $U$ but not the orbit.
-The phase condition pins one representative of that equivalence class.
+Without a phase condition, sliding all samples in time changes $U$ but not
+the orbit. The collocation Jacobian therefore has a neutral direction; the
+phase condition selects one representative of that equivalence class.
 \end{block}
 \end{frame}
 
-\begin{frame}{The periodic-orbit workflow}
+\begin{frame}{JaxCont refines a supplied cycle}
 \centering
-\begin{tikzpicture}[scale=.76,transform shape,node distance=6mm and 6mm,>=Latex,
- box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,minimum width=27mm,minimum height=11mm,align=center},
- jax/.style={rounded corners,draw=JaxGreen,thick,fill=JaxGreen!10,minimum width=27mm,minimum height=11mm,align=center}]
-\node[box] (sim) {simulate with the\\user's ODE solver};
-\node[box,right=of sim] (guess) {extract one cycle\\and estimate $T$};
-\node[jax,right=of guess] (build) {\texttt{periodic\_orbit\_problem}\\resample and refine};
-\node[jax,right=of build] (cont) {\texttt{jc.continuation}\\follow the cycle};
-\node[jax,right=of cont] (read) {inspect shape, period,\\Floquet stability};
+\begin{tikzpicture}[scale=.78,transform shape,node distance=7mm and 7mm,>=Latex,
+ box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,minimum width=30mm,minimum height=12mm,align=center},
+ jax/.style={rounded corners,draw=JaxGreen,thick,fill=JaxGreen!10,minimum width=30mm,minimum height=12mm,align=center}]
+\node[box] (sim) {user simulates\\the ODE};
+\node[box,right=of sim] (guess) {user extracts one\\cycle and estimates $T$};
+\node[jax,right=of guess] (build) {factory resamples\\and refines};
+\node[jax,right=of build] (cont) {continuation\\follows the cycle};
 \draw[->,thick] (sim)--(guess);
 \draw[->,thick] (guess)--(build);
 \draw[->,thick] (build)--(cont);
-\draw[->,thick] (cont)--(read);
 \end{tikzpicture}
-\vspace{7mm}
-\begin{alertblock}{Division of responsibility}
-The periodic-problem factory does not simulate to discover a cycle. The user
-supplies a coarse trajectory guess; the factory resamples it onto the fixed
-mesh and refines it with a differentiable Newton root solve before
-continuation starts. The newer phase-plane \texttt{plot\_trajectory} helper is
-diagnostic visualization, not automatic cycle initialization.
+\vspace{6mm}
+\begin{alertblock}{Responsibility boundary}
+The user supplies a coarse trajectory representing one cycle and a reasonable
+period. The factory refines that supplied coarse cycle; it does not discover a
+cycle by integrating from a Hopf point.
 \end{alertblock}
-\begin{block}{Practical input rule}
-\texttt{t\_trajectory} must start at zero. The factory evaluates the guess at
-$t=\tau T$; leaving the original simulation-time offset can make interpolation
+\begin{block}{Interpolation boundary}
+Rebase \texttt{t\_trajectory} to start at zero. The factory samples the guess
+at $t=\tau T$; an original simulation-time offset can make interpolation
 clamp to a nearly constant, invalid guess.
 \end{block}
 \end{frame}
 
-\begin{frame}[fragile]{Example: continue the Van der Pol limit cycle}
+\begin{frame}[fragile]{Minimal periodic-orbit API}
 \begin{lstlisting}[basicstyle=\ttfamily\tiny]
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 
 mesh = Collocation(ntst=20, ncol=4)
 problem = periodic_orbit_problem(
-    van_der_pol_rhs,
-    jnp.asarray(u_trajectory),  # one coarse cycle
-    jnp.asarray(t_trajectory),  # rebased to start at 0
-    period_guess, mu_start, mesh,
+    rhs,
+    jnp.asarray(u_trajectory),  # supplied coarse cycle
+    jnp.asarray(t_trajectory),  # starts at zero
+    period_guess, p_start, mesh,
 )
 
 result = jc.continuation(
     problem, jc.PseudoArclength(),
-    p_span=(mu_start, 4.0),
+    p_span=(p_start, p_stop),
     settings=jc.ContinuationPar(
         ds=0.05, max_steps=250,
-        newton_tol=1e-5,
-        compute_stability=True,
+        newton_tol=1e-5, compute_stability=True,
     ),
 )
 \end{lstlisting}
-\begin{block}{What the repository example demonstrates}
-As $\mu$ grows, the cycle sharpens and its period increases while amplitude
-stays near two. Floquet multipliers confirm stability on the shown branch.
+\begin{block}{Example 10: Van der Pol}
+The repository example supplies one simulated cycle, then continues it as the
+parameter changes. The period grows and the waveform sharpens while the shown
+branch remains Floquet-stable.
 \end{block}
 \end{frame}
 
 \begin{frame}{What is packed into a periodic branch state?}
-For physical state dimension $n$, \texttt{ntst} intervals and \texttt{ncol}
-collocation points, every branch state has
+For state dimension $n$, \texttt{ntst} intervals, and \texttt{ncol}
+collocation points, each branch state has
 \[
   n\,\texttt{ntst}\,(1+\texttt{ncol})+1
 \]
@@ -161,20 +159,18 @@ entries.
 \end{center}
 \begin{itemize}
   \item The final entry is the orbit period.
-  \item The leading mesh states can be reshaped to
-        \texttt{(n\_valid, ntst, n)} for phase portraits.
-  \item The full packed vector is the numerical unknown; it is intentionally
-        larger than the physical state.
+  \item Leading mesh states reshape to \texttt{(n\_valid, ntst, n)} for phase portraits.
+  \item The full packed vector is the numerical unknown, not merely the physical state.
 \end{itemize}
 \begin{alertblock}{Interpretation rule}
-\texttt{result.branch.states[:, 0]} is only the first component at the first
-mesh point-not automatically the orbit amplitude.
+\texttt{result.branch.states[:, 0]} is one component at one mesh point---not
+automatically the orbit amplitude.
 \end{alertblock}
 \end{frame}
 
 \begin{frame}{Floquet multipliers: stability of a cycle}
 Perturb a point on a period-$T$ orbit and evolve the linearized perturbation
-for one complete period:
+for one full period:
 \[
   \dot\Phi(t)=f_{\state}(\state(t),p)\Phi(t),\qquad \Phi(0)=I.
 \]
@@ -188,11 +184,11 @@ must satisfy $|\mu_i|<1$.
 \end{block}
 \column{.48\textwidth}
 \begin{alertblock}{Different from equilibria}
-Equilibrium stability uses $\operatorname{Re}\lambda_i<0$.
-Applying that rule to Floquet multipliers is mathematically wrong.
+Equilibrium stability uses $\operatorname{Re}\lambda_i<0$; applying that rule
+to Floquet multipliers is mathematically wrong.
 \end{alertblock}
 \end{columns}
-\vspace{3mm}
+\vspace{2mm}
 JaxCont reconstructs the monodromy matrix from the collocation solution and
 dispatches \texttt{compute\_stability=True} by \texttt{problem.kind}.
 \end{frame}
@@ -210,7 +206,7 @@ dispatches \texttt{compute\_stability=True} by \texttt{problem.kind}.
   \node[below=2mm] at (-1.25,0) {$-1$};
 \end{tikzpicture}
 \begin{block}{Period doubling (PD)}
-A real nontrivial multiplier crosses $-1$. The original cycle loses stability
+A real nontrivial multiplier crosses $-1$; the original cycle loses stability
 to a cycle with twice the period.
 \end{block}
 \column{.48\textwidth}
@@ -231,49 +227,64 @@ a torus bifurcation.
 \end{columns}
 \end{frame}
 
-\begin{frame}[fragile]{Example: request a periodic-orbit event}
-\begin{lstlisting}
-pd = jc.PeriodDoubling(raw_f=rhs, mesh=mesh)
-ns = jc.NeimarkSacker(raw_f=rhs, mesh=mesh)
+\begin{frame}{Example 08: a period-doubling crossing}
+\centering
+\includegraphics[width=.84\textwidth]{example_08_period_doubling.png}
+\vspace{-1mm}
+\begin{block}{Closed-form check}
+{\small Analytic $\mu=-e^{\alpha T}$ crosses at $\alpha=0$.
+\texttt{jc.PeriodDoubling(raw\_f=rhs, mesh=mesh)} detects
+$\alpha=-1.38\times10^{-6}$ (error $1.38\times10^{-6}$).}
+\end{block}
+{\scriptsize Source: \texttt{examples/example\_08\_period\_doubling.py}; reviewed snapshot in \texttt{assets/}.}
+\end{frame}
 
-result = jc.continuation(
-    problem, jc.PseudoArclength(),
-    p_span=(p0, p1),
-    settings=jc.ContinuationPar(
-        ds=0.02, max_steps=50,
-        newton_tol=1e-5,
-        compute_stability=True,
-    ),
-    events=[pd],  # or [ns]
-)
-\end{lstlisting}
-\begin{itemize}
-  \item The event receives the raw ODE and mesh so refinement can recompute
-        Floquet multipliers at bisection midpoints.
-  \item The repository includes analytic crossing examples:
-        $\mu=-e^{\alpha T}$ for PD and $|\mu|=e^{\alpha T}$ for NS; both cross
-        at $\alpha=0$.
-  \item \texttt{Hopf()} is for equilibrium eigenvalues; PD/NS are for periodic
-        Floquet multipliers. The API does not yet prevent mixing them.
-\end{itemize}
+\begin{frame}{Example 09: a Neimark--Sacker crossing}
+\centering
+\includegraphics[width=.84\textwidth]{example_09_neimark_sacker.png}
+\vspace{-1mm}
+\begin{block}{Closed-form check}
+{\small Analytic $|\mu|=e^{\alpha T}$ crosses at $\alpha=0$.
+\texttt{jc.NeimarkSacker(raw\_f=rhs, mesh=mesh)} detects
+$\alpha=-4.60\times10^{-7}$ (error $4.60\times10^{-7}$).}
+\end{block}
+{\scriptsize Source: \texttt{examples/example\_09\_neimark\_sacker.py}; reviewed snapshot in \texttt{assets/}.}
 \end{frame}
 
 \begin{frame}{Periodic-orbit numerics: practical boundaries}
 \begin{itemize}
-  \item \textbf{Fixed mesh:} \texttt{ntst} and \texttt{ncol} are compile-time
-        constants; v0.2 does not redistribute the mesh adaptively.
-  \item \textbf{Large residual:} collocation multiplies the unknown dimension,
-        so dense Newton and eigenvalue solves become expensive quickly.
-  \item \textbf{Tolerance floor:} examples use \texttt{newton\_tol} around
-        $10^{-5}$ or $10^{-4}$ in float32, based on the system and mesh.
-  \item \textbf{Initial guess quality:} the trajectory must represent one
-        cycle and have a reasonable period estimate.
-  \item \textbf{Event semantics:} fold is meaningful on either branch kind;
-        Hopf is equilibrium-only, while PD/NS are periodic-only.
+  \item \textbf{Fixed mesh:} \texttt{ntst} and \texttt{ncol} fix array shapes;
+        v0.3.1 does not redistribute the mesh adaptively.
+  \item \textbf{Large residual:} collocation expands the unknown, so dense
+        Newton and eigenvalue solves become expensive quickly.
+  \item \textbf{Float32 tolerance:} examples use \texttt{newton\_tol} around
+        $10^{-5}$ or $10^{-4}$ depending on the system and mesh.
+  \item \textbf{Guess quality:} the supplied trajectory must represent one
+        cycle and carry a reasonable period estimate.
+  \item \textbf{Event semantics:} Fold works on either branch kind; Hopf is
+        equilibrium-only, while PD and NS are periodic-only.
 \end{itemize}
-\begin{block}{Why \texttt{Collocation} is an Equinox module}
-\texttt{ntst} and \texttt{ncol} are declared static fields because they fix
-array shapes and therefore compilation. This makes the static/traced split
-explicit in the type itself.
+\begin{block}{Static mesh metadata}
+\texttt{Collocation.ntst} and \texttt{ncol} are static because they determine
+array shapes and compilation. This makes the static/traced split explicit.
 \end{block}
+\end{frame}
+
+\begin{frame}{What to remember}
+\begin{enumerate}
+  \item Collocation converts an entire cycle and its period into one finite
+        nonlinear root with defect, continuity, and phase residuals.
+  \item The user supplies a coarse cycle; \texttt{periodic\_orbit\_problem}
+        resamples and refines it before continuation.
+  \item Cycle stability is a Floquet-multiplier magnitude test after removing
+        the trivial multiplier nearest $+1$.
+  \item PD and NS events are unit-circle crossings, and Examples 08--09 check
+        their detected locations against analytic answers.
+\end{enumerate}
+\vspace{3mm}
+\begin{alertblock}{Scope boundary}
+JaxCont continues a supplied/refined periodic orbit. Automatic cycle
+discovery from a Hopf point, general BVP continuation, and connecting-orbit
+continuation are not implemented.
+\end{alertblock}
 \end{frame}
