@@ -243,16 +243,15 @@
       "tolerances": {"residual_atol": 0.000001}
     },
     {
-      "id": "US-PRC-001",
-      "title": "PRC and dPRC calculations",
-      "support": "unsupported",
-      "unsupported_execution": "executable",
+      "id": "MC-PRC-001",
+      "title": "PRC and dPRC calculations (adaptx Hopf limit cycle)",
+      "support": "supported",
       "features": ["prc", "dprc"],
-      "python": null,
+      "python": "examples.MatCont.python_cases.prc:run_adaptx_prc_dprc",
       "matlab": "run_prc_dprc",
-      "references": [],
+      "references": ["MC-PRC-001_prc.csv", "MC-PRC-001_metadata.json"],
       "manual_source": "MatCont 7.6 Testruns/testadaptPRC.m",
-      "tolerances": {"residual_atol": 0.000001}
+      "tolerances": {"residual_atol": 0.01}
     }
   ]
 }

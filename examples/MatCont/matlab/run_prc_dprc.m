@@ -26,12 +26,12 @@ opt = contset(opt, 'PRC', 1);
 opt = contset(opt, 'dPRC', 1);
 opt = contset(opt, 'Input', 1);
 opt = contset(opt, 'MaxNumPoints', 20);
-[~, ~, ~, ~, processor_data] = cont(@limitcycle, seed, tangent, opt);
+[x2, ~, ~, ~, processor_data] = cont(@limitcycle, seed, tangent, opt);
 assert(~isempty(processor_data) && all(isfinite(processor_data(:, end))));
 
 metadata = struct('producer', mfilename, ...
     'source', 'MatCont 7.6 Testruns/testadaptPRC.m', ...
     'precision', 'double', 'fixed_parameters', p(2)', ...
     'solver_settings', opt);
-export_prc_run('MC-PRC-001', processor_data, output_dir, metadata);
+export_prc_run('MC-PRC-001', x2, processor_data, output_dir, metadata);
 end

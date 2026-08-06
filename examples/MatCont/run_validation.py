@@ -138,6 +138,8 @@ def _run_matlab_function(
 def _equation_path(case: dict, matcont_root: str) -> Path:
     if case["id"] == "MC-LC-002":
         return Path(matcont_root) / "Testruns" / "TestSystems" / "torBPC.m"
+    if case["id"] == "MC-PRC-001":
+        return Path(matcont_root) / "Testruns" / "TestSystems" / "adaptx.m"
     return _EQUATION_FILES[case["id"]]
 
 
@@ -240,6 +242,9 @@ def _case_result_passes(case_id: str, checks: dict) -> bool:
             and checks["all_stable"]
         ),
         "MC-LC-002": lambda: bool(checks["all_comparisons_pass"]),
+        "MC-PRC-001": lambda: (
+            checks["prc_matches_matcont"] and checks["dprc_matches_matcont"]
+        ),
     }
     return bool(predicates[case_id]())
 
