@@ -50,6 +50,46 @@ upper = mesh_points(2:end);
 fractions = (1:ncol) / ncol;
 subdivided = lower(:) + (upper(:) - lower(:)) * fractions;  % ntst x ncol
 phase_fraction = [0; reshape(subdivided', [], 1)];  % interval-major, ntst*ncol+1 rows
+
+% calcPRC.m circularly rotates its PRC/dPRC VALUE output so the exported
+% curve starts at the trajectory's own x-maximum ("make the PRC and
+% collocation mesh start at the spike-top"; see LimitCycle/calcPRC.m's
+% [val,ind] = max(tmpcycle(1,:)) block and the PRC(end+1:end+ind-1) =
+% PRC(1:ind-1); PRC = PRC(ind:end) rotation applied to PRC, dPRC, and its
+% own inpmesh). prc_values/dprc_values above are exactly that already-
+% rotated calcPRC.m output (they flow through lds.PRCdata/lds.dPRCdata,
+% see limitcycle.m). phase_fraction, in contrast, was just built from
+% mesh_points = lds.msh, which calcPRC.m never rotates -- it is already
+% the correct, natural (unrotated) 0..1 labeling, with the periodic
+% closure (phase 0 == phase 1, same physical point) sitting cleanly at
+% the two endpoints.
+%
+% The bug is pairing this natural, unrotated phase_fraction with the
+% already-rotated prc_values/dprc_values. Rotating phase_fraction to
+% match would only relabel the rotation's own internal wrap-around seam
+% (where the periodic-closure duplicate lands adjacent, INTERIOR to the
+% array, at position half-rotation_index+1/+2) -- it would not move that
+% duplicate back to the endpoints, since a circular rotation's own
+% closure seam is invariant to how the array is subsequently labeled.
+% The only way to make the exported (phase, value) pairs show the
+% periodic closure at the endpoints (phase 0 <-> phase 1, matching
+% values) is to undo calcPRC.m's rotation on the VALUES, recovering
+% their natural pre-rotation order, and pair that with phase_fraction
+% as already (correctly) built above.
+%
+% Derive the same rotation index calcPRC.m computes (from the
+% trajectory's own x-maximum, using x2's cycle coordinates -- the same
+% values calcPRC.m was called with), then invert calcPRC.m's circular
+% shift: if rotated(i) = natural(mod(rotation_index+i-2, half)+1), then
+% natural(j) = rotated(mod(j-rotation_index, half)+1).
+nphase = lds.nphase;
+cycle_coords = real(x2(1:nphase * half, end));
+tmpcycle = reshape(cycle_coords, nphase, half);
+[~, rotation_index] = max(tmpcycle(1, :));
+unrotate_index = mod((1:half)' - rotation_index, half) + 1;
+prc_values = prc_values(unrotate_index);
+dprc_values = dprc_values(unrotate_index);
+
 prc_table = table(repmat({case_id}, n_points, 1), point, phase_fraction, prc_values, dprc_values, ...
     'VariableNames', {'case_id', 'point', 'phase_fraction', 'prc', 'dprc'});
 writetable(prc_table, fullfile(output_dir, [case_id '_prc.csv']));
