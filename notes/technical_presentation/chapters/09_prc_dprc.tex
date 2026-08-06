@@ -1,3 +1,286 @@
 \chapterdivider{9}{Phase-response curves and parameter sensitivity}
   {When an oscillator is perturbed, how much does its phase shift, and how does that sensitivity change with a parameter?}
   {Featured application: the circle oscillator's iPRC and dPRC}
+
+\begin{frame}{Why phase sensitivity matters}
+\mainbadge
+\vspace{2mm}
+\begin{block}{One kick can have three different effects}
+The state-space impulse is identical; only the phase at which it arrives changes.
+\end{block}
+\centering
+\begin{tikzpicture}[>=Latex,scale=.82,
+ orbit/.style={draw=JaxBlue,very thick},
+ kick/.style={->,very thick,JaxOrange},
+ phaseshift/.style={->,very thick,JaxTeal}]
+  \foreach \cx/\ang/\lab/\shiftang in {0/25/early/18,4.8/145/middle/52,9.6/265/late/-25}{
+    \draw[orbit] (\cx,0) circle (1.25);
+    \draw[->,JaxBlue,thick] (\cx+1.25,0) arc[start angle=0,end angle=55,radius=1.25];
+    \coordinate (hit) at ({\cx+1.25*cos(\ang)},{1.25*sin(\ang)});
+    \fill[JaxBlue] (hit) circle (2.2pt);
+    \draw[kick] ($(hit)+(-.75,-.55)$) -- (hit) node[midway,below right,font=\scriptsize] {$\delta x$};
+    \draw[phaseshift] (hit) arc[start angle=\ang,end angle={\ang+\shiftang},radius=1.25];
+    \node[font=\small\bfseries] at (\cx,-1.65) {\lab{} phase};
+    \node[font=\scriptsize,JaxTeal] at (\cx,-2.03) {$\Delta\phi$ differs};
+  }
+\end{tikzpicture}
+\vspace{1mm}
+
+{\small The iPRC maps a small state perturbation to its first-order phase shift.}
+\end{frame}
+
+\begin{frame}{The iPRC is a gradient of asymptotic phase}
+\begin{columns}[T,onlytextwidth]
+\column{.46\textwidth}
+\centering
+\begin{tikzpicture}[>=Latex,scale=.78]
+  \draw[very thick,JaxBlue] (0,0) circle (1.55);
+  \draw[->,thick,JaxBlue] (1.55,0) arc[start angle=0,end angle=65,radius=1.55];
+  \foreach \a in {25,50,75,100,125} {
+    \draw[JaxTeal!60,thick] ({1.0*cos(\a)},{1.0*sin(\a)}) -- ({2.25*cos(\a)},{2.25*sin(\a)});
+  }
+  \coordinate (x) at ({1.55*cos(50)},{1.55*sin(50)});
+  \fill[JaxBlue] (x) circle (2.4pt) node[below right,font=\scriptsize] {$x(\phi)$};
+  \draw[->,very thick,JaxOrange] (x) -- ++(.72,.20) node[right,font=\scriptsize] {$\delta x$};
+  \draw[->,very thick,JaxTeal] (x) -- ++(-.32,.82) node[above,font=\scriptsize] {$Z(\phi)$};
+  \node[JaxTeal,font=\scriptsize,align=center] at (0,-2.05) {equal-phase surfaces\\(isochrons)};
+\end{tikzpicture}
+\column{.50\textwidth}
+\begin{block}{Phase is a scalar field near a stable cycle}
+All states on one isochron converge to the same location on the oscillation.
+\end{block}
+\[
+  Z(\phi)=\nabla_x\phi\bigl(x(\phi)\bigr),
+  \qquad
+  \Delta\phi \approx Z(\phi)^{\mathsf T}\delta x.
+\]
+\begin{alertblock}{Infinitesimal means first order}
+The approximation describes sufficiently small kicks near the cycle, not an arbitrary reset or a basin crossing.
+\end{alertblock}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Adjoint propagation around one period}
+\centering
+\begin{tikzpicture}[>=Latex,node distance=19mm,
+ state/.style={circle,draw=JaxBlue,thick,fill=SoftBlue,minimum size=9mm},
+ adj/.style={circle,draw=JaxTeal,thick,fill=JaxTeal!10,minimum size=9mm}]
+  \node[state] (x0) {$x_0$};
+  \node[state,right=of x0] (x1) {$x_1$};
+  \node[state,right=of x1] (x2) {$\cdots$};
+  \node[state,right=of x2] (xT) {$x_T=x_0$};
+  \draw[->,very thick,JaxBlue] (x0)--node[above,font=\scriptsize] {$M_0$}(x1);
+  \draw[->,very thick,JaxBlue] (x1)--node[above,font=\scriptsize] {$M_1$}(x2);
+  \draw[->,very thick,JaxBlue] (x2)--node[above,font=\scriptsize] {$M_{N-1}$}(xT);
+
+  \node[adj,below=18mm of x0] (z0) {$Z_0$};
+  \node[adj,below=18mm of x1] (z1) {$Z_1$};
+  \node[adj,below=18mm of x2] (z2) {$\cdots$};
+  \node[adj,below=18mm of xT] (zT) {$Z_T=Z_0$};
+  \draw[->,very thick,JaxTeal] (zT)--node[below,font=\scriptsize] {$M_{N-1}^{\mathsf T}$}(z2);
+  \draw[->,very thick,JaxTeal] (z2)--node[below,font=\scriptsize] {$M_1^{\mathsf T}$}(z1);
+  \draw[->,very thick,JaxTeal] (z1)--node[below,font=\scriptsize] {$M_0^{\mathsf T}$}(z0);
+  \draw[<->,dashed,JaxOrange,thick] (x0)--node[left,font=\scriptsize,align=right]{same mesh\\intervals}(z0);
+\end{tikzpicture}
+\vspace{4mm}
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Forward perturbations}
+The interval propagators $M_i$ advance a state perturbation around the orbit.
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Backward sensitivities}
+$Z_i=M_i^{\mathsf T}Z_{i+1}$ propagates the adjoint backward; periodic closure requires $Z(T)=Z(0)$.
+\end{block}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Normalization fixes the scale}
+\small
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Closure chooses an eigendirection}
+\[
+  \bigl(\Phi(T)^{\mathsf T}-I\bigr)Z(0)=0
+\]
+Any nonzero multiple is still a solution, so periodicity alone cannot define phase units.
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Radian phase chooses one scale}
+\[
+  \boxed{Z(0)\cdot f(x_0,p)=\frac{2\pi}{T}}
+\]
+The phase advances by $2\pi$ in one period $T$. JaxCont solves closure and normalization together in a bordered linear system.
+\end{block}
+\end{columns}
+\vspace{3mm}
+\begin{alertblock}{Supported boundary condition}
+The PRC construction uses periodic-orbit closure at $t=0$ and $t=T$; it does not accept arbitrary user-supplied endpoint boundary conditions.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{One orbit, a branch, or a parameter derivative?}
+\small
+\mainbadge
+\centering
+\renewcommand{\arraystretch}{1.28}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{.19\textwidth}
+                  >{\raggedright\arraybackslash}p{.31\textwidth}
+                  >{\raggedright\arraybackslash}p{.22\textwidth}
+                  >{\raggedright\arraybackslash}p{.21\textwidth}@{}}
+\toprule
+Question & Call & Return shape & Meaning\\
+\midrule
+One orbit
+  & \texttt{prc\_curve(rhs, mesh, U, p)}
+  & \texttt{(ntst, n)}
+  & iPRC at mesh points\\
+Stored branch
+  & \texttt{branch\_prc(rhs, mesh, states, params)}
+  & \texttt{(batch, ntst, n)}
+  & vmapped per-orbit iPRCs\\
+Parameter sensitivity
+  & \texttt{dprc\_curve(problem)}
+  & \texttt{(ntst, n) + p.shape}
+  & derivative with respect to \texttt{problem.p0}\\
+\bottomrule
+\end{tabular}
+\vspace{3mm}
+\begin{block}{Branch batching requires compatible fixed shapes}
+\texttt{Z\_branch = branch\_prc(rhs, mesh, branch\_states, branch\_params)}
+
+Every packed orbit must use the same mesh/state shape, and the leading dimensions of states and parameters must agree.
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{Minimal iPRC/dPRC API}
+\begin{lstlisting}
+from jaxcont.stability.prc import (
+    branch_prc, dprc_curve, prc_curve,
+)
+from jaxcont.viz import plot_prc
+
+# problem is a converged periodic_orbit_problem(...)
+Z = prc_curve(rhs, mesh, problem.u0, problem.p0)
+dZ_dp = dprc_curve(problem)
+
+plot_prc(Z, labels=["x", "y"], title="iPRC")
+\end{lstlisting}
+\vspace{-2mm}
+\begin{block}{What \texttt{dprc\_curve} differentiates}
+For each perturbed parameter, JaxCont reconverges the packed periodic orbit, recomputes its phase-condition anchor, evaluates the PRC, and differentiates that complete map at \texttt{problem.p0}.
+\end{block}
+\begin{alertblock}{Not a frozen-orbit derivative}
+Changing $p$ while holding $U$ fixed generally leaves the periodic-orbit manifold and does not produce the implemented dPRC.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}[fragile]{Plot the curves}
+\begin{lstlisting}
+fig, (ax_prc, ax_dprc) = plt.subplots(
+    1, 2, figsize=(12, 5)
+)
+plot_prc(
+    Z, ax=ax_prc, labels=["x", "y"], title="iPRC"
+)
+plot_prc(
+    dZ_dp, ax=ax_dprc, labels=["x", "y"],
+    title="dPRC (d/d\u03c1)",
+)
+\end{lstlisting}
+\vspace{-2mm}
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Default horizontal axis}
+Without \texttt{phase=...}, \texttt{plot\_prc} labels the $N$ returned samples by mesh-point index.
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Optional phase coordinates}
+Pass one coordinate per mesh point to label the axis as phase; the helper does not reconstruct internal collocation points.
+\end{block}
+\end{columns}
+\vspace{2mm}
+{\small Each \texttt{plot\_prc} call returns the Matplotlib figure, whether it created the axes or received them.}
+\end{frame}
+
+\begin{frame}{Example 13: circle-oscillator iPRC and dPRC}
+\mainbadge\par
+\vspace{1mm}
+\centering
+\includegraphics[width=.98\textwidth]{example_13_phase_response_curve.png}
+\vspace{-2mm}
+
+{\tiny Fresh repository output from \texttt{examples/example\_13\_phase\_response\_curve.py}; generated with \texttt{MPLBACKEND=Agg}. The curves are returned at 40 mesh points.}
+\end{frame}
+
+\begin{frame}{How to read sign, component, phase, and magnitude}
+\small
+\centering
+\renewcommand{\arraystretch}{1.35}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{.16\textwidth}
+                  >{\raggedright\arraybackslash}p{.33\textwidth}
+                  >{\raggedright\arraybackslash}p{.42\textwidth}@{}}
+\toprule
+Read & Ask & Interpretation\\
+\midrule
+Sign
+  & Which way is the kick applied?
+  & Positive advances radian phase; negative delays it for that signed component kick.\\
+Component
+  & Which state variable is perturbed?
+  & Each line is one coordinate of $Z$ (or of $\partial Z/\partial p$).\\
+Phase
+  & Where on the orbit does the kick land?
+  & Compare values at the same phase origin and phase units.\\
+Magnitude
+  & How strong is first-order sensitivity?
+  & $Z^{\mathsf T}\delta x$ predicts phase shift; dPRC magnitude says how that coefficient changes with $p$.\\
+\bottomrule
+\end{tabular}
+\vspace{3mm}
+\begin{alertblock}{Compare aligned conventions}
+A shifted phase origin moves peaks horizontally without changing the underlying oscillator response.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{What these curves do not establish}
+\scriptsize
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{alertblock}{Scientific limits}
+\begin{itemize}
+  \item iPRC is a local, infinitesimal response—not a finite-reset map.
+  \item A PRC does not prove global attraction, basin size, entrainment, or a coupling function.
+  \item The asymptotic-phase interpretation is for a stable cycle near which phase is defined.
+\end{itemize}
+\end{alertblock}
+\column{.48\textwidth}
+\begin{alertblock}{Numerical/API limits}
+\begin{itemize}
+  \item Supply a converged fixed-mesh periodic orbit; the bordered solve assumes the unit Floquet multiplier is simple.
+  \item Output is at \texttt{ntst} mesh points, not internal collocation points.
+  \item Only periodic closure is supported here—no homoclinic/heteroclinic or arbitrary endpoint-boundary PRC.
+\end{itemize}
+\end{alertblock}
+\end{columns}
+\vspace{2mm}
+% Exact semantics required by Task 10:
+% JaxCont’s dprc_curve is d(PRC)/dp after reconverging the periodic orbit; it is not the time derivative d(PRC)/dt exported under the dPRC name by MatCont.
+\begin{block}{Name collision to avoid}
+JaxCont's \texttt{dprc\_curve} is \texttt{d(PRC)/dp} after reconverging the periodic orbit; it is not the time derivative \texttt{d(PRC)/dt} exported under the dPRC name by MatCont.
+\end{block}
+\end{frame}
+
+\begin{frame}{What to remember}
+\large
+\begin{enumerate}
+  \item The iPRC is the gradient that converts a small state kick into a first-order phase shift.
+  \item JaxCont obtains it by periodic adjoint propagation plus the normalization $Z(0)\cdot f(x_0,p)=2\pi/T$.
+  \item \texttt{prc\_curve} handles one orbit, \texttt{branch\_prc} batches compatible orbits, and \texttt{dprc\_curve} differentiates the PRC after reconverging the orbit with respect to the parameter.
+\end{enumerate}
+\vfill
+\centering
+\mainbadge
+\end{frame}
