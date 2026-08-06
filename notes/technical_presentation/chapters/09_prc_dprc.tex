@@ -13,12 +13,16 @@ The state-space impulse is identical; only the phase at which it arrives changes
  orbit/.style={draw=JaxBlue,very thick},
  kick/.style={->,very thick,JaxOrange},
  phaseshift/.style={->,very thick,JaxTeal}]
-  \foreach \cx/\ang/\lab/\shiftang in {0/25/early/18,4.8/145/middle/52,9.6/265/late/-25}{
+  \foreach \cx/\ang/\lab/\shiftang/\kicklabelpos in {
+    0/25/early/18/{below right},
+    4.8/145/middle/52/{below right},
+    9.6/265/late/-25/{above left}}{
     \draw[orbit] (\cx,0) circle (1.25);
     \draw[->,JaxBlue,thick] (\cx+1.25,0) arc[start angle=0,end angle=55,radius=1.25];
     \coordinate (hit) at ({\cx+1.25*cos(\ang)},{1.25*sin(\ang)});
     \fill[JaxBlue] (hit) circle (2.2pt);
-    \draw[kick] ($(hit)+(-.75,-.55)$) -- (hit) node[midway,below right,font=\scriptsize] {$\delta x$};
+    \draw[kick] ($(hit)+(-.75,-.55)$) -- (hit)
+      node[midway,\kicklabelpos,font=\scriptsize] {$\delta x$};
     \draw[phaseshift] (hit) arc[start angle=\ang,end angle={\ang+\shiftang},radius=1.25];
     \node[font=\small\bfseries] at (\cx,-1.65) {\lab{} phase};
     \node[font=\scriptsize,JaxTeal] at (\cx,-2.03) {$\Delta\phi$ differs};
