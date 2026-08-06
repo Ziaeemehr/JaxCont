@@ -282,7 +282,9 @@ fig, axes = plt.subplots(2, 2, figsize=(11, 8))
 
 axes[0, 0].plot(theta_mesh, Z_jaxcont_circle[:, 0], "o", label="JaxCont prc_curve")
 axes[0, 0].plot(theta_mesh, Z_shoot_at_mesh_circle[:, 0], "x", label="shooting")
-axes[0, 0].plot(theta_mesh, Z_closed[:, 0], "-", alpha=0.5, label="closed form")
+theta_closed_loop = np.append(theta_mesh, theta_mesh[0])
+Z_closed_loop = np.append(Z_closed[:, 0], Z_closed[0, 0])
+axes[0, 0].plot(theta_closed_loop, Z_closed_loop, "-", alpha=0.5, label="closed form")
 axes[0, 0].set_title("Sheared circle: iPRC (x-component)")
 axes[0, 0].set_xlabel(r"$\theta$")
 axes[0, 0].legend()
@@ -305,6 +307,9 @@ axes[1, 1].plot(t_mesh_vdp, dZ_shoot_fd_vdp[:, 0], "x", label="shooting finite-d
 axes[1, 1].set_title("Van der Pol: dPRC (x-component)")
 axes[1, 1].set_xlabel("t")
 axes[1, 1].legend()
+
+for ax in axes.flat:
+    ax.axhline(0.0, color="gray", linewidth=0.8, linestyle="--", zorder=0)
 
 plt.tight_layout()
 plt.show()
