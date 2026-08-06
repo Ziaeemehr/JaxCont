@@ -2,118 +2,138 @@
   {What can JaxCont compute, and where should a newcomer begin?}
   {Featured application: one model viewed as branches, cycles, phase geometry, and phase sensitivity}
 
-\begin{frame}{What you should be able to explain afterwards}
-\begin{enumerate}
-  \item What a continuation method computes-and why it is not time integration.
-  \item Why natural parameter continuation fails at a fold.
-  \item How pseudo-arclength prediction and correction pass a fold.
-  \item How the same engine follows equilibria and collocated periodic orbits.
-  \item How eigenvalues, Floquet multipliers and event tests reveal stability changes.
-  \item What automatic differentiation, JIT, \texttt{vmap}, PyTrees and custom VJPs contribute.
-  \item How branch diagrams and 2D phase planes answer complementary questions.
-  \item How to plan, run, validate, visualize and interpret a continuation study.
-\end{enumerate}
-\begin{alertblock}{Important naming clarification}
-The function contains ``scan'' in its name, but its outer loop is currently
-implemented with \texttt{jax.lax.while\_loop}, not \texttt{jax.lax.scan}.
-\end{alertblock}
-\end{frame}
-
-\begin{frame}{The story in one picture}
-\centering
-\begin{tikzpicture}[scale=.88,transform shape,node distance=8mm and 9mm,>=Latex,
- box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,minimum height=10mm,align=center},
- fast/.style={rounded corners,draw=JaxGreen,thick,fill=JaxGreen!10,minimum height=10mm,align=center}]
-\node[box] (model) {Model\\$\dot{\state}=f(\state,p)$};
-\node[box,right=of model] (residual) {Build a residual\\$F(U,p)=0$};
-\node[box,right=of residual] (pc) {Predict and\\correct a branch};
-\node[fast,right=of pc] (analyze) {Stability\\and events};
-\node[fast,right=of analyze] (batch) {Differentiate or\\batch the study};
-\draw[->,thick] (model)--(residual);
-\draw[->,thick] (residual)--(pc);
-\draw[->,thick] (pc)--(analyze);
-\draw[->,thick] (analyze)--(batch);
-\node[below=4mm of residual,align=center,font=\small] {one state for equilibria\\an entire cycle for periodic orbits};
-\end{tikzpicture}
-\vspace{10mm}
-\begin{columns}[T]
-\column{.48\textwidth}
-\begin{block}{Numerical idea}
-Turn the desired object into a root, then follow its solution curve by approximate arclength.
-\end{block}
-\column{.48\textwidth}
-\begin{block}{Computational idea}
-Express bounded solvers as array programs that JAX can differentiate, compile and batch.
-\end{block}
-\end{columns}
-\end{frame}
-
-\begin{frame}{What changed in v0.2?}
+\begin{frame}{How to read ``v0.3.1+''}
 \small
-\begin{center}
-\begin{tabular}{>{\raggedright\arraybackslash}p{.25\textwidth}
-                >{\raggedright\arraybackslash}p{.31\textwidth}
-                >{\raggedright\arraybackslash}p{.34\textwidth}}
-\toprule
-Area & v0.2 capability & Why a user cares\\
-\midrule
-Core engine & One functional API dispatching to natural or pseudo-arclength engines & One predictable workflow and result model\\
-Periodic solutions & Fixed-mesh Gauss--Legendre collocation & Continue complete limit cycles, including period and shape\\
-Stability & Equilibrium eigenvalues or periodic-orbit Floquet multipliers & Use the correct criterion for each solution type\\
-Events & \texttt{Fold}, \texttt{Hopf}, \texttt{PeriodDoubling}, \texttt{NeimarkSacker} & Detect the main codimension-one transitions on both branch types\\
-Extensibility & Linear/eigen solver protocols and reusable differentiable roots & Clear seams for larger systems and differentiable workflows\\
-Presentation & Consolidated \texttt{jaxcont.viz} tools & Consistent diagrams, annotations and eigenvalue views\\
-\bottomrule
-\end{tabular}
-\end{center}
-\end{frame}
-
-\begin{frame}{What is new on current main after v0.2?}
-\small
-\begin{columns}[T]
-\column{.49\textwidth}
-\begin{block}{A composed 2D phase plane}
-\begin{itemize}
-  \item nullcline contours;
-  \item normalized vector fields or streamlines;
-  \item every continued equilibrium at a chosen parameter;
-  \item integrated or precomputed trajectories;
-  \item one \texttt{plot\_phase\_plane} convenience layer.
-\end{itemize}
-\end{block}
-\column{.49\textwidth}
-\begin{block}{Why this changes the workflow}
-A bifurcation diagram says how solutions change with a parameter. A phase
-plane freezes one parameter and shows the local state-space geometry behind
-that branch point.
-\end{block}
-\begin{alertblock}{Release status}
-These functions are in the changelog's \emph{Unreleased} section. The installed
-package version is still 0.2.0; use a current source checkout until the next
-release.
-\end{alertblock}
+\begin{columns}[T,onlytextwidth]
+\column{.30\textwidth}
+\releasedbadge
+\column{.67\textwidth}
+Continuation, periodic orbits, Floquet events, Hopf classification,
+direct codim-2 solvers, phase planes, and the validation suite.
 \end{columns}
-\end{frame}
 
-\begin{frame}{A capability map: two kinds of branch}
-\centering
-\begin{tikzpicture}[scale=.86,transform shape,node distance=7mm and 9mm,>=Latex,
- root/.style={rounded corners,draw=JaxBlue,very thick,fill=SoftBlue,minimum width=41mm,minimum height=11mm,align=center},
- child/.style={rounded corners,draw=JaxTeal,thick,fill=JaxTeal!9,minimum width=43mm,minimum height=11mm,align=center},
- leaf/.style={rounded corners,draw=JaxOrange,thick,fill=JaxOrange!9,minimum width=40mm,minimum height=10mm,align=center}]
-\node[root] (api) {\texttt{jc.continuation(...)}\\one branch-following interface};
-\node[child,below left=of api] (eq) {Equilibrium residual\\$F(\state,p)=f(\state,p)$};
-\node[child,below right=of api] (po) {Periodic residual\\$F(U,p)=$ collocation equations};
-\node[leaf,below=of eq] (eqs) {stability: $\operatorname{Re}\lambda<0$\\events: fold, Hopf};
-\node[leaf,below=of po] (pos) {stability: $|\mu|<1$\\events: fold of cycles, PD, NS};
-\draw[->,thick] (api)--(eq);
-\draw[->,thick] (api)--(po);
-\draw[->,thick] (eq)--(eqs);
-\draw[->,thick] (po)--(pos);
-\end{tikzpicture}
 \vspace{4mm}
-\begin{block}{Unifying principle}
-The continuation engine only needs a pure residual with matching input and output shapes.
-The problem factory decides whether that residual represents one equilibrium or one complete orbit.
+\begin{columns}[T,onlytextwidth]
+\column{.30\textwidth}
+\mainbadge
+\column{.67\textwidth}
+\texttt{prc\_curve}, \texttt{branch\_prc}, \texttt{dprc\_curve},
+\texttt{plot\_prc}, and Examples 13--14.
+\end{columns}
+
+\vspace{4mm}
+\begin{columns}[T,onlytextwidth]
+\column{.30\textwidth}
+\futurebadge
+\column{.67\textwidth}
+Branch switching, two-parameter curve continuation, and general BVP or
+connecting-orbit workflows.
+\end{columns}
+
+\vfill
+\begin{alertblock}{Read the label literally}
+``+'' is a source-status marker, not a released version number.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Start from the scientific question}
+\centering
+\begin{tikzpicture}[node distance=3.2mm and 8mm,>=Latex,
+ question/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+   minimum width=66mm,minimum height=8mm,align=left,font=\small},
+ method/.style={rounded corners,draw=JaxTeal,thick,fill=JaxTeal!9,
+   minimum width=56mm,minimum height=8mm,align=center,font=\small}]
+\node[question] (q1) {Where do steady states exist?};
+\node[method,right=of q1] (m1) {equilibrium continuation};
+\node[question,below=of q1] (q2) {Where do oscillations exist?};
+\node[method,right=of q2] (m2) {periodic-orbit continuation};
+\node[question,below=of q2] (q3) {Where does stability change?};
+\node[method,right=of q3] (m3) {eigenvalues, Floquet multipliers, events};
+\node[question,below=of q3] (q4) {What kind of local organizing point is this?};
+\node[method,right=of q4] (m4) {Hopf $l_1$ and direct codim-2 refinement};
+\node[question,below=of q4] (q5) {How does an oscillator respond to perturbations?};
+\node[method,right=of q5] (m5) {iPRC and dPRC};
+\foreach \i in {1,...,5}{\draw[->,thick] (q\i)--(m\i);}
+\end{tikzpicture}
+
+\vfill
+\begin{block}{Application map}
+Choose the object or change you want to understand; that question selects the
+continuation problem, diagnostic, or sensitivity calculation.
+\end{block}
+\end{frame}
+
+\begin{frame}{Choose a route through the presentation}
+\begin{columns}[T,onlytextwidth]
+\column{.32\textwidth}
+\begin{block}{Overview route}
+\centering
+\small Chapters
+
+\Large 1, 2
+
+\normalsize selected 3, 5, 8
+
+\Large 11, 12
+
+\vspace{2mm}
+\small Intuition, representative outputs, workflow, and boundaries.
+\end{block}
+
+\column{.32\textwidth}
+\begin{block}{Methods route}
+\centering
+\small Chapters
+
+\Large 2--7, 10
+
+\vspace{8.4mm}
+\small Algorithms, stability, local refinements, and validation.
+\end{block}
+
+\column{.32\textwidth}
+\begin{block}{Complete route}
+\centering
+\small Chapters
+
+\Large 1--12
+
+\vspace{8.4mm}
+\small The full narrative, including applications and guided workflows.
+\end{block}
+\end{columns}
+
+\vfill
+\centering
+\textcolor{JaxTeal}{Every route ends with scope and limitations in Chapter 12.}
+\end{frame}
+
+\begin{frame}{What you should be able to explain afterwards}
+\footnotesize
+\begin{columns}[T,onlytextwidth]
+\column{.49\textwidth}
+\begin{enumerate}
+  \item Distinguish continuation from simulation and isolated root solving.
+  \item Explain fold failure and pseudo-arclength passage.
+  \item Build equilibrium and periodic-orbit problems with the public API.
+  \item Interpret eigenvalues, Floquet multipliers, and codim-1 events.
+  \item Explain Hopf refinement and the first Lyapunov coefficient.
+\end{enumerate}
+
+\column{.49\textwidth}
+\begin{enumerate}
+  \setcounter{enumi}{5}
+  \item State the purpose and limits of CP, BT, GH, ZH, and HH solvers.
+  \item Relate bifurcation diagrams to 2D phase planes.
+  \item Explain iPRCs and their parameter derivatives.
+  \item Run examples, inspect outputs, and choose a validation strategy.
+  \item State the boundaries: no branch switching or two-parameter continuation.
+\end{enumerate}
+\end{columns}
+
+\vfill
+\begin{block}{The through-line}
+Ask a scientific question, choose the numerical object, then validate the
+result before interpreting it.
 \end{block}
 \end{frame}
