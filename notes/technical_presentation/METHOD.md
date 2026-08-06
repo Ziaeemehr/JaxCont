@@ -1,74 +1,191 @@
 # Method used to maintain the technical presentation
 
-## Source hierarchy
+This document defines how claims, status labels, examples, figures, and
+validation language enter the JaxCont v0.3.1+ deck. It is a maintenance policy,
+not an additional copy of the slide narrative.
 
-The deck is maintained from the current implementation and user-facing
-documentation rather than from release-history notes. Sources are used in this
-order:
+## Evidence hierarchy
 
-1. The current implementation, particularly
-   `src/jaxcont/core/scan_continuation.py` and `src/jaxcont/api.py`.
-2. Tests and examples that state intended behavior.
-3. `notes/ARCHITECTURE.md`, `notes/ROADMAP.md`, and
-   `notes/BEGINNERS_GUIDE_TO_BIFURCATION_ANALYSIS.md` for motivation and
-   research workflow.
-4. Design plans and Git history only when they are needed to explain why a
-   current behavior or limitation exists.
+Use evidence in this order:
 
-## Teaching strategy
+```text
+current public API and implementation
+→ tests and runnable examples
+→ validation artifacts and independent references
+→ current docs/changelog/roadmap
+→ approved specs/plans for rationale only
+```
 
-The presentation follows a layered explanation:
+The levels have different jobs:
 
-1. Start from the familiar problem “solve `F(u,p)=0`.”
-2. Explain a branch geometrically before introducing algorithms.
-3. Show natural continuation and let its failure at a fold motivate the next
-   method.
-4. Introduce pseudo-arclength through geometry, then equations, then the
-   bordered linear system.
-5. Separate the *numerical method* from the *JAX implementation strategy*.
-   This is where the ambiguous word “scan” is resolved.
-6. Reuse the root abstraction to introduce periodic-orbit collocation: an
-   entire cycle and its period become one finite-dimensional unknown.
-7. Contrast equilibrium eigenvalue stability with Floquet-multiplier stability
-   and connect their crossings to the v0.2 event protocol.
-8. Map each JAX feature to a concrete package and user benefit.
-9. Finish with repository examples, a reproducible workflow, validation,
-   interpretation, and current scope.
+1. The current public API and implementation establish what exists, its
+   signature, returned data, transformation boundaries, and numerical scope.
+2. Tests and runnable examples establish intended behavior and provide exact
+   commands, diagnostics, and outputs that can be reproduced.
+3. Reviewed validation artifacts and independent analytic, shooting, MatCont,
+   or BifurcationKit references support accuracy or agreement claims within
+   their stated conventions and tolerances.
+4. Current user documentation, `CHANGELOG.md`, and `notes/ROADMAP.md` supply
+   public context and release history. Historical status snapshots inside a
+   long-lived document do not override current source or release metadata.
+5. Approved specifications, plans, and Git history may explain why a design
+   choice was made. They are not evidence that a planned capability exists.
 
-All branch diagrams are TikZ drawings of the scalar cubic
-`F(u,p)=p+u-u^3/3`; the same example has analytic folds at `p=+/-2/3`. Using
-one example repeatedly reduces the amount of new notation a beginner must
-hold in memory.
+When levels disagree, investigate the higher-priority evidence and state the
+discrepancy. Do not silently combine behavior from different revisions.
 
-Periodic-orbit diagrams remain schematic and editable in TikZ. Numerical claims
-come from the v0.2 collocation, Floquet, event and example implementations,
-including the analytic period-doubling and Neimark–Sacker crossings in Examples
-08 and 09.
+## Version and feature-status rule
 
-## Terminology decision: “scan”
+“JaxCont v0.3.1+” is the deck label. It means the published v0.3.1 release plus
+selected current-main features intended for v0.4; it does not mean that v0.4
+has been released.
 
-The source function is named `pseudo_arclength_scan`, but its outer iteration
-uses `jax.lax.while_loop`. The presentation uses “scan engine” as the project's
-name for a whole-sweep, fixed-buffer functional engine. It explicitly does not
-claim that the implementation calls `jax.lax.scan`.
+Before finalizing the deck, check `src/jaxcont/_version.py` and `CHANGELOG.md`,
+then classify each feature with exactly one convention:
 
-This distinction is central because three different ideas are easy to mix up:
+- **Available in v0.3.1** — present in the published v0.3.1 release;
+- **Current main — planned for v0.4** — implemented and evidenced on current
+  `main`, but not part of a published v0.4 release;
+- **Future work — not implemented** — a boundary or direction, not an
+  available workflow.
 
-- pseudo-arclength is the numerical continuation method;
-- predictor-corrector is the repeated algorithmic pattern;
-- `lax.while_loop` plus JIT/fixed buffers is the JAX execution strategy.
+At the current revision, PRC/dPRC (`prc_curve`, `branch_prc`, `dprc_curve`,
+`plot_prc`, and Examples 13–14) remains current-main/planned-for-v0.4. Hopf
+classification, direct CP/BT/GH/ZH/HH point refinement, phase planes,
+periodic-orbit continuation, and the released validation suite are v0.3.1
+capabilities. If a release changes, update the global label, badges,
+documentation, and speaker notes together; do not promote status from a plan
+or anticipated release date.
 
-## Performance claims
+Always preserve the explicit future boundary: no branch switching,
+two-parameter bifurcation-curve continuation, automatic cycle discovery from a
+Hopf point, general BVP continuation, or connecting-/homoclinic-/heteroclinic-
+orbit continuation is claimed.
 
-The deck explains the reusable architectural ideas—whole-loop compilation,
-fixed shapes, and batching—without retaining historical old-versus-new timing
-comparisons. Any future benchmark must report cold and warm timing, hardware,
-precision, model size, branch settings, and batch size.
+## Source ownership
 
-## Verification performed
+The source is intentionally modular:
 
-- The LaTeX source is compiled with `latexmk -pdf`.
-- The PDF page count and build log are checked after compilation.
-- Claims about the public API and numerical behavior are checked against the
-  current implementation, tests, and examples.
-- Research advice is kept distinct from repository software tests.
+- `jaxcont_technical_presentation.tex` owns document metadata, title, chapter
+  order, and the final document boundary.
+- `presentation_setup.tex` owns packages, Beamer/TikZ/listing conventions,
+  shared colors, status badges, and chapter-divider components.
+- `chapters/01_orientation.tex` through
+  `chapters/12_scope_and_appendix.tex` own section declarations and frames.
+- `assets/` owns reviewed deck-specific snapshots; `examples/images/` may be
+  referenced directly for a reusable gallery figure.
+- `README.md`, this file, and `SPEAKER_NOTES.md` own build/navigation,
+  maintenance policy, and delivery guidance respectively.
+
+The final public artifact remains
+`notes/technical_presentation/jaxcont_technical_presentation.pdf`.
+
+## Chapter construction pattern
+
+Feature chapters use this sequence:
+
+```text
+scientific question
+→ representative visual
+→ mathematical or numerical method
+→ minimum useful public API
+→ concrete output
+→ interpretation
+→ limitation or common misuse
+```
+
+Not every chapter needs a separate frame for every arrow, but the order should
+remain visible. Begin with what the audience is trying to learn and a picture
+of the object or change. Introduce equations after the geometry or scientific
+motivation. Show only the API needed to perform the task. End by teaching how
+to read the result and what it does not establish.
+
+Each normal frame has one primary teaching message. Put dense derivations,
+carry fields, traced/eager reassembly, and similar maintainer detail in the
+Chapter 12 appendix. Use descriptive frame/chapter names for cross-references;
+page numbers are revision-specific navigation aids.
+
+## Terminology and interpretation conventions
+
+Keep these distinctions explicit throughout the deck:
+
+- continuation follows connected roots; simulation follows a trajectory in
+  physical time; a root solve finds one isolated solution;
+- pseudo-arclength is the numerical method, predictor–corrector is the repeated
+  pattern, and the “scan engine” is JaxCont’s bounded whole-branch functional
+  implementation;
+- `pseudo_arclength_scan` and `natural_scan` use `jax.lax.while_loop`; “scan”
+  does not claim that the outer sweep calls `jax.lax.scan`;
+- equilibrium stability is determined by eigenvalue real parts, whereas cycle
+  stability is determined by nontrivial Floquet-multiplier magnitudes after
+  removing exactly one multiplier nearest +1;
+- detecting an event candidate is not the same as a converged local
+  refinement;
+- Hopf `l1` is a local, scale- and tolerance-aware normal-form quantity, not a
+  global periodic-branch prediction;
+- direct codimension-two solvers refine one supplied two-parameter guess; they
+  do not continue fold or Hopf curves;
+- JaxCont’s dPRC is `d(PRC)/dp` after reconverging the periodic orbit, not the
+  time derivative exported under the dPRC name by MatCont;
+- software tests support implementation behavior, not model truth, causality,
+  or the scientific interpretation of a computed branch.
+
+## Figure and demo provenance
+
+Use TikZ for editable teaching geometry and repository outputs for application
+claims. A committed snapshot must be regenerated from the exact command in
+`assets/README.md`, visually reviewed, copied without hand editing, and recorded
+with source path, source revision/date, intended chapter, and SHA-256.
+
+When an example changes, rerun it before editing the slide. Check its printed
+diagnostics and the generated image; a current filename does not prove current
+content. If a slide prints a numerical value, copy it from a fresh run or a
+reviewed validation artifact and identify whether it is a diagnostic, an
+analytic answer, or a result judged against a declared tolerance.
+
+For a live demo, keep a reviewed image and captured expected output available.
+Commands that open interactive windows, simulate a long transient, compile a
+new JAX shape, or perform independent shooting are better demonstrated from
+pre-generated output unless they have been rehearsed on the presentation
+machine.
+
+## Validation standard
+
+Present validation as a ladder:
+
+1. inspect convergence, re-evaluated residuals, finite values, validity masks,
+   endpoint coverage, and configured stop conditions;
+2. repeat with changed mesh, tolerance, step bounds, and direction;
+3. compare with an analytic oracle where one exists;
+4. compare with an independent algorithm;
+5. compare with an independent package or reviewed reference artifact.
+
+Higher rungs supplement rather than replace lower ones. Before numerical
+comparison, align state ordering, parameter units, branch orientation,
+interpolation grid, phase origin, phase units, eigenvalue/multiplier matching,
+and trivial-multiplier removal. Document the alignment rule before applying it.
+
+Do not turn a visual overlap into a pass claim. A pass/fail statement requires
+a declared metric and tolerance. Preserve partial results and known failures;
+do not relax a tolerance to make a comparison pass. For dPRC, use analytic or
+reconverged finite-difference/shooting evidence rather than a misleading
+MatCont time-derivative comparison.
+
+## Maintenance verification
+
+For every substantive change:
+
+1. check displayed imports, names, signatures, return fields, and status
+   against current source;
+2. run every example whose output or numerical claim changed;
+3. update snapshot provenance and hashes when an image changed;
+4. build the complete deck and scan the log for errors, missing files,
+   undefined references, and overfull frames;
+5. extract PDF text to confirm chapter/status wording;
+6. render and inspect the affected pages at presentation scale;
+7. run `make verify` before final handoff;
+8. synchronize `README.md`, this method, and `SPEAKER_NOTES.md` whenever
+   structure, status, routes, commands, or pagination changes.
+
+Record commit, precision, numerical settings, dependency versions, and target
+hardware when producing evidence for external publication.
