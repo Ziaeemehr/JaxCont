@@ -226,8 +226,9 @@ man_pages = [
 
 # sphinx.ext.githubpages writes a `.nojekyll` marker for the HTML/GitHub
 # Pages target; the EPUB packager doesn't recognize its mimetype and warns
-# (fatal under fail_on_warning) unless it's excluded here.
-epub_exclude_files = ['.nojekyll']
+# (fatal under fail_on_warning) unless it's excluded here. Same story for the
+# technical presentation PDF copied into _static/ below.
+epub_exclude_files = ['.nojekyll', '_static/jaxcont_technical_presentation.pdf']
 
 # -- Options for Texinfo output ----------------------------------------------
 
