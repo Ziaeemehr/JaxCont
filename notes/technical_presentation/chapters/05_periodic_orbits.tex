@@ -66,13 +66,13 @@ Split normalized time $\tau\in[0,1]$ into \texttt{ntst} intervals and place
 \end{frame}
 
 \begin{frame}{Why the phase condition is necessary}
-If $\state(\tau)$ is periodic, then $\state(\tau+\phi)$ traces the same
-geometric orbit for every phase shift $\phi$.
+For normalized phase $\tau,\phi\in[0,1)$, every shift
+$\state((\tau+\phi)\bmod 1)$ traces the same geometric orbit.
 \begin{center}
 \begin{tikzpicture}[x=1.1cm,y=1.1cm,>=Latex]
   \draw[JaxBlue,very thick] (0,0) ellipse (2.3 and 1.25);
   \fill[JaxOrange] (2.3,0) circle (3pt) node[right] {$\phi=0$};
-  \fill[JaxGreen!80!black] (0,1.25) circle (3pt) node[above] {$\phi=\pi/2$};
+  \fill[JaxGreen!80!black] (0,1.25) circle (3pt) node[above] {$\phi=1/4$};
   \draw[->,thick,JaxOrange] (1.9,.75)
       arc[start angle=35,end angle=75,x radius=2.3,y radius=1.25];
   \node[align=center] at (0,-1.85) {same closed curve, different starting point};
@@ -206,8 +206,9 @@ dispatches \texttt{compute\_stability=True} by \texttt{problem.kind}.
   \node[below=2mm] at (-1.25,0) {$-1$};
 \end{tikzpicture}
 \begin{block}{Period doubling (PD)}
-A real nontrivial multiplier crosses $-1$; the original cycle loses stability
-to a cycle with twice the period.
+{\small A nontrivial real multiplier crossing $-1$ is the period-doubling test
+condition; under standard nondegeneracy conditions, a period-2 branch
+bifurcates.}
 \end{block}
 \column{.48\textwidth}
 \centering
@@ -221,8 +222,9 @@ to a cycle with twice the period.
   \fill[JaxTeal] (.88,-.88) circle (3pt);
 \end{tikzpicture}
 \begin{block}{Neimark--Sacker (NS)}
-A complex-conjugate pair crosses $|\mu|=1$ away from the real axis, indicating
-a torus bifurcation.
+{\small A complex-conjugate pair crossing $|\mu|=1$ away from the real axis is the
+Neimark--Sacker test condition; the detector does not construct an invariant
+torus.}
 \end{block}
 \end{columns}
 \end{frame}
