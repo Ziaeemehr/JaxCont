@@ -147,14 +147,24 @@ html_theme_options = {
     'use_repository_button': True,
     'show_toc_level': 2,
     'navigation_with_keys': True,
+    # Keep the project name next to html_logo below -- pydata-sphinx-theme
+    # (which sphinx-book-theme is built on) only shows the logo image on its
+    # own once html_logo is set, dropping the title text unless it's
+    # re-supplied here.
+    'logo': {
+        'text': project,
+    },
 }
 html_context = {
     'default_mode': 'light',
 }
 
-# The name of an image file (relative to this directory) to place at the top
-# of the sidebar.
-# html_logo = '_static/jaxcont_logo.png'
+# The name of an image file to place at the top of the sidebar, above the
+# project title. Points at the same source-of-truth SVG the README embeds
+# (README.md's <img src="docs/images/logo/logo.svg">) rather than a
+# duplicated copy under _static/ -- Sphinx copies html_logo into the built
+# tree's _static/ itself, so it need not already live in html_static_path.
+html_logo = '../images/logo/logo.svg'
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
