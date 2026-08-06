@@ -1,7 +1,9 @@
 # Technical Presentation Update — Design Specification
 
-**Date:** 2026-08-06  
-**Status:** Approved in conversation; awaiting review of the written specification  
+**Date:** 2026-08-06
+
+**Status:** Approved for implementation planning
+
 **Deliverable:** One beginner-friendly “JaxCont v0.3.1+” technical presentation PDF assembled from modular Beamer chapters
 
 ## Purpose
@@ -45,7 +47,7 @@ The new or substantially revised material includes:
 
 The deck-wide version label is **“JaxCont v0.3.1+”**. The plus sign means “the published v0.3.1 release plus current-main features intended for v0.4”; it must not imply that v0.4 has already been released. A short legend near the beginning distinguishes three statuses:
 
-- **Released in v0.3.1**;
+- **Available in v0.3.1**;
 - **Current main — planned for v0.4**;
 - **Future work — not implemented**.
 
