@@ -86,7 +86,12 @@ def _seed(f, u, p, args, n):
     fallback here would silently produce garbage exactly as before, so this
     is a documented caller contract, not a runtime-checked one."""
     jac = jacfwd(f, argnums=0)(u, p, args)
-    evals, evecs = jnp.linalg.eig(jac)
+    # Stop gradient on the Jacobian before eigendecomposition to prevent
+    # JAX from trying to differentiate through eig, which is not supported
+    # for non-symmetric matrices. The seed is an undifferentiated fixed
+    # reference, not part of the differentiation path.
+    jac_stopped = lax.stop_gradient(jac)
+    evals, evecs = jnp.linalg.eig(jac_stopped)
 
     complex_mask = jnp.abs(jnp.imag(evals)) > 1e-8
     has_complex = jnp.any(complex_mask)
