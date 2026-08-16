@@ -117,9 +117,9 @@ sol2  = jc.continuation(prob2, p_span=(1.0, 4.0),
 - `p_span[0]` must equal `p_guess[free]`. This is not redundant: `continuation()`
   treats `p_span[0]` as the *literal* starting parameter value rather than
   reading it off the problem — a pre-existing `api.py` design point documented
-  during the engine consolidation, and a known footgun. The factories validate
-  this and raise on mismatch rather than silently continuing from a point that
-  is not on the refined curve.
+  during the engine consolidation, and a known footgun. `continuation()` validates
+  this and raises on mismatch (the factories never see `p_span`) rather than silently
+  continuing from a point that is not on the refined curve.
 - Both factories are exported top level (`jc.fold_curve_problem`,
   `jc.hopf_curve_problem`), as are all five events of §4 (`jc.Cusp`,
   `jc.BogdanovTakens`, `jc.ZeroHopf`, `jc.GeneralizedHopf`, `jc.DoubleHopf`),

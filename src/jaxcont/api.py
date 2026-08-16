@@ -84,7 +84,9 @@ class BifProblem:
     u0: Array
     p0: Array
     args: PyTree = None
-    kind: Literal["equilibrium", "periodic", "bvp"] = "equilibrium"
+    kind: Literal[
+        "equilibrium", "periodic", "bvp", "fold_curve", "hopf_curve"
+    ] = "equilibrium"
     state_names: Optional[Tuple[str, ...]] = None
     param_name: Optional[str] = None
 
@@ -347,6 +349,26 @@ def _run_scan(
     p_start, p_end = p_span
     u0 = jnp.asarray(problem.u0)
     dtype = u0.dtype
+
+    if problem.kind in ("fold_curve", "hopf_curve"):
+        if settings.compute_stability:
+            raise ValueError(
+                f"compute_stability=True is not meaningful for "
+                f"kind={problem.kind!r}: the branch state is an extended-"
+                f"system vector, so eigendecomposing its Jacobian does not "
+                f"give the original system's spectrum. Pass "
+                f"ContinuationPar(compute_stability=False); the codim-2 "
+                f"events in bifurcations/codim2_events.py carry their own "
+                f"raw_f and compute the original spectrum themselves."
+            )
+        if not jnp.allclose(jnp.asarray(p_start, dtype), problem.p0):
+            raise ValueError(
+                f"p_span[0]={float(p_start)} must equal the curve's starting "
+                f"parameter p0={float(problem.p0)}. continuation() treats "
+                f"p_span[0] as the literal starting value rather than reading "
+                f"it off the problem, so a mismatch would start the run at a "
+                f"point that is not on the refined curve."
+            )
 
     res = scan_fn(
         rhs2,
