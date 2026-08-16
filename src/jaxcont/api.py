@@ -361,14 +361,22 @@ def _run_scan(
                 f"events in bifurcations/codim2_events.py carry their own "
                 f"raw_f and compute the original spectrum themselves."
             )
-        if not jnp.allclose(jnp.asarray(p_start, dtype), problem.p0):
-            raise ValueError(
-                f"p_span[0]={float(p_start)} must equal the curve's starting "
-                f"parameter p0={float(problem.p0)}. continuation() treats "
-                f"p_span[0] as the literal starting value rather than reading "
-                f"it off the problem, so a mismatch would start the run at a "
-                f"point that is not on the refined curve."
-            )
+        try:
+            # Check p_span[0] == problem.p0 only in eager mode; traced calls
+            # (jax.vmap/jax.jit) have p_start as a tracer and would raise
+            # TracerBoolConversionError on the jnp.allclose result.
+            if not jnp.allclose(jnp.asarray(p_start, dtype), problem.p0):
+                raise ValueError(
+                    f"p_span[0]={float(p_start)} must equal the curve's starting "
+                    f"parameter p0={float(problem.p0)}. continuation() treats "
+                    f"p_span[0] as the literal starting value rather than reading "
+                    f"it off the problem, so a mismatch would start the run at a "
+                    f"point that is not on the refined curve."
+                )
+        except jax.errors.ConcretizationTypeError:
+            # Traced call: p_start cannot be concretized to test equality, so
+            # the check is deferred to eager execution. Skip it here.
+            pass
 
     res = scan_fn(
         rhs2,

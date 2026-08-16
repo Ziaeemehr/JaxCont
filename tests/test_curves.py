@@ -1,5 +1,6 @@
 """Two-parameter curve factories (bifurcations/curves.py)."""
 
+import jax
 import jax.numpy as jnp
 import pytest
 
@@ -84,3 +85,60 @@ def test_hopf_curve_traces_the_exact_parabola():
         _, p0, _, _, omega = unpack_hopf_curve(sol.branch.states[i], n=2)
         assert abs(float(p0) + p1**2 - 2.0) < 1e-3
         assert abs(float(omega) - 1.0) < 1e-3
+
+
+def test_fold_curve_continuation_under_jit():
+    """Regression test: fold_curve continuation wrapped in jax.jit should not
+    raise TracerBoolConversionError from the p_span[0] == problem.p0 guard.
+    Exercises the traced code path that was broken by the original guard."""
+    @jax.jit
+    def run_continuation(u_guess, p_guess, p_span_start, p_span_end):
+        prob = fold_curve_problem(
+            _cusp_shifted,
+            u_guess,
+            p_guess,
+            free=1,
+        )
+        sol = jc.continuation(
+            prob,
+            p_span=(p_span_start, p_span_end),
+            settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
+        )
+        return sol.branch.n_valid
+
+    # Call with concrete values to ensure p_span is traced
+    n_valid = run_continuation(
+        jnp.array([1.7]),
+        jnp.array([-1.7, 4.2]),
+        4.2,
+        5.2,
+    )
+    assert n_valid > 0  # Continuation should produce at least one point
+
+
+def test_hopf_curve_continuation_under_jit():
+    """Regression test: hopf_curve continuation wrapped in jax.jit should not
+    raise TracerBoolConversionError from the p_span[0] == problem.p0 guard."""
+    @jax.jit
+    def run_continuation(u_guess, p_guess, p_span_start, p_span_end):
+        prob = hopf_curve_problem(
+            _hopf_parabola,
+            u_guess,
+            p_guess,
+            free=1,
+        )
+        sol = jc.continuation(
+            prob,
+            p_span=(p_span_start, p_span_end),
+            settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
+        )
+        return sol.branch.n_valid
+
+    # Call with concrete values to ensure p_span is traced
+    n_valid = run_continuation(
+        jnp.array([0.5, -0.3]),
+        jnp.array([2.0, 0.0]),
+        0.0,
+        0.5,
+    )
+    assert n_valid > 0  # Continuation should produce at least one point
