@@ -24,11 +24,13 @@ continued away from this degenerate point via periodic-orbit collocation.
 # %%
 # Setup
 
+import os
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-
 import jaxcont as jc
 from jaxcont.viz import EigenvalueReference, plot_eigenvalues
+
+os.makedirs("images", exist_ok=True)
 
 # %%
 # Define the system
@@ -138,5 +140,5 @@ fig.suptitle(
     fontweight="bold",
 )
 fig.tight_layout(rect=(0, 0, 1, 0.94))
-plt.savefig("van_der_pol.png", dpi=150, bbox_inches="tight")
+plt.savefig("images/van_der_pol.png", dpi=150, bbox_inches="tight")
 plt.show()

@@ -9,14 +9,15 @@ whole curve batched under ``jax.vmap``, and the exact gradient of a
 codim-2 location under ``jax.grad``.
 """
 
+import os
 import jax
 import jax.numpy as jnp
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
 import jaxcont as jc
 
+os.makedirs("images", exist_ok=True)
 
 def bt_system(u, p, args):
     """x' = y ; y' = b1 + b2*x + x^2 + x*y, shifted so the BT sits at
@@ -48,7 +49,7 @@ for hit in sol.events:
 
 ax = jc.plot_two_parameter_diagram([(sol, "fold")], free=1)
 ax.set_title("Fold curve with its Bogdanov-Takens point")
-plt.savefig("example_15_two_parameter_diagram.png", dpi=140,
+plt.savefig("images/example_15_two_parameter_diagram.png", dpi=140,
             bbox_inches="tight")
 
 # %%
