@@ -27,7 +27,7 @@ determinism/jittability; make ``max_steps`` generous.
 from __future__ import annotations
 
 from functools import partial
-from typing import Any, Callable, NamedTuple, Tuple
+from typing import Any, Callable, NamedTuple
 
 import jax
 import jax.numpy as jnp

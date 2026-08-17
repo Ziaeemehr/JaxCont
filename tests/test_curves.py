@@ -211,7 +211,7 @@ def test_lorenz84_bt_matches_bifurcationkit():
     BifurcationKit.jl v0.5.2 finds independently (examples/BifurcationKit/
     05_codim2.jl). tests/test_codim2.py asserts the direct SOLVER matches
     these values; this asserts the DETECTOR finds them without a guess."""
-    from tests.test_codim2 import _bk_model, BK_BT_U, BK_BT_P
+    from tests.test_codim2 import BK_BT_P, BK_BT_U, _bk_model
 
     # Seed the fold curve at a fold point away from the BT, then continue
     # toward it. Exact seed values come from 05_codim2.jl's printed output.

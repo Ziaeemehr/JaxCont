@@ -16,7 +16,6 @@ from jaxcont.problems.periodic import periodic_orbit_problem
 from ..compare import ValidationMismatch, match_spectrum
 from . import CaseResult
 
-
 _TORBPC_EVENT_PARAMETERS = {
     "LPC": -0.5844928424,
     "NS": -0.5957504315,

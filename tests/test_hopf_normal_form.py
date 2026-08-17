@@ -9,7 +9,10 @@ import jax
 import jax.numpy as jnp
 
 from jaxcont.bifurcations.hopf_normal_form import (
-    hopf_point, hopf_parameter, lyapunov_coefficient, _seed,
+    _seed,
+    hopf_parameter,
+    hopf_point,
+    lyapunov_coefficient,
 )
 
 
@@ -66,7 +69,7 @@ def test_hopf_point_end_to_end_ignores_slow_real_mode():
     # system must converge to the same Hopf point as the pure 2-D textbook
     # example (the z-mode is decoupled and irrelevant to the Hopf point),
     # not diverge/NaN from a bad real-eigenvalue seed.
-    u, p, q1, q2, omega0 = hopf_point(
+    u, p, _q1, _q2, omega0 = hopf_point(
         _hopf_plus_slow_real_mode, jnp.array([0.0, 0.0, 0.0]), 0.05,
         tol=1e-10, max_iter=50,
     )

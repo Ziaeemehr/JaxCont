@@ -8,7 +8,6 @@ docs/superpowers/specs/2026-07-24-periodic-orbit-collocation-design.md.
 
 import jax.numpy as jnp
 import numpy as np
-import pytest
 
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
@@ -108,7 +107,7 @@ def test_periodic_orbit_problem_args_carries_raw_f_and_mesh():
     prob = periodic_orbit_problem(_rhs, u_trajectory, t_trajectory, 5.5, 1.0, mesh)
 
     assert len(prob.args) == 4
-    u_ref_coll, uref_prime_coll, raw_f, returned_mesh = prob.args
+    _u_ref_coll, _uref_prime_coll, raw_f, returned_mesh = prob.args
     assert raw_f is _rhs
     assert returned_mesh is mesh
     # Residual must still evaluate correctly with the extended args (this

@@ -6,10 +6,10 @@ import argparse
 import importlib
 import inspect
 import os
-from pathlib import Path
 import subprocess
 import sys
-from typing import Sequence
+from collections.abc import Sequence
+from pathlib import Path
 
 from .artifacts import (
     compare_case_result_to_reference,
@@ -20,7 +20,6 @@ from .artifacts import (
     verify_case_references,
 )
 from .registry import load_registry, select_cases
-
 
 _DEFAULT_MATLAB_BIN = "/home/ziaee/prog/Matlab/R2020a/bin/matlab"
 _DEFAULT_MATCONT_ROOT = "/home/ziaee/prog/MatCont/MatCont7p6"

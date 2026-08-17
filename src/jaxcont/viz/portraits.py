@@ -3,8 +3,9 @@ Phase-portrait and eigenvalue-trajectory plots for jaxcont.viz.
 """
 
 import warnings
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Optional, Union
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -31,8 +32,8 @@ class EigenvalueReference:
 
 def plot_branch_states(
     solution: ContinuationSolution,
-    state_indices: Tuple[int, int] = (0, 1),
-    param_indices: Optional[List[int]] = None,
+    state_indices: tuple[int, int] = (0, 1),
+    param_indices: Optional[list[int]] = None,
     ax: Optional[plt.Axes] = None,
     **kwargs,
 ) -> plt.Figure:
@@ -114,8 +115,8 @@ def plot_eigenvalues(
     references: Optional[Sequence[Union[EigenvalueReference, Mapping[str, Any]]]] = None,
     param_name: Optional[str] = None,
     labels: Optional[Sequence[str]] = None,
-    figsize: Tuple[float, float] = (12.0, 5.0),
-    titles: Tuple[Optional[str], Optional[str]] = (
+    figsize: tuple[float, float] = (12.0, 5.0),
+    titles: tuple[Optional[str], Optional[str]] = (
         "Real Part of Eigenvalues",
         "Imaginary Part of Eigenvalues",
     ),
@@ -375,7 +376,7 @@ def plot_prc(
     phase: Optional[Any] = None,
     labels: Optional[Sequence[str]] = None,
     title: str = "Phase Response Curve",
-    figsize: Tuple[float, float] = (8.0, 5.0),
+    figsize: tuple[float, float] = (8.0, 5.0),
     **kwargs,
 ) -> plt.Figure:
     """Plot an iPRC (or dPRC) curve: one line per state component against

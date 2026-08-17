@@ -7,7 +7,6 @@ See docs/superpowers/specs/2026-07-24-periodic-orbit-collocation-design.md.
 
 import jax.numpy as jnp
 import numpy as np
-import pytest
 
 import jaxcont as jc
 from jaxcont.core.collocation import Collocation

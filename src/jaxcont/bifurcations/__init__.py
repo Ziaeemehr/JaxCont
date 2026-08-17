@@ -1,17 +1,29 @@
 """Bifurcation detection and analysis."""
 
-from jaxcont.bifurcations.events import BranchPoint, Event, Fold, Hopf, EventHit, detect_events
-from jaxcont.bifurcations.taxonomy import LABELS, BIFURCATION_TYPES, BifurcationLabel, describe
+from jaxcont.bifurcations.events import (
+    BranchPoint,
+    Event,
+    EventHit,
+    Fold,
+    Hopf,
+    detect_events,
+)
+from jaxcont.bifurcations.taxonomy import (
+    BIFURCATION_TYPES,
+    LABELS,
+    BifurcationLabel,
+    describe,
+)
 
 __all__ = [
+    "BIFURCATION_TYPES",
+    "LABELS",
+    "BifurcationLabel",
     "BranchPoint",
     "Event",
+    "EventHit",
     "Fold",
     "Hopf",
-    "EventHit",
-    "detect_events",
-    "LABELS",
-    "BIFURCATION_TYPES",
-    "BifurcationLabel",
     "describe",
+    "detect_events",
 ]

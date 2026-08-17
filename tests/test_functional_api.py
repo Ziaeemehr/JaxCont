@@ -10,8 +10,7 @@ import jax.numpy as jnp
 import pytest
 
 import jaxcont as jc
-from jaxcont.core.scan_continuation import pseudo_arclength_scan, natural_scan
-
+from jaxcont.core.scan_continuation import natural_scan, pseudo_arclength_scan
 
 # --- test systems ---------------------------------------------------------
 

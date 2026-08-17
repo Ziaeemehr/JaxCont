@@ -6,11 +6,12 @@ This script shows the performance difference between JIT and non-JIT versions
 of key operations used in continuation.
 """
 
+import time
+
 import jax
 import jax.numpy as jnp
-from jax import jit, jacfwd
-import time
 import numpy as np
+from jax import jacfwd, jit
 
 
 def benchmark(func, *args, n_runs=100, warmup=3):

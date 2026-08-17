@@ -6,8 +6,8 @@ See jaxcont/bifurcations/taxonomy.py for the table and rationale.
 
 import pytest
 
-from jaxcont.bifurcations.taxonomy import LABELS, BIFURCATION_TYPES, describe
 from jaxcont import Fold, Hopf
+from jaxcont.bifurcations.taxonomy import BIFURCATION_TYPES, LABELS, describe
 
 
 def test_table_has_no_duplicate_labels():

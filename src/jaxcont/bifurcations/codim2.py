@@ -27,7 +27,7 @@ See docs/superpowers/specs/2026-08-05-codim2-direct-solvers-design.md.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Tuple
+from typing import Any, Callable
 
 import jax.numpy as jnp
 from jax import Array, jacfwd, lax
@@ -48,7 +48,7 @@ def _solve_and_check(
     *,
     tol: float,
     max_iter: int,
-) -> Tuple[Array, Array]:
+) -> tuple[Array, Array]:
     """
     Solve ``G(x, args) = 0`` and report whether the result is trustworthy.
 
@@ -69,7 +69,7 @@ def _solve_and_check(
 
 def _normalize_omega(
     q1: Array, q2: Array, omega: Array, seed1: Array, seed2: Array
-) -> Tuple[Array, Array, Array]:
+) -> tuple[Array, Array, Array]:
     """
     Pin the critical frequency to ``omega >= 0``, exactly preserving every
     row of the Hopf block -- the eigenvector relations, the unit-norm row,
@@ -138,7 +138,7 @@ def _normalize_omega(
 # CP -- cusp
 # --------------------------------------------------------------------------
 
-def _cp_unpack(x: Array, n: int) -> Tuple[Array, Array, Array]:
+def _cp_unpack(x: Array, n: int) -> tuple[Array, Array, Array]:
     return x[:n], x[n:n + 2], x[n + 2:]
 
 
@@ -165,7 +165,7 @@ def cusp_point(
     *,
     tol: float = 1e-6,
     max_iter: int = 50,
-) -> Tuple[Array, Array, Array, Array]:
+) -> tuple[Array, Array, Array, Array]:
     """
     Locate a cusp (``CP``) near ``(u_guess, p_guess)``, differentiable in
     ``args``. Kuznetsov, 3rd ed., Sec. 8.2.
@@ -217,7 +217,7 @@ def cusp_parameters(
 # BT -- Bogdanov-Takens
 # --------------------------------------------------------------------------
 
-def _bt_unpack(x: Array, n: int) -> Tuple[Array, Array, Array, Array]:
+def _bt_unpack(x: Array, n: int) -> tuple[Array, Array, Array, Array]:
     return x[:n], x[n:n + 2], x[n + 2:2 * n + 2], x[2 * n + 2:]
 
 
@@ -251,7 +251,7 @@ def bogdanov_takens_point(
     *,
     tol: float = 1e-6,
     max_iter: int = 50,
-) -> Tuple[Array, Array, Array, Array, Array]:
+) -> tuple[Array, Array, Array, Array, Array]:
     """
     Locate a Bogdanov-Takens point (``BT``) near ``(u_guess, p_guess)``,
     differentiable in ``args``. Kuznetsov, 3rd ed., Sec. 8.4.
@@ -363,7 +363,7 @@ def generalized_hopf_point(
     *,
     tol: float = 1e-6,
     max_iter: int = 50,
-) -> Tuple[Array, Array, Array, Array, Array, Array]:
+) -> tuple[Array, Array, Array, Array, Array, Array]:
     """
     Locate a generalized Hopf / Bautin point (``GH``) near
     ``(u_guess, p_guess)``, differentiable in ``args``. Kuznetsov, 3rd ed.,
@@ -463,7 +463,7 @@ def zero_hopf_point(
     *,
     tol: float = 1e-6,
     max_iter: int = 50,
-) -> Tuple[Array, Array, Array, Array, Array, Array, Array]:
+) -> tuple[Array, Array, Array, Array, Array, Array, Array]:
     """
     Locate a zero-Hopf point (``ZH``) near ``(u_guess, p_guess)``,
     differentiable in ``args``. Kuznetsov, 3rd ed., Sec. 8.5.
@@ -556,7 +556,7 @@ def double_hopf_point(
     tol: float = 1e-6,
     max_iter: int = 50,
     separation_tolerance: float = 1e-3,
-) -> Tuple[Array, ...]:
+) -> tuple[Array, ...]:
     """
     Locate a double-Hopf point (``HH``) near ``(u_guess, p_guess)``,
     differentiable in ``args``. Kuznetsov, 3rd ed., Sec. 8.6.

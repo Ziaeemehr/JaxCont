@@ -12,12 +12,17 @@ import jax
 import jax.numpy as jnp
 
 from jaxcont.bifurcations.codim2 import (
-    cusp_point, cusp_parameters,
-    bogdanov_takens_point, bogdanov_takens_parameters,
-    generalized_hopf_point, generalized_hopf_parameters,
-    zero_hopf_point, zero_hopf_parameters,
-    double_hopf_point, double_hopf_parameters,
     _normalize_omega,
+    bogdanov_takens_parameters,
+    bogdanov_takens_point,
+    cusp_parameters,
+    cusp_point,
+    double_hopf_parameters,
+    double_hopf_point,
+    generalized_hopf_parameters,
+    generalized_hopf_point,
+    zero_hopf_parameters,
+    zero_hopf_point,
 )
 from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
 
@@ -47,7 +52,7 @@ def test_cusp_point_does_not_merely_return_its_guess():
     # Guards against a trivial implementation that echoes the seed back.
     guess_u = jnp.array([2.2])
     guess_p = jnp.array([0.8, -3.7])
-    u, p, _, ok = cusp_point(_cusp_shifted, guess_u, guess_p)
+    _u, p, _, ok = cusp_point(_cusp_shifted, guess_u, guess_p)
     assert bool(ok)
     assert float(jnp.max(jnp.abs(p - guess_p))) > 1e-2
 
@@ -119,7 +124,7 @@ def _bt_shifted(u, p, args):
 
 
 def test_bogdanov_takens_point_recovers_exact_shifted_bt():
-    u, p, v0, v1, ok = bogdanov_takens_point(
+    u, p, v0, _v1, ok = bogdanov_takens_point(
         _bt_shifted, jnp.array([5.3, 1.7]), jnp.array([2.6, -0.8]),
     )
     assert bool(ok)
@@ -174,7 +179,7 @@ def _gh_shifted(u, p, args):
 
 
 def test_generalized_hopf_point_recovers_exact_shifted_gh():
-    u, p, q1, q2, omega, ok = generalized_hopf_point(
+    u, p, _q1, _q2, omega, ok = generalized_hopf_point(
         _gh_shifted, jnp.array([0.02, -0.03]), jnp.array([2.05, -2.90]),
     )
     assert bool(ok)
@@ -263,7 +268,7 @@ def _zh_shifted(u, p, args):
 
 
 def test_zero_hopf_point_recovers_exact_shifted_zh():
-    u, p, v, q1, q2, omega, ok = zero_hopf_point(
+    u, p, _v, _q1, _q2, omega, ok = zero_hopf_point(
         _zh_shifted, jnp.array([1.05, 0.03, -0.02]), jnp.array([4.04, -1.94]),
     )
     assert bool(ok)
@@ -357,7 +362,7 @@ def test_double_hopf_reports_not_converged_when_both_pairs_collapse():
     # extended system structurally singular. During planning this produced
     # nan rather than a plausible wrong answer; the separation check turns
     # that into an explicit converged=False instead of a bare nan.
-    _, _, _, _, oa, _, _, ob, ok = double_hopf_point(
+    _, _, _, _, _oa, _, _, _ob, ok = double_hopf_point(
         _hh_shifted,
         jnp.array([0.03, -0.02, 0.04, 0.01]),
         jnp.array([5.05, -5.93]),
@@ -404,7 +409,7 @@ def test_double_hopf_point_recovers_a_non_two_to_one_frequency_ratio():
             b2 * x2 - 3.0 * y2, 3.0 * x2 + b2 * y2,
         ])
 
-    u, p, q1a, q2a, oa, q1b, q2b, ob, ok = double_hopf_point(
+    _u, p, _q1a, _q2a, oa, _q1b, _q2b, ob, ok = double_hopf_point(
         hh_one_three,
         jnp.array([0.03, -0.02, 0.04, 0.01]),
         jnp.array([5.05, -5.93]),
@@ -458,13 +463,17 @@ def test_normalize_omega_is_identity_when_omega_already_nonnegative():
 
 def test_codim2_functions_are_exported_at_top_level():
     import jaxcont as jc
-
     from jaxcont.bifurcations.codim2 import (
-        bogdanov_takens_parameters, bogdanov_takens_point,
-        cusp_parameters, cusp_point,
-        double_hopf_parameters, double_hopf_point,
-        generalized_hopf_parameters, generalized_hopf_point,
-        zero_hopf_parameters, zero_hopf_point,
+        bogdanov_takens_parameters,
+        bogdanov_takens_point,
+        cusp_parameters,
+        cusp_point,
+        double_hopf_parameters,
+        double_hopf_point,
+        generalized_hopf_parameters,
+        generalized_hopf_point,
+        zero_hopf_parameters,
+        zero_hopf_point,
     )
     from jaxcont.bifurcations.fold_normal_form import fold_coefficient
 

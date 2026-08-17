@@ -39,7 +39,7 @@ Public entry points:
 
 from __future__ import annotations
 
-from typing import Any, Callable, Tuple
+from typing import Any, Callable
 
 import jax.numpy as jnp
 from jax import Array, jacfwd, jvp, lax
@@ -140,7 +140,7 @@ def hopf_point(
     *,
     tol: float = 1e-8,
     max_iter: int = 50,
-) -> Tuple[Array, Array, Array, Array, Array]:
+) -> tuple[Array, Array, Array, Array, Array]:
     """
     Locate a Hopf point near ``(u_guess, p_guess)``, differentiable in ``args``.
 

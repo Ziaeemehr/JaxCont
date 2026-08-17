@@ -7,10 +7,7 @@ Note: This tests installation and environment setup, not unit tests (see tests/ 
 """
 
 from jaxcont.utils import (
-    print_jax_cuda_info,
-    print_package_import_test,
     run_installation_tests,
-    test_jax_cuda,
 )
 
 

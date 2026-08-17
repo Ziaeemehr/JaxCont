@@ -2,9 +2,10 @@
 Newton's method for solving nonlinear systems.
 """
 
-from typing import Callable, Tuple
+from typing import Callable
+
 import jax.numpy as jnp
-from jax import Array, jacfwd, jit, lax
+from jax import Array, jacfwd, lax
 
 
 class NewtonSolver:
@@ -34,7 +35,7 @@ class NewtonSolver:
         self,
         f: Callable[[Array], Array],
         x0: Array
-    ) -> Tuple[Array, bool, int]:
+    ) -> tuple[Array, bool, int]:
         """
         Solve f(x) = 0 using Newton's method (JIT-compiled).
         
@@ -51,12 +52,12 @@ class NewtonSolver:
         self,
         f: Callable[[Array], Array],
         x0: Array
-    ) -> Tuple[Array, bool, int]:
+    ) -> tuple[Array, bool, int]:
         """JIT-compiled implementation using JAX control flow."""
         
         def newton_step(carry):
             """Single Newton iteration."""
-            x, iteration, converged, residual = carry
+            x, iteration, _converged, _residual = carry
             
             # Evaluate function
             f_val = f(x)
@@ -81,7 +82,7 @@ class NewtonSolver:
         
         def cond_fun(carry):
             """Continue if not converged and within max iterations."""
-            x, iteration, converged, residual = carry
+            _x, iteration, converged, _residual = carry
             return jnp.logical_and(
                 jnp.logical_not(converged),
                 iteration < self.max_iter
@@ -93,7 +94,7 @@ class NewtonSolver:
         initial_carry = (x0, 0, initial_converged, initial_residual)
         
         # Run Newton iterations using JAX while_loop for JIT compatibility
-        final_x, final_iter, final_converged, final_residual = lax.while_loop(
+        final_x, final_iter, final_converged, _final_residual = lax.while_loop(
             cond_fun, newton_step, initial_carry
         )
         
@@ -104,7 +105,7 @@ class NewtonSolver:
         f: Callable[[Array], Array],
         jac: Callable[[Array], Array],
         x0: Array
-    ) -> Tuple[Array, bool, int]:
+    ) -> tuple[Array, bool, int]:
         """
         Solve f(x) = 0 with user-provided Jacobian (JIT-compiled).
         
@@ -123,12 +124,12 @@ class NewtonSolver:
         f: Callable[[Array], Array],
         jac: Callable[[Array], Array],
         x0: Array
-    ) -> Tuple[Array, bool, int]:
+    ) -> tuple[Array, bool, int]:
         """JIT-compiled implementation with user-provided Jacobian."""
         
         def newton_step(carry):
             """Single Newton iteration."""
-            x, iteration, converged, residual = carry
+            x, iteration, _converged, _residual = carry
             
             # Evaluate function
             f_val = f(x)
@@ -153,7 +154,7 @@ class NewtonSolver:
         
         def cond_fun(carry):
             """Continue if not converged and within max iterations."""
-            x, iteration, converged, residual = carry
+            _x, iteration, converged, _residual = carry
             return jnp.logical_and(
                 jnp.logical_not(converged),
                 iteration < self.max_iter
@@ -165,7 +166,7 @@ class NewtonSolver:
         initial_carry = (x0, 0, initial_converged, initial_residual)
         
         # Run Newton iterations using JAX while_loop for JIT compatibility
-        final_x, final_iter, final_converged, final_residual = lax.while_loop(
+        final_x, final_iter, final_converged, _final_residual = lax.while_loop(
             cond_fun, newton_step, initial_carry
         )
         

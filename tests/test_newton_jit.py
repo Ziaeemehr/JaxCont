@@ -2,10 +2,12 @@
 Test and benchmark JIT-compiled Newton solver.
 """
 
+import time
+
 import jax
 import jax.numpy as jnp
-import time
 import numpy as np
+
 from jaxcont.solvers.newton import NewtonSolver
 
 
@@ -163,7 +165,7 @@ def benchmark_performance():
     times = []
     for _ in range(n_runs):
         start = time.perf_counter()
-        sol, conv, it = solver.solve(f_2d, x0)
+        sol, conv, _it = solver.solve(f_2d, x0)
         jax.block_until_ready(sol)
         end = time.perf_counter()
         times.append((end - start) * 1000)
@@ -196,7 +198,7 @@ def benchmark_performance():
     times = []
     for _ in range(n_runs):
         start = time.perf_counter()
-        sol, conv, it = solver.solve(f_3d, x0)
+        sol, conv, _it = solver.solve(f_3d, x0)
         jax.block_until_ready(sol)
         end = time.perf_counter()
         times.append((end - start) * 1000)

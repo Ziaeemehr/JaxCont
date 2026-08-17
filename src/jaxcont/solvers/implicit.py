@@ -50,7 +50,7 @@ def differentiable_root(
         x_seed = x0(theta) if callable(x0) else x0
 
         def cond(carry):
-            x, it, done = carry
+            _x, it, done = carry
             return jnp.logical_and(jnp.logical_not(done), it < max_iter)
 
         def body(carry):

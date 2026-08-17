@@ -6,7 +6,11 @@ docs/superpowers/specs/2026-07-28-phase-plane-visualization-design.md for the
 design rationale behind this module's structure.
 """
 
-from jaxcont.viz.core import plot_all_states, plot_bifurcation_diagram, plot_continuation
+from jaxcont.viz.core import (
+    plot_all_states,
+    plot_bifurcation_diagram,
+    plot_continuation,
+)
 from jaxcont.viz.phase_plane import (
     plot_equilibria,
     plot_nullclines,
@@ -25,23 +29,23 @@ from jaxcont.viz.portraits import (
 from jaxcont.viz.two_parameter import plot_two_parameter_diagram
 
 __all__ = [
+    "EigenvalueReference",
+    "plot_all_states",
+    "plot_bifurcation_diagram",
+    "plot_branch_states",
     # Continuation diagrams
     "plot_continuation",
-    "plot_bifurcation_diagram",
-    "plot_all_states",
-    "plot_branch_states",
     "plot_eigenvalues",
-    "plot_prc",
-    "EigenvalueReference",
+    "plot_equilibria",
+    "plot_nullclines",
     # 2D phase planes
     "plot_phase_plane",
-    "plot_nullclines",
-    "plot_vector_field",
+    # Deprecated, removal target v0.4.0
+    "plot_phase_portrait",
+    "plot_prc",
     "plot_streamlines",
-    "plot_equilibria",
     "plot_trajectory",
     # Two-parameter diagrams
     "plot_two_parameter_diagram",
-    # Deprecated, removal target v0.4.0
-    "plot_phase_portrait",
+    "plot_vector_field",
 ]

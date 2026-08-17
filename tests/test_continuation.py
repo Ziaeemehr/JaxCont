@@ -2,8 +2,9 @@
 Tests for core continuation functionality.
 """
 
-import pytest
 import jax.numpy as jnp
+import pytest
+
 from jaxcont.core.continuation import ContinuationProblem, ContinuationSolution
 
 

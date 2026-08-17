@@ -28,9 +28,9 @@ explicitly with:
 on a machine/CI runner with a genuinely working GPU.
 """
 
-import pytest
 import jax
 import jax.numpy as jnp
+import pytest
 
 import jaxcont as jc
 

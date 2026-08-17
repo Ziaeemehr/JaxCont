@@ -10,10 +10,15 @@ from dataclasses import dataclass
 
 import jax.numpy as jnp
 from jax import jacfwd
-import pytest
 
 from jaxcont.bifurcations.events import (
-    BranchPoint, EventHit, Fold, Hopf, PeriodDoubling, NeimarkSacker, detect_events,
+    BranchPoint,
+    EventHit,
+    Fold,
+    Hopf,
+    NeimarkSacker,
+    PeriodDoubling,
+    detect_events,
 )
 
 

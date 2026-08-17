@@ -9,7 +9,7 @@ docs/superpowers/specs/2026-07-28-phase-plane-visualization-design.md for the
 design rationale, in particular why only 2D systems are supported.
 """
 
-from typing import Optional, Tuple
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
@@ -48,7 +48,7 @@ def _require_2d(problem) -> None:
         )
 
 
-def _state_names(problem) -> Tuple[str, str]:
+def _state_names(problem) -> tuple[str, str]:
     """Display names for the two state components, with a neutral fallback."""
     names = getattr(problem, "state_names", None)
     if names is None:
@@ -56,7 +56,7 @@ def _state_names(problem) -> Tuple[str, str]:
     return (str(names[0]), str(names[1]))
 
 
-def _prepare_axes(ax: Optional[plt.Axes], figsize) -> Tuple[plt.Figure, plt.Axes]:
+def _prepare_axes(ax: Optional[plt.Axes], figsize) -> tuple[plt.Figure, plt.Axes]:
     """Return ``(figure, axes)``, creating a figure when ``ax`` is None."""
     if ax is None:
         return plt.subplots(figsize=figsize)
@@ -83,14 +83,14 @@ def _evaluate_field(problem, p, xlim, ylim, resolution: int):
 def plot_nullclines(
     problem,
     p,
-    xlim: Tuple[float, float],
-    ylim: Tuple[float, float],
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
     *,
     resolution: int = 200,
-    colors: Optional[Tuple[str, str]] = None,
+    colors: Optional[tuple[str, str]] = None,
     labels: bool = True,
     ax: Optional[plt.Axes] = None,
-    figsize: Tuple[float, float] = DEFAULT_FIGSIZE,
+    figsize: tuple[float, float] = DEFAULT_FIGSIZE,
     **kwargs,
 ) -> plt.Figure:
     """
@@ -137,7 +137,7 @@ def plot_nullclines(
                 [], [],
                 color=color,
                 linewidth=contour_options["linewidths"],
-                label=r"$\dot{%s} = 0$" % names[index],
+                label=rf"$\dot{{{names[index]}}} = 0$",
             )
 
     if labels:
@@ -153,13 +153,13 @@ def plot_nullclines(
 def plot_vector_field(
     problem,
     p,
-    xlim: Tuple[float, float],
-    ylim: Tuple[float, float],
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
     *,
     density: int = 20,
     normalize: bool = True,
     ax: Optional[plt.Axes] = None,
-    figsize: Tuple[float, float] = DEFAULT_FIGSIZE,
+    figsize: tuple[float, float] = DEFAULT_FIGSIZE,
     **kwargs,
 ) -> plt.Figure:
     """
@@ -218,13 +218,13 @@ def plot_vector_field(
 def plot_streamlines(
     problem,
     p,
-    xlim: Tuple[float, float],
-    ylim: Tuple[float, float],
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
     *,
     resolution: int = 100,
     color: str = "#7F7F7F",
     ax: Optional[plt.Axes] = None,
-    figsize: Tuple[float, float] = DEFAULT_FIGSIZE,
+    figsize: tuple[float, float] = DEFAULT_FIGSIZE,
     **kwargs,
 ) -> plt.Figure:
     """
@@ -385,7 +385,7 @@ def plot_equilibria(
     *,
     atol: Optional[float] = None,
     ax: Optional[plt.Axes] = None,
-    figsize: Tuple[float, float] = DEFAULT_FIGSIZE,
+    figsize: tuple[float, float] = DEFAULT_FIGSIZE,
     **kwargs,
 ) -> plt.Figure:
     """
@@ -488,7 +488,7 @@ def plot_trajectory(
     problem,
     u0=None,
     p=None,
-    t_span: Optional[Tuple[float, float]] = None,
+    t_span: Optional[tuple[float, float]] = None,
     *,
     n_points: int = 1000,
     rtol: float = 1e-8,
@@ -496,7 +496,7 @@ def plot_trajectory(
     arrow: bool = True,
     color: str = "#262626",
     ax: Optional[plt.Axes] = None,
-    figsize: Tuple[float, float] = DEFAULT_FIGSIZE,
+    figsize: tuple[float, float] = DEFAULT_FIGSIZE,
     **kwargs,
 ) -> plt.Figure:
     """
@@ -584,8 +584,8 @@ def plot_trajectory(
 def plot_phase_plane(
     problem,
     p,
-    xlim: Tuple[float, float],
-    ylim: Tuple[float, float],
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
     *,
     result=None,
     nullclines: bool = True,
@@ -597,7 +597,7 @@ def plot_phase_plane(
     title: Optional[str] = None,
     legend: bool = True,
     ax: Optional[plt.Axes] = None,
-    figsize: Tuple[float, float] = DEFAULT_FIGSIZE,
+    figsize: tuple[float, float] = DEFAULT_FIGSIZE,
 ) -> plt.Figure:
     """
     Compose a phase plane for a 2D autonomous system at parameter ``p``.

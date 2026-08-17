@@ -16,7 +16,6 @@ from PIL import Image
 # img.save("jaxcont_logo_transparent.png")
 
 
-from PIL import Image
 
 img = Image.open("jaxcont_logo.png")
 

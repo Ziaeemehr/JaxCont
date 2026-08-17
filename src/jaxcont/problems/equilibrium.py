@@ -3,8 +3,8 @@ Equilibrium problem definition.
 """
 
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional
-import jax.numpy as jnp
+from typing import Callable
+
 from jax import Array, jacfwd
 
 
@@ -21,8 +21,8 @@ class EquilibriumProblem:
         initial_state: Initial equilibrium point
         continuation_param: Parameter to continue in
     """
-    rhs: Callable[[Array, Dict[str, float]], Array]
-    params: Dict[str, float]
+    rhs: Callable[[Array, dict[str, float]], Array]
+    params: dict[str, float]
     initial_state: Array
     continuation_param: str
     

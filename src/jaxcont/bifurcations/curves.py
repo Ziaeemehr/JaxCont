@@ -22,7 +22,7 @@ See docs/superpowers/specs/2026-08-17-two-parameter-continuation-design.md.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Tuple
+from typing import Any, Callable
 
 import jax.numpy as jnp
 from jax import Array, lax
@@ -64,7 +64,7 @@ def _validate(u_guess: Array, p_guess: Array, free: int) -> None:
         raise ValueError(f"u_guess must be 1-D, got shape {u_guess.shape}")
 
 
-def unpack_fold_curve(X: Array, n: int) -> Tuple[Array, Array, Array]:
+def unpack_fold_curve(X: Array, n: int) -> tuple[Array, Array, Array]:
     """Split a packed fold-curve state into ``(u, p_fixed, v)``."""
     return X[:n], X[n], X[n + 1:]
 
@@ -137,7 +137,7 @@ def fold_curve_problem(
 
 def unpack_hopf_curve(
     X: Array, n: int
-) -> Tuple[Array, Array, Array, Array, Array]:
+) -> tuple[Array, Array, Array, Array, Array]:
     """Split a packed Hopf-curve state into ``(u, p_fixed, q1, q2, omega)``."""
     return (
         X[:n], X[n], X[n + 1:2 * n + 1], X[2 * n + 1:3 * n + 1], X[3 * n + 1]

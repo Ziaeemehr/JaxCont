@@ -16,8 +16,15 @@ existing NotImplementedError for events=[...] under jax.vmap/jax.jit.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, List, Optional, Protocol, Sequence, Tuple, runtime_checkable
+from typing import (
+    Any,
+    Callable,
+    Optional,
+    Protocol,
+    runtime_checkable,
+)
 
 import jax.numpy as jnp
 from jax import Array
@@ -51,12 +58,12 @@ class Event(Protocol):
         self,
         left: BranchPoint,
         right: BranchPoint,
-        index: Tuple[int, int],
+        index: tuple[int, int],
         rhs: Callable[[Array, float], Array],
         *,
         tolerance: float,
         max_iterations: int,
-    ) -> "EventHit":
+    ) -> EventHit:
         """Precisely locate the event between `left` and `right`."""
         ...
 
@@ -68,7 +75,7 @@ class EventHit:
     kind: str
     p: float
     u: Array
-    index: Optional[Tuple[int, int]] = None
+    index: Optional[tuple[int, int]] = None
     info: dict = field(default_factory=dict)
 
 
@@ -189,7 +196,7 @@ def detect_events(
     ds: float,
     tolerance: float = 1e-6,
     max_iterations: int = 20,
-) -> List[EventHit]:
+) -> list[EventHit]:
     """Detect and refine all requested events along a branch, deduped.
 
     `params`/`states`/`tangents`/`eigenvalues` are the branch's per-step
@@ -211,7 +218,7 @@ def detect_events(
         for i in range(params.shape[0])
     ]
 
-    hits: List[EventHit] = []
+    hits: list[EventHit] = []
     for event in events:
         test_vals = [event.test_function(pt) for pt in points]
         for i in range(len(points) - 1):
@@ -223,7 +230,7 @@ def detect_events(
 
     hits.sort(key=lambda h: h.p)
     merge_window = 2.0 * abs(ds)
-    deduped: List[EventHit] = []
+    deduped: list[EventHit] = []
     last_p_by_kind: dict = {}
     for hit in hits:
         prev_p = last_p_by_kind.get(hit.kind)

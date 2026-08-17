@@ -14,8 +14,8 @@ alpha is the continuation parameter (p) in every test below. See
 docs/superpowers/specs/2026-07-24-period-doubling-neimark-sacker-design.md.
 """
 
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
 
 import jaxcont as jc
 from jaxcont.core.collocation import Collocation

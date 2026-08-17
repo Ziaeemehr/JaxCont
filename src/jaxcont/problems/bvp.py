@@ -3,8 +3,8 @@ Boundary value problem (BVP) solver.
 """
 
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional, Tuple
-import jax.numpy as jnp
+from typing import Callable
+
 from jax import Array
 
 
@@ -23,13 +23,13 @@ class BoundaryValueProblem:
         t_span: Time span (t0, tF)
         initial_guess: Initial guess for solution
     """
-    rhs: Callable[[float, Array, Dict[str, float]], Array]
+    rhs: Callable[[float, Array, dict[str, float]], Array]
     boundary_conditions: Callable[[Array, Array], Array]
-    params: Dict[str, float]
-    t_span: Tuple[float, float]
+    params: dict[str, float]
+    t_span: tuple[float, float]
     initial_guess: Array
     
-    def solve_collocation(self, n_nodes: int = 50) -> Tuple[Array, Array]:
+    def solve_collocation(self, n_nodes: int = 50) -> tuple[Array, Array]:
         """
         Solve BVP using collocation method.
         
@@ -43,7 +43,7 @@ class BoundaryValueProblem:
         # Would use collocation method similar to MATLAB's bvp4c
         raise NotImplementedError("Collocation BVP solver not yet implemented")
     
-    def solve_shooting(self, max_iter: int = 50, tol: float = 1e-6) -> Tuple[Array, Array]:
+    def solve_shooting(self, max_iter: int = 50, tol: float = 1e-6) -> tuple[Array, Array]:
         """
         Solve BVP using shooting method.
         

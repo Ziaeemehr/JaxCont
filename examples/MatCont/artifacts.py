@@ -8,11 +8,12 @@ import importlib.metadata
 import json
 import platform
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
-import numpy as np
 import jax
+import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from .compare import (
@@ -22,7 +23,6 @@ from .compare import (
     match_spectrum,
     scaled_close,
 )
-
 
 _REQUIRED_METADATA_FIELDS = {
     "case_id",
@@ -463,7 +463,7 @@ def _compare_branch_rows(
         extrema_columns = sorted(
             column
             for column in actual_set & reference_set
-            if column.startswith("state_") and (column.endswith("_min") or column.endswith("_max"))
+            if column.startswith("state_") and (column.endswith(("_min", "_max")))
         )
         if not extrema_columns:
             raise ValidationMismatch("radial branch is missing state extrema")
@@ -1007,7 +1007,7 @@ def compare_case_result_to_reference(
     """Numerically compare a Python/JaxCont case result with committed MatCont data."""
     branch_name, event_name, spectrum_name = _reference_names(case)
     reference_branch_fields, reference_branch = _read_table(Path(reference_dir) / branch_name)
-    reference_event_fields, reference_events = _read_table(Path(reference_dir) / event_name)
+    _reference_event_fields, reference_events = _read_table(Path(reference_dir) / event_name)
     reference_spectrum_fields, reference_spectra = _read_table(
         Path(reference_dir) / spectrum_name
     )
@@ -1066,10 +1066,10 @@ def compare_case_result_to_reference(
 
 
 __all__ = [
-    "validate_equilibrium_artifacts",
-    "validate_periodic_artifacts",
     "compare_case_result_to_reference",
     "enrich_generated_metadata",
+    "validate_equilibrium_artifacts",
+    "validate_periodic_artifacts",
     "validate_reference_metadata",
     "verify_case_references",
 ]

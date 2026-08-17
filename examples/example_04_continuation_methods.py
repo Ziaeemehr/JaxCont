@@ -74,7 +74,7 @@ result_nat = jc.continuation(
     settings=jc.ContinuationPar(ds=0.05, max_steps=30, newton_tol=1e-6, newton_max_iter=50),
 )
 n_nat = result_nat.branch.n_valid
-print(f"\nNatural continuation, heading toward the fold at r=0:")
+print("\nNatural continuation, heading toward the fold at r=0:")
 print(f"  reached r = {float(result_nat.branch.params[n_nat - 1]):.5f} "
       f"in {n_nat} points (started at r=1, target r=-1)")
 print("  (stalled before reaching r=0 -- no real solution exists past the fold "
@@ -95,10 +95,10 @@ result_pa = jc.continuation(
 n_pa = result_pa.branch.n_valid
 final_p = float(result_pa.branch.params[n_pa - 1])
 final_u = float(result_pa.branch.states[n_pa - 1, 0])
-print(f"\nPseudo-arclength continuation, through the fold and beyond:")
+print("\nPseudo-arclength continuation, through the fold and beyond:")
 print(f"  reached r = {final_p:.5f}, x = {final_u:.5f} in {n_pa} points")
 if final_p > 0.5 and final_u < 0:
-    print(f"  PASSED THE FOLD: now on the mirror branch x=-sqrt(r)")
+    print("  PASSED THE FOLD: now on the mirror branch x=-sqrt(r)")
 
 print("\nPseudo-arclength's bordered system stays well-conditioned through the")
 print("fold, unlike the natural corrector's fixed-parameter Newton solve above.")

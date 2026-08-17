@@ -3,7 +3,8 @@ Core continuation problem definition and solution containers.
 """
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Any, Optional, Tuple, List
+from typing import Any, Callable, Optional
+
 import jax.numpy as jnp
 from jax import Array
 
@@ -21,9 +22,9 @@ class ContinuationProblem:
         constraints: Optional additional constraints
         problem_type: Type of problem ('equilibrium', 'periodic', 'bvp')
     """
-    rhs: Callable[[Array, Dict[str, float]], Array]
+    rhs: Callable[[Array, dict[str, float]], Array]
     u0: Array
-    params: Dict[str, float]
+    params: dict[str, float]
     continuation_param: str
     constraints: Optional[Callable] = None
     problem_type: str = "equilibrium"
@@ -91,10 +92,10 @@ class ContinuationSolution:
     parameters: Array
     eigenvalues: Optional[Array] = None
     stability: Optional[Array] = None
-    bifurcations: List[Dict[str, Any]] = field(default_factory=list)
+    bifurcations: list[dict[str, Any]] = field(default_factory=list)
     tangent_vectors: Optional[Array] = None
-    convergence_info: Optional[List[Dict[str, Any]]] = None
-    state_names: Optional[Tuple[str, ...]] = None
+    convergence_info: Optional[list[dict[str, Any]]] = None
+    state_names: Optional[tuple[str, ...]] = None
     param_name: Optional[str] = None
     
     @property
@@ -107,7 +108,7 @@ class ContinuationSolution:
         """Dimension of state space."""
         return self.states.shape[1] if len(self.states.shape) > 1 else 1
     
-    def get_point(self, index: int) -> Tuple[Array, float]:
+    def get_point(self, index: int) -> tuple[Array, float]:
         """
         Get state and parameter at a specific point.
         
@@ -119,7 +120,7 @@ class ContinuationSolution:
         """
         return self.states[index], float(self.parameters[index])
     
-    def get_bifurcations_by_type(self, bif_type: str) -> List[Dict[str, Any]]:
+    def get_bifurcations_by_type(self, bif_type: str) -> list[dict[str, Any]]:
         """
         Get all bifurcations of a specific type.
         

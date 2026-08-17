@@ -12,7 +12,11 @@ import jax.numpy as jnp
 from jax import Array
 
 from jaxcont.api import BifProblem
-from jaxcont.core.collocation import Collocation, collocation_matrices, interval_propagators
+from jaxcont.core.collocation import (
+    Collocation,
+    collocation_matrices,
+    interval_propagators,
+)
 from jaxcont.solvers.implicit import differentiable_root
 from jaxcont.solvers.protocols import Dense, LinearSolver
 
@@ -85,7 +89,7 @@ def branch_prc(
 
 
 def dprc_curve(
-    problem: "BifProblem",
+    problem: BifProblem,
     linear_solver: LinearSolver = Dense(),
     newton_tol: float = 1e-5,
 ) -> Array:

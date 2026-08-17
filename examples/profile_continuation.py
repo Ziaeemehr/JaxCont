@@ -9,16 +9,15 @@ This script profiles the most time-consuming parts:
 - Eigenvalue computations
 """
 
+import cProfile
+import io
+import pstats
+import time
+
 import jax
 import jax.numpy as jnp
-import time
-import cProfile
-import pstats
-import io
-from functools import wraps
 
 import jaxcont as jc
-
 
 # ============================================================================
 # Test Problems
@@ -343,9 +342,10 @@ def check_jit_usage():
     print("JIT COMPILATION STATUS")
     print("="*80)
     
+    import inspect
+
     from jaxcont.core import scan_continuation
     from jaxcont.solvers import newton
-    import inspect
 
     modules_to_check = [
         ('scan_continuation', scan_continuation),
@@ -373,7 +373,7 @@ def check_jit_usage():
         if jitted:
             print(f"  JIT compiled: {', '.join(jitted)}")
         else:
-            print(f"  JIT compiled: None")
+            print("  JIT compiled: None")
         
         if not_jitted:
             print(f"  Not JIT compiled: {', '.join(not_jitted)}")
@@ -406,8 +406,8 @@ def main():
     profile_eigenvalue_computation()
     
     # Profile continuation runs
-    sol1, time1 = profile_simple_continuation()
-    sol3, time3 = profile_3d_continuation()
+    _sol1, _time1 = profile_simple_continuation()
+    _sol3, _time3 = profile_3d_continuation()
     
     # Detailed profiling with cProfile
     print("\n" + "="*80)

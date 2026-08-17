@@ -345,7 +345,8 @@ def test_double_hopf_detected_with_automatic_seed_b():
 
 def test_drop_nearest_pinned_pair_excludes_both_halves_near_bt():
     from jaxcont.bifurcations.codim2_events import (
-        _drop_nearest, _drop_nearest_pinned_pair,
+        _drop_nearest,
+        _drop_nearest_pinned_pair,
     )
 
     # Two eigenvalues sit near zero (the collapsing pinned pair as omega ->

@@ -19,7 +19,8 @@ this remains a direct test of the production corrector, not a reimplementation.
 """
 
 import jax.numpy as jnp
-from jaxcont.core.scan_continuation import _tangent, _newton_correct
+
+from jaxcont.core.scan_continuation import _newton_correct, _tangent
 
 
 def test_bordered_system_simple():
@@ -45,7 +46,7 @@ def test_bordered_system_simple():
     u_pred = u_prev + ds * du0
     param_pred = param_prev + ds * dp0
 
-    u_corr, p_corr, converged, n_iter = _newton_correct(
+    u_corr, p_corr, converged, _n_iter = _newton_correct(
         f, u_pred, param_pred, u_prev, param_prev, du0, dp0, ds, 1e-6, 20
     )
 
@@ -83,7 +84,7 @@ def test_bordered_system_nonlinear():
     u_pred = u_prev + ds * du0
     param_pred = param_prev + ds * dp0
 
-    u_corr, p_corr, converged, n_iter = _newton_correct(
+    u_corr, p_corr, converged, _n_iter = _newton_correct(
         f, u_pred, param_pred, u_prev, param_prev, du0, dp0, ds, 1e-6, 20
     )
 
@@ -122,7 +123,7 @@ def test_bordered_system_2d():
     u_pred = u_prev + ds * du0
     param_pred = param_prev + ds * dp0
 
-    u_corr, p_corr, converged, n_iter = _newton_correct(
+    u_corr, p_corr, converged, _n_iter = _newton_correct(
         f, u_pred, param_pred, u_prev, param_prev, du0, dp0, ds, 1e-6, 20
     )
 
@@ -164,7 +165,7 @@ def test_bordered_system_continuation_branch():
         u_pred = u_prev + ds * du0
         param_pred = param_prev + ds * dp0
 
-        u_current, param_current, converged, n_iter = _newton_correct(
+        u_current, param_current, converged, _n_iter = _newton_correct(
             f, u_pred, param_pred, u_prev, param_prev, du0, dp0, ds, 1e-6, 20
         )
 

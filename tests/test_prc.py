@@ -11,7 +11,6 @@ See docs/superpowers/specs/2026-08-05-prc-dprc-design.md.
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pytest
 
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem

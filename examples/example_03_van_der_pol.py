@@ -25,8 +25,10 @@ continued away from this degenerate point via periodic-orbit collocation.
 # Setup
 
 import os
+
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+
 import jaxcont as jc
 from jaxcont.viz import EigenvalueReference, plot_eigenvalues
 

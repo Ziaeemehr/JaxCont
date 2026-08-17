@@ -3,7 +3,8 @@ Core continuation-diagram plots for jaxcont.viz: plot_continuation (single
 state variable vs. the parameter) and plot_bifurcation_diagram (alias).
 """
 
-from typing import Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Optional
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -22,7 +23,7 @@ def plot_continuation(
     annotate: bool = False,
     stable_color: str = "#0072B2",
     unstable_color: str = "#D55E00",
-    figsize: Tuple[float, float] = (8.5, 5.25),
+    figsize: tuple[float, float] = (8.5, 5.25),
     title: Optional[str] = "Continuation Diagram",
     legend: bool = True,
     **kwargs,
@@ -162,16 +163,16 @@ def plot_continuation(
                     xy=(param, state_val),
                     xytext=(14, vertical_offset),
                     textcoords="offset points",
-                    bbox=dict(
-                        boxstyle="round,pad=0.4",
-                        facecolor="white",
-                        edgecolor=style.color,
-                        alpha=0.95,
-                    ),
-                    arrowprops=dict(
-                        arrowstyle="-|>", color=style.color, lw=1.1,
-                        shrinkA=3, shrinkB=5,
-                    ),
+                    bbox={
+                        "boxstyle": "round,pad=0.4",
+                        "facecolor": "white",
+                        "edgecolor": style.color,
+                        "alpha": 0.95,
+                    },
+                    arrowprops={
+                        "arrowstyle": "-|>", "color": style.color, "lw": 1.1,
+                        "shrinkA": 3, "shrinkB": 5,
+                    },
                     color="#262626",
                     fontsize=8.5,
                     linespacing=1.3,
@@ -237,7 +238,7 @@ def plot_all_states(
     show_bifurcations: bool = True,
     stable_color: str = "blue",
     unstable_color: str = "red",
-    figsize: Optional[Tuple[float, float]] = None,
+    figsize: Optional[tuple[float, float]] = None,
 ) -> plt.Figure:
     """
     Plot every state variable against the continuation parameter, one per

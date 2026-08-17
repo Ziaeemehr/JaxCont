@@ -4,9 +4,7 @@ Configuration management for JaxCont.
 
 import importlib
 import pkgutil
-import sys
-from dataclasses import dataclass, field
-from typing import Optional, Dict, List, Tuple
+from dataclasses import dataclass
 
 
 @dataclass
@@ -98,7 +96,7 @@ def reset_config():
     _global_config = Config.default()
 
 
-def test_jax_cuda() -> Dict[str, any]:
+def test_jax_cuda() -> dict[str, any]:
     """
     Test JAX installation and CUDA/GPU support.
     
@@ -157,15 +155,15 @@ def test_jax_cuda() -> Dict[str, any]:
         # Test a simple computation
         try:
             x = jnp.array([1.0, 2.0, 3.0])
-            y = jnp.sum(x)
+            jnp.sum(x)
             result['computation_test'] = 'passed'
         except Exception as e:
-            result['computation_test'] = f'failed: {str(e)}'
+            result['computation_test'] = f'failed: {e!s}'
             
     except ImportError as e:
-        result['error'] = f'JAX import failed: {str(e)}'
+        result['error'] = f'JAX import failed: {e!s}'
     except Exception as e:
-        result['error'] = f'Unexpected error: {str(e)}'
+        result['error'] = f'Unexpected error: {e!s}'
     
     return result
 
@@ -188,11 +186,11 @@ def print_jax_cuda_info():
     print(f"  Device Count: {info['device_count']}")
     
     if info['cuda_available']:
-        print(f"✓ CUDA/GPU Available: Yes")
+        print("✓ CUDA/GPU Available: Yes")
     else:
-        print(f"✗ CUDA/GPU Available: No")
+        print("✗ CUDA/GPU Available: No")
     
-    print(f"\nDevices:")
+    print("\nDevices:")
     for dev_info in info['device_info']:
         print(f"  [{dev_info['id']}] {dev_info['device']}")
         print(f"      Platform: {dev_info['platform']}, Kind: {dev_info['device_kind']}")
@@ -203,7 +201,7 @@ def print_jax_cuda_info():
     print("=" * 60)
 
 
-def test_package_imports() -> Dict[str, Dict[str, any]]:
+def test_package_imports() -> dict[str, dict[str, any]]:
     """
     Test all imports from the jaxcont package and its submodules.
     
@@ -241,9 +239,9 @@ def test_package_imports() -> Dict[str, Dict[str, any]]:
                 result['attributes'] = [attr for attr in dir(module) if not attr.startswith('_')]
             
         except ImportError as e:
-            result['error'] = f'ImportError: {str(e)}'
+            result['error'] = f'ImportError: {e!s}'
         except Exception as e:
-            result['error'] = f'Error: {str(e)}'
+            result['error'] = f'Error: {e!s}'
         
         results[module_name] = result
     

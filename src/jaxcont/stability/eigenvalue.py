@@ -2,7 +2,7 @@
 Eigenvalue computation and stability analysis for equilibria.
 """
 
-from typing import Tuple, Dict
+
 import jax.numpy as jnp
 from jax import Array, jacfwd
 
@@ -24,7 +24,7 @@ def compute_eigenvalues(jacobian: Array) -> Array:
     return eigenvalues[idx]
 
 
-def analyze_stability(eigenvalues: Array, tolerance: float = 1e-10) -> Dict[str, any]:
+def analyze_stability(eigenvalues: Array, tolerance: float = 1e-10) -> dict[str, any]:
     """
     Analyze stability based on eigenvalues.
     
@@ -95,10 +95,8 @@ def compute_eigenvalues_along_branch(
     Returns:
         Array of eigenvalues at each point (n_points, state_dim)
     """
-    from jaxcont.core.continuation import ContinuationProblem
     
     n_points = solution.n_points
-    state_dim = solution.state_dim
     
     eigenvalues_list = []
     

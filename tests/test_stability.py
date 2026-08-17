@@ -2,15 +2,16 @@
 Tests for stability analysis.
 """
 
-import pytest
 import jax.numpy as jnp
+import pytest
+
+from jaxcont.core.continuation import ContinuationProblem, ContinuationSolution
 from jaxcont.stability.eigenvalue import (
-    compute_eigenvalues,
     analyze_stability,
+    compute_eigenvalues,
     compute_eigenvalues_along_branch,
     compute_stability_along_branch,
 )
-from jaxcont.core.continuation import ContinuationProblem, ContinuationSolution
 
 
 def test_compute_eigenvalues():

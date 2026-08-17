@@ -3,6 +3,7 @@
 import warnings
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import jax.numpy as jnp
@@ -205,7 +206,10 @@ def test_plot_all_states_single_state_keeps_its_xlabel():
 
 
 from jaxcont.viz.portraits import (
-    EigenvalueReference, plot_branch_states, plot_eigenvalues, plot_phase_portrait,
+    EigenvalueReference,
+    plot_branch_states,
+    plot_eigenvalues,
+    plot_phase_portrait,
 )
 
 
@@ -369,7 +373,7 @@ def test_plot_eigenvalues_validates_generalized_inputs(kwargs, message):
 
 
 def test_viz_package_exports_public_surface():
-    import jaxcont.viz as viz
+    from jaxcont import viz
 
     for name in (
         "plot_continuation", "plot_bifurcation_diagram", "plot_all_states",
@@ -668,7 +672,7 @@ def test_plot_equilibria_uses_neutral_style_without_stability_data():
         params=jnp.array([-1.0, 0.0, 1.0]),
         states=jnp.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]]),
     )
-    fig, ax = plt.subplots()
+    _fig, ax = plt.subplots()
 
     plot_equilibria(branch, 0.5, ax=ax)
 
@@ -703,7 +707,7 @@ def test_plot_trajectory_integrates_toward_the_stable_spiral():
 
 def test_plot_trajectory_accepts_a_precomputed_array():
     states = np.column_stack([np.linspace(0.0, 1.0, 50), np.linspace(1.0, 0.0, 50)])
-    fig, ax = plt.subplots()
+    _fig, ax = plt.subplots()
 
     plot_trajectory(states, ax=ax, arrow=False)
 
@@ -813,7 +817,7 @@ def test_plot_phase_plane_titles_with_the_parameter_name():
 def test_plot_two_parameter_diagram_draws_curves_and_codim2_markers():
     import jaxcont as jc
     from jaxcont.viz.two_parameter import plot_two_parameter_diagram
-    from tests.test_codim2_events import _bt_shifted, _bt_fold_curve_seed
+    from tests.test_codim2_events import _bt_fold_curve_seed, _bt_shifted
 
     u_guess, p_guess = _bt_fold_curve_seed()
     prob = jc.fold_curve_problem(_bt_shifted, u_guess, p_guess, free=1)

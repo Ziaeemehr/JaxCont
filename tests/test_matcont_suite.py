@@ -1,7 +1,7 @@
 """Focused contract tests for the MatCont validation-suite foundation."""
 
-import json
 import hashlib
+import json
 import shutil
 import subprocess
 import sys
@@ -11,6 +11,12 @@ import numpy as np
 import pytest
 
 import examples.MatCont.run_validation as matcont_runner
+from examples.MatCont.artifacts import (
+    enrich_generated_metadata,
+    validate_equilibrium_artifacts,
+    validate_reference_metadata,
+    verify_case_references,
+)
 from examples.MatCont.compare import (
     ValidationMismatch,
     interpolate_observable,
@@ -18,27 +24,23 @@ from examples.MatCont.compare import (
     match_spectrum,
     scaled_close,
 )
-from examples.MatCont.registry import load_registry, select_cases
-from examples.MatCont.run_validation import build_parser, resolve_runtime_paths
-from examples.MatCont.artifacts import (
-    validate_equilibrium_artifacts,
-    enrich_generated_metadata,
-    validate_reference_metadata,
-    verify_case_references,
-)
 from examples.MatCont.python_cases.codim2 import run_codim2_points
 from examples.MatCont.python_cases.equilibrium import (
     run_adaptive_control_hopf,
     run_cubic_fold,
     run_vanderpol_hopf,
 )
-from examples.MatCont.python_cases.transforms import _batched_branch, run_transform_checks
 from examples.MatCont.python_cases.periodic import (
     load_torbpc_reference,
     run_radial_cycle,
     run_torbpc_cycle,
 )
-
+from examples.MatCont.python_cases.transforms import (
+    _batched_branch,
+    run_transform_checks,
+)
+from examples.MatCont.registry import load_registry, select_cases
+from examples.MatCont.run_validation import build_parser, resolve_runtime_paths
 
 REQUIRED_CASE_FIELDS = {
     "id",

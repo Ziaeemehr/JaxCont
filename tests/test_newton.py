@@ -2,8 +2,9 @@
 Tests for Newton solver.
 """
 
-import pytest
 import jax.numpy as jnp
+import pytest
+
 from jaxcont.solvers.newton import NewtonSolver
 
 
@@ -32,7 +33,7 @@ def test_newton_system():
     
     # Use slightly looser tolerance since floating point convergence can stall at ~6e-8
     solver = NewtonSolver(tol=1e-7, max_iter=20)
-    x, converged, n_iter = solver.solve(f, jnp.array([0.5, 0.5]))
+    x, _converged, _n_iter = solver.solve(f, jnp.array([0.5, 0.5]))
     
     # Check that we got close enough (even if not "converged" by strict tolerance)
     residual = jnp.linalg.norm(f(x))
@@ -49,7 +50,7 @@ def test_newton_no_convergence():
         return jnp.array([jnp.exp(x[0])])  # No root
     
     solver = NewtonSolver(tol=1e-8, max_iter=5)
-    x, converged, n_iter = solver.solve(f, jnp.array([1.0]))
+    _x, converged, n_iter = solver.solve(f, jnp.array([1.0]))
     
     assert not converged
     assert n_iter == 5

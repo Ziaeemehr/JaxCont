@@ -2,8 +2,8 @@
 Corrector methods for continuation.
 """
 
-from typing import Callable, Tuple
-import jax.numpy as jnp
+from typing import Callable
+
 from jax import Array
 
 
@@ -29,7 +29,7 @@ class Corrector:
         residual: Callable[[Array], Array],
         x0: Array,
         **kwargs
-    ) -> Tuple[Array, bool, int]:
+    ) -> tuple[Array, bool, int]:
         """
         Correct predicted point.
         

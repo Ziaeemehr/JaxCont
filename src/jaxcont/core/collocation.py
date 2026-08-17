@@ -98,14 +98,14 @@ def collocation_matrices(ncol: int):
     return D, E, gauss, gw
 
 
-def interval_propagators(raw_f, D: "jnp.ndarray", E: "jnp.ndarray", h: float, mesh_states, coll_states, T, p):
+def interval_propagators(raw_f, D: jnp.ndarray, E: jnp.ndarray, h: float, mesh_states, coll_states, T, p):
     """``(ntst, n, n)`` per-interval propagator blocks ``M_i``, such that
     ``Phi(T) = M_{ntst-1} @ ... @ M_0``. Extracted from ``monodromy_matrix``
     (unchanged math) so ``stability/prc.py`` can adjoint-propagate a vector
     across each interval individually, not just consume the composed
     endpoint map -- see
     docs/superpowers/specs/2026-08-05-prc-dprc-design.md."""
-    ntst, n = mesh_states.shape
+    _ntst, n = mesh_states.shape
     ncol = coll_states.shape[1]
     eye_n = jnp.eye(n)
 
@@ -129,7 +129,7 @@ def interval_propagators(raw_f, D: "jnp.ndarray", E: "jnp.ndarray", h: float, me
     return jax.vmap(interval_map)(mesh_states, coll_states)
 
 
-def monodromy_matrix(raw_f, D: "jnp.ndarray", E: "jnp.ndarray", h: float, mesh_states, coll_states, T, p):
+def monodromy_matrix(raw_f, D: jnp.ndarray, E: jnp.ndarray, h: float, mesh_states, coll_states, T, p):
     """``(n, n)`` monodromy matrix ``Phi(T)`` -- see ``interval_propagators``
     for the per-interval blocks this composes. Behavior/numerics unchanged
     from before the ``interval_propagators`` extraction; see

@@ -7,7 +7,8 @@ the same markers/colors/abbreviations as every other diagram.
 
 from __future__ import annotations
 
-from typing import Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Optional
 
 import matplotlib.pyplot as plt
 
@@ -42,7 +43,7 @@ def _curve_points(result, curve_kind: str, free: int):
 
 
 def plot_two_parameter_diagram(
-    results: Sequence[Tuple[object, str]],
+    results: Sequence[tuple[object, str]],
     *,
     free: int = 1,
     labels: Optional[Sequence[str]] = None,

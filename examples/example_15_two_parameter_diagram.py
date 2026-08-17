@@ -10,11 +10,14 @@ codim-2 location under ``jax.grad``.
 """
 
 import os
+
 import jax
 import jax.numpy as jnp
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
 import jaxcont as jc
 
 os.makedirs("images", exist_ok=True)

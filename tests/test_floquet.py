@@ -10,7 +10,6 @@ docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md.
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pytest
 
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
@@ -50,7 +49,11 @@ def test_monodromy_matrix_matches_interval_propagators_scan():
     """interval_propagators must be extractable from monodromy_matrix without
     changing monodromy_matrix's own numerics -- see
     docs/superpowers/specs/2026-08-05-prc-dprc-design.md."""
-    from jaxcont.core.collocation import collocation_matrices, interval_propagators, monodromy_matrix
+    from jaxcont.core.collocation import (
+        collocation_matrices,
+        interval_propagators,
+        monodromy_matrix,
+    )
 
     prob, mesh = _circle_problem(rho=1.0)
     ntst, ncol = mesh.ntst, mesh.ncol

@@ -13,7 +13,8 @@ docs/superpowers/plans/2026-07-21-engine-consolidation.md Task 5).
 """
 
 import jax.numpy as jnp
-from jaxcont.core.scan_continuation import _tangent, _newton_correct
+
+from jaxcont.core.scan_continuation import _newton_correct, _tangent
 
 
 class TestPseudoArclengthBasic:
@@ -44,7 +45,7 @@ class TestPseudoArclengthBasic:
             dp0 = tangent[-1]
             u_pred = u + ds * du0
             param_pred = param + ds * dp0
-            u_new, param_new, converged, n_iter = _newton_correct(
+            u_new, param_new, converged, _n_iter = _newton_correct(
                 f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 100
             )
 
@@ -92,7 +93,7 @@ class TestPseudoArclengthBasic:
             dp0 = tangent[-1]
             u_pred = u + ds * du0
             param_pred = param + ds * dp0
-            u_new, param_new, converged, n_iter = _newton_correct(
+            u_new, param_new, converged, _n_iter = _newton_correct(
                 f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 50
             )
 
@@ -173,7 +174,7 @@ class TestPseudoArclengthFoldBifurcation:
             dp0 = tangent[-1]
             u_pred = u + ds * du0
             param_pred = param + ds * dp0
-            u_new, param_new, converged, n_iter = _newton_correct(
+            u_new, param_new, converged, _n_iter = _newton_correct(
                 f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 100
             )
 
@@ -220,7 +221,7 @@ class TestPseudoArclengthFoldBifurcation:
             dp0 = tangent[-1]
             u_pred = u + ds * du0
             param_pred = param + ds * dp0
-            u_new, param_new, converged, n_iter = _newton_correct(
+            u_new, param_new, converged, _n_iter = _newton_correct(
                 f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 50
             )
 
@@ -270,7 +271,7 @@ class TestPseudoArclengthStepControl:
                 dp0 = tangent[-1]
                 u_pred = u + ds * du0
                 param_pred = param + ds * dp0
-                u_new, param_new, converged, n_iter = _newton_correct(
+                u_new, param_new, converged, _n_iter = _newton_correct(
                     f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 50
                 )
 
@@ -309,7 +310,7 @@ class TestPseudoArclengthStepControl:
         dp0 = tangent1[-1]
         u_pred = u + ds * du0
         param_pred = param + ds * dp0
-        u_new, param_new, converged, n_iter = _newton_correct(
+        u_new, param_new, converged, _n_iter = _newton_correct(
             f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 50
         )
 
@@ -343,7 +344,7 @@ class TestPseudoArclengthVsNatural:
         dp0 = tangent[-1]
         u_pred = u + ds * du0
         param_pred = param + ds * dp0
-        u_pa, param_pa, converged_pa, n_iter_pa = _newton_correct(
+        u_pa, param_pa, converged_pa, _n_iter_pa = _newton_correct(
             f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 50
         )
 

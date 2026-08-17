@@ -14,8 +14,8 @@ tests from the pre-migration version are intentionally not ported --
 see the module-level notes in that plan's Task 6 for why.
 """
 
-import pytest
 import jax.numpy as jnp
+import pytest
 
 import jaxcont as jc
 from jaxcont.core.scan_continuation import _adapt_ds

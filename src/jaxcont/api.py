@@ -14,36 +14,43 @@ through the analysis possible.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable, Literal, Optional, Sequence, Tuple
+from typing import Any, Callable, Literal, Optional
 
 import jax
 import jax.numpy as jnp
 from jax import Array
 
 from jaxcont.bifurcations.events import (
-    Event, Fold, Hopf, PeriodDoubling, NeimarkSacker, EventHit, detect_events,
+    Event,
+    EventHit,
+    Fold,
+    Hopf,
+    NeimarkSacker,
+    PeriodDoubling,
+    detect_events,
 )
-from jaxcont.core.continuation import ContinuationProblem, ContinuationSolution
+from jaxcont.core.continuation import ContinuationSolution
 from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
 
 __all__ = [
     "BifProblem",
-    "bif_problem",
-    "continuation",
-    "ContinuationPar",
-    "Solvers",
+    "Branch",
     "ContinuationAlgorithm",
-    "PseudoArclength",
-    "Natural",
+    "ContinuationPar",
+    "ContinuationResult",
     "Event",
+    "EventHit",
     "Fold",
     "Hopf",
-    "PeriodDoubling",
+    "Natural",
     "NeimarkSacker",
-    "EventHit",
-    "Branch",
-    "ContinuationResult",
+    "PeriodDoubling",
+    "PseudoArclength",
+    "Solvers",
+    "bif_problem",
+    "continuation",
 ]
 
 PyTree = Any
@@ -87,7 +94,7 @@ class BifProblem:
     kind: Literal[
         "equilibrium", "periodic", "bvp", "fold_curve", "hopf_curve"
     ] = "equilibrium"
-    state_names: Optional[Tuple[str, ...]] = None
+    state_names: Optional[tuple[str, ...]] = None
     param_name: Optional[str] = None
 
     def at(
@@ -96,7 +103,7 @@ class BifProblem:
         u0: Optional[Array] = None,
         p0: Optional[Array] = None,
         args: PyTree = _KEEP,
-    ) -> "BifProblem":
+    ) -> BifProblem:
         """Return a copy with selected fields overridden (cheap, functional)."""
         return replace(
             self,
@@ -268,7 +275,7 @@ class Branch:
     def n_valid(self) -> int:
         return int(self.params.shape[0])
 
-    def at_param(self, p: float) -> Tuple[float, Array]:
+    def at_param(self, p: float) -> tuple[float, Array]:
         """Return the ``(param, state)`` on the branch closest to ``p``."""
         idx = int(jnp.argmin(jnp.abs(self.params - p)))
         return float(self.params[idx]), self.states[idx]
@@ -329,7 +336,7 @@ jax.tree_util.register_pytree_node(
 def _run_scan(
     scan_fn,
     problem: BifProblem,
-    p_span: Tuple[float, float],
+    p_span: tuple[float, float],
     settings: ContinuationPar,
     events: Sequence[Event],
     solvers: Solvers,
@@ -563,7 +570,7 @@ def continuation(
     problem: BifProblem,
     alg: ContinuationAlgorithm = PseudoArclength(),
     *,
-    p_span: Tuple[float, float],
+    p_span: tuple[float, float],
     settings: ContinuationPar = ContinuationPar(),
     events: Sequence[Event] = (),
     solvers: Solvers = Solvers(),
