@@ -570,9 +570,11 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
       primitive `fold_point`/`hopf_point` already use — no new engine. `p` is generalized from
       scalar to shape `(2,)` throughout this feature (codim-2 needs two free parameters); every
       other function is untouched. **Deliberate scope choice:** these are direct point *solves* —
-      refine a point you can already guess at — not the `jc.codim2(prob, event=...)` two-parameter-
-      *continuation* sketch in ARCHITECTURE.md (finding points you can't yet approximate), which
-      remains its own, unstarted roadmap item below.
+      refine a point you can already guess at — not two-parameter *continuation* itself (finding
+      points you can't yet approximate), which was a separate roadmap item — see the
+      "Two-parameter continuation" entry above, done 2026-08-17 (the `jc.codim2(prob,
+      event=...)` sketch this paragraph originally pointed at was never built; the shipped API
+      is `fold_curve_problem`/`hopf_curve_problem` instead).
       Four real design findings, verified numerically during planning (not just reasoned about) and
       confirmed correct through implementation:
       (1) ω's sign is unconstrained — the Hopf block of every extended system (GH, ZH, HH) is
