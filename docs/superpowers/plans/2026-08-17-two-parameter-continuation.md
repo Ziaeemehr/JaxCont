@@ -666,7 +666,7 @@ git commit -m "feat(codim2-events): detect cusp points along a fold curve"
 **Interfaces:**
 - Consumes: Task 3's `Cusp._decode` pattern; `codim2.bogdanov_takens_point(f, u_guess, p_guess, args, *, tol, max_iter) -> (u, p, v0, v1, converged)`; `curves.unpack_hopf_curve`.
 - Produces:
-  - `_nontrivial_eigenvalues(jac, curve, omega, near_critical) -> (values, mask)` — shared by Tasks 4-7.
+  - `_CurveEvent` (decoding mixin) and `_drop_nearest(values, target) -> mask` — shared by Tasks 4-7 (see Step 3's code for the authoritative signatures; this line only names them).
   - `BogdanovTakens(raw_f, free, curve, args=None, kind="bogdanov_takens", tolerance=1e-6, near_critical=2.0)`.
   - `_CurveEvent` mixin providing `_decode_fold` / `_decode_hopf` / `_jacobian`.
 
@@ -732,7 +732,7 @@ def test_bogdanov_takens_detected_on_the_fold_curve():
 
 def test_bt_test_function_ignores_the_pinned_zero_eigenvalue():
     """DISCRIMINATING POWER: one eigenvalue is identically zero along the
-    whole fold curve. If the exclusion in _nontrivial_eigenvalues were
+    whole fold curve. If the exclusion in _drop_nearest were
     removed, the test function would be identically ~0, never change sign,
     and detect nothing. This asserts it instead tracks -(p1+1)/2."""
     from jaxcont.bifurcations.events import BranchPoint
