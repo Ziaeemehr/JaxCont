@@ -83,6 +83,13 @@ from jaxcont.stability.eigenvalue import compute_eigenvalues, analyze_stability
 # events=[...] is passed to the top-level continuation() call regardless of
 # problem kind. BVP continuation remains an unimplemented stub.
 
+# Two-parameter continuation: fold/Hopf curves + codim-2 events along them.
+# See docs/superpowers/specs/2026-08-17-two-parameter-continuation-design.md
+from jaxcont.bifurcations.curves import fold_curve_problem, hopf_curve_problem
+from jaxcont.bifurcations.codim2_events import (
+    BogdanovTakens, Cusp, DoubleHopf, GeneralizedHopf, ZeroHopf,
+)
+
 # Utilities
 from jaxcont.utils.config import Config
 from jaxcont.viz import plot_bifurcation_diagram, plot_continuation
@@ -136,6 +143,14 @@ __all__ = [
     # Stability
     "compute_eigenvalues",
     "analyze_stability",
+    # Two-parameter continuation
+    "fold_curve_problem",
+    "hopf_curve_problem",
+    "Cusp",
+    "BogdanovTakens",
+    "ZeroHopf",
+    "GeneralizedHopf",
+    "DoubleHopf",
     # Utilities
     "Config",
     "plot_bifurcation_diagram",

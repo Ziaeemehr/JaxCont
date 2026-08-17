@@ -142,3 +142,21 @@ def test_hopf_curve_continuation_under_jit():
         0.5,
     )
     assert n_valid > 0  # Continuation should produce at least one point
+
+
+def test_two_parameter_surface_is_exported_top_level():
+    for name in [
+        "fold_curve_problem", "hopf_curve_problem",
+        "Cusp", "BogdanovTakens", "ZeroHopf", "GeneralizedHopf", "DoubleHopf",
+    ]:
+        assert hasattr(jc, name), f"jc.{name} missing"
+        assert name in jc.__all__, f"{name} missing from __all__"
+
+
+def test_every_codim2_event_kind_has_a_plot_style():
+    from jaxcont.viz.styles import BIFURCATION_STYLES
+    for kind in [
+        "cusp", "bogdanov_takens", "zero_hopf",
+        "generalized_hopf", "double_hopf",
+    ]:
+        assert kind in BIFURCATION_STYLES, f"no style for {kind!r}"
