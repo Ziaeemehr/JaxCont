@@ -157,6 +157,35 @@ No CUDA-specific code. The same `continuation()` runs on CPU for a 1-D toy and o
 sweeps, differentiable exponents, matrix-free scaling). Presenting them identically in both
 packages is what makes the two read as one ecosystem (§9).
 
+### 3.4 Two-parameter continuation (curves of codim-1 points) — shipped 2026-08-17
+
+A fold/Hopf *curve* through the `(p[0], p[1])` plane is an ordinary `BifProblem`, not a new
+engine: `jc.fold_curve_problem`/`jc.hopf_curve_problem` fold the non-continued parameter
+component into the extended-system unknowns (same reduction that let periodic-orbit collocation
+reuse the equilibrium scan engine in v0.2), so §3.1's `vmap` and §3.2's implicit-diff `grad` both
+apply for free — the roadmap's standing mandate ("every new curve/event type ships batched *and*
+differentiable") is satisfied without new plumbing. This replaces the `jc.codim2(...)` sketch
+this section used to carry (see below): that dispatcher-over-an-event API was never built — the
+factory-per-curve-kind pattern shipped instead, matching `periodic_orbit_problem`'s precedent.
+
+```python
+prob2 = jc.fold_curve_problem(f, u_guess, p_guess=jnp.array([0.3, 1.0]), free=1)
+sol2  = jc.continuation(prob2, p_span=(1.0, 4.0),
+                        settings=jc.ContinuationPar(compute_stability=False),
+                        events=[jc.Cusp(raw_f=f, free=1),
+                                jc.BogdanovTakens(raw_f=f, free=1, curve="fold")])
+```
+
+Five codim-2 `Event`s detect where a curve degenerates further: `Cusp`/`BogdanovTakens` on a
+fold curve, `ZeroHopf`/`GeneralizedHopf`/`DoubleHopf` on a Hopf curve — each built on the
+matching direct solver from `bifurcations/codim2.py` (v0.3.0), with a trivial-eigenvalue
+exclusion pre-filter before its test function runs. `jc.plot_two_parameter_diagram(results, *,
+free=1, ...)` visualizes one or more curves plus their codim-2 markers. See
+[ROADMAP.md](ROADMAP.md)'s v0.3.0+ section for the full writeup, including the measured
+`newton_tol` floors, the cross-validation performed, and the explicit scope cuts (no adaptive
+Hopf-phase re-anchoring, no bialternate-product test functions, periodic-orbit codim-2 curves
+still unsupported, codim-2 normal-form coefficients still future work).
+
 ---
 
 ## 4. The stable core contract (design now, keep stable)
@@ -355,11 +384,6 @@ Sketched so the surface stays coherent as features land. **Do not implement or o
 - **v0.3 Branch switching** (from a detected event):
   ```python
   new = jc.branch_switch(sol, event=sol.events[0], settings=...)
-  ```
-- **v0.3 Two-parameter continuation** (codim-2 curve of a codim-1 point):
-  ```python
-  sol2 = jc.continuation(jc.codim2(prob, event=jc.Fold()),
-                         p_span=..., p2_span=..., events=[jc.Cusp(), jc.BogdanovTakens()])
   ```
 - **Normal forms / Lyapunov coefficient**: `jc.normal_form(sol, event)` -> criticality.
 

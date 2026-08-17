@@ -16,8 +16,11 @@ the usual ``f(u, p, args)`` signature; only ``p``'s shape changes.
 
 These are refinement tools: every solver needs a guess already near the
 codim-2 point and none of them search. Finding codim-2 points you cannot
-already approximate requires two-parameter continuation, which is a
-separate (unstarted) roadmap item.
+already approximate requires two-parameter continuation -- shipped, see
+``bifurcations/curves.py`` (``fold_curve_problem``/``hopf_curve_problem``)
+and this module's own ``codim2_events.py`` sibling, which detects these
+same codim-2 points along a traced curve instead of requiring a
+pre-supplied guess.
 
 See docs/superpowers/specs/2026-08-05-codim2-direct-solvers-design.md.
 """

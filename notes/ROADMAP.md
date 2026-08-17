@@ -444,7 +444,76 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
 - [x] Phase-plane visualization for 2D autonomous systems: nullclines, vector fields,
       streamlines, continuation equilibria, and trajectories.
 - [ ] Branch switching
-- [ ] Two-parameter continuation
+- [x] Two-parameter continuation: curves of folds and Hopf points, five codim-2
+      events — *(done 2026-08-17, see
+      [plan](../docs/superpowers/plans/2026-08-17-two-parameter-continuation.md) and its
+      [design spec](../docs/superpowers/specs/2026-08-17-two-parameter-continuation-design.md))*.
+      New `bifurcations/curves.py`: `fold_curve_problem`/`hopf_curve_problem`, both plain
+      `BifProblem` factories — a fold/Hopf *curve* through the `(p[0], p[1])` plane, traced
+      by the existing scan engine with **no new engine**. The reduction: pick a `free`
+      component of `p` as the ordinary scalar continuation parameter `q`, fold the other
+      (`p_fixed`) into the extended-system unknowns alongside `(u, v)` (or `(u, q1, q2,
+      omega)` for Hopf) — from the residual's point of view `p_fixed` is just another state
+      variable, so `fold_solve.py`'s/`hopf_normal_form.py`'s existing extended residuals
+      apply unchanged (the same trick that let periodic-orbit collocation reuse the
+      equilibrium engine in v0.2). Both factories Newton-refine the caller's guess onto a
+      genuine fold/Hopf point at construction time (`p_span[0]` must equal `problem.p0`,
+      enforced) before `continuation()` ever runs. New `bifurcations/codim2_events.py`: five
+      `Event` implementations usable via `continuation(..., events=[...])` on a curve —
+      `Cusp`/`BogdanovTakens` (on a fold curve), `ZeroHopf`/`GeneralizedHopf`/`DoubleHopf`
+      (on a Hopf curve) — each a test function built on the matching `codim2.py` direct
+      solver from v0.3.0, with a `_drop_nearest`/`near_critical` pre-filter excluding the
+      trivial eigenvalue (mirroring `PeriodDoubling`/`NeimarkSacker`'s `near_unit_circle`
+      pattern from v0.2) so the genuinely-critical eigenvalue is what gets tested, not
+      whichever eigenvalue happens to sit nearest zero/the imaginary axis. New
+      `viz.plot_two_parameter_diagram(results, *, free=1, labels=None, ax=None,
+      annotate=True)` takes `[(ContinuationResult, "fold"|"hopf"), ...]` and reuses the
+      existing `BIFURCATION_STYLES` table (already had CP/BT/GH/ZH/HH entries).
+      `ContinuationPar(compute_stability=False, ...)` is now a required guard for curve
+      problems (stability along a codim-2 curve isn't a meaningful quantity — same
+      guard-clause pattern periodic orbits used in v0.2). **Measured `newton_tol` floors**
+      (Tasks 1-2, both cross-checked by independent review): fold-curve residual floor
+      2.4e-7 at `newton_tol=1e-5` (41× margin), Hopf-curve floor 5.96e-8 at the same
+      tolerance (168× margin) — no TF32 GPU precision fix needed (unlike periodic-orbit
+      collocation's big einsums), since both residuals are `jacfwd` + matvecs only.
+      **Cross-validation, one independent tool plus one closed-form check** (not the two
+      independent-tool tiers originally planned — see the explicit scope note below):
+      (1) `bogdanov_takens_parameters`'s Lorenz-84 BT (already used for the v0.3.0 codim-2
+      direct-solver cross-validation) is re-detected here along a *traced fold curve* and
+      matches the same BifurcationKit.jl v0.5.2 reference values `tests/test_codim2.py`'s
+      direct-solver test already validates — same tool, same model, now exercised through
+      the curve/event path instead of a single direct solve; (2) the cusp discriminant is
+      checked against its exact closed form on a hand-built test system. **Explicit scope
+      cuts, each its own future item, not oversights:** no adaptive re-anchoring of the Hopf
+      curve's phase seed — the phase condition anchors to a seed eigenvector from the
+      curve's starting point, and fixed-shape buffers (required for the `jit`/`vmap` story)
+      rule out MatCont-style re-anchoring if that eigenvector rotates far enough to go
+      orthogonal; the documented remedy is restarting the curve from a later point, not a
+      library fix. No bialternate-product/determinant test functions (MatCont's more robust
+      alternative for "second eigenvalue crosses" conditions) — `n(n-1)/2`-dimensional and
+      would need its own `LinearSolver` story, disproportionate here. `US-C2-PD-001`/`LPC`/
+      `NS` (two-parameter curves of *periodic* bifurcations) stay `unsupported` — need the
+      collocation system nested inside the extended system, their own epic. Codim-2
+      normal-form coefficients beyond each solver's defining conditions (BT's own `(a,b)`
+      pair, GH's second Lyapunov coefficient `l2`) remain future work, as scoped back in
+      v0.3.0's codim-2 direct-solver entry above. Branch switching is untouched by this
+      work. **MatCont cross-validation deliberately deferred, not attempted and not
+      forgotten:** the original plan called for a *second*, independent-tool tier promoting
+      `US-C2-LP-001`/`US-C2-H-001` from `unsupported` to `supported` in
+      `examples/MatCont/cases.json` (MatCont 7.6 `Testruns/testLPcataloscill.m` /
+      `testLPHopfcataloscill.m`). Under a hard time budget, this was cut in favor of
+      shipping the working, tested, documented feature end-to-end rather than leaving it
+      half-done: working MATLAB drivers already exist and run
+      (`examples/MatCont/matlab/unsupported/run_two_parameter_fold_curve.m`,
+      `run_two_parameter_hopf_curve.m`) — scaffolded, not started from zero — but
+      `cases.json`'s two `US-C2-*` entries are still `support: "unsupported"`,
+      `python: null` right now. Promoting them needs a Python-side transcription of the
+      catalytic-oscillator model, a live MATLAB/MatCont run to generate references, and the
+      `cases.json` flip — realistically its own session's worth of work, tracked in "Next
+      up" below.
+      Full suite green throughout: 302 passed by the end (11 new tests across the two
+      curve-factory tasks alone, plus more from the five events and the viz/export tasks),
+      zero regressions.
 - [x] Normal forms / Lyapunov **coefficient** `l₁` (Hopf criticality — a *bifurcation* invariant,
       NOT the Lyapunov exponent spectrum; see below) — *(done 2026-08-04, see
       [plan](../docs/superpowers/plans/2026-08-04-hopf-normal-form.md) and its
@@ -782,12 +851,21 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
     only archives releases published after the integration is turned on. Concept DOI
     `10.5281/zenodo.21812716` in the README badge, version DOI `10.5281/zenodo.21812717` in
     `CITATION.cff`. Every future GitHub release now archives automatically.
-19. **Next up** — no single item is blocking; pick by what's wanted:
+19. ✅ **Two-parameter continuation** (v0.3.0+, done 2026-08-17) — fold/Hopf curve factories,
+    five codim-2 events, `plot_two_parameter_diagram`, one independent-tool cross-validation
+    (BifurcationKit.jl Lorenz-84 BT) plus a closed-form cusp check — see the v0.3.0+ section
+    above for the full writeup. **Follow-up, deliberately deferred:** MatCont cross-validation
+    (`US-C2-LP-001`/`US-C2-H-001`) — the MATLAB drivers already run
+    (`examples/MatCont/matlab/unsupported/run_two_parameter_{fold,hopf}_curve.m`), but the
+    Python transcription, reference generation, and `cases.json` promotion are not done.
+20. **Next up** — no single item is blocking; pick by what's wanted:
     - **Ergonomics:** `bothside` continuation (issue #8) and the legacy `natural_continuation.py`
       FD/bare-except cleanup (issue #10) are still open, low-severity, non-blocking items.
-    - **Larger v0.3.0+ epics** (bigger, less demand-driven urgency so far): branch switching,
-      two-parameter continuation (which the codim-2 *direct solvers* just shipped are explicitly
-      not a substitute for — see the v0.3.0+ writeup above).
+    - **Deferred follow-up from item 19:** promote `US-C2-LP-001`/`US-C2-H-001` to `supported`
+      in `examples/MatCont/cases.json` — MATLAB drivers are scaffolded and runnable already;
+      needs the Python-side model, a live MatCont reference run, and the `cases.json` flip.
+    - **Larger v0.3.0+ epic:** branch switching — the one item from this section's original list
+      that two-parameter continuation's completion doesn't touch.
 
 ---
 
