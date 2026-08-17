@@ -22,7 +22,13 @@ from typing import Any, Callable
 import jax.numpy as jnp
 from jax import Array, jacfwd
 
-from jaxcont.bifurcations.codim2 import bogdanov_takens_point, cusp_point
+from jaxcont.bifurcations.codim2 import (
+    bogdanov_takens_point,
+    cusp_point,
+    double_hopf_point,
+    generalized_hopf_point,
+    zero_hopf_point,
+)
 from jaxcont.bifurcations.curves import (
     _assemble_p,
     unpack_fold_curve,
@@ -30,6 +36,7 @@ from jaxcont.bifurcations.curves import (
 )
 from jaxcont.bifurcations.events import BranchPoint, Event, EventHit
 from jaxcont.bifurcations.fold_normal_form import fold_coefficient
+from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
 
 PyTree = Any
 
@@ -207,6 +214,218 @@ class BogdanovTakens(_CurveEvent, Event):
             info={
                 "p": p_star,
                 "p_fixed": p_star[1 - self.free],
+                "converged": True,
+                "method": "extended_system",
+            },
+        )
+
+
+@dataclass(frozen=True)
+class ZeroHopf(_CurveEvent, Event):
+    """A zero-Hopf (ZH) point: a zero eigenvalue coincides with an
+    imaginary pair. Requires ``n >= 3``.
+
+    On a HOPF curve: a REAL eigenvalue crosses zero (the imaginary pair is
+    pinned to the axis by the curve's defining condition).
+    On a FOLD curve: a complex pair's real part crosses zero (the zero
+    eigenvalue is pinned by the curve's defining condition).
+
+    Abbreviation **ZH**, see ``bifurcations.taxonomy.describe("ZH")``.
+    """
+
+    raw_f: Callable[[Array, Array, PyTree], Array]
+    free: int = 1
+    curve: str = "hopf"
+    args: PyTree = None
+    kind: str = "zero_hopf"
+    tolerance: float = 1e-6
+    near_critical: float = 2.0
+
+    def test_function(self, point: BranchPoint) -> float:
+        u, p, extra = self._decode(point)
+        eigs = self._eigenvalues(u, p)
+        near = jnp.abs(eigs) < self.near_critical
+        if self.curve == "hopf":
+            # Exclude the pinned imaginary pair; watch a real eigenvalue.
+            _q1, _q2, omega = extra
+            keep = _drop_nearest(eigs, 1j * omega) & _drop_nearest(eigs, -1j * omega)
+            mask = keep & near & (jnp.abs(jnp.imag(eigs)) < self.tolerance)
+        else:
+            # Exclude the pinned zero; watch a complex pair's real part.
+            keep = _drop_nearest(eigs, 0.0 + 0.0j)
+            mask = keep & near & (jnp.abs(jnp.imag(eigs)) > self.tolerance)
+        if not jnp.any(mask):
+            return float("nan")
+        candidates = jnp.where(mask, eigs, jnp.nan)
+        idx = jnp.nanargmin(jnp.abs(jnp.real(candidates)))
+        return float(jnp.real(eigs[idx]))
+
+    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+        u_l, p_l, _ = self._decode(left)
+        u_r, p_r, _ = self._decode(right)
+        result = zero_hopf_point(
+            self.raw_f, (u_l + u_r) / 2, (p_l + p_r) / 2, self.args,
+            tol=max(tolerance, 1e-6), max_iter=max_iterations,
+        )
+        u_star, p_star, _v, _q1, _q2, omega_star, converged = result
+        ok = bool(converged) and bool(jnp.all(jnp.isfinite(p_star)))
+        if not ok:
+            return EventHit(
+                kind=self.kind, p=float(right.p), u=right.u, index=index,
+                info={"converged": False, "method": "extended_system"},
+            )
+        return EventHit(
+            kind=self.kind, p=float(p_star[self.free]), u=u_star, index=index,
+            info={
+                "p": p_star,
+                "p_fixed": p_star[1 - self.free],
+                "omega": float(omega_star),
+                "converged": True,
+                "method": "extended_system",
+            },
+        )
+
+
+@dataclass(frozen=True)
+class GeneralizedHopf(_CurveEvent, Event):
+    """A generalized-Hopf / Bautin (GH) point on a Hopf curve: the first
+    Lyapunov coefficient ``l1`` crosses zero, so the Hopf's criticality
+    flips between supercritical and subcritical.
+
+    Needs no eigenvalues -- ``l1`` is already a scalar that changes sign.
+
+    Abbreviation **GH**, see ``bifurcations.taxonomy.describe("GH")``.
+    """
+
+    raw_f: Callable[[Array, Array, PyTree], Array]
+    free: int = 1
+    args: PyTree = None
+    kind: str = "generalized_hopf"
+    curve: str = "hopf"
+    # Absolute threshold on a scale-dependent float32 quantity; see
+    # events.py:Hopf.l1_tolerance for why this is not a universal constant.
+    l1_tolerance: float = 1e-6
+
+    def test_function(self, point: BranchPoint) -> float:
+        u, p, (q1, q2, omega) = self._decode(point)
+        return float(lyapunov_coefficient(self.raw_f, u, p, q1, q2, omega, self.args))
+
+    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+        u_l, p_l, _ = self._decode(left)
+        u_r, p_r, _ = self._decode(right)
+        result = generalized_hopf_point(
+            self.raw_f, (u_l + u_r) / 2, (p_l + p_r) / 2, self.args,
+            tol=max(tolerance, 1e-6), max_iter=max_iterations,
+        )
+        u_star, p_star, _q1, _q2, omega_star, converged = result
+        ok = bool(converged) and bool(jnp.all(jnp.isfinite(p_star)))
+        if not ok:
+            return EventHit(
+                kind=self.kind, p=float(right.p), u=right.u, index=index,
+                info={"converged": False, "method": "extended_system"},
+            )
+        return EventHit(
+            kind=self.kind, p=float(p_star[self.free]), u=u_star, index=index,
+            info={
+                "p": p_star,
+                "p_fixed": p_star[1 - self.free],
+                "omega": float(omega_star),
+                "converged": True,
+                "method": "extended_system",
+            },
+        )
+
+
+@dataclass(frozen=True)
+class DoubleHopf(_CurveEvent, Event):
+    """A double-Hopf (HH) point on a Hopf curve: a SECOND complex pair's
+    real part crosses zero while the first pair is pinned to the axis.
+
+    ``double_hopf_point`` requires a caller-supplied ``seed_b`` (no
+    default) because it cannot guess the second pair and degenerates to
+    ``nan`` if both blocks land on the same physical pair. Detection along
+    the curve produces that second pair naturally, so this event supplies
+    ``seed_b`` itself.
+
+    Abbreviation **HH**, see ``bifurcations.taxonomy.describe("HH")``.
+    """
+
+    raw_f: Callable[[Array, Array, PyTree], Array]
+    free: int = 1
+    args: PyTree = None
+    kind: str = "double_hopf"
+    curve: str = "hopf"
+    tolerance: float = 1e-6
+    near_critical: float = 2.0
+    separation_tolerance: float = 1e-3
+
+    def _second_pair(self, point: BranchPoint):
+        """Full eigendecomposition of the ORIGINAL system's Jacobian at
+        ``point``, masked to the SECOND complex pair (the pinned pair
+        excluded via ``_drop_nearest``). Returns ``(eigs, evecs, mask)``.
+
+        Unlike ``_CurveEvent._eigenvalues`` (which uses ``eigvals`` only),
+        this needs the eigenVECTORS too: ``refine()`` must hand
+        ``double_hopf_point`` a real direction (``seed_b``) pointing at
+        this pair, not just its eigenvalue.
+        """
+        u, p, (_q1, _q2, omega) = self._decode(point)
+        jac = jacfwd(lambda uu: self.raw_f(uu, p, self.args))(u)
+        eigs, evecs = jnp.linalg.eig(jac)
+        keep = _drop_nearest(eigs, 1j * omega) & _drop_nearest(eigs, -1j * omega)
+        near = jnp.abs(jnp.real(eigs)) < self.near_critical
+        mask = keep & near & (jnp.abs(jnp.imag(eigs)) > self.tolerance)
+        return eigs, evecs, mask
+
+    def test_function(self, point: BranchPoint) -> float:
+        eigs, _evecs, mask = self._second_pair(point)
+        if not jnp.any(mask):
+            return float("nan")
+        candidates = jnp.where(mask, eigs, jnp.nan)
+        idx = jnp.nanargmin(jnp.abs(jnp.real(candidates)))
+        return float(jnp.real(eigs[idx]))
+
+    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+        u_l, p_l, _ = self._decode(left)
+        u_r, p_r, _ = self._decode(right)
+        # seed_b: a real direction pointing at the second Hopf pair, built
+        # the same way hopf_normal_form._seed builds a block's q1 -- the
+        # real part of the eigenvector at the nearest-to-critical
+        # surviving complex eigenvalue, taken from the bracket's right
+        # endpoint. This is exactly what double_hopf_point cannot guess
+        # for itself; it is the whole reason this event exists.
+        eigs, evecs, mask = self._second_pair(right)
+        candidates = jnp.where(mask, eigs, jnp.nan)
+        idx = jnp.nanargmin(jnp.abs(jnp.real(candidates)))
+        seed_b = jnp.real(evecs[:, idx])
+        seed_b = seed_b / jnp.linalg.norm(seed_b)
+
+        result = double_hopf_point(
+            self.raw_f, (u_l + u_r) / 2, (p_l + p_r) / 2, self.args,
+            seed_b=seed_b,
+            tol=max(tolerance, 1e-6), max_iter=max_iterations,
+            separation_tolerance=self.separation_tolerance,
+        )
+        # double_hopf_point returns a 9-tuple:
+        # (u*, p*, q1a, q2a, omega_a, q1b, q2b, omega_b, converged) --
+        # confirmed against the live docstring (Task 7 Step 1). Unpacked
+        # by full position, not the brief's `result[-3:]` slice, which
+        # would have misaligned (that lands on q2b, omega_b, converged).
+        (u_star, p_star, _q1a, _q2a, omega_a,
+         _q1b, _q2b, omega_b, converged) = result
+        ok = bool(converged) and bool(jnp.all(jnp.isfinite(p_star)))
+        if not ok:
+            return EventHit(
+                kind=self.kind, p=float(right.p), u=right.u, index=index,
+                info={"converged": False, "method": "extended_system"},
+            )
+        return EventHit(
+            kind=self.kind, p=float(p_star[self.free]), u=u_star, index=index,
+            info={
+                "p": p_star,
+                "p_fixed": p_star[1 - self.free],
+                "omega_a": float(omega_a),
+                "omega_b": float(omega_b),
                 "converged": True,
                 "method": "extended_system",
             },

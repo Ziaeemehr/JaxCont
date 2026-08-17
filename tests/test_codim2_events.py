@@ -116,3 +116,147 @@ def test_bt_near_critical_filter_is_not_too_aggressive():
                         near_critical=2.0)]
     )
     assert len([h for h in sol.events if h.kind == "bogdanov_takens"]) == 1
+
+
+from jaxcont.bifurcations.codim2_events import ZeroHopf
+from jaxcont.bifurcations.curves import hopf_curve_problem
+
+
+def _zh_system(u, p, args):
+    """2-D Hopf block (+- i at criticality) decoupled from a 2-D UPPER
+    TRIANGULAR z block (z1' = lam*z1 + z2, z2' = -K*z2, K > 0 fixed).
+
+    Equilibrium is pinned at (1, -2, 3, -1) for every p. The Hopf block's
+    mu = p0 + p1**2 - 1 gives the exact Hopf curve p0 = 1 - p1**2; along
+    it the z block's eigenvalues are exactly {lam, -K} with
+    lam = p1 - 0.5, so the zero-Hopf point sits exactly at p1 = 0.5,
+    p0 = 0.75, and n = 4 satisfies zero_hopf_point's n >= 3 requirement.
+
+    The z block is NOT the simpler single-state ``lam*z1``: with a scalar
+    z, its own equilibrium row is the ONLY equation in the whole extended
+    system that touches z, and that row's z-sensitivity IS the eigenvalue
+    itself -- identically zero exactly at the zero-Hopf point. That makes
+    zero_hopf_point's Newton system exactly rank-deficient there (confirmed
+    via SVD), and refine()'s bracket-midpoint guess lands EXACTLY on the
+    pinned equilibrium (since it never moves), so the very first Newton
+    step lands almost exactly on the singular point and the next explodes
+    to nan. The constant coupling ``+z2`` (independent of z1, lam, or K)
+    gives the null-vector/eigenvector rows touching z1 a genuine, always
+    -nonzero z2-sensitivity, which is enough rank to keep Newton
+    well-conditioned through convergence -- confirmed by direct SVD
+    (18/19, vs. 14/15 for the scalar block) and by running refine()'s own
+    tolerance/iteration budget (tol=1e-6, max_iter=20) against the actual
+    bracket points this system produces.
+    """
+    x = u[0] - 1.0
+    y = u[1] + 2.0
+    z1 = u[2] - 3.0
+    z2 = u[3] + 1.0
+    mu = p[0] + p[1] ** 2 - 1.0
+    lam = p[1] - 0.5
+    K = 2.0
+    r2 = x * x + y * y
+    return jnp.array([
+        mu * x - y - x * r2,
+        x + mu * y - y * r2,
+        lam * z1 + z2,
+        -K * z2,
+    ])
+
+
+def test_zero_hopf_detected_on_the_hopf_curve():
+    # Seed at p1 = 0 -> p0 = 1, equilibrium (1,-2,3,-1).
+    prob = hopf_curve_problem(
+        _zh_system, jnp.array([1.0, -2.0, 3.0, -1.0]), jnp.array([1.0, 0.0]), free=1,
+    )
+    sol = jc.continuation(
+        prob,
+        p_span=(0.0, 1.0),
+        settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
+        events=[ZeroHopf(raw_f=_zh_system, free=1, curve="hopf")],
+    )
+    hits = [h for h in sol.events if h.kind == "zero_hopf"]
+    assert len(hits) == 1
+    assert hits[0].info["converged"] is True
+    assert abs(hits[0].p - 0.5) < 5e-2
+    assert abs(float(hits[0].info["p_fixed"]) - 0.75) < 5e-2
+
+
+from jaxcont.bifurcations.codim2_events import GeneralizedHopf
+
+
+def _bautin(u, p, args):
+    """Bautin (generalized-Hopf) normal form, equilibrium shifted to
+    (0.4, -0.6). mu = p0 so the Hopf curve is exactly p0 = 0; the cubic
+    coefficient b = p1 - 0.4 sets sign(l1), so GH sits exactly at p1 = 0.4.
+    """
+    x = u[0] - 0.4
+    y = u[1] + 0.6
+    mu = p[0]
+    b = p[1] - 0.4
+    r2 = x * x + y * y
+    return jnp.array([
+        mu * x - y + b * x * r2 - x * r2 * r2,
+        x + mu * y + b * y * r2 - y * r2 * r2,
+    ])
+
+
+def test_generalized_hopf_detected_on_the_hopf_curve():
+    prob = hopf_curve_problem(
+        _bautin, jnp.array([0.4, -0.6]), jnp.array([0.0, 0.0]), free=1,
+    )
+    sol = jc.continuation(
+        prob,
+        p_span=(0.0, 0.9),
+        settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
+        events=[GeneralizedHopf(raw_f=_bautin, free=1)],
+    )
+    hits = [h for h in sol.events if h.kind == "generalized_hopf"]
+    assert len(hits) == 1
+    assert hits[0].info["converged"] is True
+    assert abs(hits[0].p - 0.4) < 5e-2
+
+
+from jaxcont.bifurcations.codim2_events import DoubleHopf
+
+
+def _hh_system(u, p, args):
+    """Two decoupled 2-D Hopf blocks with distinct frequencies (1 and 2, so
+    they clear double_hopf_point's separation check). Equilibrium pinned at
+    (0.2, -0.1, 0.3, -0.4). Block A's mu_a = p0 gives the Hopf curve
+    p0 = 0; along it block B's mu_b = p1 - 0.3 crosses zero exactly at
+    p1 = 0.3, which is the double-Hopf point."""
+    xa, ya = u[0] - 0.2, u[1] + 0.1
+    xb, yb = u[2] - 0.3, u[3] + 0.4
+    mu_a = p[0]
+    mu_b = p[1] - 0.3
+    ra2 = xa * xa + ya * ya
+    rb2 = xb * xb + yb * yb
+    return jnp.array([
+        mu_a * xa - 1.0 * ya - xa * ra2,
+        1.0 * xa + mu_a * ya - ya * ra2,
+        mu_b * xb - 2.0 * yb - xb * rb2,
+        2.0 * xb + mu_b * yb - yb * rb2,
+    ])
+
+
+def test_double_hopf_detected_with_automatic_seed_b():
+    prob = hopf_curve_problem(
+        _hh_system,
+        jnp.array([0.2, -0.1, 0.3, -0.4]),
+        jnp.array([0.0, 0.0]),
+        free=1,
+    )
+    sol = jc.continuation(
+        prob,
+        p_span=(0.0, 0.7),
+        settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
+        events=[DoubleHopf(raw_f=_hh_system, free=1)],
+    )
+    hits = [h for h in sol.events if h.kind == "double_hopf"]
+    assert len(hits) == 1
+    assert hits[0].info["converged"] is True
+    assert abs(hits[0].p - 0.3) < 5e-2
+    # The two frequencies must be genuinely distinct -- a collapsed pair is
+    # the degenerate case double_hopf_point returns nan for.
+    assert abs(hits[0].info["omega_a"] - hits[0].info["omega_b"]) > 0.5
