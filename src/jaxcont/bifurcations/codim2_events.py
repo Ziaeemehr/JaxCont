@@ -95,6 +95,30 @@ def _drop_nearest(values: Array, target: complex) -> Array:
     return jnp.arange(values.shape[0]) != idx
 
 
+def _drop_nearest_pinned_pair(values: Array, omega, near_zero: float = 1e-6) -> Array:
+    """Mask out the pinned Hopf-curve pair +-i*omega, one entry per half.
+
+    Two independent ``_drop_nearest`` calls -- one at ``+i*omega``, one at
+    ``-i*omega`` -- work everywhere EXCEPT right near a Bogdanov-Takens
+    point, where ``omega`` genuinely approaches 0: there ``+i*omega`` and
+    ``-i*omega`` coincide, so ``argmin`` latches onto the SAME single
+    entry for both calls, and only one eigenvalue gets excluded instead of
+    two. The second (still-pinned) entry then leaks back into the
+    candidate mask as if it were a genuine codim-2 candidate.
+
+    Below ``near_zero`` this instead drops the two entries nearest 0 --
+    both halves of the collapsing pinned pair -- which is what "exclude
+    the pinned pair" means once it has degenerated to a near-double zero.
+    """
+    if abs(float(omega)) < near_zero:
+        first = _drop_nearest(values, 0.0 + 0.0j)
+        masked = jnp.where(first, jnp.abs(values), jnp.inf)
+        idx2 = jnp.argmin(masked)
+        second = jnp.arange(values.shape[0]) != idx2
+        return first & second
+    return _drop_nearest(values, 1j * omega) & _drop_nearest(values, -1j * omega)
+
+
 @dataclass(frozen=True)
 class Cusp(_CurveEvent, Event):
     """A cusp (CP) point on a fold curve.
@@ -112,7 +136,6 @@ class Cusp(_CurveEvent, Event):
     curve: str = "fold"
     args: PyTree = None
     kind: str = "cusp"
-    tolerance: float = 1e-6
 
     def test_function(self, point: BranchPoint) -> float:
         u, p, v = self._decode(point)
@@ -244,14 +267,22 @@ class ZeroHopf(_CurveEvent, Event):
     def test_function(self, point: BranchPoint) -> float:
         u, p, extra = self._decode(point)
         eigs = self._eigenvalues(u, p)
-        near = jnp.abs(eigs) < self.near_critical
         if self.curve == "hopf":
             # Exclude the pinned imaginary pair; watch a real eigenvalue.
+            # The candidate IS real here, so its full magnitude equals the
+            # quantity being watched -- |eigs| is the correct pre-filter.
+            near = jnp.abs(eigs) < self.near_critical
             _q1, _q2, omega = extra
-            keep = _drop_nearest(eigs, 1j * omega) & _drop_nearest(eigs, -1j * omega)
+            keep = _drop_nearest_pinned_pair(eigs, omega)
             mask = keep & near & (jnp.abs(jnp.imag(eigs)) < self.tolerance)
         else:
-            # Exclude the pinned zero; watch a complex pair's real part.
+            # Exclude the pinned zero; watch a complex pair's REAL PART
+            # crossing zero. The pre-filter must gate on that real part,
+            # not the full complex magnitude |eigs| -- a genuine candidate
+            # can have Re(eigs) ~ 0 while sitting at a large |eigs| (e.g.
+            # omega=3), which the magnitude filter would wrongly reject.
+            # Matches DoubleHopf._second_pair's identical situation below.
+            near = jnp.abs(jnp.real(eigs)) < self.near_critical
             keep = _drop_nearest(eigs, 0.0 + 0.0j)
             mask = keep & near & (jnp.abs(jnp.imag(eigs)) > self.tolerance)
         if not jnp.any(mask):
@@ -302,9 +333,6 @@ class GeneralizedHopf(_CurveEvent, Event):
     args: PyTree = None
     kind: str = "generalized_hopf"
     curve: str = "hopf"
-    # Absolute threshold on a scale-dependent float32 quantity; see
-    # events.py:Hopf.l1_tolerance for why this is not a universal constant.
-    l1_tolerance: float = 1e-6
 
     def test_function(self, point: BranchPoint) -> float:
         u, p, (q1, q2, omega) = self._decode(point)
@@ -362,7 +390,8 @@ class DoubleHopf(_CurveEvent, Event):
     def _second_pair(self, point: BranchPoint):
         """Full eigendecomposition of the ORIGINAL system's Jacobian at
         ``point``, masked to the SECOND complex pair (the pinned pair
-        excluded via ``_drop_nearest``). Returns ``(eigs, evecs, mask)``.
+        excluded via ``_drop_nearest_pinned_pair``). Returns
+        ``(eigs, evecs, mask)``.
 
         Unlike ``_CurveEvent._eigenvalues`` (which uses ``eigvals`` only),
         this needs the eigenVECTORS too: ``refine()`` must hand
@@ -372,7 +401,7 @@ class DoubleHopf(_CurveEvent, Event):
         u, p, (_q1, _q2, omega) = self._decode(point)
         jac = jacfwd(lambda uu: self.raw_f(uu, p, self.args))(u)
         eigs, evecs = jnp.linalg.eig(jac)
-        keep = _drop_nearest(eigs, 1j * omega) & _drop_nearest(eigs, -1j * omega)
+        keep = _drop_nearest_pinned_pair(eigs, omega)
         near = jnp.abs(jnp.real(eigs)) < self.near_critical
         mask = keep & near & (jnp.abs(jnp.imag(eigs)) > self.tolerance)
         return eigs, evecs, mask

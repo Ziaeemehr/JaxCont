@@ -162,10 +162,18 @@ packages is what makes the two read as one ecosystem (§9).
 A fold/Hopf *curve* through the `(p[0], p[1])` plane is an ordinary `BifProblem`, not a new
 engine: `jc.fold_curve_problem`/`jc.hopf_curve_problem` fold the non-continued parameter
 component into the extended-system unknowns (same reduction that let periodic-orbit collocation
-reuse the equilibrium scan engine in v0.2), so §3.1's `vmap` and §3.2's implicit-diff `grad` both
-apply for free — the roadmap's standing mandate ("every new curve/event type ships batched *and*
-differentiable") is satisfied without new plumbing. This replaces the `jc.codim2(...)` sketch
-this section used to carry (see below): that dispatcher-over-an-event API was never built — the
+reuse the equilibrium scan engine in v0.2), so §3.1's `vmap` applies for free — batching a sweep
+of curves costs no new plumbing. `grad` is more nuanced: §3.2's implicit-diff seam applies to the
+*direct* codim-2 point solvers in `bifurcations/codim2.py` (e.g. `bogdanov_takens_parameters`,
+used to seed/refine a codim-2 point once a curve has located it), the same way it already applies
+to `fold_parameter` — but `jax.grad` still does not differentiate through the `lax.while_loop`
+that traces a curve itself, exactly as §3.2 documents for ordinary continuation runs; this is a
+pre-existing property of the whole engine, not something specific to curves. `examples/
+example_15_two_parameter_diagram.py` differentiates `bogdanov_takens_parameters` directly, not a
+curve-continuation call, for this reason. The roadmap's standing mandate ("every new curve/event
+type ships batched *and* differentiable") is satisfied by `vmap` plus the direct-solver `grad`
+seam, not by `grad` over the curve trace. This replaces the `jc.codim2(...)` sketch this section
+used to carry (see below): that dispatcher-over-an-event API was never built — the
 factory-per-curve-kind pattern shipped instead, matching `periodic_orbit_problem`'s precedent.
 
 ```python

@@ -404,9 +404,20 @@ def _run_scan(
     params = res.params[:n]
     tangents = res.tangents[:n]
 
+    # Curve-kind problems (fold_curve/hopf_curve) never need Branch.eigen-
+    # values: the branch state is an extended-system vector, so eigen-
+    # decomposing its Jacobian wouldn't give the original system's
+    # spectrum anyway (see the compute_stability=True guard above), and
+    # every codim-2 event in bifurcations/codim2_events.py carries its own
+    # raw_f and computes the original spectrum itself via BranchPoint.u --
+    # it never reads BranchPoint.eigenvalues. Computing eigenvalues here
+    # whenever events=[...] was non-empty (the old `len(events) > 0`
+    # clause) wasted real time re-eigendecomposing a Jacobian nothing
+    # reads.
+    is_curve_kind = problem.kind in ("fold_curve", "hopf_curve")
     eigenvalues = None
     stability = None
-    want_eigs = settings.compute_stability or len(events) > 0
+    want_eigs = not is_curve_kind and (settings.compute_stability or len(events) > 0)
     if want_eigs and states.shape[0] > 0:
         if problem.kind == "periodic":
             _, _, raw_f, mesh = problem.args
@@ -440,7 +451,10 @@ def _run_scan(
     )
 
     # Detect events with the Event protocol (bifurcations/events.py).
-    if len(events) > 0 and eigenvalues is not None:
+    # Curve-kind problems intentionally have eigenvalues=None (see above)
+    # but their codim-2 events are self-contained and never read
+    # BranchPoint.eigenvalues, so detection must still run for them.
+    if len(events) > 0 and (eigenvalues is not None or is_curve_kind):
         hits = detect_events(
             events, params, states, tangents, eigenvalues, rhs2,
             ds=float(settings.ds), tolerance=1e-6,

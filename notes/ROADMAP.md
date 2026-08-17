@@ -462,10 +462,14 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
       `Event` implementations usable via `continuation(..., events=[...])` on a curve —
       `Cusp`/`BogdanovTakens` (on a fold curve), `ZeroHopf`/`GeneralizedHopf`/`DoubleHopf`
       (on a Hopf curve) — each a test function built on the matching `codim2.py` direct
-      solver from v0.3.0, with a `_drop_nearest`/`near_critical` pre-filter excluding the
-      trivial eigenvalue (mirroring `PeriodDoubling`/`NeimarkSacker`'s `near_unit_circle`
-      pattern from v0.2) so the genuinely-critical eigenvalue is what gets tested, not
-      whichever eigenvalue happens to sit nearest zero/the imaginary axis. New
+      solver from v0.3.0. Of these, the three EIGENVALUE-based events
+      (`BogdanovTakens`/`ZeroHopf`/`DoubleHopf`) use a `_drop_nearest`/`near_critical`
+      pre-filter excluding the trivial eigenvalue (mirroring `PeriodDoubling`/
+      `NeimarkSacker`'s `near_unit_circle` pattern from v0.2) so the genuinely-critical
+      eigenvalue is what gets tested, not whichever eigenvalue happens to sit nearest
+      zero/the imaginary axis; `Cusp`/`GeneralizedHopf` need no eigenvalues at all (their
+      test functions are `fold_coefficient`/`lyapunov_coefficient` directly) and have no
+      such filter. New
       `viz.plot_two_parameter_diagram(results, *, free=1, labels=None, ax=None,
       annotate=True)` takes `[(ContinuationResult, "fold"|"hopf"), ...]` and reuses the
       existing `BIFURCATION_STYLES` table (already had CP/BT/GH/ZH/HH entries).

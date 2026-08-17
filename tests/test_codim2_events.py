@@ -88,7 +88,7 @@ def test_bogdanov_takens_detected_on_the_fold_curve():
 
 def test_bt_test_function_ignores_the_pinned_zero_eigenvalue():
     """DISCRIMINATING POWER: one eigenvalue is identically zero along the
-    whole fold curve. If the exclusion in _nontrivial_eigenvalues were
+    whole fold curve. If the exclusion in _drop_nearest were
     removed, the test function would be identically ~0, never change sign,
     and detect nothing. This asserts it instead tracks -(p1+1)/2."""
     from jaxcont.bifurcations.events import BranchPoint
@@ -116,6 +116,34 @@ def test_bt_near_critical_filter_is_not_too_aggressive():
                         near_critical=2.0)]
     )
     assert len([h for h in sol.events if h.kind == "bogdanov_takens"]) == 1
+
+
+def test_bogdanov_takens_detected_on_the_hopf_curve():
+    """Same BT point as the fold-curve tests above (u*=(5,2), p*=(3,-1)),
+    approached from the HOPF-curve side instead: the Hopf curve's own
+    critical frequency omega -- the BogdanovTakens test function for
+    curve="hopf" -- crosses zero exactly at p1 = -1.
+
+    The Hopf curve for this system sits at b1 = p0-3 = 0 (so p0 = 3 for
+    every point) with b2 = p1+1 < 0, omega = sqrt(-b2). Seeding at p1=-2
+    (omega=1) and continuing toward p1=-0.5, pseudo-arclength continuation
+    passes through the p1=-1 singularity (arc length does not need p1 to
+    move monotonically) and omega changes sign, giving the crossing.
+    """
+    prob = hopf_curve_problem(
+        _bt_shifted, jnp.array([5.0, 2.0]), jnp.array([3.0, -2.0]), free=1,
+    )
+    sol = jc.continuation(
+        prob,
+        p_span=(-2.0, -0.5),
+        settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
+        events=[BogdanovTakens(raw_f=_bt_shifted, free=1, curve="hopf")],
+    )
+    hits = [h for h in sol.events if h.kind == "bogdanov_takens"]
+    assert len(hits) == 1
+    assert hits[0].info["converged"] is True
+    assert abs(hits[0].p - (-1.0)) < 5e-2
+    assert jnp.allclose(hits[0].u, jnp.array([5.0, 2.0]), atol=5e-2)
 
 
 from jaxcont.bifurcations.codim2_events import ZeroHopf
@@ -180,6 +208,52 @@ def test_zero_hopf_detected_on_the_hopf_curve():
     assert hits[0].info["converged"] is True
     assert abs(hits[0].p - 0.5) < 5e-2
     assert abs(float(hits[0].info["p_fixed"]) - 0.75) < 5e-2
+
+
+def _zh_fold_system(u, p, args):
+    """Same fold-generating (X, Y) block as ``_bt_shifted`` (pinned zero
+    eigenvalue + a real eigenvalue -(p1+1)/2), decoupled from a 2-D
+    rotation block (z1, z2) whose real part ``a = p1 + 0.4`` crosses zero
+    at p1 = -0.4 with a FIXED imaginary part omega = 3.0.
+
+    REGRESSION for the near_critical pre-filter bug (review finding 1):
+    with near_critical=2.0 and omega=3.0, ``|a +- 3j| ~= 3`` for every
+    p1 in this span, so a pre-filter gated on the full complex magnitude
+    (the bug) rejects the candidate everywhere and detects nothing. Gating
+    on ``|Re(eigenvalue)| = |a|`` (the fix) sees ``|a| <= 1.6`` throughout,
+    well inside the window, and the crossing at p1 = -0.4 is detected.
+    """
+    X, Y, z1, z2 = u[0], u[1], u[2], u[3]
+    x, y = X - 5.0, Y - 2.0
+    b1 = p[0] - 3.0
+    b2 = p[1] + 1.0
+    a = p[1] + 0.4
+    omega = 3.0
+    return jnp.array([
+        y,
+        b1 + b2 * x + x**2 + x * y,
+        a * z1 - omega * z2,
+        omega * z1 + a * z2,
+    ])
+
+
+def test_zero_hopf_detected_on_the_fold_curve_with_large_omega():
+    # Seed on the fold curve at p1 = -2 (b2 = -1 -> x = 0.5 -> X = 5.5).
+    prob = fold_curve_problem(
+        _zh_fold_system, jnp.array([5.5, 2.0, 0.0, 0.0]), jnp.array([3.25, -2.0]),
+        free=1,
+    )
+    sol = jc.continuation(
+        prob,
+        p_span=(-2.0, 0.5),
+        settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
+        events=[ZeroHopf(raw_f=_zh_fold_system, free=1, curve="fold")],
+    )
+    hits = [h for h in sol.events if h.kind == "zero_hopf"]
+    assert len(hits) == 1
+    assert hits[0].info["converged"] is True
+    assert abs(hits[0].p - (-0.4)) < 5e-2
+    assert abs(hits[0].info["omega"] - 3.0) < 5e-2
 
 
 from jaxcont.bifurcations.codim2_events import GeneralizedHopf
@@ -260,3 +334,37 @@ def test_double_hopf_detected_with_automatic_seed_b():
     # The two frequencies must be genuinely distinct -- a collapsed pair is
     # the degenerate case double_hopf_point returns nan for.
     assert abs(hits[0].info["omega_a"] - hits[0].info["omega_b"]) > 0.5
+
+
+# --------------------------------------------------------------------------
+# Review finding 4: near omega=0 (approaching a Bogdanov-Takens point), two
+# independent _drop_nearest(+-i*omega) calls can collide on the SAME index,
+# under-excluding the pinned pair.
+# --------------------------------------------------------------------------
+
+
+def test_drop_nearest_pinned_pair_excludes_both_halves_near_bt():
+    from jaxcont.bifurcations.codim2_events import (
+        _drop_nearest, _drop_nearest_pinned_pair,
+    )
+
+    # Two eigenvalues sit near zero (the collapsing pinned pair as omega ->
+    # 0 near a BT point) alongside two clearly unrelated real eigenvalues.
+    eigs = jnp.array([0.1 + 0j, -0.05 + 0.001j, 2.0 + 0j, -3.0 + 0j])
+    omega = 1e-8
+
+    # DISCRIMINATING POWER: the naive paired-_drop_nearest pattern this
+    # replaces collapses +i*omega and -i*omega onto the SAME nearest
+    # index at this omega, dropping only one of the two pinned entries.
+    naive = _drop_nearest(eigs, 1j * omega) & _drop_nearest(eigs, -1j * omega)
+    assert int(jnp.sum(naive)) == 3, "test setup: naive pattern should under-exclude"
+
+    fixed = _drop_nearest_pinned_pair(eigs, omega)
+    assert jnp.array_equal(fixed, jnp.array([False, False, True, True]))
+
+    # Far from BT (omega well above the threshold), behaviour must match
+    # the original paired-_drop_nearest pattern exactly.
+    eigs2 = jnp.array([0.5 + 3j, 0.5 - 3j, 2.0 + 0j, -3.0 + 0j])
+    omega2 = 3.0
+    expected = _drop_nearest(eigs2, 1j * omega2) & _drop_nearest(eigs2, -1j * omega2)
+    assert jnp.array_equal(_drop_nearest_pinned_pair(eigs2, omega2), expected)

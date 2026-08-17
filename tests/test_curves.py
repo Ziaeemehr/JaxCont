@@ -228,3 +228,61 @@ def test_lorenz84_bt_matches_bifurcationkit():
     assert hits[0].info["converged"] is True
     assert jnp.allclose(hits[0].u, jnp.array(BK_BT_U), atol=1e-3)
     assert jnp.allclose(hits[0].info["p"], jnp.array(BK_BT_P), atol=1e-3)
+
+
+# --------------------------------------------------------------------------
+# Review finding 2: events=[...] on a curve problem must not eigendecompose
+# the extended-system Jacobian -- no codim-2 event reads Branch.eigenvalues.
+# --------------------------------------------------------------------------
+
+
+def test_fold_curve_events_do_not_eigendecompose_the_extended_jacobian():
+    """Regression: passing events=[...] to a fold_curve problem must leave
+    Branch.eigenvalues unset (None) -- codim-2 events carry their own
+    raw_f and compute the ORIGINAL system's spectrum themselves, they
+    never read Branch/BranchPoint.eigenvalues, so eigendecomposing the
+    extended-system Jacobian here was pure waste. Detection must still
+    work with eigenvalues left None."""
+    prob = fold_curve_problem(
+        _cusp_shifted, jnp.array([1.7]), jnp.array([-1.7, 4.2]), free=1,
+    )
+    sol = jc.continuation(
+        prob,
+        p_span=(4.2, 0.9),
+        settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
+        events=[jc.Cusp(raw_f=_cusp_shifted, free=1)],
+    )
+    assert sol.branch.eigenvalues is None
+    hits = [h for h in sol.events if h.kind == "cusp"]
+    assert len(hits) == 1
+    assert abs(hits[0].p - 1.2) < 5e-2
+
+
+def test_hopf_curve_events_do_not_eigendecompose_the_extended_jacobian():
+    """Same regression as above, for a hopf_curve problem."""
+    from jaxcont.bifurcations.codim2_events import GeneralizedHopf
+
+    def _bautin(u, p, args):
+        x = u[0] - 0.4
+        y = u[1] + 0.6
+        mu = p[0]
+        b = p[1] - 0.4
+        r2 = x * x + y * y
+        return jnp.array([
+            mu * x - y + b * x * r2 - x * r2 * r2,
+            x + mu * y + b * y * r2 - y * r2 * r2,
+        ])
+
+    prob = hopf_curve_problem(
+        _bautin, jnp.array([0.4, -0.6]), jnp.array([0.0, 0.0]), free=1,
+    )
+    sol = jc.continuation(
+        prob,
+        p_span=(0.0, 0.9),
+        settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
+        events=[GeneralizedHopf(raw_f=_bautin, free=1)],
+    )
+    assert sol.branch.eigenvalues is None
+    hits = [h for h in sol.events if h.kind == "generalized_hopf"]
+    assert len(hits) == 1
+    assert abs(hits[0].p - 0.4) < 5e-2
