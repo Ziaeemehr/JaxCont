@@ -22,6 +22,7 @@ from jaxcont.viz.portraits import (
     plot_phase_portrait,
     plot_prc,
 )
+from jaxcont.viz.two_parameter import plot_two_parameter_diagram
 
 __all__ = [
     # Continuation diagrams
@@ -39,6 +40,8 @@ __all__ = [
     "plot_streamlines",
     "plot_equilibria",
     "plot_trajectory",
+    # Two-parameter diagrams
+    "plot_two_parameter_diagram",
     # Deprecated, removal target v0.4.0
     "plot_phase_portrait",
 ]

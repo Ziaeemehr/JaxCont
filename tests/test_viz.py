@@ -808,3 +808,29 @@ def test_plot_phase_plane_titles_with_the_parameter_name():
     )
 
     assert fig.axes[0].get_title() == "mu = 0.25"
+
+
+def test_plot_two_parameter_diagram_draws_curves_and_codim2_markers():
+    import jaxcont as jc
+    from jaxcont.viz.two_parameter import plot_two_parameter_diagram
+    from tests.test_codim2_events import _bt_shifted, _bt_fold_curve_seed
+
+    u_guess, p_guess = _bt_fold_curve_seed()
+    prob = jc.fold_curve_problem(_bt_shifted, u_guess, p_guess, free=1)
+    sol = jc.continuation(
+        prob, p_span=(-2.0, 0.0),
+        settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
+        events=[jc.BogdanovTakens(raw_f=_bt_shifted, free=1, curve="fold")],
+    )
+
+    fig, ax = plt.subplots()
+    returned = plot_two_parameter_diagram([(sol, "fold")], free=1, ax=ax)
+    # The ax argument must be honoured, not swallowed into **kwargs (the
+    # bug plot_phase_portrait once had).
+    assert returned is ax
+    assert len(ax.lines) >= 1
+    # One codim-2 marker was drawn.
+    assert len(ax.collections) + sum(
+        1 for ln in ax.lines if ln.get_linestyle() == "None"
+    ) >= 1
+    plt.close(fig)

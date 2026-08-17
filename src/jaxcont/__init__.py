@@ -92,7 +92,7 @@ from jaxcont.bifurcations.codim2_events import (
 
 # Utilities
 from jaxcont.utils.config import Config
-from jaxcont.viz import plot_bifurcation_diagram, plot_continuation
+from jaxcont.viz import plot_bifurcation_diagram, plot_continuation, plot_two_parameter_diagram
 
 __all__ = [
     # Functional API (blessed surface)
@@ -155,4 +155,5 @@ __all__ = [
     "Config",
     "plot_bifurcation_diagram",
     "plot_continuation",
+    "plot_two_parameter_diagram",
 ]
