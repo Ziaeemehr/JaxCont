@@ -160,3 +160,71 @@ def test_every_codim2_event_kind_has_a_plot_style():
         "generalized_hopf", "double_hopf",
     ]:
         assert kind in BIFURCATION_STYLES, f"no style for {kind!r}"
+
+
+# --------------------------------------------------------------------------
+# Cross-validation against BifurcationKit.jl v0.5.2 (detector, not solver)
+# --------------------------------------------------------------------------
+#
+# tests/test_codim2.py::test_bogdanov_takens_matches_bifurcationkit_jl_independent_run
+# already asserts jaxcont's DIRECT SOLVER (bogdanov_takens_point) lands on
+# BifurcationKit.jl's Newton-refined Lorenz-84 BT point when given a
+# hand-supplied guess near it. This test asserts the DETECTOR
+# (BogdanovTakens event) finds the same point by tracing the fold curve
+# from a point BifurcationKit.jl located far away on the SAME curve --
+# no guess anywhere near the BT is ever supplied.
+#
+# Seed values below are BifurcationKit.jl's own first fold-curve point
+# (`sn_codim2.sol[1]`), printed by examples/BifurcationKit/05_codim2.jl:
+#     first point x = [1.3117855253168738, -0.04287499818491644,
+#                      0.18038939415099514, -0.15702758496684757,
+#                      1.5466483725981275]     # (X, Y, Z, U, F)
+#     first point p = 0.04                     # T
+# The curve's augmented state there is (u, F) with T as the externally
+# continued parameter -- exactly jaxcont's fold_curve_problem(..., free=1)
+# convention, where p[0]=F is solved for (p_fixed) and p[1]=T is continued.
+#
+# P_TARGET_FREE is NOT BifurcationKit's full curve endpoint (T=-0.0735).
+# examples/BifurcationKit/05_codim2.jl's specialpoint list shows TWO BT
+# points on that curve (T=0.018390565929128334 and T=-0.023705593679238822,
+# from `sp.param`) -- the Lorenz-84 model here is exactly symmetric under
+# (U, T) -> (-U, -T) (U and T enter the RHS only as U**2 and as the U-row's
+# additive +T, so the second BT is this model's own mirror image of the
+# first, at u=(X,Y,Z,-U), p=(F,-T)). Continuing all the way to the
+# endpoint makes the detector correctly report BOTH real BT points (2
+# hits), which would defeat `len(hits) == 1` for reasons that have nothing
+# to do with detector correctness. P_TARGET_FREE = -0.01 stops well short
+# of the second BT (and of BifurcationKit's two ZH points at T ~= 0) while
+# clearing the first BT at T = 0.0209 by a wide margin -- verified
+# empirically to yield exactly one hit, landing on BK_BT_U/BK_BT_P.
+U_SEED = jnp.array([
+    1.3117855253168738, -0.04287499818491644,
+    0.18038939415099514, -0.15702758496684757,
+])
+P_SEED = jnp.array([1.5466483725981275, 0.04])  # (F, T) at the seed
+P_SEED_FREE = 0.04    # T at the seed (first curve point)
+P_TARGET_FREE = -0.01  # T target; see margin note above
+
+
+def test_lorenz84_bt_matches_bifurcationkit():
+    """Detection along a traced fold curve must land on the BT point
+    BifurcationKit.jl v0.5.2 finds independently (examples/BifurcationKit/
+    05_codim2.jl). tests/test_codim2.py asserts the direct SOLVER matches
+    these values; this asserts the DETECTOR finds them without a guess."""
+    from tests.test_codim2 import _bk_model, BK_BT_U, BK_BT_P
+
+    # Seed the fold curve at a fold point away from the BT, then continue
+    # toward it. Exact seed values come from 05_codim2.jl's printed output.
+    prob = jc.fold_curve_problem(
+        _bk_model, U_SEED, P_SEED, free=1,
+    )
+    sol = jc.continuation(
+        prob, p_span=(P_SEED_FREE, P_TARGET_FREE),
+        settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
+        events=[jc.BogdanovTakens(raw_f=_bk_model, free=1, curve="fold")],
+    )
+    hits = [h for h in sol.events if h.kind == "bogdanov_takens"]
+    assert len(hits) == 1
+    assert hits[0].info["converged"] is True
+    assert jnp.allclose(hits[0].u, jnp.array(BK_BT_U), atol=1e-3)
+    assert jnp.allclose(hits[0].info["p"], jnp.array(BK_BT_P), atol=1e-3)

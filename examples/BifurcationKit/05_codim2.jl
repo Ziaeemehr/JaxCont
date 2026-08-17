@@ -66,6 +66,13 @@ for (i, sp) in enumerate(sn_codim2.specialpoint)
     println(i, "  ", sp.type)
 end
 
+# --- Fold-curve endpoints, for JaxCont's two-parameter continuation test ---
+println("=== LP curve endpoints (seed values for tests/test_curves.py) ===")
+println("first point x  = ", sn_codim2.sol[1].x)
+println("first point p  = ", sn_codim2.sol[1].p)
+println("last  point p  = ", sn_codim2.sol[end].p)
+println("n curve points = ", length(sn_codim2.sol))
+
 btpt = get_normal_form(sn_codim2, 1; nev = 4, verbose = false)
 println("=== BT point (bisection-located, from continuation) ===")
 println("x0 = ", btpt.x0)
@@ -87,3 +94,8 @@ println("F = ", solbt.u.params.F, "  T = ", solbt.u.params.T)
 
 J = BK.jacobian(prob, solbt.u.x0, solbt.u.params)
 println("eigenvalues at refined BT point: ", eigvals(J))
+
+println("=== fold branch (continued in T) special point details ===")
+for (i, sp) in enumerate(sn_codim2.specialpoint)
+    println(i, "  type=", sp.type, "  step=", sp.step, "  param=", sp.param)
+end
