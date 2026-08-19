@@ -6,7 +6,8 @@ JaxCont already validates supported continuation cases against reviewed MatCont
 7.6 artifacts numerically. The gallery should make that correspondence visible
 without weakening or duplicating the systematic validation. A user should be
 able to see the two independently sampled branches, their bifurcation points,
-and their stability information in the same figures.
+and their stability information in the same figures. Where the validator finds
+a known mismatch, the gallery must expose it rather than imply agreement.
 
 ## Scope
 
@@ -81,6 +82,13 @@ panels. The complex-plane panel includes the unit circle and overlays JaxCont
 and MatCont multipliers with event-specific colors, making the `+1`, `-1`, and
 complex unit-circle crossings directly inspectable.
 
+`MC-LC-002` is intentionally a diagnostic rather than a passing comparison.
+The existing validator reports that JaxCont misses the correctly located
+LPC/PD labels and exceeds the NS critical-multiplier tolerance. Its figure
+therefore displays `Systematic comparison: FAIL (known limitation)` and the
+measured discrepancies. It must not move event locations, relax tolerances, or
+visually claim correspondence that the systematic comparison rejects.
+
 ## Components and Interfaces
 
 `examples/MatCont/visualize.py` remains the shared implementation boundary. It
@@ -109,7 +117,7 @@ For each page:
 2. Import and run its registered JaxCont producer.
 3. Load the reviewed MatCont branch, event, and spectrum CSV files.
 4. Invoke the existing comparison path appropriate to that case.
-5. Refuse to label the figure `PASS` if the systematic comparison fails.
+5. Derive the displayed `PASS` or `FAIL` status from the systematic comparison.
 6. Plot each package on its native adaptive mesh without fabricating paired
    sample points.
 7. Annotate the figure with the most relevant maximum errors.
@@ -124,9 +132,10 @@ comparison inside `run_torbpc_cycle`.
 ## Error Handling
 
 Renderers raise clear errors for unknown or unsupported case IDs, missing
-artifacts, incompatible CSV columns, missing event-to-branch links, absent
-spectra, or a failed numerical comparison. A figure is never silently
-presented as agreement when the validator reports failure.
+artifacts, incompatible CSV columns, missing event-to-branch links, or absent
+spectra. A failed numerical comparison remains renderable for diagnosis, but
+must receive a prominent `FAIL` annotation; it is never silently presented as
+agreement.
 
 Output directories are created when necessary. Existing reviewed reference
 files remain read-only; gallery output is written only beneath the requested
@@ -142,7 +151,9 @@ Tests will verify:
 - periodic extrema, periods, and Floquet spectra are mapped from both artifact
   schemas correctly;
 - the shared parameter domain and model-specific labels are correct;
-- validation summaries report `PASS` and the applicable error metrics;
+- the first four validation summaries report `PASS` and applicable errors;
+- the torBPC summary reports `FAIL (known limitation)` and its event, period,
+  extrema, and multiplier discrepancies without changing tolerances;
 - every renderer writes a non-empty PNG;
 - each gallery script executes in a subprocess with the documentation-style
   import path and working directory.
@@ -150,4 +161,3 @@ Tests will verify:
 The existing MatCont validation suite and full project test suite must remain
 green. The generated figures will also receive a visual inspection for
 legibility, coincident overlays, event placement, and uncluttered legends.
-
