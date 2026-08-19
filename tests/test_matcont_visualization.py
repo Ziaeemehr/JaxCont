@@ -46,6 +46,31 @@ def test_registered_hopf_case_renders_spectral_pass_figure(case_id, tmp_path):
     )
 
 
+def test_registered_radial_cycle_renders_three_panel_pass_figure(tmp_path):
+    """The periodic overlay compares amplitude, period, and Floquet stability."""
+    from examples.MatCont.visualize import render_periodic_overlay
+
+    output = tmp_path / "radial.png"
+    figure = render_periodic_overlay(
+        "MC-LC-001", output_path=output, parameter_name=r"$\rho$"
+    )
+
+    assert len(figure.axes) == 3
+    assert [axis.get_ylabel() for axis in figure.axes] == [
+        "Orbit amplitude",
+        "Period",
+        "Nontrivial |Floquet multiplier|",
+    ]
+    for axis in figure.axes:
+        labels = axis.get_legend_handles_labels()[1]
+        assert any(label.startswith("JaxCont") for label in labels)
+        assert any(label.startswith("MatCont 7.6") for label in labels)
+    assert output.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert "Systematic comparison: PASS" in " ".join(
+        text.get_text() for text in figure.texts
+    )
+
+
 def test_equilibrium_overlay_draws_both_branches_and_event_sources(tmp_path):
     """Dropping either solver's curve or markers must make the visual comparison fail."""
     from examples.MatCont.visualize import plot_equilibrium_overlay

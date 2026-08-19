@@ -69,6 +69,143 @@ def _event_spectral_abscissa(event: dict, event_spectra: list[dict]) -> float:
     return 0.0
 
 
+def _nontrivial_floquet_multipliers(values: np.ndarray) -> np.ndarray:
+    """Remove exactly one multiplier nearest the trivial value ``+1`` per row."""
+    values = np.asarray(values, dtype=complex)
+    if values.ndim != 2 or values.shape[1] < 2:
+        raise ValueError("each periodic spectrum must include a trivial and nontrivial multiplier")
+    trivial_indices = np.argmin(np.abs(values - 1.0), axis=1)
+    keep = np.ones(values.shape, dtype=bool)
+    keep[np.arange(values.shape[0]), trivial_indices] = False
+    return values[keep].reshape(values.shape[0], values.shape[1] - 1)
+
+
+def plot_radial_cycle_overlay(
+    result: CaseResult,
+    reference_dir: Path | str,
+    *,
+    parameter_name: str = "Continuation parameter",
+    title: str | None = None,
+):
+    """Overlay radial-cycle extrema, periods, and nontrivial Floquet multipliers."""
+    reference_dir = Path(reference_dir)
+    branch_rows = _read_csv(reference_dir / f"{result.case_id}_branch.csv")
+    multiplier_rows = _read_csv(reference_dir / f"{result.case_id}_multipliers.csv")
+
+    jax_parameters = np.asarray(result.artifacts["parameters"])
+    jax_periods = np.asarray(result.artifacts["periods"])
+    jax_state_min = np.asarray(result.artifacts["state_min"])[:, 0]
+    jax_state_max = np.asarray(result.artifacts["state_max"])[:, 0]
+    jax_multipliers = _nontrivial_floquet_multipliers(
+        np.asarray(result.artifacts["multipliers"])
+    )
+
+    matcont_parameters = np.asarray([float(row["parameter"]) for row in branch_rows])
+    matcont_periods = np.asarray([float(row["period"]) for row in branch_rows])
+    matcont_state_min = np.asarray([float(row["state_0_min"]) for row in branch_rows])
+    matcont_state_max = np.asarray([float(row["state_0_max"]) for row in branch_rows])
+    multipliers_by_point: dict[int, list[complex]] = {}
+    for row in multiplier_rows:
+        if int(row["event_index"]) == -1:
+            multipliers_by_point.setdefault(int(row["point"]), []).append(
+                complex(float(row["real"]), float(row["imag"]))
+            )
+    matcont_multipliers = np.asarray(
+        [multipliers_by_point[int(row["point"])] for row in branch_rows]
+    )
+    matcont_nontrivial = _nontrivial_floquet_multipliers(matcont_multipliers)
+
+    figure, axes = plt.subplots(3, 1, sharex=True, figsize=(9, 10))
+    amplitude_axis, period_axis, multiplier_axis = axes
+    amplitude_axis.plot(
+        jax_parameters,
+        jax_state_min,
+        color="#2563eb",
+        linewidth=2.4,
+        label="JaxCont minimum",
+    )
+    amplitude_axis.plot(
+        jax_parameters,
+        jax_state_max,
+        color="#2563eb",
+        linewidth=2.4,
+        linestyle="--",
+        label="JaxCont maximum",
+    )
+    amplitude_axis.plot(
+        matcont_parameters,
+        matcont_state_min,
+        color="#f97316",
+        linewidth=1.4,
+        marker="o",
+        markersize=2.8,
+        markerfacecolor="none",
+        label="MatCont 7.6 minimum",
+    )
+    amplitude_axis.plot(
+        matcont_parameters,
+        matcont_state_max,
+        color="#f97316",
+        linewidth=1.4,
+        linestyle="--",
+        marker="o",
+        markersize=2.8,
+        markerfacecolor="none",
+        label="MatCont 7.6 maximum",
+    )
+    amplitude_axis.set_ylabel("Orbit amplitude")
+    amplitude_axis.set_title(title or f"{result.case_id}: JaxCont and MatCont periodic overlay")
+
+    period_axis.plot(
+        jax_parameters,
+        jax_periods,
+        color="#2563eb",
+        linewidth=2.4,
+        label="JaxCont period",
+    )
+    period_axis.plot(
+        matcont_parameters,
+        matcont_periods,
+        color="#f97316",
+        linewidth=1.4,
+        marker="o",
+        markersize=2.8,
+        markerfacecolor="none",
+        label="MatCont 7.6 period",
+    )
+    period_axis.set_ylabel("Period")
+
+    multiplier_axis.plot(
+        jax_parameters,
+        np.abs(jax_multipliers[:, 0]),
+        color="#2563eb",
+        linewidth=2.4,
+        label="JaxCont nontrivial multiplier",
+    )
+    multiplier_axis.plot(
+        matcont_parameters,
+        np.abs(matcont_nontrivial[:, 0]),
+        color="#f97316",
+        linewidth=1.4,
+        marker="o",
+        markersize=2.8,
+        markerfacecolor="none",
+        label="MatCont 7.6 nontrivial multiplier",
+    )
+    multiplier_axis.set_xlabel(parameter_name)
+    multiplier_axis.set_ylabel("Nontrivial |Floquet multiplier|")
+
+    shared_min = max(float(np.min(jax_parameters)), float(np.min(matcont_parameters)))
+    shared_max = min(float(np.max(jax_parameters)), float(np.max(matcont_parameters)))
+    for axis in axes:
+        axis.set_xlim(shared_min, shared_max)
+        axis.grid(alpha=0.2)
+        axis.legend()
+
+    figure.tight_layout()
+    return figure
+
+
 def plot_equilibrium_overlay(
     result: CaseResult,
     reference_dir: Path | str,
@@ -295,6 +432,45 @@ def render_equilibrium_overlay(
     return figure
 
 
+def render_periodic_overlay(
+    case_id: str,
+    *,
+    reference_dir: Path | str = _DEFAULT_REFERENCE_DIR,
+    output_path: Path | str | None = None,
+    parameter_name: str = "Continuation parameter",
+    title: str | None = None,
+):
+    """Run the registered radial-cycle case and render its MatCont overlay."""
+    if case_id != "MC-LC-001":
+        raise ValueError(f"visual comparison currently supports MC-LC-001, got {case_id}")
+    reference_dir = Path(reference_dir)
+    case, result = _run_registered_case(case_id, reference_dir)
+    diagnostics = compare_case_result_to_reference(case, result, reference_dir)
+    figure = plot_radial_cycle_overlay(
+        result,
+        reference_dir,
+        parameter_name=parameter_name,
+        title=title,
+    )
+    figure.text(
+        0.5,
+        0.015,
+        "Systematic comparison: PASS  •  "
+        f"branch max error {diagnostics['branch_max_error']:.2e}  •  "
+        f"spectrum max error {diagnostics['spectrum_max_error']:.2e}  •  "
+        f"period max error {result.checks['max_period_error']:.2e}  •  "
+        f"radius max error {result.checks['max_radius_error']:.2e}",
+        ha="center",
+        va="bottom",
+        fontsize=9,
+        color="#334155",
+    )
+    figure.subplots_adjust(bottom=0.13)
+
+    _save_figure(figure, output_path)
+    return figure
+
+
 def render_case_overlay(
     case_id: str,
     *,
@@ -318,6 +494,8 @@ def render_case_overlay(
 
 __all__ = [
     "plot_equilibrium_overlay",
+    "plot_radial_cycle_overlay",
     "render_case_overlay",
     "render_equilibrium_overlay",
+    "render_periodic_overlay",
 ]
