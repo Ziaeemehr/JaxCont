@@ -37,5 +37,8 @@ figure = render_periodic_overlay(
     title="Radial periodic orbit: JaxCont vs MatCont 7.6",
 )
 
-print("Saved JaxCont/MatCont radial-cycle overlay to images/matcont_radial_cycle_overlay.png")
+print(
+    "Saved JaxCont/MatCont radial-cycle overlay to "
+    "images/matcont_radial_cycle_overlay.png"
+)
 plt.show()

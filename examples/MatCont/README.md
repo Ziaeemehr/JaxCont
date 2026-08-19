@@ -79,10 +79,13 @@ stability, spectrum, and tolerance checks against the reviewed references.
 
 The torBPC page (`MC-LC-002`) is deliberately a known-failing diagnostic, not
 evidence of complete correspondence. It retains MatCont LPC, NS, and PD
-references; JaxCont currently reports detected LPC and NS markers but no
-detected PD marker. Its `JaxCont near <type>` multiplier points are spectra at
-the nearest JaxCont branch samples, not event detections. The failure banner
-and unchanged numerical tolerances correspond to the
+references. JaxCont reports raw LPC and NS detections, but its detected LPC is
+displaced and therefore is not a correctly located match; PD is not detected.
+The strict comparison consequently lists LPC and PD as missing correctly
+located event types. Its `JaxCont near <type>` multiplier points are spectra
+at the nearest JaxCont branch samples, not event detections. The failure banner
+calls their location differences proxy discrepancies and preserves the
+unchanged numerical tolerances described by the
 [supported-coverage warning](#supported-coverage) below.
 
 ## Supported coverage
@@ -99,9 +102,11 @@ and unchanged numerical tolerances correspond to the
 | `MC-PRC-001` | adaptx Hopf limit cycle, iPRC adjoint-method curve against MatCont's PRC/Input processor output (phase-in-radians vs. phase-in-cycle-fractions and phase-origin conventions reconciled; dPRC is *not* cross-checked here -- MatCont's exported dPRC is `d(PRC)/dt`, confirmed via `LimitCycle/calcPRC.m`, a different quantity from JaxCont's `dprc_curve` = `d(PRC)/d(alpha)`, which is validated instead by `tests/test_prc.py`) |
 
 `MC-LC-002` deliberately reports the current JaxCont mismatch: MatCont's LPC,
-NS and PD references are retained, while JaxCont presently detects LPC and NS
-but not PD and exceeds the critical-multiplier tolerance at NS. The CLI exits
-nonzero for this case. Do not hide that result by changing tolerances.
+NS and PD references are retained. JaxCont's detected LPC is displaced enough
+not to count as a correctly located match, PD is not detected, and the strict
+missing-event list is therefore LPC and PD. JaxCont also exceeds the
+critical-multiplier tolerance at NS. The CLI exits nonzero for this case. Do
+not hide that result by changing tolerances.
 
 ## Unsupported matrix
 

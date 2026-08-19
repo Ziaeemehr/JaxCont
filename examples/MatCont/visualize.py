@@ -1,4 +1,4 @@
-"""Visual comparisons between JaxCont results and reviewed MatCont artifacts."""
+"""Visual comparisons between JaxCont and reviewed MatCont artifacts."""
 
 from __future__ import annotations
 
@@ -10,9 +10,13 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .artifacts import compare_case_result_to_reference
+from .artifacts import (
+    validate_equilibrium_artifacts,
+    validate_periodic_artifacts,
+)
 from .python_cases import CaseResult
 from .registry import load_registry
+from .validation import CaseValidation, evaluate_case_result
 
 _DEFAULT_REFERENCE_DIR = Path(__file__).resolve().parent / "reference"
 _TORBPC_EVENT_COLORS = {
@@ -32,13 +36,19 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def _run_registered_case(case_id: str, reference_dir: Path) -> tuple[dict, CaseResult]:
+def _run_registered_case(
+    case_id: str, reference_dir: Path
+) -> tuple[dict, CaseResult]:
     """Run the JaxCont producer declared for one supported registry case."""
     registry = load_registry()
     try:
-        case = next(item for item in registry["cases"] if item["id"] == case_id)
+        case = next(
+            item for item in registry["cases"] if item["id"] == case_id
+        )
     except StopIteration as exc:
-        raise ValueError(f"unknown MatCont validation case: {case_id}") from exc
+        raise ValueError(
+            f"unknown MatCont validation case: {case_id}"
+        ) from exc
     if case["support"] != "supported" or not case.get("python"):
         raise ValueError(f"case has no supported JaxCont producer: {case_id}")
     module_name, separator, function_name = case["python"].partition(":")
@@ -65,25 +75,100 @@ def _branch_spectral_abscissa(rows: list[dict[str, str]]) -> dict[int, float]:
     for row in rows:
         if int(row["event_index"]) != -1:
             continue
-        values_by_point.setdefault(int(row["point"]), []).append(float(row["real"]))
-    return {point: max(real_parts) for point, real_parts in values_by_point.items()}
+        values_by_point.setdefault(int(row["point"]), []).append(
+            float(row["real"])
+        )
+    return {
+        point: max(real_parts) for point, real_parts in values_by_point.items()
+    }
 
 
-def _event_spectral_abscissa(event: dict, event_spectra: list[dict]) -> float:
+def _event_spectral_abscissa(
+    event: dict,
+    event_spectra: list[dict],
+    *,
+    source: str,
+) -> float:
     """Find an event's spectral abscissa from its registered event spectrum."""
     for event_spectrum in event_spectra:
         if event_spectrum.get("kind") == event.get("kind") and np.isclose(
             float(event_spectrum["parameter"]), float(event["parameter"])
         ):
             return float(np.max(np.real(np.asarray(event_spectrum["values"]))))
-    return 0.0
+    raise ValueError(
+        f"missing {source} {event.get('kind')} event spectrum at parameter "
+        f"{float(event['parameter']):.12g}"
+    )
+
+
+def _matcont_event_spectral_abscissa(
+    event: dict[str, str],
+    spectrum_rows: list[dict[str, str]],
+) -> float:
+    values = [
+        float(row["real"])
+        for row in spectrum_rows
+        if int(row["event_index"]) == int(event["event_index"])
+    ]
+    if not values:
+        raise ValueError(
+            "missing MatCont 7.6 "
+            f"{event['event_type']} event spectrum at parameter "
+            f"{float(event['parameter']):.12g}"
+        )
+    return max(values)
+
+
+def _validation_failure_details(validation: CaseValidation) -> list[str]:
+    details = []
+    if not validation.producer_passed:
+        details.append("producer checks failed")
+    if validation.numerical_mismatch is not None:
+        details.append(f"numerical mismatch: {validation.numerical_mismatch}")
+    return details
+
+
+def _annotate_summary(
+    figure,
+    *,
+    status: str,
+    passed: bool,
+    details: list[str],
+    fontsize: float = 9.0,
+) -> None:
+    text = figure.text(
+        0.5,
+        0.015,
+        f"Systematic comparison: {status}\n" + "  •  ".join(details),
+        ha="center",
+        va="bottom",
+        fontsize=fontsize,
+        color="#334155" if passed else "#991b1b",
+        fontweight="normal" if passed else "bold",
+        bbox=(
+            None
+            if passed
+            else {
+                "boxstyle": "round,pad=0.35",
+                "facecolor": "#fee2e2",
+                "edgecolor": "#dc2626",
+                "alpha": 0.95,
+            }
+        ),
+    )
+    if passed:
+        text.set_bbox(None)
+    figure.subplots_adjust(bottom=0.16)
 
 
 def _nontrivial_floquet_multipliers(values: np.ndarray) -> np.ndarray:
-    """Remove exactly one multiplier nearest the trivial value ``+1`` per row."""
+    """Remove one multiplier nearest the trivial value ``+1`` per row."""
     values = np.asarray(values, dtype=complex)
     if values.ndim != 2 or values.shape[1] < 2:
-        raise ValueError("each periodic spectrum must include a trivial and nontrivial multiplier")
+        raise ValueError(
+            "each periodic spectrum must include a trivial and "
+            "nontrivial multiplier"
+        )
     trivial_indices = np.argmin(np.abs(values - 1.0), axis=1)
     keep = np.ones(values.shape, dtype=bool)
     keep[np.arange(values.shape[0]), trivial_indices] = False
@@ -97,10 +182,12 @@ def plot_radial_cycle_overlay(
     parameter_name: str = "Continuation parameter",
     title: str | None = None,
 ):
-    """Overlay radial-cycle extrema, periods, and nontrivial Floquet multipliers."""
+    """Overlay radial extrema, periods, and nontrivial multipliers."""
     reference_dir = Path(reference_dir)
     branch_rows = _read_csv(reference_dir / f"{result.case_id}_branch.csv")
-    multiplier_rows = _read_csv(reference_dir / f"{result.case_id}_multipliers.csv")
+    multiplier_rows = _read_csv(
+        reference_dir / f"{result.case_id}_multipliers.csv"
+    )
 
     jax_parameters = np.asarray(result.artifacts["parameters"])
     jax_periods = np.asarray(result.artifacts["periods"])
@@ -110,10 +197,16 @@ def plot_radial_cycle_overlay(
         np.asarray(result.artifacts["multipliers"])
     )
 
-    matcont_parameters = np.asarray([float(row["parameter"]) for row in branch_rows])
+    matcont_parameters = np.asarray(
+        [float(row["parameter"]) for row in branch_rows]
+    )
     matcont_periods = np.asarray([float(row["period"]) for row in branch_rows])
-    matcont_state_min = np.asarray([float(row["state_0_min"]) for row in branch_rows])
-    matcont_state_max = np.asarray([float(row["state_0_max"]) for row in branch_rows])
+    matcont_state_min = np.asarray(
+        [float(row["state_0_min"]) for row in branch_rows]
+    )
+    matcont_state_max = np.asarray(
+        [float(row["state_0_max"]) for row in branch_rows]
+    )
     multipliers_by_point: dict[int, list[complex]] = {}
     for row in multiplier_rows:
         if int(row["event_index"]) == -1:
@@ -125,26 +218,45 @@ def plot_radial_cycle_overlay(
     )
     matcont_nontrivial = _nontrivial_floquet_multipliers(matcont_multipliers)
 
+    shared_min = max(
+        float(np.min(jax_parameters)),
+        float(np.min(matcont_parameters)),
+    )
+    shared_max = min(
+        float(np.max(jax_parameters)),
+        float(np.max(matcont_parameters)),
+    )
+    if shared_min > shared_max:
+        raise ValueError(
+            "JaxCont and MatCont branches have no shared parameter domain"
+        )
+    jax_in_domain = (jax_parameters >= shared_min) & (
+        jax_parameters <= shared_max
+    )
+    matcont_in_domain = (matcont_parameters >= shared_min) & (
+        matcont_parameters <= shared_max
+    )
+
     figure, axes = plt.subplots(3, 1, sharex=True, figsize=(9, 10))
     amplitude_axis, period_axis, multiplier_axis = axes
     amplitude_axis.plot(
-        jax_parameters,
-        jax_state_min,
+        jax_parameters[jax_in_domain],
+        jax_state_min[jax_in_domain],
         color="#2563eb",
         linewidth=2.4,
         label="JaxCont minimum",
     )
     amplitude_axis.plot(
-        jax_parameters,
-        jax_state_max,
+        jax_parameters[jax_in_domain],
+        jax_state_max[jax_in_domain],
         color="#2563eb",
         linewidth=2.4,
         linestyle="--",
         label="JaxCont maximum",
     )
     amplitude_axis.plot(
-        matcont_parameters,
-        matcont_state_min,
+        matcont_parameters[matcont_in_domain],
+        matcont_state_min[matcont_in_domain],
         color="#f97316",
         linewidth=1.4,
         marker="o",
@@ -153,8 +265,8 @@ def plot_radial_cycle_overlay(
         label="MatCont 7.6 minimum",
     )
     amplitude_axis.plot(
-        matcont_parameters,
-        matcont_state_max,
+        matcont_parameters[matcont_in_domain],
+        matcont_state_max[matcont_in_domain],
         color="#f97316",
         linewidth=1.4,
         linestyle="--",
@@ -164,18 +276,20 @@ def plot_radial_cycle_overlay(
         label="MatCont 7.6 maximum",
     )
     amplitude_axis.set_ylabel("Orbit amplitude")
-    amplitude_axis.set_title(title or f"{result.case_id}: JaxCont and MatCont periodic overlay")
+    amplitude_axis.set_title(
+        title or f"{result.case_id}: JaxCont and MatCont periodic overlay"
+    )
 
     period_axis.plot(
-        jax_parameters,
-        jax_periods,
+        jax_parameters[jax_in_domain],
+        jax_periods[jax_in_domain],
         color="#2563eb",
         linewidth=2.4,
         label="JaxCont period",
     )
     period_axis.plot(
-        matcont_parameters,
-        matcont_periods,
+        matcont_parameters[matcont_in_domain],
+        matcont_periods[matcont_in_domain],
         color="#f97316",
         linewidth=1.4,
         marker="o",
@@ -186,15 +300,15 @@ def plot_radial_cycle_overlay(
     period_axis.set_ylabel("Period")
 
     multiplier_axis.plot(
-        jax_parameters,
-        np.abs(jax_multipliers[:, 0]),
+        jax_parameters[jax_in_domain],
+        np.abs(jax_multipliers[jax_in_domain, 0]),
         color="#2563eb",
         linewidth=2.4,
         label="JaxCont nontrivial multiplier",
     )
     multiplier_axis.plot(
-        matcont_parameters,
-        np.abs(matcont_nontrivial[:, 0]),
+        matcont_parameters[matcont_in_domain],
+        np.abs(matcont_nontrivial[matcont_in_domain, 0]),
         color="#f97316",
         linewidth=1.4,
         marker="o",
@@ -205,8 +319,6 @@ def plot_radial_cycle_overlay(
     multiplier_axis.set_xlabel(parameter_name)
     multiplier_axis.set_ylabel("Nontrivial |Floquet multiplier|")
 
-    shared_min = max(float(np.min(jax_parameters)), float(np.min(matcont_parameters)))
-    shared_max = min(float(np.max(jax_parameters)), float(np.max(matcont_parameters)))
     for axis in axes:
         axis.set_xlim(shared_min, shared_max)
         axis.grid(alpha=0.2)
@@ -238,7 +350,9 @@ def plot_torbpc_overlay(
     jax_state_max = np.max(jax_orbits[:, :, state_index], axis=1)
     jax_multipliers = np.asarray(result.artifacts["jaxcont_multipliers"])
 
-    matcont_parameters = np.asarray([float(row["parameter"]) for row in branch_rows])
+    matcont_parameters = np.asarray(
+        [float(row["parameter"]) for row in branch_rows]
+    )
     matcont_periods = np.asarray([float(row["period"]) for row in branch_rows])
     matcont_state_min = np.asarray(
         [float(row[f"state_{state_index}_min"]) for row in branch_rows]
@@ -343,7 +457,9 @@ def plot_torbpc_overlay(
             zorder=6,
         )
 
-        nearest_index = int(np.argmin(np.abs(jax_parameters - event_parameter)))
+        nearest_index = int(
+            np.argmin(np.abs(jax_parameters - event_parameter))
+        )
         event_index = int(event["event_index"])
         matcont_spectrum = np.asarray(
             [
@@ -383,7 +499,9 @@ def plot_torbpc_overlay(
         parameter = float(event["parameter"])
         nearest_index = int(np.argmin(np.abs(jax_parameters - parameter)))
         label = f"JaxCont detected {event_type}"
-        legend_label = label if event_type not in detected_event_labels else "_nolegend_"
+        legend_label = (
+            label if event_type not in detected_event_labels else "_nolegend_"
+        )
         amplitude_axis.scatter(
             [parameter],
             [jax_state_max[nearest_index]],
@@ -408,8 +526,12 @@ def plot_torbpc_overlay(
         )
         detected_event_labels.add(event_type)
 
-    shared_min = max(float(np.min(jax_parameters)), float(np.min(matcont_parameters)))
-    shared_max = min(float(np.max(jax_parameters)), float(np.max(matcont_parameters)))
+    shared_min = max(
+        float(np.min(jax_parameters)), float(np.min(matcont_parameters))
+    )
+    shared_max = min(
+        float(np.max(jax_parameters)), float(np.max(matcont_parameters))
+    )
     for axis in (amplitude_axis, period_axis):
         axis.set_xlim(shared_min, shared_max)
         axis.grid(alpha=0.2)
@@ -445,7 +567,7 @@ def plot_equilibrium_overlay(
     title: str | None = None,
     include_spectrum: bool = False,
 ):
-    """Overlay one JaxCont equilibrium branch on its reviewed MatCont branch."""
+    """Overlay one JaxCont branch on its reviewed MatCont branch."""
     reference_dir = Path(reference_dir)
     branch_rows = _read_csv(reference_dir / f"{result.case_id}_branch.csv")
     event_rows = _read_csv(reference_dir / f"{result.case_id}_events.csv")
@@ -453,8 +575,12 @@ def plot_equilibrium_overlay(
 
     jax_parameters = np.asarray(result.artifacts["parameters"])
     jax_states = np.asarray(result.artifacts["states"])
-    matcont_parameters = np.asarray([float(row["parameter"]) for row in branch_rows])
-    matcont_states = np.asarray([float(row[state_column]) for row in branch_rows])
+    matcont_parameters = np.asarray(
+        [float(row["parameter"]) for row in branch_rows]
+    )
+    matcont_states = np.asarray(
+        [float(row[state_column]) for row in branch_rows]
+    )
     branch_by_point = {row["point"]: row for row in branch_rows}
 
     if include_spectrum:
@@ -497,7 +623,9 @@ def plot_equilibrium_overlay(
             facecolor="#2563eb",
             edgecolor="white",
             linewidth=1.2,
-            label=label if kind not in labeled_jaxcont_events else "_nolegend_",
+            label=(
+                label if kind not in labeled_jaxcont_events else "_nolegend_"
+            ),
             zorder=5,
         )
         labeled_jaxcont_events.add(kind)
@@ -516,24 +644,37 @@ def plot_equilibrium_overlay(
             s=95,
             color="#c2410c",
             linewidth=2.2,
-            label=label if kind not in labeled_matcont_events else "_nolegend_",
+            label=(
+                label if kind not in labeled_matcont_events else "_nolegend_"
+            ),
             zorder=6,
         )
         labeled_matcont_events.add(kind)
 
     axis.set_ylabel(state_name or f"state[{state_index}]")
-    axis.set_title(title or f"{result.case_id}: JaxCont and MatCont branch overlay")
-    shared_min = max(float(np.min(jax_parameters)), float(np.min(matcont_parameters)))
-    shared_max = min(float(np.max(jax_parameters)), float(np.max(matcont_parameters)))
+    axis.set_title(
+        title or f"{result.case_id}: JaxCont and MatCont branch overlay"
+    )
+    shared_min = max(
+        float(np.min(jax_parameters)), float(np.min(matcont_parameters))
+    )
+    shared_max = min(
+        float(np.max(jax_parameters)), float(np.max(matcont_parameters))
+    )
     axis.set_xlim(shared_min, shared_max)
     axis.grid(alpha=0.2)
     axis.legend()
 
     if spectral_axis is not None:
-        spectrum_rows = _read_csv(reference_dir / f"{result.case_id}_multipliers.csv")
+        spectrum_rows = _read_csv(
+            reference_dir / f"{result.case_id}_multipliers.csv"
+        )
         matcont_spectral_abscissa = _branch_spectral_abscissa(spectrum_rows)
         matcont_spectrum_points = [
-            (float(row["parameter"]), matcont_spectral_abscissa[int(row["point"])])
+            (
+                float(row["parameter"]),
+                matcont_spectral_abscissa[int(row["point"])],
+            )
             for row in branch_rows
             if int(row["point"]) in matcont_spectral_abscissa
         ]
@@ -566,7 +707,13 @@ def plot_equilibrium_overlay(
             kind = str(event["kind"])
             spectral_axis.scatter(
                 [float(event["parameter"])],
-                [_event_spectral_abscissa(event, jax_event_spectra)],
+                [
+                    _event_spectral_abscissa(
+                        event,
+                        jax_event_spectra,
+                        source="JaxCont",
+                    )
+                ],
                 marker="o",
                 s=85,
                 facecolor="#2563eb",
@@ -584,14 +731,9 @@ def plot_equilibrium_overlay(
         labeled_matcont_spectral_events: set[str] = set()
         for event in event_rows:
             kind = event["event_type"]
-            values = [
-                float(row["real"])
-                for row in spectrum_rows
-                if int(row["event_index"]) == int(event["event_index"])
-            ]
             spectral_axis.scatter(
                 [float(event["parameter"])],
-                [max(values) if values else 0.0],
+                [_matcont_event_spectral_abscissa(event, spectrum_rows)],
                 marker="x",
                 s=95,
                 color="#c2410c",
@@ -628,11 +770,15 @@ def render_equilibrium_overlay(
     include_spectrum: bool | None = None,
 ):
     """Run a registered equilibrium case and render its MatCont overlay."""
+    if not case_id.startswith("MC-EQ-"):
+        raise ValueError(
+            "visual comparison currently supports equilibrium cases, "
+            f"got {case_id}"
+        )
     reference_dir = Path(reference_dir)
     case, result = _run_registered_case(case_id, reference_dir)
-    if not case_id.startswith("MC-EQ-"):
-        raise ValueError(f"visual comparison currently supports equilibrium cases, got {case_id}")
-    diagnostics = compare_case_result_to_reference(case, result, reference_dir)
+    validate_equilibrium_artifacts(reference_dir, case_id)
+    validation = evaluate_case_result(case, result, reference_dir)
     if include_spectrum is None:
         include_spectrum = "hopf" in case["features"]
     figure = plot_equilibrium_overlay(
@@ -643,19 +789,24 @@ def render_equilibrium_overlay(
         title=title,
         include_spectrum=include_spectrum,
     )
-    figure.text(
-        0.5,
-        0.015,
-        "Systematic comparison: PASS  •  "
-        f"branch max error {diagnostics['branch_max_error']:.2e}  •  "
-        f"event max error {diagnostics['event_max_error']:.2e}  •  "
-        f"spectrum max error {diagnostics['spectrum_max_error']:.2e}",
-        ha="center",
-        va="bottom",
-        fontsize=9,
-        color="#334155",
+    details = _validation_failure_details(validation)
+    if validation.diagnostics is not None:
+        details.extend(
+            [
+                "branch max error "
+                f"{validation.diagnostics['branch_max_error']:.2e}",
+                "event max error "
+                f"{validation.diagnostics['event_max_error']:.2e}",
+                "spectrum max error "
+                f"{validation.diagnostics['spectrum_max_error']:.2e}",
+            ]
+        )
+    _annotate_summary(
+        figure,
+        status="PASS" if validation.passed else "FAIL",
+        passed=validation.passed,
+        details=details,
     )
-    figure.subplots_adjust(bottom=0.13)
 
     _save_figure(figure, output_path)
     return figure
@@ -674,10 +825,13 @@ def render_periodic_overlay(
     """Run a registered periodic case and render its MatCont overlay."""
     if case_id not in {"MC-LC-001", "MC-LC-002"}:
         raise ValueError(
-            f"visual comparison currently supports MC-LC-001 and MC-LC-002, got {case_id}"
+            "visual comparison currently supports MC-LC-001 and MC-LC-002, "
+            f"got {case_id}"
         )
     reference_dir = Path(reference_dir)
     case, result = _run_registered_case(case_id, reference_dir)
+    validate_periodic_artifacts(reference_dir, case_id)
+    validation = evaluate_case_result(case, result, reference_dir)
     if case_id == "MC-LC-002":
         figure = plot_torbpc_overlay(
             result,
@@ -687,49 +841,58 @@ def render_periodic_overlay(
             state_name=state_name,
             title=title,
         )
-        passed = bool(result.checks["all_comparisons_pass"])
-        status = "PASS" if passed else "FAIL (known limitation)"
-        figure.text(
-            0.5,
-            0.015,
-            f"Systematic comparison: {status}  •  "
-            "event errors "
-            f"LPC {result.checks['jaxcont_lpc_parameter_error']:.2e}, "
-            f"NS {result.checks['jaxcont_ns_parameter_error']:.2e}, "
-            f"PD {result.checks['jaxcont_pd_parameter_error']:.2e}  •  "
-            f"period {result.checks['jaxcont_max_period_error']:.2e}  •  "
-            f"extrema {result.checks['jaxcont_max_extrema_error']:.2e}  •  "
-            f"multiplier {result.checks['jaxcont_max_multiplier_error']:.2e}",
-            ha="center",
-            va="bottom",
+        checks = validation.checks
+        missing_event_types = ", ".join(checks["jaxcont_missing_event_types"])
+        _annotate_summary(
+            figure,
+            status=(
+                "PASS" if validation.passed else "FAIL (known limitation)"
+            ),
+            passed=validation.passed,
+            details=[
+                "critical-signature proxy parameter discrepancies "
+                f"LPC {checks['jaxcont_lpc_parameter_error']:.2e}, "
+                f"NS {checks['jaxcont_ns_parameter_error']:.2e}, "
+                f"PD {checks['jaxcont_pd_parameter_error']:.2e}",
+                "missing correctly located event types "
+                f"{missing_event_types or 'none'}",
+                f"period {checks['jaxcont_max_period_error']:.2e}",
+                f"extrema {checks['jaxcont_max_extrema_error']:.2e}",
+                f"multiplier {checks['jaxcont_max_multiplier_error']:.2e}",
+            ],
             fontsize=8.5,
-            color="#991b1b" if not passed else "#166534",
         )
-        figure.subplots_adjust(bottom=0.13)
         _save_figure(figure, output_path)
         return figure
 
-    diagnostics = compare_case_result_to_reference(case, result, reference_dir)
     figure = plot_radial_cycle_overlay(
         result,
         reference_dir,
         parameter_name=parameter_name,
         title=title,
     )
-    figure.text(
-        0.5,
-        0.015,
-        "Systematic comparison: PASS  •  "
-        f"branch max error {diagnostics['branch_max_error']:.2e}  •  "
-        f"spectrum max error {diagnostics['spectrum_max_error']:.2e}  •  "
-        f"period max error {result.checks['max_period_error']:.2e}  •  "
-        f"radius max error {result.checks['max_radius_error']:.2e}",
-        ha="center",
-        va="bottom",
-        fontsize=9,
-        color="#334155",
+    details = _validation_failure_details(validation)
+    if validation.diagnostics is not None:
+        details.extend(
+            [
+                "branch max error "
+                f"{validation.diagnostics['branch_max_error']:.2e}",
+                "spectrum max error "
+                f"{validation.diagnostics['spectrum_max_error']:.2e}",
+            ]
+        )
+    details.extend(
+        [
+            f"period max error {result.checks['max_period_error']:.2e}",
+            f"radius max error {result.checks['max_radius_error']:.2e}",
+        ]
     )
-    figure.subplots_adjust(bottom=0.13)
+    _annotate_summary(
+        figure,
+        status="PASS" if validation.passed else "FAIL",
+        passed=validation.passed,
+        details=details,
+    )
 
     _save_figure(figure, output_path)
     return figure

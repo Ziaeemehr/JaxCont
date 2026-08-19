@@ -41,5 +41,8 @@ figure = render_equilibrium_overlay(
 # at the Hopf bifurcation.  The PASS annotation is only added after the
 # registered numerical comparison succeeds.
 
-print("Saved JaxCont/MatCont Van der Pol overlay to images/matcont_vanderpol_overlay.png")
+print(
+    "Saved JaxCont/MatCont Van der Pol overlay to "
+    "images/matcont_vanderpol_overlay.png"
+)
 plt.show()
