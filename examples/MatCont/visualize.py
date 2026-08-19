@@ -15,6 +15,16 @@ from .python_cases import CaseResult
 from .registry import load_registry
 
 _DEFAULT_REFERENCE_DIR = Path(__file__).resolve().parent / "reference"
+_TORBPC_EVENT_COLORS = {
+    "LPC": "#16a34a",
+    "NS": "#7c3aed",
+    "PD": "#dc2626",
+}
+_TORBPC_JAXCONT_EVENT_TYPES = {
+    "fold": "LPC",
+    "neimark_sacker": "NS",
+    "period_doubling": "PD",
+}
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -201,6 +211,225 @@ def plot_radial_cycle_overlay(
         axis.set_xlim(shared_min, shared_max)
         axis.grid(alpha=0.2)
         axis.legend()
+
+    figure.tight_layout()
+    return figure
+
+
+def plot_torbpc_overlay(
+    result: CaseResult,
+    reference_dir: Path | str,
+    *,
+    state_index: int = 0,
+    parameter_name: str = r"$\nu$",
+    state_name: str | None = None,
+    title: str | None = None,
+):
+    """Plot torBPC envelopes, periods, and event-centered Floquet spectra."""
+    branch_rows = result.artifacts["branch"]
+    event_rows = result.artifacts["events"]
+    multiplier_rows = result.artifacts["multipliers"]
+
+    jax_parameters = np.asarray(result.artifacts["jaxcont_parameters"])
+    jax_states = np.asarray(result.artifacts["jaxcont_states"])
+    jax_periods = jax_states[:, -1]
+    jax_orbits = np.asarray(result.artifacts["jaxcont_orbits"])
+    jax_state_min = np.min(jax_orbits[:, :, state_index], axis=1)
+    jax_state_max = np.max(jax_orbits[:, :, state_index], axis=1)
+    jax_multipliers = np.asarray(result.artifacts["jaxcont_multipliers"])
+
+    matcont_parameters = np.asarray([float(row["parameter"]) for row in branch_rows])
+    matcont_periods = np.asarray([float(row["period"]) for row in branch_rows])
+    matcont_state_min = np.asarray(
+        [float(row[f"state_{state_index}_min"]) for row in branch_rows]
+    )
+    matcont_state_max = np.asarray(
+        [float(row[f"state_{state_index}_max"]) for row in branch_rows]
+    )
+    branch_by_point = {int(row["point"]): row for row in branch_rows}
+
+    figure = plt.figure(figsize=(13, 8))
+    grid = figure.add_gridspec(2, 2, width_ratios=(1.4, 1.0))
+    amplitude_axis = figure.add_subplot(grid[0, 0])
+    period_axis = figure.add_subplot(grid[1, 0], sharex=amplitude_axis)
+    spectrum_axis = figure.add_subplot(grid[:, 1])
+
+    amplitude_axis.plot(
+        jax_parameters,
+        jax_state_min,
+        color="#2563eb",
+        linewidth=2.2,
+        label="JaxCont minimum",
+    )
+    amplitude_axis.plot(
+        jax_parameters,
+        jax_state_max,
+        color="#2563eb",
+        linewidth=2.2,
+        linestyle="--",
+        label="JaxCont maximum",
+    )
+    amplitude_axis.plot(
+        matcont_parameters,
+        matcont_state_min,
+        color="#f97316",
+        linewidth=1.3,
+        marker="o",
+        markersize=2.8,
+        markerfacecolor="none",
+        label="MatCont 7.6 minimum",
+    )
+    amplitude_axis.plot(
+        matcont_parameters,
+        matcont_state_max,
+        color="#f97316",
+        linewidth=1.3,
+        linestyle="--",
+        marker="o",
+        markersize=2.8,
+        markerfacecolor="none",
+        label="MatCont 7.6 maximum",
+    )
+    amplitude_axis.set_ylabel(state_name or f"state[{state_index}] envelope")
+    amplitude_axis.set_title(
+        title or f"{result.case_id}: JaxCont and MatCont 7.6 diagnostic"
+    )
+
+    period_axis.plot(
+        jax_parameters,
+        jax_periods,
+        color="#2563eb",
+        linewidth=2.2,
+        label="JaxCont period",
+    )
+    period_axis.plot(
+        matcont_parameters,
+        matcont_periods,
+        color="#f97316",
+        linewidth=1.3,
+        marker="o",
+        markersize=2.8,
+        markerfacecolor="none",
+        label="MatCont 7.6 period",
+    )
+    period_axis.set_xlabel(parameter_name)
+    period_axis.set_ylabel("Period")
+
+    for event in event_rows:
+        event_type = event["event_type"].strip()
+        if event_type not in _TORBPC_EVENT_COLORS:
+            continue
+        color = _TORBPC_EVENT_COLORS[event_type]
+        event_parameter = float(event["parameter"])
+        branch_row = branch_by_point[int(event["point"])]
+        amplitude_axis.scatter(
+            [event_parameter],
+            [float(branch_row[f"state_{state_index}_max"])],
+            marker="x",
+            s=85,
+            color=color,
+            linewidth=2.0,
+            label=f"MatCont 7.6 {event_type}",
+            zorder=6,
+        )
+        period_axis.scatter(
+            [event_parameter],
+            [float(event["period"])],
+            marker="x",
+            s=85,
+            color=color,
+            linewidth=2.0,
+            label=f"MatCont 7.6 {event_type}",
+            zorder=6,
+        )
+
+        nearest_index = int(np.argmin(np.abs(jax_parameters - event_parameter)))
+        event_index = int(event["event_index"])
+        matcont_spectrum = np.asarray(
+            [
+                complex(float(row["real"]), float(row["imag"]))
+                for row in multiplier_rows
+                if int(row["event_index"]) == event_index
+                and row["event_type"].strip() == event_type
+            ]
+        )
+        spectrum_axis.scatter(
+            np.real(matcont_spectrum),
+            np.imag(matcont_spectrum),
+            marker="x",
+            s=75,
+            color=color,
+            linewidth=2.0,
+            label=f"MatCont 7.6 {event_type}",
+            zorder=6,
+        )
+        spectrum_axis.scatter(
+            np.real(jax_multipliers[nearest_index]),
+            np.imag(jax_multipliers[nearest_index]),
+            marker="o",
+            s=55,
+            facecolor="none",
+            edgecolor=color,
+            linewidth=1.8,
+            label=f"JaxCont near {event_type}",
+            zorder=5,
+        )
+
+    detected_event_labels: set[str] = set()
+    for event in result.observations.get("jaxcont_events", []):
+        event_type = _TORBPC_JAXCONT_EVENT_TYPES.get(str(event["kind"]))
+        if event_type is None:
+            continue
+        parameter = float(event["parameter"])
+        nearest_index = int(np.argmin(np.abs(jax_parameters - parameter)))
+        label = f"JaxCont detected {event_type}"
+        legend_label = label if event_type not in detected_event_labels else "_nolegend_"
+        amplitude_axis.scatter(
+            [parameter],
+            [jax_state_max[nearest_index]],
+            marker="D",
+            s=55,
+            facecolor=_TORBPC_EVENT_COLORS[event_type],
+            edgecolor="white",
+            linewidth=0.9,
+            label=legend_label,
+            zorder=7,
+        )
+        period_axis.scatter(
+            [parameter],
+            [jax_periods[nearest_index]],
+            marker="D",
+            s=55,
+            facecolor=_TORBPC_EVENT_COLORS[event_type],
+            edgecolor="white",
+            linewidth=0.9,
+            label=legend_label,
+            zorder=7,
+        )
+        detected_event_labels.add(event_type)
+
+    shared_min = max(float(np.min(jax_parameters)), float(np.min(matcont_parameters)))
+    shared_max = min(float(np.max(jax_parameters)), float(np.max(matcont_parameters)))
+    for axis in (amplitude_axis, period_axis):
+        axis.set_xlim(shared_min, shared_max)
+        axis.grid(alpha=0.2)
+        axis.legend(fontsize=8, ncols=2)
+
+    angle = np.linspace(0.0, 2.0 * np.pi, 361)
+    spectrum_axis.plot(
+        np.cos(angle),
+        np.sin(angle),
+        color="#94a3b8",
+        linestyle="--",
+        label="Unit circle",
+    )
+    spectrum_axis.axhline(0.0, color="#cbd5e1", linewidth=0.8, zorder=1)
+    spectrum_axis.axvline(0.0, color="#cbd5e1", linewidth=0.8, zorder=1)
+    spectrum_axis.set_xlabel("Re(Floquet multiplier)")
+    spectrum_axis.set_ylabel("Im(Floquet multiplier)")
+    spectrum_axis.set_aspect("equal", adjustable="box")
+    spectrum_axis.grid(alpha=0.2)
+    spectrum_axis.legend(fontsize=8)
 
     figure.tight_layout()
     return figure
@@ -437,14 +666,49 @@ def render_periodic_overlay(
     *,
     reference_dir: Path | str = _DEFAULT_REFERENCE_DIR,
     output_path: Path | str | None = None,
+    state_index: int = 0,
     parameter_name: str = "Continuation parameter",
+    state_name: str | None = None,
     title: str | None = None,
 ):
-    """Run the registered radial-cycle case and render its MatCont overlay."""
-    if case_id != "MC-LC-001":
-        raise ValueError(f"visual comparison currently supports MC-LC-001, got {case_id}")
+    """Run a registered periodic case and render its MatCont overlay."""
+    if case_id not in {"MC-LC-001", "MC-LC-002"}:
+        raise ValueError(
+            f"visual comparison currently supports MC-LC-001 and MC-LC-002, got {case_id}"
+        )
     reference_dir = Path(reference_dir)
     case, result = _run_registered_case(case_id, reference_dir)
+    if case_id == "MC-LC-002":
+        figure = plot_torbpc_overlay(
+            result,
+            reference_dir,
+            state_index=state_index,
+            parameter_name=parameter_name,
+            state_name=state_name,
+            title=title,
+        )
+        passed = bool(result.checks["all_comparisons_pass"])
+        status = "PASS" if passed else "FAIL (known limitation)"
+        figure.text(
+            0.5,
+            0.015,
+            f"Systematic comparison: {status}  •  "
+            "event errors "
+            f"LPC {result.checks['jaxcont_lpc_parameter_error']:.2e}, "
+            f"NS {result.checks['jaxcont_ns_parameter_error']:.2e}, "
+            f"PD {result.checks['jaxcont_pd_parameter_error']:.2e}  •  "
+            f"period {result.checks['jaxcont_max_period_error']:.2e}  •  "
+            f"extrema {result.checks['jaxcont_max_extrema_error']:.2e}  •  "
+            f"multiplier {result.checks['jaxcont_max_multiplier_error']:.2e}",
+            ha="center",
+            va="bottom",
+            fontsize=8.5,
+            color="#991b1b" if not passed else "#166534",
+        )
+        figure.subplots_adjust(bottom=0.13)
+        _save_figure(figure, output_path)
+        return figure
+
     diagnostics = compare_case_result_to_reference(case, result, reference_dir)
     figure = plot_radial_cycle_overlay(
         result,
@@ -495,6 +759,7 @@ def render_case_overlay(
 __all__ = [
     "plot_equilibrium_overlay",
     "plot_radial_cycle_overlay",
+    "plot_torbpc_overlay",
     "render_case_overlay",
     "render_equilibrium_overlay",
     "render_periodic_overlay",

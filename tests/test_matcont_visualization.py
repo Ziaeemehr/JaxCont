@@ -71,6 +71,31 @@ def test_registered_radial_cycle_renders_three_panel_pass_figure(tmp_path):
     )
 
 
+def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
+    from examples.MatCont.visualize import render_periodic_overlay
+
+    figure = render_periodic_overlay(
+        "MC-LC-002", output_path=tmp_path / "torbpc.png"
+    )
+    summary = " ".join(text.get_text() for text in figure.texts)
+
+    assert "Systematic comparison: FAIL (known limitation)" in summary
+    assert "multiplier" in summary
+    assert "event" in summary
+    assert (tmp_path / "torbpc.png").is_file()
+    assert len(figure.axes) == 3
+    assert figure.axes[2].get_xlabel() == "Re(Floquet multiplier)"
+    assert figure.axes[2].get_ylabel() == "Im(Floquet multiplier)"
+    labels = {
+        label
+        for axis in figure.axes
+        for label in axis.get_legend_handles_labels()[1]
+    }
+    for event_type in ("LPC", "NS", "PD"):
+        assert f"MatCont 7.6 {event_type}" in labels
+        assert f"JaxCont near {event_type}" in labels
+
+
 def test_equilibrium_overlay_draws_both_branches_and_event_sources(tmp_path):
     """Dropping either solver's curve or markers must make the visual comparison fail."""
     from examples.MatCont.visualize import plot_equilibrium_overlay
