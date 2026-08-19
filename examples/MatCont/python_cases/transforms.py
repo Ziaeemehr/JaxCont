@@ -105,7 +105,7 @@ def run_transform_checks() -> CaseResult:
     hopf_fd = _centered_difference(hopf_parameter, jnp.array(0.1))
 
     def lyapunov(scale):
-        state, parameter, q1, q2, omega = jc.hopf_point(
+        state, parameter, q1, q2, omega, _converged = jc.hopf_point(
             _lyapunov_family,
             jnp.zeros(2),
             jnp.array(0.05),

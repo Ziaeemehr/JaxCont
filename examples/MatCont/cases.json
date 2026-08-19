@@ -117,6 +117,7 @@
       "title": "MatCont torBPC1 limit-cycle bifurcations",
       "support": "supported",
       "features": ["periodic-orbit", "fold-of-cycles", "neimark-sacker", "period-doubling", "floquet-multipliers"],
+      "caveats": "The strict MatCont comparison (test_torbpc_jaxcont_matches_all_matcont_diagnostics) is a tracked xfail: JaxCont is missing LPC/PD event labels MatCont reports, and its maximum Floquet-multiplier error is approximately 1.13e-2. Treat fold-of-cycles/period-doubling/Neimark-Sacker support as experimental until this closes.",
       "python": "examples.MatCont.python_cases.periodic:run_torbpc_cycle",
       "matlab": "run_torbpc_cycle",
       "references": [

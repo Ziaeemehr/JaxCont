@@ -31,6 +31,7 @@ from jax import Array
 
 from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.bifurcations.hopf_normal_form import hopf_point, lyapunov_coefficient
+from jaxcont.solvers.implicit import differentiable_root_checked
 from jaxcont.stability.floquet import floquet_multipliers
 
 PyTree = Any
@@ -107,13 +108,22 @@ class Fold(Event):
         # fold_point expects f(u, p, args) (3-arg, per fold_solve.py); `rhs`
         # here is the 2-arg (u, p) -> Array callable used throughout this
         # module (matches api.py's rhs2), so adapt with an ignored 3rd arg.
-        u_bif, p_bif, null_vector = fold_point(
+        u_bif, p_bif, null_vector, converged = fold_point(
             lambda u, p, _args: rhs(u, p),
             u_guess, p_guess, tol=tolerance, max_iter=max_iterations,
         )
+        # A bracket sign-change is not a convergence guarantee: the same
+        # "silent unchecked bifurcation location" risk Hopf.refine already
+        # guards against applies here (Codim-2's Cusp.refine established
+        # this fallback shape -- see bifurcations/codim2_events.py).
+        if not bool(converged):
+            return EventHit(
+                kind="fold", p=float(right.p), u=right.u, index=index,
+                info={"null_vector": None, "converged": False, "method": "extended_system"},
+            )
         return EventHit(
             kind="fold", p=float(p_bif), u=u_bif, index=index,
-            info={"null_vector": null_vector, "method": "extended_system"},
+            info={"null_vector": null_vector, "converged": True, "method": "extended_system"},
         )
 
 
@@ -155,7 +165,7 @@ class Hopf(Event):
     def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
         u_guess = (left.u + right.u) / 2
         p_guess = (left.p + right.p) / 2
-        u, p, q1, q2, omega0 = hopf_point(
+        u, p, q1, q2, omega0, converged = hopf_point(
             lambda u, p, _args: rhs(u, p), u_guess, p_guess,
             tol=tolerance, max_iter=max_iterations,
         )
@@ -164,24 +174,32 @@ class Hopf(Event):
         # convergence guarantee: if the bracket's sign change wasn't a real
         # Hopf point (a known occurrence -- see the "no close match --
         # spurious" branches in examples/example_05_neural_mass.py), p/l1/
-        # omega0 can come back non-finite (e.g. p=-inf, l1=nan). Both
-        # `abs(nan) < tol` and `nan < 0` are False, so without this guard a
+        # omega0 can come back non-finite (e.g. p=-inf, l1=nan), or --the
+        # gap `converged` closes -- come back finite but never actually
+        # satisfy the extended-system residual within tol. Both `abs(nan) <
+        # tol` and `nan < 0` are False, so without these guards a
         # non-convergent solve would silently fall through to the
         # "subcritical" else-branch below -- a confident-looking label for
-        # a result that isn't a Hopf point at all. Check finiteness (and
-        # omega0 > 0, since a genuine Hopf point always has a nonzero
-        # critical frequency) before trusting the sign of l1.
+        # a result that isn't a Hopf point at all. omega0 > 0 is checked too
+        # since a genuine Hopf point always has a nonzero critical frequency.
         finite = jnp.isfinite(p) & jnp.isfinite(l1) & jnp.isfinite(omega0)
-        if not bool(finite) or not (float(omega0) > 0.0):
-            criticality = "unknown"
-        elif abs(l1) < self.l1_tolerance:
-            criticality = "degenerate"
-        else:
-            criticality = "supercritical" if l1 < 0 else "subcritical"
+        ok = bool(converged) and bool(finite) and (float(omega0) > 0.0)
+        if not ok:
+            return EventHit(
+                kind="hopf", p=float(right.p), u=right.u, index=index,
+                info={"omega0": float(omega0), "l1": float(l1),
+                      "criticality": "unknown", "converged": False,
+                      "method": "extended_system"},
+            )
+        criticality = (
+            "degenerate" if abs(l1) < self.l1_tolerance
+            else "supercritical" if l1 < 0 else "subcritical"
+        )
         return EventHit(
             kind="hopf", p=float(p), u=u, index=index,
             info={"omega0": float(omega0), "l1": float(l1),
-                  "criticality": criticality, "method": "extended_system"},
+                  "criticality": criticality, "converged": True,
+                  "method": "extended_system"},
         )
 
 
@@ -366,12 +384,26 @@ class PeriodDoubling(Event):
         v_right = self.select_candidate(right, v_left)
         t_left = self.test_value(v_left)
         t_right = self.test_value(v_right)
+        corrected_all = True
         for _ in range(max_iterations):
             if abs(p_right - p_left) < tolerance:
                 break
             p_mid = (p_left + p_right) / 2
             alpha = (p_mid - p_left) / (p_right - p_left)
-            u_mid = u_left + alpha * (u_right - u_left)
+            u_interp = u_left + alpha * (u_right - u_left)
+            # A linear interpolation between two collocation states does not
+            # itself satisfy the nonlinear collocation residual on a curved
+            # branch. Correct it back onto the residual manifold at the
+            # interpolated parameter before trusting its Floquet multipliers
+            # -- otherwise a narrow reported parameter bracket does not by
+            # itself imply an accurate multiplier crossing. tol=1e-5 matches
+            # problems/periodic.py's own calibrated float32 residual floor
+            # for this exact collocation residual (~3.4e-6); a tighter
+            # default would spuriously report `corrected=False` every step.
+            u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=1e-5)
+            if not bool(corrected):
+                corrected_all = False
+                break
             mult_mid = floquet_multipliers(self.raw_f, self.mesh, u_mid, p_mid)
             mid_point = BranchPoint(p=p_mid, u=u_mid, eigenvalues=mult_mid)
             v_mid = self.select_candidate(mid_point, v_left)
@@ -387,9 +419,16 @@ class PeriodDoubling(Event):
             else:
                 break
         p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
+        # u_bif/p_bif are the midpoint of the final bracket, not a fresh
+        # Newton correction at that exact midpoint -- the endpoints
+        # (u_left/u_right) were the ones actually corrected onto the
+        # residual manifold during the loop above. In practice this sits at
+        # the float32 residual floor (empirically ~4-5e-6) since the final
+        # bracket is narrow, but it's a linear average, not an independently
+        # re-corrected point.
         return EventHit(
             kind="period_doubling", p=float(p_bif), u=u_bif, index=index,
-            info={"method": "bisection"},
+            info={"method": "bisection", "corrected": corrected_all},
         )
 
 
@@ -455,12 +494,20 @@ class NeimarkSacker(Event):
         v_right = self.select_candidate(right, v_left)
         t_left = self.test_value(v_left)
         t_right = self.test_value(v_right)
+        corrected_all = True
         for _ in range(max_iterations):
             if abs(p_right - p_left) < tolerance:
                 break
             p_mid = (p_left + p_right) / 2
             alpha = (p_mid - p_left) / (p_right - p_left)
-            u_mid = u_left + alpha * (u_right - u_left)
+            u_interp = u_left + alpha * (u_right - u_left)
+            # See PeriodDoubling.refine for why the interpolated state must
+            # be Newton-corrected back onto the collocation residual
+            # manifold before its Floquet multipliers can be trusted.
+            u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=1e-5)
+            if not bool(corrected):
+                corrected_all = False
+                break
             mult_mid = floquet_multipliers(self.raw_f, self.mesh, u_mid, p_mid)
             mid_point = BranchPoint(p=p_mid, u=u_mid, eigenvalues=mult_mid)
             v_mid = self.select_candidate(mid_point, v_left)
@@ -472,7 +519,10 @@ class NeimarkSacker(Event):
             else:
                 break
         p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
+        # See PeriodDoubling.refine's identical comment above: u_bif/p_bif
+        # are the midpoint of the final (already Newton-corrected-endpoint)
+        # bracket, not a fresh correction at that exact midpoint.
         return EventHit(
             kind="neimark_sacker", p=float(p_bif), u=u_bif, index=index,
-            info={"method": "bisection"},
+            info={"method": "bisection", "corrected": corrected_all},
         )

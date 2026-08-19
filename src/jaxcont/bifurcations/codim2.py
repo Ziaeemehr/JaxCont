@@ -36,35 +36,9 @@ from jaxcont.bifurcations.fold_normal_form import fold_coefficient
 from jaxcont.bifurcations.fold_solve import _initial_v
 from jaxcont.bifurcations.hopf_normal_form import _seed as _hopf_seed
 from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
-from jaxcont.solvers.implicit import differentiable_root
+from jaxcont.solvers.implicit import differentiable_root_checked as _solve_and_check
 
 PyTree = Any
-
-
-def _solve_and_check(
-    G: Callable[[Array, PyTree], Array],
-    x0: Callable[[PyTree], Array],
-    args: PyTree,
-    *,
-    tol: float,
-    max_iter: int,
-) -> tuple[Array, Array]:
-    """
-    Solve ``G(x, args) = 0`` and report whether the result is trustworthy.
-
-    ``differentiable_root`` returns only the root, and its Newton loop exits
-    on non-finite iterates as well as on convergence, so the caller cannot
-    tell success from failure without re-checking. ``converged`` is a JAX
-    boolean (not a Python bool) so callers stay ``jit``/``vmap``-safe.
-    """
-    x_star = differentiable_root(G, x0, args, tol=tol, max_iter=max_iter)
-    residual = jnp.linalg.norm(G(x_star, args))
-    converged = (
-        jnp.isfinite(residual)
-        & (residual < tol)
-        & jnp.all(jnp.isfinite(x_star))
-    )
-    return x_star, converged
 
 
 def _normalize_omega(

@@ -89,3 +89,31 @@ def differentiable_root(
 
     solve.defvjp(solve_fwd, solve_bwd)
     return solve(theta)
+
+
+def differentiable_root_checked(
+    G: Callable[[Array, PyTree], Array],
+    x0: Array | Callable[[PyTree], Array],
+    theta: PyTree,
+    *,
+    tol: float = 1e-8,
+    max_iter: int = 50,
+) -> tuple[Array, Array]:
+    """
+    Solve ``G(x, theta) = 0`` like :func:`differentiable_root`, and
+    additionally report whether the result is trustworthy.
+
+    ``differentiable_root``'s Newton loop exits on a non-finite residual as
+    well as on convergence, so the caller cannot otherwise tell success from
+    failure without re-checking the final residual itself. ``converged`` is
+    a JAX boolean (not a Python ``bool``), so this stays ``jit``/``vmap``-safe;
+    callers in eager code should call ``bool(converged)`` themselves.
+    """
+    x_star = differentiable_root(G, x0, theta, tol=tol, max_iter=max_iter)
+    residual = jnp.linalg.norm(G(x_star, theta))
+    converged = (
+        jnp.isfinite(residual)
+        & (residual < tol)
+        & jnp.all(jnp.isfinite(x_star))
+    )
+    return x_star, converged

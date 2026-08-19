@@ -49,7 +49,7 @@ def fold_p(theta):
 # --------------------------------------------
 
 theta0 = jnp.array(1.0)
-u, p, v = jc.fold_point(f_fold, jnp.array([0.4]), jnp.array(0.2), theta0)
+u, p, v, _converged = jc.fold_point(f_fold, jnp.array([0.4]), jnp.array(0.2), theta0)
 print(f"fold at theta={float(theta0):.2f}: u*={float(u[0]):.4f}  p*={float(p):.4f}")
 print(f"  (analytic: u=theta/2={float(theta0)/2:.4f}, p=theta^2/4={float(theta0)**2/4:.4f})")
 
