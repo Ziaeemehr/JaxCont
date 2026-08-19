@@ -55,14 +55,15 @@ execute_gallery = (
 sphinx_gallery_conf = {
     'examples_dirs': '../../examples',
     'gallery_dirs': 'auto_examples',
-    # examples/MatCont/{artifacts,compare,registry,run_validation,visualize}.py are the
-    # validation suite's library modules, not narrated example scripts --
-    # sphinx-gallery lists every .py file it finds regardless of
-    # filename_pattern (that only gates execution), so without this they turn
-    # into title-less gallery pages and break the `fail_on_warning` build.
+    # examples/MatCont/{artifacts,compare,registry,run_validation,validation,
+    # visualize}.py are the validation suite's library modules, not narrated
+    # example scripts -- sphinx-gallery lists every .py file it finds
+    # regardless of filename_pattern (that only gates execution), so without
+    # this they turn into title-less gallery pages and break the
+    # `fail_on_warning` build.
     'ignore_pattern': (
         r'(__init__|check_installation|profile_continuation'
-        r'|artifacts|compare|registry|run_validation|visualize)\.py'
+        r'|artifacts|compare|registry|run_validation|validation|visualize)\.py'
     ),
     'filename_pattern': r'/(example_|demo_)',
     'within_subsection_order': 'FileNameSortKey',

@@ -532,6 +532,10 @@ def plot_torbpc_overlay(
     shared_max = min(
         float(np.max(jax_parameters)), float(np.max(matcont_parameters))
     )
+    if shared_min > shared_max:
+        raise ValueError(
+            "JaxCont and MatCont branches have no shared parameter domain"
+        )
     for axis in (amplitude_axis, period_axis):
         axis.set_xlim(shared_min, shared_max)
         axis.grid(alpha=0.2)
@@ -661,6 +665,10 @@ def plot_equilibrium_overlay(
     shared_max = min(
         float(np.max(jax_parameters)), float(np.max(matcont_parameters))
     )
+    if shared_min > shared_max:
+        raise ValueError(
+            "JaxCont and MatCont branches have no shared parameter domain"
+        )
     axis.set_xlim(shared_min, shared_max)
     axis.grid(alpha=0.2)
     axis.legend()
