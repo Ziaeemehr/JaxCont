@@ -182,16 +182,25 @@ def pseudo_arclength_scan(
     p_end = jnp.asarray(p_end, dtype)
     direction = jnp.sign(p_end - p0)
 
+    # The scan buffer's slot 0 is the branch's starting point. u0 is caller-
+    # supplied and not guaranteed to satisfy f(u0, p0) = 0 (e.g. a stale
+    # guess, or api.py's BifProblem.u0 built by hand rather than refined).
+    # Correct it the same way natural_scan corrects every other point on
+    # the branch -- via _natural_correct, plain Newton with p held fixed at
+    # p0 -- instead of writing the raw guess into slot 0 and marking it
+    # converged unconditionally.
+    u0_seed, seed_converged, _ = _natural_correct(f, u0, p0, tol, max_iter, linear_solver)
+
     # Initial tangent: seed prev with the parameter axis pointing in `direction`,
     # so the branch is traversed toward p_end.
     seed = jnp.zeros(n + 1, dtype).at[-1].set(direction)
-    tan0 = _tangent(f, u0, p0, seed, linear_solver)
+    tan0 = _tangent(f, u0_seed, p0, seed, linear_solver)
 
     # Fixed-size output buffers; slot 0 is the initial point.
-    P = jnp.zeros((max_steps + 1, n), dtype).at[0].set(u0)
+    P = jnp.zeros((max_steps + 1, n), dtype).at[0].set(u0_seed)
     Q = jnp.zeros((max_steps + 1,), dtype).at[0].set(p0)
     T = jnp.zeros((max_steps + 1, n + 1), dtype).at[0].set(tan0)
-    C = jnp.zeros((max_steps + 1,), dtype=bool).at[0].set(True)
+    C = jnp.zeros((max_steps + 1,), dtype=bool).at[0].set(seed_converged)
 
     ds_mag0 = jnp.asarray(ds0, dtype)
     D = jnp.zeros((max_steps + 1,), dtype).at[0].set(ds_mag0)
@@ -253,7 +262,7 @@ def pseudo_arclength_scan(
         return Carry(u, p, tan, ds, idx, stop, P, Q, T, C, D)
 
     init = Carry(
-        u=u0, p=p0, tan=tan0, ds=ds_mag0,
+        u=u0_seed, p=p0, tan=tan0, ds=ds_mag0,
         idx=jnp.array(0, jnp.int32), stop=jnp.array(False),
         P=P, Q=Q, T=T, C=C, D=D,
     )
@@ -350,10 +359,12 @@ def natural_scan(
     p_end = jnp.asarray(p_end, dtype)
     direction = jnp.sign(p_end - p0)
 
-    P = jnp.zeros((max_steps + 1, n), dtype).at[0].set(u0)
+    u0_seed, seed_converged, _ = _natural_correct(f, u0, p0, tol, max_iter, linear_solver)
+
+    P = jnp.zeros((max_steps + 1, n), dtype).at[0].set(u0_seed)
     Q = jnp.zeros((max_steps + 1,), dtype).at[0].set(p0)
     T = jnp.zeros((max_steps + 1, n + 1), dtype)
-    C = jnp.zeros((max_steps + 1,), dtype=bool).at[0].set(True)
+    C = jnp.zeros((max_steps + 1,), dtype=bool).at[0].set(seed_converged)
     ds_mag0 = jnp.asarray(ds0, dtype)
     D = jnp.zeros((max_steps + 1,), dtype).at[0].set(ds_mag0)
 
@@ -396,7 +407,7 @@ def natural_scan(
         return Carry(u, p, ds, idx, stop, P, Q, c.T, C, D)
 
     init = Carry(
-        u=u0, p=p0, ds=ds_mag0,
+        u=u0_seed, p=p0, ds=ds_mag0,
         idx=jnp.array(0, jnp.int32), stop=jnp.array(False),
         P=P, Q=Q, T=T, C=C, D=D,
     )

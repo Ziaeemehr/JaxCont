@@ -28,8 +28,8 @@ def hopf_normal_form(u, p, args):
     return jnp.array([p * u[0] - u[1], u[0] + p * u[1]])
 
 
-def _max_residual(f, states, params, args=None, skip_first=True):
-    start = 1 if skip_first else 0  # slot 0 is the uncorrected initial guess
+def _max_residual(f, states, params, args=None, skip_first=False):
+    start = 1 if skip_first else 0
     vals = [jnp.abs(f(states[i], params[i], args)).max() for i in range(start, states.shape[0])]
     return float(jnp.max(jnp.array(vals))) if vals else 0.0
 
@@ -306,3 +306,31 @@ class TestNaturalScanEngine:
         batch = jax.vmap(run)(jnp.linspace(0.0, 2.0, 8))
         assert batch.params.shape == (8, 41)
         assert batch.n_valid.shape == (8,)
+
+
+def test_p_span_mismatch_raises_for_equilibrium_problem():
+    # Regression for finding #1: p_span[0] == problem.p0 used to be checked
+    # only for fold_curve/hopf_curve kinds, so an ordinary equilibrium
+    # problem silently started its branch at a point that was never on the
+    # refined curve.
+    def f(u, p, args):
+        return u - p
+
+    prob = jc.bif_problem(f, u0=jnp.array([0.0]), p0=jnp.array(0.0))
+    with pytest.raises(ValueError, match="p_span"):
+        jc.continuation(prob, p_span=(1.0, 1.2))
+
+
+def test_invalid_seed_is_newton_corrected_not_silently_accepted():
+    # Regression for finding #1: an invalid u0 (residual != 0 at p0) used to
+    # be copied into branch slot 0 and marked converged unconditionally.
+    def f(u, p, args):
+        return u - p - 1.0  # true equilibrium: u = p + 1
+
+    prob = jc.bif_problem(f, u0=jnp.array([0.0]), p0=jnp.array(0.0))  # f(0, 0) = -1, invalid
+    result = jc.continuation(
+        prob, p_span=(0.0, 0.5), settings=jc.ContinuationPar(max_steps=20),
+    )
+    assert result.branch.n_valid >= 1
+    assert float(result.branch.states[0, 0]) == pytest.approx(1.0, abs=1e-4)
+    assert _max_residual(f, result.branch.states, result.branch.params) < 1e-5
