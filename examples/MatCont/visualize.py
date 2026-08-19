@@ -22,9 +22,7 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def _run_registered_case(
-    case_id: str, reference_dir: Path
-) -> tuple[dict, CaseResult]:
+def _run_registered_case(case_id: str, reference_dir: Path) -> tuple[dict, CaseResult]:
     """Run the JaxCont producer declared for one supported registry case."""
     registry = load_registry()
     try:
@@ -51,6 +49,26 @@ def _save_figure(figure, output_path: Path | str | None) -> None:
     figure.savefig(path, dpi=180, bbox_inches="tight")
 
 
+def _branch_spectral_abscissa(rows: list[dict[str, str]]) -> dict[int, float]:
+    """Return the largest real eigenvalue at each non-event MatCont point."""
+    values_by_point: dict[int, list[float]] = {}
+    for row in rows:
+        if int(row["event_index"]) != -1:
+            continue
+        values_by_point.setdefault(int(row["point"]), []).append(float(row["real"]))
+    return {point: max(real_parts) for point, real_parts in values_by_point.items()}
+
+
+def _event_spectral_abscissa(event: dict, event_spectra: list[dict]) -> float:
+    """Find an event's spectral abscissa from its registered event spectrum."""
+    for event_spectrum in event_spectra:
+        if event_spectrum.get("kind") == event.get("kind") and np.isclose(
+            float(event_spectrum["parameter"]), float(event["parameter"])
+        ):
+            return float(np.max(np.real(np.asarray(event_spectrum["values"]))))
+    return 0.0
+
+
 def plot_equilibrium_overlay(
     result: CaseResult,
     reference_dir: Path | str,
@@ -59,6 +77,7 @@ def plot_equilibrium_overlay(
     parameter_name: str = "Continuation parameter",
     state_name: str | None = None,
     title: str | None = None,
+    include_spectrum: bool = False,
 ):
     """Overlay one JaxCont equilibrium branch on its reviewed MatCont branch."""
     reference_dir = Path(reference_dir)
@@ -72,7 +91,12 @@ def plot_equilibrium_overlay(
     matcont_states = np.asarray([float(row[state_column]) for row in branch_rows])
     branch_by_point = {row["point"]: row for row in branch_rows}
 
-    figure, axis = plt.subplots(figsize=(9, 6))
+    if include_spectrum:
+        figure, axes = plt.subplots(2, 1, sharex=True, figsize=(9, 8))
+        axis, spectral_axis = axes
+    else:
+        figure, axis = plt.subplots(figsize=(9, 6))
+        spectral_axis = None
     axis.plot(
         jax_parameters,
         jax_states[:, state_index],
@@ -131,7 +155,6 @@ def plot_equilibrium_overlay(
         )
         labeled_matcont_events.add(kind)
 
-    axis.set_xlabel(parameter_name)
     axis.set_ylabel(state_name or f"state[{state_index}]")
     axis.set_title(title or f"{result.case_id}: JaxCont and MatCont branch overlay")
     shared_min = max(float(np.min(jax_parameters)), float(np.min(matcont_parameters)))
@@ -139,11 +162,96 @@ def plot_equilibrium_overlay(
     axis.set_xlim(shared_min, shared_max)
     axis.grid(alpha=0.2)
     axis.legend()
+
+    if spectral_axis is not None:
+        spectrum_rows = _read_csv(reference_dir / f"{result.case_id}_multipliers.csv")
+        matcont_spectral_abscissa = _branch_spectral_abscissa(spectrum_rows)
+        matcont_spectrum_points = [
+            (float(row["parameter"]), matcont_spectral_abscissa[int(row["point"])])
+            for row in branch_rows
+            if int(row["point"]) in matcont_spectral_abscissa
+        ]
+        jax_spectra = np.asarray(result.artifacts["spectra"])
+        spectral_axis.plot(
+            jax_parameters,
+            np.max(np.real(jax_spectra), axis=1),
+            color="#2563eb",
+            linewidth=2.4,
+            label="JaxCont spectral abscissa",
+            zorder=3,
+        )
+        spectral_axis.plot(
+            [point[0] for point in matcont_spectrum_points],
+            [point[1] for point in matcont_spectrum_points],
+            linestyle="none",
+            marker="o",
+            markersize=3.5,
+            markerfacecolor="none",
+            markeredgecolor="#f97316",
+            alpha=0.75,
+            label="MatCont 7.6 spectral abscissa",
+            zorder=2,
+        )
+        spectral_axis.axhline(0.0, color="#64748b", linewidth=1.0, zorder=1)
+
+        jax_event_spectra = result.artifacts.get("event_spectra", [])
+        labeled_jaxcont_spectral_events: set[str] = set()
+        for event in result.artifacts.get("events", []):
+            kind = str(event["kind"])
+            spectral_axis.scatter(
+                [float(event["parameter"])],
+                [_event_spectral_abscissa(event, jax_event_spectra)],
+                marker="o",
+                s=85,
+                facecolor="#2563eb",
+                edgecolor="white",
+                linewidth=1.2,
+                label=(
+                    f"JaxCont {kind}"
+                    if kind not in labeled_jaxcont_spectral_events
+                    else "_nolegend_"
+                ),
+                zorder=5,
+            )
+            labeled_jaxcont_spectral_events.add(kind)
+
+        labeled_matcont_spectral_events: set[str] = set()
+        for event in event_rows:
+            kind = event["event_type"]
+            values = [
+                float(row["real"])
+                for row in spectrum_rows
+                if int(row["event_index"]) == int(event["event_index"])
+            ]
+            spectral_axis.scatter(
+                [float(event["parameter"])],
+                [max(values) if values else 0.0],
+                marker="x",
+                s=95,
+                color="#c2410c",
+                linewidth=2.2,
+                label=(
+                    f"MatCont 7.6 {kind}"
+                    if kind not in labeled_matcont_spectral_events
+                    else "_nolegend_"
+                ),
+                zorder=6,
+            )
+            labeled_matcont_spectral_events.add(kind)
+
+        spectral_axis.set_xlabel(parameter_name)
+        spectral_axis.set_ylabel("Largest Re(eigenvalue)")
+        spectral_axis.set_xlim(shared_min, shared_max)
+        spectral_axis.grid(alpha=0.2)
+        spectral_axis.legend()
+    else:
+        axis.set_xlabel(parameter_name)
+
     figure.tight_layout()
     return figure
 
 
-def render_case_overlay(
+def render_equilibrium_overlay(
     case_id: str,
     *,
     reference_dir: Path | str = _DEFAULT_REFERENCE_DIR,
@@ -151,21 +259,23 @@ def render_case_overlay(
     parameter_name: str = "Continuation parameter",
     state_name: str | None = None,
     title: str | None = None,
+    include_spectrum: bool | None = None,
 ):
     """Run a registered equilibrium case and render its MatCont overlay."""
     reference_dir = Path(reference_dir)
     case, result = _run_registered_case(case_id, reference_dir)
     if not case_id.startswith("MC-EQ-"):
-        raise ValueError(
-            f"visual comparison currently supports equilibrium cases, got {case_id}"
-        )
+        raise ValueError(f"visual comparison currently supports equilibrium cases, got {case_id}")
     diagnostics = compare_case_result_to_reference(case, result, reference_dir)
+    if include_spectrum is None:
+        include_spectrum = "hopf" in case["features"]
     figure = plot_equilibrium_overlay(
         result,
         reference_dir,
         parameter_name=parameter_name,
         state_name=state_name,
         title=title,
+        include_spectrum=include_spectrum,
     )
     figure.text(
         0.5,
@@ -185,4 +295,29 @@ def render_case_overlay(
     return figure
 
 
-__all__ = ["plot_equilibrium_overlay", "render_case_overlay"]
+def render_case_overlay(
+    case_id: str,
+    *,
+    reference_dir: Path | str = _DEFAULT_REFERENCE_DIR,
+    output_path: Path | str | None = None,
+    parameter_name: str = "Continuation parameter",
+    state_name: str | None = None,
+    title: str | None = None,
+):
+    """Render the original one-panel equilibrium overlay compatibility view."""
+    return render_equilibrium_overlay(
+        case_id,
+        reference_dir=reference_dir,
+        output_path=output_path,
+        parameter_name=parameter_name,
+        state_name=state_name,
+        title=title,
+        include_spectrum=False,
+    )
+
+
+__all__ = [
+    "plot_equilibrium_overlay",
+    "render_case_overlay",
+    "render_equilibrium_overlay",
+]

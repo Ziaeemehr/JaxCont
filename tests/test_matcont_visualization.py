@@ -10,6 +10,7 @@ import sys
 
 import jax.numpy as jnp
 import matplotlib
+import pytest
 
 from examples.MatCont.python_cases import CaseResult
 
@@ -21,6 +22,28 @@ def _write_rows(path, fieldnames, rows):
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
+
+
+@pytest.mark.parametrize("case_id", ["MC-EQ-002", "MC-EQ-003"])
+def test_registered_hopf_case_renders_spectral_pass_figure(case_id, tmp_path):
+    """Hopf views compare stability crossings as well as flat equilibria."""
+    from examples.MatCont.visualize import render_equilibrium_overlay
+
+    output = tmp_path / f"{case_id}.png"
+    figure = render_equilibrium_overlay(case_id, output_path=output)
+
+    assert len(figure.axes) == 2
+    labels = {
+        artist.get_label()
+        for artist in [*figure.axes[1].lines, *figure.axes[1].collections]
+    }
+    assert {"JaxCont spectral abscissa", "MatCont 7.6 spectral abscissa"} <= labels
+    assert figure.axes[1].get_ylabel() == "Largest Re(eigenvalue)"
+    assert any("H" in label for label in labels)
+    assert output.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert "Systematic comparison: PASS" in " ".join(
+        text.get_text() for text in figure.texts
+    )
 
 
 def test_equilibrium_overlay_draws_both_branches_and_event_sources(tmp_path):
@@ -215,7 +238,20 @@ def test_equilibrium_overlay_accepts_domain_labels_and_title(tmp_path):
     assert axis.get_title() == "Cubic S-curve: JaxCont vs MatCont 7.6"
 
 
-def test_gallery_example_runs_from_outside_repository_root(tmp_path):
+@pytest.mark.parametrize(
+    ("script_name", "image_name"),
+    [
+        ("example_16_matcont_cubic_overlay.py", "matcont_cubic_overlay.png"),
+        ("example_17_matcont_vanderpol_overlay.py", "matcont_vanderpol_overlay.png"),
+        (
+            "example_18_matcont_adaptive_control_overlay.py",
+            "matcont_adaptive_control_overlay.png",
+        ),
+    ],
+)
+def test_gallery_example_runs_from_outside_repository_root(
+    script_name, image_name, tmp_path
+):
     """Sphinx-Gallery execution must not depend on the repository root in sys.path."""
     repository = Path(__file__).resolve().parents[1]
     obsolete_script = repository / "examples" / "example_16_matcont_overlay.py"
@@ -234,7 +270,7 @@ def test_gallery_example_runs_from_outside_repository_root(tmp_path):
     )
 
     completed = subprocess.run(
-        [sys.executable, str(repository / "examples" / "example_16_matcont_cubic_overlay.py")],
+        [sys.executable, str(repository / "examples" / script_name)],
         cwd=tmp_path,
         env=environment,
         text=True,
@@ -243,4 +279,4 @@ def test_gallery_example_runs_from_outside_repository_root(tmp_path):
     )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert (tmp_path / "images" / "matcont_cubic_overlay.png").is_file()
+    assert (tmp_path / "images" / image_name).is_file()
