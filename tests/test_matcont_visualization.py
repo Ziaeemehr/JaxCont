@@ -218,6 +218,8 @@ def test_equilibrium_overlay_accepts_domain_labels_and_title(tmp_path):
 def test_gallery_example_runs_from_outside_repository_root(tmp_path):
     """Sphinx-Gallery execution must not depend on the repository root in sys.path."""
     repository = Path(__file__).resolve().parents[1]
+    obsolete_script = repository / "examples" / "example_16_matcont_overlay.py"
+    assert not obsolete_script.exists()
     environment = os.environ.copy()
     environment.update(
         {
