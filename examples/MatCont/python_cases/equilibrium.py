@@ -66,7 +66,8 @@ def run_cubic_fold() -> CaseResult:
     fold_events = [event for event in result.events if event.kind == "fold"]
     refined = [jc.fold_point(_cubic_rhs, event.u, event.p) for event in fold_events]
     actual = sorted(
-        [(float(state[0]), float(parameter), vector) for state, parameter, vector in refined],
+        [(float(state[0]), float(parameter), vector)
+         for state, parameter, vector, _converged in refined],
         key=lambda item: item[0],
     )
     expected = [(-1.0, 2.0 / 3.0), (1.0, -2.0 / 3.0)]
@@ -166,7 +167,7 @@ def run_vanderpol_hopf() -> CaseResult:
     )
     hopf_events = [event for event in result.events if event.kind == "hopf"]
     if hopf_events:
-        state, parameter, q1, q2, omega = jc.hopf_point(
+        state, parameter, q1, q2, omega, _converged = jc.hopf_point(
             _van_der_pol_rhs, hopf_events[0].u, hopf_events[0].p, tol=1e-7
         )
         lyapunov = jc.lyapunov_coefficient(
@@ -256,7 +257,7 @@ def run_adaptive_control_hopf() -> CaseResult:
     )
     hopf_events = [event for event in result.events if event.kind == "hopf"]
     if hopf_events:
-        state, parameter, q1, q2, omega = jc.hopf_point(
+        state, parameter, q1, q2, omega, _converged = jc.hopf_point(
             _adaptive_control_rhs,
             hopf_events[0].u,
             hopf_events[0].p,

@@ -25,7 +25,7 @@ def _textbook_hopf(u, p, args):
 
 
 def test_hopf_point_recovers_exact_hopf_of_textbook_example():
-    u, p, q1, q2, omega0 = hopf_point(
+    u, p, q1, q2, omega0, _converged = hopf_point(
         _textbook_hopf, jnp.zeros(2), 0.05, tol=1e-10, max_iter=50,
     )
     assert jnp.allclose(u, jnp.zeros(2), atol=1e-5)
@@ -69,7 +69,7 @@ def test_hopf_point_end_to_end_ignores_slow_real_mode():
     # system must converge to the same Hopf point as the pure 2-D textbook
     # example (the z-mode is decoupled and irrelevant to the Hopf point),
     # not diverge/NaN from a bad real-eigenvalue seed.
-    u, p, _q1, _q2, omega0 = hopf_point(
+    u, p, _q1, _q2, omega0, _converged = hopf_point(
         _hopf_plus_slow_real_mode, jnp.array([0.0, 0.0, 0.0]), 0.05,
         tol=1e-10, max_iter=50,
     )
@@ -103,7 +103,7 @@ def test_hopf_parameter_grad_matches_finite_difference():
 
 
 def test_lyapunov_coefficient_matches_exact_textbook_value():
-    u, p, q1, q2, omega0 = hopf_point(
+    u, p, q1, q2, omega0, _converged = hopf_point(
         _textbook_hopf, jnp.zeros(2), 0.05, tol=1e-10, max_iter=50,
     )
     l1 = lyapunov_coefficient(_textbook_hopf, u, p, q1, q2, omega0)
@@ -119,7 +119,7 @@ def test_lyapunov_coefficient_scales_linearly_with_cubic_coefficient():
         return jnp.array([-y + x * (p - k * r2), x + y * (p - k * r2)])
 
     for k in (1.0, 2.0, 0.5, -1.0):
-        u, p, q1, q2, omega0 = hopf_point(
+        u, p, q1, q2, omega0, _converged = hopf_point(
             hopf_scaled, jnp.zeros(2), 0.05, k, tol=1e-10, max_iter=50,
         )
         l1 = lyapunov_coefficient(hopf_scaled, u, p, q1, q2, omega0, k)
@@ -135,7 +135,7 @@ def test_lyapunov_coefficient_grad_matches_finite_difference():
         return jnp.array([-y + x * (p - scale * r2), x + y * (p - scale * r2)])
 
     def l1_of_scale(scale):
-        u, p, q1, q2, omega0 = hopf_point(
+        u, p, q1, q2, omega0, _converged = hopf_point(
             hopf_scaled, jnp.zeros(2), 0.05, scale, tol=1e-10, max_iter=50,
         )
         return lyapunov_coefficient(hopf_scaled, u, p, q1, q2, omega0, scale)
@@ -159,7 +159,7 @@ def test_lyapunov_coefficient_matches_bifurcationkit_jl_independent_run():
             x + p * y + x * y - y**3,
         ])
 
-    u, p, q1, q2, omega0 = hopf_point(f, jnp.zeros(2), 0.05, tol=1e-10, max_iter=50)
+    u, p, q1, q2, omega0, _converged = hopf_point(f, jnp.zeros(2), 0.05, tol=1e-10, max_iter=50)
     l1 = lyapunov_coefficient(f, u, p, q1, q2, omega0)
 
     # This literal is the value actually observed running this repo's own

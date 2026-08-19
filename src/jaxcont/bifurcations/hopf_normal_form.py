@@ -32,9 +32,9 @@ differentiated quantity, so cutting its gradient path is correct, not a
 workaround.
 
 Public entry points:
-- :func:`hopf_point`           -> (u*, p*, q1*, q2*, omega0*), differentiable in ``args``
-- :func:`hopf_parameter`       -> p*,                          differentiable in ``args``
-- :func:`lyapunov_coefficient` -> l1,                           differentiable in its inputs
+- :func:`hopf_point`           -> (u*, p*, q1*, q2*, omega0*, converged), differentiable in ``args``
+- :func:`hopf_parameter`       -> p*,                                     differentiable in ``args``
+- :func:`lyapunov_coefficient` -> l1,                                     differentiable in its inputs
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ from typing import Any, Callable
 import jax.numpy as jnp
 from jax import Array, jacfwd, jvp, lax
 
-from jaxcont.solvers.implicit import differentiable_root
+from jaxcont.solvers.implicit import differentiable_root_checked
 
 PyTree = Any
 
@@ -140,13 +140,15 @@ def hopf_point(
     *,
     tol: float = 1e-8,
     max_iter: int = 50,
-) -> tuple[Array, Array, Array, Array, Array]:
+) -> tuple[Array, Array, Array, Array, Array, Array]:
     """
     Locate a Hopf point near ``(u_guess, p_guess)``, differentiable in ``args``.
 
-    Returns ``(u*, p*, q1*, q2*, omega0*)``: the equilibrium, parameter,
-    real and imaginary parts of the (unit) critical eigenvector, and the
-    critical frequency.
+    Returns ``(u*, p*, q1*, q2*, omega0*, converged)``: the equilibrium,
+    parameter, real and imaginary parts of the (unit) critical eigenvector,
+    the critical frequency, and a JAX bool reporting whether the extended-
+    system residual actually reached ``tol`` -- see
+    :func:`jaxcont.solvers.implicit.differentiable_root_checked`.
     """
     u_guess = jnp.asarray(u_guess)
     n = u_guess.shape[0]
@@ -159,9 +161,9 @@ def hopf_point(
         q1_0, q2_0, omega_0 = _seed(f, u_guess, p_guess, theta, n)
         return _pack(u_guess, p_guess, q1_0, q2_0, omega_0)
 
-    x_star = differentiable_root(G, x0, args, tol=tol, max_iter=max_iter)
+    x_star, converged = differentiable_root_checked(G, x0, args, tol=tol, max_iter=max_iter)
     u, p, q1, q2, omega = _unpack(x_star, n)
-    return u, p, q1, q2, omega
+    return u, p, q1, q2, omega, converged
 
 
 def hopf_parameter(
@@ -174,9 +176,12 @@ def hopf_parameter(
     max_iter: int = 50,
 ) -> Array:
     """
-    Parameter value ``p*`` at the Hopf point -- a scalar, differentiable in ``args``.
+    Parameter value ``p*`` at the Hopf point -- a scalar, differentiable in
+    ``args``. Returns a bare array with no convergence flag so
+    ``jax.grad(...)`` applies directly; use :func:`hopf_point` when you need
+    convergence info.
     """
-    _, p, _, _, _ = hopf_point(f, u_guess, p_guess, args, tol=tol, max_iter=max_iter)
+    _, p, _, _, _, _ = hopf_point(f, u_guess, p_guess, args, tol=tol, max_iter=max_iter)
     return p
 
 

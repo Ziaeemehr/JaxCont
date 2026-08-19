@@ -151,7 +151,7 @@ class TestDifferentiableFold:
         return jnp.array([u[0] ** 2 - theta * u[0] + p])
 
     def test_fold_location(self):
-        u, p, v = jc.fold_point(self._f, jnp.array([0.4]), jnp.array(0.2),
+        u, p, v, _converged = jc.fold_point(self._f, jnp.array([0.4]), jnp.array(0.2),
                                 jnp.array(1.0))
         assert float(u[0]) == pytest.approx(0.5, abs=1e-4)
         assert float(p) == pytest.approx(0.25, abs=1e-4)

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+import jax
 import jax.numpy as jnp
 from jax import Array, lax
 
@@ -114,10 +115,25 @@ def fold_curve_problem(
         return f(u, _assemble_p(p_fixed, q, free), a)
 
     # Refine the seed onto the curve at q = q0.
-    u_star, p_star, v_star = fold_point(
+    u_star, p_star, v_star, seed_converged = fold_point(
         lambda u, p_fixed, a: reduced(u, p_fixed, a, q0),
         u_guess, fixed0, args, tol=tol, max_iter=max_iter,
     )
+    try:
+        # Check the seed's convergence only in eager mode: a traced call
+        # (jax.jit/jax.vmap wrapping fold_curve_problem, as
+        # test_fold_curve_continuation_under_jit exercises) has
+        # seed_converged as a tracer, and bool() on it would raise
+        # TracerBoolConversionError -- same deferral pattern api.py's
+        # continuation() already uses for its p_span[0]==p0 guard.
+        if not bool(seed_converged):
+            raise ValueError(
+                f"fold_curve_problem: the initial fold-point refinement did not "
+                f"converge near u_guess={u_guess}, p_guess={p_guess}. Pass a "
+                f"guess closer to an actual fold, or increase tol/max_iter."
+            )
+    except jax.errors.ConcretizationTypeError:
+        pass
 
     def F(X, q, a):
         return _fold_extended_residual(
@@ -181,10 +197,21 @@ def hopf_curve_problem(
     def reduced(u, p_fixed, a, q):
         return f(u, _assemble_p(p_fixed, q, free), a)
 
-    u_star, p_star, q1_star, q2_star, omega_star = hopf_point(
+    u_star, p_star, q1_star, q2_star, omega_star, seed_converged = hopf_point(
         lambda u, p_fixed, a: reduced(u, p_fixed, a, q0),
         u_guess, fixed0, args, tol=tol, max_iter=max_iter,
     )
+    try:
+        # See fold_curve_problem's identical guard above for why this is
+        # deferred under a traced call.
+        if not bool(seed_converged):
+            raise ValueError(
+                f"hopf_curve_problem: the initial Hopf-point refinement did not "
+                f"converge near u_guess={u_guess}, p_guess={p_guess}. Pass a "
+                f"guess closer to an actual Hopf point, or increase tol/max_iter."
+            )
+    except jax.errors.ConcretizationTypeError:
+        pass
 
     def F(X, q, a):
         return _hopf_extended_residual(

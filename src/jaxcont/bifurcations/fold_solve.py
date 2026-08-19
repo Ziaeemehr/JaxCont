@@ -14,8 +14,8 @@ extended-system event (Hopf, LPC, PD, NS); this module only builds the
 fold-specific ``G`` and initial guess.
 
 Public entry points:
-- :func:`fold_point`     -> (u*, p*, v*), differentiable in ``args``
-- :func:`fold_parameter` -> p*,            differentiable in ``args``  (grad-ready)
+- :func:`fold_point`     -> (u*, p*, v*, converged), differentiable in ``args``
+- :func:`fold_parameter` -> p*,                       differentiable in ``args``  (grad-ready)
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from typing import Any, Callable
 import jax.numpy as jnp
 from jax import Array, jacfwd
 
-from jaxcont.solvers.implicit import differentiable_root
+from jaxcont.solvers.implicit import differentiable_root_checked
 
 PyTree = Any
 
@@ -65,11 +65,15 @@ def fold_point(
     *,
     tol: float = 1e-8,
     max_iter: int = 50,
-) -> tuple[Array, Array, Array]:
+) -> tuple[Array, Array, Array, Array]:
     """
     Locate a fold near ``(u_guess, p_guess)``, differentiable in ``args``.
 
-    Returns ``(u*, p*, v*)`` where ``v*`` is the (unit) null vector of ``f_u``.
+    Returns ``(u*, p*, v*, converged)`` where ``v*`` is the (unit) null
+    vector of ``f_u`` and ``converged`` is a JAX bool reporting whether the
+    extended-system residual actually reached ``tol`` (not just whether the
+    Newton loop's iterate stayed finite) -- see
+    :func:`jaxcont.solvers.implicit.differentiable_root_checked`.
     """
     u_guess = jnp.asarray(u_guess)
     n = u_guess.shape[0]
@@ -82,9 +86,9 @@ def fold_point(
         v0 = _initial_v(f, u_guess, p_guess, theta, n)
         return _pack(u_guess, p_guess, v0)
 
-    x_star = differentiable_root(G, x0, args, tol=tol, max_iter=max_iter)
+    x_star, converged = differentiable_root_checked(G, x0, args, tol=tol, max_iter=max_iter)
     u, p, v = _unpack(x_star, n)
-    return u, p, v
+    return u, p, v, converged
 
 
 def fold_parameter(
@@ -97,10 +101,13 @@ def fold_parameter(
     max_iter: int = 50,
 ) -> Array:
     """
-    Parameter value ``p*`` at the fold — a scalar, differentiable in ``args``.
+    Parameter value ``p*`` at the fold -- a scalar, differentiable in
+    ``args``. Returns a bare array with no convergence flag so
+    ``jax.grad(...)`` applies directly; use :func:`fold_point` when you need
+    convergence info.
 
     ``jax.grad(lambda a: fold_parameter(f, u0, p0, a))(theta)`` gives the exact
     sensitivity of the fold location to the design parameters.
     """
-    _, p, _ = fold_point(f, u_guess, p_guess, args, tol=tol, max_iter=max_iter)
+    _, p, _, _ = fold_point(f, u_guess, p_guess, args, tol=tol, max_iter=max_iter)
     return p

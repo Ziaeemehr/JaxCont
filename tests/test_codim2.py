@@ -107,7 +107,7 @@ def test_cusp_agrees_with_the_codim1_fold_solver_there():
     def f_scalar(u, p, args):
         return _cusp_shifted(u, jnp.array([p, p_c[1]]), args)
 
-    u_f, p_f, _ = fold_point(f_scalar, jnp.array([2.1]), float(p_c[0]) + 0.05)
+    u_f, p_f, _, _converged = fold_point(f_scalar, jnp.array([2.1]), float(p_c[0]) + 0.05)
     assert jnp.allclose(u_f, u_c, atol=1e-3)
     assert jnp.isclose(float(p_f), float(p_c[0]), atol=1e-3)
 
@@ -249,7 +249,7 @@ def test_generalized_hopf_agrees_with_the_codim1_hopf_solver_there():
     def f_scalar(u, p, args):
         return _gh_shifted(u, jnp.array([p, p_g[1]]), args)
 
-    _, p_h, _, _, om_h = hopf_point(
+    _, p_h, _, _, om_h, _converged = hopf_point(
         f_scalar, jnp.array([0.01, -0.01]), float(p_g[0]) + 0.02, tol=1e-6,
     )
     assert jnp.isclose(float(p_h), float(p_g[0]), atol=1e-3)

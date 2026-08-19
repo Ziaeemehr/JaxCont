@@ -107,13 +107,22 @@ class Fold(Event):
         # fold_point expects f(u, p, args) (3-arg, per fold_solve.py); `rhs`
         # here is the 2-arg (u, p) -> Array callable used throughout this
         # module (matches api.py's rhs2), so adapt with an ignored 3rd arg.
-        u_bif, p_bif, null_vector = fold_point(
+        u_bif, p_bif, null_vector, converged = fold_point(
             lambda u, p, _args: rhs(u, p),
             u_guess, p_guess, tol=tolerance, max_iter=max_iterations,
         )
+        # A bracket sign-change is not a convergence guarantee: the same
+        # "silent unchecked bifurcation location" risk Hopf.refine already
+        # guards against applies here (Codim-2's Cusp.refine established
+        # this fallback shape -- see bifurcations/codim2_events.py).
+        if not bool(converged):
+            return EventHit(
+                kind="fold", p=float(right.p), u=right.u, index=index,
+                info={"converged": False, "method": "extended_system"},
+            )
         return EventHit(
             kind="fold", p=float(p_bif), u=u_bif, index=index,
-            info={"null_vector": null_vector, "method": "extended_system"},
+            info={"null_vector": null_vector, "converged": True, "method": "extended_system"},
         )
 
 
@@ -155,7 +164,7 @@ class Hopf(Event):
     def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
         u_guess = (left.u + right.u) / 2
         p_guess = (left.p + right.p) / 2
-        u, p, q1, q2, omega0 = hopf_point(
+        u, p, q1, q2, omega0, converged = hopf_point(
             lambda u, p, _args: rhs(u, p), u_guess, p_guess,
             tol=tolerance, max_iter=max_iterations,
         )
@@ -164,24 +173,32 @@ class Hopf(Event):
         # convergence guarantee: if the bracket's sign change wasn't a real
         # Hopf point (a known occurrence -- see the "no close match --
         # spurious" branches in examples/example_05_neural_mass.py), p/l1/
-        # omega0 can come back non-finite (e.g. p=-inf, l1=nan). Both
-        # `abs(nan) < tol` and `nan < 0` are False, so without this guard a
+        # omega0 can come back non-finite (e.g. p=-inf, l1=nan), or --the
+        # gap `converged` closes -- come back finite but never actually
+        # satisfy the extended-system residual within tol. Both `abs(nan) <
+        # tol` and `nan < 0` are False, so without these guards a
         # non-convergent solve would silently fall through to the
         # "subcritical" else-branch below -- a confident-looking label for
-        # a result that isn't a Hopf point at all. Check finiteness (and
-        # omega0 > 0, since a genuine Hopf point always has a nonzero
-        # critical frequency) before trusting the sign of l1.
+        # a result that isn't a Hopf point at all. omega0 > 0 is checked too
+        # since a genuine Hopf point always has a nonzero critical frequency.
         finite = jnp.isfinite(p) & jnp.isfinite(l1) & jnp.isfinite(omega0)
-        if not bool(finite) or not (float(omega0) > 0.0):
-            criticality = "unknown"
-        elif abs(l1) < self.l1_tolerance:
-            criticality = "degenerate"
-        else:
-            criticality = "supercritical" if l1 < 0 else "subcritical"
+        ok = bool(converged) and bool(finite) and (float(omega0) > 0.0)
+        if not ok:
+            return EventHit(
+                kind="hopf", p=float(right.p), u=right.u, index=index,
+                info={"omega0": float(omega0), "l1": float(l1),
+                      "criticality": "unknown", "converged": False,
+                      "method": "extended_system"},
+            )
+        criticality = (
+            "degenerate" if abs(l1) < self.l1_tolerance
+            else "supercritical" if l1 < 0 else "subcritical"
+        )
         return EventHit(
             kind="hopf", p=float(p), u=u, index=index,
             info={"omega0": float(omega0), "l1": float(l1),
-                  "criticality": criticality, "method": "extended_system"},
+                  "criticality": criticality, "converged": True,
+                  "method": "extended_system"},
         )
 
 
