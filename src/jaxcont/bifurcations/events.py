@@ -220,12 +220,31 @@ def detect_events(
 
     hits: list[EventHit] = []
     for event in events:
-        test_vals = [event.test_function(pt) for pt in points]
+        # PeriodDoubling/NeimarkSacker opt into continuity-based candidate
+        # tracking via `select_candidate` (see their docstrings for why: a
+        # per-point absolute-window filter recurringly false-negatived under
+        # hardware-dependent float32 adaptive-step noise). Events without it
+        # (Fold, Hopf) fall back to the plain per-point test_function scan.
+        select = getattr(event, "select_candidate", None)
+        if select is None:
+            test_vals = [event.test_function(pt) for pt in points]
+            selected: list[Any] = [None] * len(points)
+        else:
+            test_vals = []
+            selected = []
+            prev_value = None
+            for pt in points:
+                value = select(pt, prev_value)
+                selected.append(value)
+                test_vals.append(float("nan") if value is None else event.test_value(value))
+                if value is not None:
+                    prev_value = value
         for i in range(len(points) - 1):
             if test_vals[i] * test_vals[i + 1] < 0:
+                kwargs = {} if select is None else {"prev_value": selected[i]}
                 hits.append(event.refine(
                     points[i], points[i + 1], (i, i + 1), rhs,
-                    tolerance=tolerance, max_iterations=max_iterations,
+                    tolerance=tolerance, max_iterations=max_iterations, **kwargs,
                 ))
 
     hits.sort(key=lambda h: h.p)
@@ -268,46 +287,85 @@ class PeriodDoubling(Event):
     mesh: Any
     kind: str = "period_doubling"
     tolerance: float = 1e-6
-    # Log-magnitude window (|ln|mult|| < near_unit_circle), not a linear
-    # distance from 1: a linear "|mag - 1| < threshold" window is capped
-    # below 1.0 by construction, since a magnitude-~0 decaying multiplier
-    # (the always-present trivial-like candidate this filter exists to
-    # reject -- see test_period_doubling_near_unit_circle_filter_excludes_
-    # far_multipliers) sits at *exactly* distance 1.0 from 1, leaving almost
-    # no room to widen the window for the true transverse candidate's travel.
-    # That ceiling is what caused a recurring false negative: with
-    # ds_max=0.1 (default), the worst-case single accepted step can move a
-    # multiplier by a factor of up to exp(ds_max * T) (T~2*pi here) =~ 1.87x
-    # -- the old linear threshold of 0.9 (magnitude ceiling 1.9) left only
-    # ~1.4% margin over that bound, thin enough that ordinary hardware-
-    # dependent float32 rounding (different Newton iteration counts feed the
-    # adaptive step controller) pushed the post-crossing sample outside the
-    # window on some CI runners but not others -- 0 events instead of 1,
-    # reproduced on CI, not locally. Log space removes the ceiling: a
-    # magnitude-~0 candidate has ln|mult| ~ -12.6 (jnp.log(3.4e-6)), so any
-    # reasonable threshold rejects it, while the true candidate gets far more
-    # room -- e^2.0 =~ 7.4x its magnitude at the crossing -- before falling
-    # out of the window. See docs/superpowers/specs/2026-07-24-period-
-    # doubling-neimark-sacker-design.md for the filter's original rationale.
+    # Only used to pick the FIRST point's candidate (no prior selection to
+    # track continuity from yet) -- see select_candidate. Every later point
+    # tracks continuity from the previous step's selected multiplier instead
+    # of re-filtering by this absolute window, which is what let a recurring
+    # false negative resurface three times (v0.3.0, v0.3.1, and again on CI
+    # after the log-magnitude fix): whatever window is chosen, an adaptive
+    # step can grow the true candidate's magnitude by hardware-dependent
+    # amounts (different Newton iteration counts feed the step controller
+    # under this project's float32-by-default policy) and land the very next
+    # sample just outside it, turning that bracket point's test_function to
+    # nan and silently dropping the crossing (0 events instead of 1,
+    # reproduced on CI, not locally -- nan comparisons are never `< 0`, so
+    # detect_events's sign-change scan sees nothing to report). Nearest-
+    # neighbor continuity tracking has no such window to outrun: the
+    # candidate is "whichever multiplier is closest to where we last saw it,"
+    # which holds regardless of step size, as long as no other multiplier
+    # crosses closer to the previous value first (a genericity assumption
+    # standard continuation software like AUTO/MatCont also relies on). See
+    # docs/superpowers/specs/2026-07-24-period-doubling-neimark-sacker-design.md
+    # for the filter's original rationale and events.py's git history for the
+    # three false-negative incidents this replaces.
     near_unit_circle: float = 2.0
 
-    def test_function(self, point: BranchPoint) -> float:
+    def select_candidate(self, point: BranchPoint, prev_value: Optional[Array]) -> Optional[Array]:
+        """Pick the real Floquet multiplier tracked as the PD candidate.
+
+        With `prev_value=None` (first point on the branch, or refine's own
+        bootstrap), picks the real multiplier nearest -1 within the
+        `near_unit_circle` log-magnitude window, excluding the ~1
+        trivial-like multiplier. With `prev_value` set, ignores both the
+        window AND the real/imaginary classification, picking whichever
+        multiplier (still excluding trivial) is nearest `prev_value` in the
+        complex plane -- continuity, not a threshold. Dropping the
+        real/imaginary gate here matters: a multiplicity-2 real multiplier
+        (this module's own test system deliberately has one -- see
+        tests/test_period_doubling_neimark_sacker.py's module docstring) is
+        a degenerate eigenvalue, and eigensolvers routinely return degenerate
+        real roots as a complex-conjugate pair with a tiny (float32-noise
+        scale, ~1e-6) nonzero imaginary part. That's comfortably past
+        `tolerance` (1e-6) on some steps, which would otherwise make the
+        genuinely-tracked candidate fail its OWN classification check and
+        fall back to whatever else remains in the pool -- including the
+        always-present near-zero decaying multiplier this filter exists to
+        reject in the first place. The classification only needs to hold at
+        bootstrap, to pick the right *kind* of candidate to start tracking;
+        once tracking is anchored to a specific multiplier's trajectory,
+        nearest-in-value is a strictly more reliable identity check than
+        re-classifying its noisy imaginary part every step.
+        """
         mult = point.eigenvalues
         trivial_idx = jnp.argmin(jnp.abs(mult - 1.0))
         keep = jnp.arange(mult.shape[0]) != trivial_idx
-        near_unit = jnp.abs(jnp.log(jnp.abs(mult) + 1e-30)) < self.near_unit_circle
-        candidates_mask = keep & near_unit & (jnp.abs(jnp.imag(mult)) < self.tolerance)
-        if not jnp.any(candidates_mask):
-            return float("nan")
-        candidates = jnp.where(candidates_mask, mult, jnp.nan)
-        idx = jnp.nanargmin(jnp.abs(jnp.real(candidates) + 1.0))
-        return float(jnp.real(mult[idx]) + 1.0)
+        if prev_value is None:
+            keep = keep & (jnp.abs(jnp.imag(mult)) < self.tolerance)
+            keep = keep & (jnp.abs(jnp.log(jnp.abs(mult) + 1e-30)) < self.near_unit_circle)
+            metric = jnp.abs(jnp.real(mult) + 1.0)
+        else:
+            metric = jnp.abs(mult - prev_value)
+        if not bool(jnp.any(keep)):
+            return None
+        idx = jnp.nanargmin(jnp.where(keep, metric, jnp.nan))
+        return mult[idx]
 
-    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+    def test_value(self, value: Array) -> float:
+        return float(jnp.real(value) + 1.0)
+
+    def test_function(self, point: BranchPoint) -> float:
+        value = self.select_candidate(point, None)
+        return float("nan") if value is None else self.test_value(value)
+
+    def refine(
+        self, left, right, index, rhs, *, tolerance, max_iterations, prev_value=None,
+    ) -> EventHit:
         p_left, p_right = left.p, right.p
         u_left, u_right = left.u, right.u
-        t_left = self.test_function(left)
-        t_right = self.test_function(right)
+        v_left = prev_value if prev_value is not None else self.select_candidate(left, None)
+        v_right = self.select_candidate(right, v_left)
+        t_left = self.test_value(v_left)
+        t_right = self.test_value(v_right)
         for _ in range(max_iterations):
             if abs(p_right - p_left) < tolerance:
                 break
@@ -316,15 +374,16 @@ class PeriodDoubling(Event):
             u_mid = u_left + alpha * (u_right - u_left)
             mult_mid = floquet_multipliers(self.raw_f, self.mesh, u_mid, p_mid)
             mid_point = BranchPoint(p=p_mid, u=u_mid, eigenvalues=mult_mid)
-            t_mid = self.test_function(mid_point)
+            v_mid = self.select_candidate(mid_point, v_left)
+            t_mid = self.test_value(v_mid)
             # Three-way branch, not "left-half or else" -- see this file's
             # existing Global Constraints (Hopf has the same shape, for the
             # same reason: a two-way version degenerates whenever t_mid
             # lands on an exact zero).
             if t_left * t_mid < 0:
-                p_right, u_right, t_right = p_mid, u_mid, t_mid
+                p_right, u_right, t_right, v_right = p_mid, u_mid, t_mid, v_mid
             elif t_mid * t_right < 0:
-                p_left, u_left, t_left = p_mid, u_mid, t_mid
+                p_left, u_left, t_left, v_left = p_mid, u_mid, t_mid, v_mid
             else:
                 break
         p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
@@ -349,33 +408,53 @@ class NeimarkSacker(Event):
     mesh: Any
     kind: str = "neimark_sacker"
     tolerance: float = 1e-6
-    # See PeriodDoubling.near_unit_circle for why this is a log-magnitude
-    # window (not a linear distance from 1, and not 0.9): a linear window is
-    # capped below 1.0 by construction and left too thin a margin against
-    # ordinary hardware-dependent float32 noise, causing a recurring false
-    # negative. Log space rejects a ~0-magnitude decaying candidate just as
-    # reliably (ln|mult| ~ -12.6) while giving the true complex-pair
-    # candidate far more margin before it's mistaken for "lost" as it moves
-    # away from the unit circle.
+    # See PeriodDoubling.near_unit_circle/select_candidate for why this only
+    # bounds the FIRST point's candidate: every later point tracks continuity
+    # from the previous step's selected complex pair instead of re-filtering
+    # by this window, which is what let the same false negative resurface
+    # repeatedly under hardware-dependent float32 adaptive-step noise.
     near_unit_circle: float = 2.0
 
-    def test_function(self, point: BranchPoint) -> float:
+    def select_candidate(self, point: BranchPoint, prev_value: Optional[Array]) -> Optional[Array]:
+        """Pick the complex Floquet multiplier tracked as the NS candidate.
+
+        See PeriodDoubling.select_candidate for the bootstrap-vs-continuity
+        shape and why the real/imaginary classification only applies at
+        bootstrap (dropped once `prev_value` anchors continuity tracking);
+        here the bootstrap pool is genuinely-complex multipliers (imaginary
+        part above `tolerance`) instead of real ones, and the bootstrap
+        target is the unit circle (|mult|=1) instead of -1.
+        """
         mult = point.eigenvalues
         trivial_idx = jnp.argmin(jnp.abs(mult - 1.0))
         keep = jnp.arange(mult.shape[0]) != trivial_idx
-        near_unit = jnp.abs(jnp.log(jnp.abs(mult) + 1e-30)) < self.near_unit_circle
-        candidates_mask = keep & near_unit & (jnp.abs(jnp.imag(mult)) > self.tolerance)
-        if not jnp.any(candidates_mask):
-            return float("nan")
-        candidates = jnp.where(candidates_mask, mult, jnp.nan)
-        idx = jnp.nanargmin(jnp.abs(jnp.abs(candidates) - 1.0))
-        return float(jnp.abs(mult[idx]) - 1.0)
+        if prev_value is None:
+            keep = keep & (jnp.abs(jnp.imag(mult)) > self.tolerance)
+            keep = keep & (jnp.abs(jnp.log(jnp.abs(mult) + 1e-30)) < self.near_unit_circle)
+            metric = jnp.abs(jnp.abs(mult) - 1.0)
+        else:
+            metric = jnp.abs(mult - prev_value)
+        if not bool(jnp.any(keep)):
+            return None
+        idx = jnp.nanargmin(jnp.where(keep, metric, jnp.nan))
+        return mult[idx]
 
-    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+    def test_value(self, value: Array) -> float:
+        return float(jnp.abs(value) - 1.0)
+
+    def test_function(self, point: BranchPoint) -> float:
+        value = self.select_candidate(point, None)
+        return float("nan") if value is None else self.test_value(value)
+
+    def refine(
+        self, left, right, index, rhs, *, tolerance, max_iterations, prev_value=None,
+    ) -> EventHit:
         p_left, p_right = left.p, right.p
         u_left, u_right = left.u, right.u
-        t_left = self.test_function(left)
-        t_right = self.test_function(right)
+        v_left = prev_value if prev_value is not None else self.select_candidate(left, None)
+        v_right = self.select_candidate(right, v_left)
+        t_left = self.test_value(v_left)
+        t_right = self.test_value(v_right)
         for _ in range(max_iterations):
             if abs(p_right - p_left) < tolerance:
                 break
@@ -384,11 +463,12 @@ class NeimarkSacker(Event):
             u_mid = u_left + alpha * (u_right - u_left)
             mult_mid = floquet_multipliers(self.raw_f, self.mesh, u_mid, p_mid)
             mid_point = BranchPoint(p=p_mid, u=u_mid, eigenvalues=mult_mid)
-            t_mid = self.test_function(mid_point)
+            v_mid = self.select_candidate(mid_point, v_left)
+            t_mid = self.test_value(v_mid)
             if t_left * t_mid < 0:
-                p_right, u_right, t_right = p_mid, u_mid, t_mid
+                p_right, u_right, t_right, v_right = p_mid, u_mid, t_mid, v_mid
             elif t_mid * t_right < 0:
-                p_left, u_left, t_left = p_mid, u_mid, t_mid
+                p_left, u_left, t_left, v_left = p_mid, u_mid, t_mid, v_mid
             else:
                 break
         p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
