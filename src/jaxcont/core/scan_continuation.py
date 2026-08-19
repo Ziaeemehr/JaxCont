@@ -189,7 +189,15 @@ def pseudo_arclength_scan(
     # the branch -- via _natural_correct, plain Newton with p held fixed at
     # p0 -- instead of writing the raw guess into slot 0 and marking it
     # converged unconditionally.
-    u0_seed, seed_converged, _ = _natural_correct(f, u0, p0, tol, max_iter, linear_solver)
+    u0_corrected, seed_converged, _ = _natural_correct(f, u0, p0, tol, max_iter, linear_solver)
+    # If correction fails to converge, its raw output can be +-inf (a
+    # divergent Newton iterate) -- fall back to the caller's original,
+    # known-finite u0 rather than publishing that into the branch. This
+    # matches the fallback convention events.py's Fold.refine/Hopf.refine
+    # already use elsewhere on this branch: on failure, report a known-
+    # finite value, not the solver's possibly-non-finite output.
+    # `seed_converged` itself is unchanged -- only the value written differs.
+    u0_seed = jnp.where(seed_converged, u0_corrected, u0)
 
     # Initial tangent: seed prev with the parameter axis pointing in `direction`,
     # so the branch is traversed toward p_end.
@@ -359,7 +367,11 @@ def natural_scan(
     p_end = jnp.asarray(p_end, dtype)
     direction = jnp.sign(p_end - p0)
 
-    u0_seed, seed_converged, _ = _natural_correct(f, u0, p0, tol, max_iter, linear_solver)
+    u0_corrected, seed_converged, _ = _natural_correct(f, u0, p0, tol, max_iter, linear_solver)
+    # See pseudo_arclength_scan's identical guard: fall back to the caller's
+    # original (finite) u0 rather than publishing a possibly-inf failed
+    # correction into the branch. `seed_converged` itself is unchanged.
+    u0_seed = jnp.where(seed_converged, u0_corrected, u0)
 
     P = jnp.zeros((max_steps + 1, n), dtype).at[0].set(u0_seed)
     Q = jnp.zeros((max_steps + 1,), dtype).at[0].set(p0)

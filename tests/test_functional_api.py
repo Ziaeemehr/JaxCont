@@ -334,3 +334,28 @@ def test_invalid_seed_is_newton_corrected_not_silently_accepted():
     assert result.branch.n_valid >= 1
     assert float(result.branch.states[0, 0]) == pytest.approx(1.0, abs=1e-4)
     assert _max_residual(f, result.branch.states, result.branch.params) < 1e-5
+
+
+@pytest.mark.parametrize("scan_fn", [pseudo_arclength_scan, natural_scan])
+def test_seed_correction_failure_falls_back_to_finite_u0(scan_fn):
+    # Regression for the Important #1 review finding: when the seed's own
+    # Newton correction fails to converge, its raw (possibly non-finite)
+    # output used to be written into branch slot 0 anyway, with only
+    # `converged=False` as an out-of-band signal. u0=0 is a genuine
+    # zero-derivative starting point for f(u, p) = u**2 + p (df/du = 2u = 0),
+    # so the uncorrected Newton step is a division by zero -- the raw
+    # corrected output is -inf. states[0] must instead fall back to the
+    # caller's original, finite u0, with seed_converged still False.
+    def f(u, p):
+        return u ** 2 + p
+
+    u0 = jnp.array([0.0])
+    p0 = jnp.array(1.0)  # no real root exists for p > 0
+    result = scan_fn(
+        f, u0, p0, jnp.array(2.0),
+        jnp.array(0.01), jnp.array(1e-6), jnp.array(0.1),
+        jnp.array(1e-8), 5, jnp.array(50),
+    )
+    assert bool(jnp.all(jnp.isfinite(result.states[0])))
+    assert jnp.allclose(result.states[0], u0)
+    assert not bool(result.converged[0])

@@ -119,7 +119,7 @@ class Fold(Event):
         if not bool(converged):
             return EventHit(
                 kind="fold", p=float(right.p), u=right.u, index=index,
-                info={"converged": False, "method": "extended_system"},
+                info={"null_vector": None, "converged": False, "method": "extended_system"},
             )
         return EventHit(
             kind="fold", p=float(p_bif), u=u_bif, index=index,
@@ -419,6 +419,13 @@ class PeriodDoubling(Event):
             else:
                 break
         p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
+        # u_bif/p_bif are the midpoint of the final bracket, not a fresh
+        # Newton correction at that exact midpoint -- the endpoints
+        # (u_left/u_right) were the ones actually corrected onto the
+        # residual manifold during the loop above. In practice this sits at
+        # the float32 residual floor (empirically ~4-5e-6) since the final
+        # bracket is narrow, but it's a linear average, not an independently
+        # re-corrected point.
         return EventHit(
             kind="period_doubling", p=float(p_bif), u=u_bif, index=index,
             info={"method": "bisection", "corrected": corrected_all},
@@ -512,6 +519,9 @@ class NeimarkSacker(Event):
             else:
                 break
         p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
+        # See PeriodDoubling.refine's identical comment above: u_bif/p_bif
+        # are the midpoint of the final (already Newton-corrected-endpoint)
+        # bracket, not a fresh correction at that exact midpoint.
         return EventHit(
             kind="neimark_sacker", p=float(p_bif), u=u_bif, index=index,
             info={"method": "bisection", "corrected": corrected_all},

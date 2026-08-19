@@ -42,10 +42,14 @@ def periodic_orbit_problem(
     ODEs itself); ``period0`` is the corresponding period guess. Both are
     resampled onto ``mesh`` and refined to convergence (via
     :func:`~jaxcont.solvers.implicit.differentiable_root`) before being
-    returned as the ``BifProblem``'s ``u0`` --
-    ``pseudo_arclength_scan``/``natural_scan`` do not Newton-correct their
-    starting point, so an unrefined guess would silently be marked
-    ``converged=True``.
+    returned as the ``BifProblem``'s ``u0``. This factory-level refinement
+    is kept even though ``pseudo_arclength_scan``/``natural_scan`` now also
+    Newton-correct their own seed (a later hardening fix, so a hand-built
+    ``BifProblem`` no longer risks a silently-unconverged seed at the
+    continuation level either): refining here uses a tolerance matched to
+    this problem's own collocation residual scale, ahead of the scan
+    engine's generic corrector, and produces a better-conditioned starting
+    tangent for the branch that follows.
 
     Note: this factory's *construction* (this function call itself) is not
     guaranteed safe under an outer ``jax.grad``/``jax.vmap`` -- the

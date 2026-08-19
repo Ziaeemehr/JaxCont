@@ -5,6 +5,23 @@ All notable changes to JaxCont will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Breaking:** `fold_point()` now returns a 4-tuple `(u, p, v, converged)` (was a 3-tuple);
+  `hopf_point()` now returns a 6-tuple `(u, p, q1, q2, omega0, converged)` (was a 5-tuple).
+  Existing code unpacking the old shape (e.g. `u, p, v = jc.fold_point(...)`) will now raise
+  `ValueError: too many values to unpack`.
+- `continuation()`'s `p_span[0] == problem.p0` validation now applies to every problem kind
+  (previously only checked for `fold_curve`/`hopf_curve` kinds) -- a mismatch that previously
+  silently started the branch at the wrong point now raises `ValueError` instead.
+
+### Fixed
+- The continuation seed (`u0`) is now Newton-corrected/validated before entering the branch,
+  instead of being accepted unconditionally.
+- `PeriodDoubling`/`NeimarkSacker` event refinement now Newton-corrects interpolated periodic
+  orbits before evaluating Floquet multipliers, instead of trusting a linear interpolation.
+
 ## [0.3.1] - 2026-08-05
 
 ### Fixed

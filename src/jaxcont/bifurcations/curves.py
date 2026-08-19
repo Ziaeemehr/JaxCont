@@ -88,10 +88,18 @@ def fold_curve_problem(
     solved for and lives inside the packed state. ``p_guess`` has shape
     ``(2,)``.
 
-    The caller's guess is refined to a genuine fold via ``fold_point``
-    before the problem is returned -- the scan engines do not Newton-correct
-    their starting point, so an unrefined guess would silently be marked
-    ``converged=True`` (the same reason ``periodic_orbit_problem`` refines).
+    The caller's guess is refined to a genuine fold via ``fold_point`` before
+    the problem is returned. This factory-level refinement stays necessary
+    even though the scan engines (``pseudo_arclength_scan``/``natural_scan``)
+    now also Newton-correct their own seed as a general hardening fix: their
+    corrector holds the continuation parameter fixed and solves a plain
+    (non-extended) system, which is exactly what cannot work here -- the
+    seed for a fold *curve* is itself a fold, a point where ``df/du`` is
+    singular by definition, so only the extended-system solve ``fold_point``
+    performs (with its extra null-vector unknown absorbing that
+    singularity) can actually converge there. Refining here also lets this
+    factory use a tolerance matched to the extended-system residual, ahead
+    of the scan engine's generic corrector.
 
     ``tol``/``max_iter`` govern that initial refinement only; the
     continuation-time tolerance is ``ContinuationPar.newton_tol`` (use
@@ -100,6 +108,15 @@ def fold_curve_problem(
     Pass ``p_span=(p_guess[free], ...)`` to ``continuation()``: its
     ``p_span[0]`` is the literal starting parameter value, and a mismatch is
     rejected there.
+
+    Note: the ``ValueError`` this factory raises below when the seed's
+    refinement fails to converge is an eager-mode-only check -- under a
+    traced call (``jax.jit``/``jax.vmap`` wrapping this factory), it
+    silently becomes a no-op instead of raising, since ``seed_converged``
+    is then a tracer and ``bool()`` on it would need to raise
+    ``TracerBoolConversionError``, not resolve to a real Python value. Same
+    limitation, and the same reason, as ``api.py``'s own ``p_span[0]``
+    equality check in ``continuation()``.
 
     Measured residual floor at refined seed: 2.4e-7 (float32).
     """
@@ -173,7 +190,11 @@ def hopf_curve_problem(
     """
     Build a ``BifProblem`` whose solution branch is a curve of Hopf points
     in the ``(p[0], p[1])`` plane. See :func:`fold_curve_problem` for the
-    shared ``free``/``p_guess``/``tol`` conventions.
+    shared ``free``/``p_guess``/``tol`` conventions, why this factory's own
+    ``hopf_point`` seed refinement stays necessary even though the scan
+    engines now also Newton-correct their seed, and why the non-converged-
+    seed ``ValueError`` below is an eager-mode-only check (a no-op under
+    ``jax.jit``/``jax.vmap`` tracing).
 
     Known limitation: the phase condition anchors to a seed eigenvector
     recomputed from the refined starting point at each ``q``, so it tracks
