@@ -31,6 +31,7 @@ from jax import Array
 
 from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.bifurcations.hopf_normal_form import hopf_point, lyapunov_coefficient
+from jaxcont.solvers.implicit import differentiable_root_checked
 from jaxcont.stability.floquet import floquet_multipliers
 
 PyTree = Any
@@ -383,12 +384,26 @@ class PeriodDoubling(Event):
         v_right = self.select_candidate(right, v_left)
         t_left = self.test_value(v_left)
         t_right = self.test_value(v_right)
+        corrected_all = True
         for _ in range(max_iterations):
             if abs(p_right - p_left) < tolerance:
                 break
             p_mid = (p_left + p_right) / 2
             alpha = (p_mid - p_left) / (p_right - p_left)
-            u_mid = u_left + alpha * (u_right - u_left)
+            u_interp = u_left + alpha * (u_right - u_left)
+            # A linear interpolation between two collocation states does not
+            # itself satisfy the nonlinear collocation residual on a curved
+            # branch. Correct it back onto the residual manifold at the
+            # interpolated parameter before trusting its Floquet multipliers
+            # -- otherwise a narrow reported parameter bracket does not by
+            # itself imply an accurate multiplier crossing. tol=1e-5 matches
+            # problems/periodic.py's own calibrated float32 residual floor
+            # for this exact collocation residual (~3.4e-6); a tighter
+            # default would spuriously report `corrected=False` every step.
+            u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=1e-5)
+            if not bool(corrected):
+                corrected_all = False
+                break
             mult_mid = floquet_multipliers(self.raw_f, self.mesh, u_mid, p_mid)
             mid_point = BranchPoint(p=p_mid, u=u_mid, eigenvalues=mult_mid)
             v_mid = self.select_candidate(mid_point, v_left)
@@ -406,7 +421,7 @@ class PeriodDoubling(Event):
         p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
         return EventHit(
             kind="period_doubling", p=float(p_bif), u=u_bif, index=index,
-            info={"method": "bisection"},
+            info={"method": "bisection", "corrected": corrected_all},
         )
 
 
@@ -472,12 +487,20 @@ class NeimarkSacker(Event):
         v_right = self.select_candidate(right, v_left)
         t_left = self.test_value(v_left)
         t_right = self.test_value(v_right)
+        corrected_all = True
         for _ in range(max_iterations):
             if abs(p_right - p_left) < tolerance:
                 break
             p_mid = (p_left + p_right) / 2
             alpha = (p_mid - p_left) / (p_right - p_left)
-            u_mid = u_left + alpha * (u_right - u_left)
+            u_interp = u_left + alpha * (u_right - u_left)
+            # See PeriodDoubling.refine for why the interpolated state must
+            # be Newton-corrected back onto the collocation residual
+            # manifold before its Floquet multipliers can be trusted.
+            u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=1e-5)
+            if not bool(corrected):
+                corrected_all = False
+                break
             mult_mid = floquet_multipliers(self.raw_f, self.mesh, u_mid, p_mid)
             mid_point = BranchPoint(p=p_mid, u=u_mid, eigenvalues=mult_mid)
             v_mid = self.select_candidate(mid_point, v_left)
@@ -491,5 +514,5 @@ class NeimarkSacker(Event):
         p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
         return EventHit(
             kind="neimark_sacker", p=float(p_bif), u=u_bif, index=index,
-            info={"method": "bisection"},
+            info={"method": "bisection", "corrected": corrected_all},
         )

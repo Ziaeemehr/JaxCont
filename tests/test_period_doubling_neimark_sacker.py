@@ -129,3 +129,39 @@ def test_period_doubling_near_unit_circle_filter_prevents_double_detection():
     sol = _sweep(BETA_PD, jc.PeriodDoubling, span=(-0.1, 0.3))
     assert len(sol.events) == 1
     assert abs(sol.events[0].p) < 1e-4
+
+
+def test_period_doubling_refine_result_satisfies_collocation_residual():
+    # Regression for finding #6: refine() used to hand floquet_multipliers
+    # a linearly-interpolated (uncorrected) orbit. The event's own .u/.p
+    # must now satisfy the same nonlinear collocation residual the branch
+    # itself is held to.
+    prob, mesh, rhs = _build_problem(BETA_PD, alpha0=-0.05)
+    sol = jc.continuation(
+        prob, p_span=(-0.05, 0.05),
+        settings=jc.ContinuationPar(
+            compute_stability=True, ds=0.02, max_steps=50, newton_tol=1e-5
+        ),
+        events=[jc.PeriodDoubling(raw_f=rhs, mesh=mesh)],
+    )
+    assert len(sol.events) == 1
+    hit = sol.events[0]
+    assert hit.info.get("corrected", False) is True
+    residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), prob.args)
+    assert float(jnp.abs(residual).max()) < 1e-4
+
+
+def test_neimark_sacker_refine_result_satisfies_collocation_residual():
+    prob, mesh, rhs = _build_problem(BETA_NS, alpha0=-0.05)
+    sol = jc.continuation(
+        prob, p_span=(-0.05, 0.05),
+        settings=jc.ContinuationPar(
+            compute_stability=True, ds=0.02, max_steps=50, newton_tol=1e-5
+        ),
+        events=[jc.NeimarkSacker(raw_f=rhs, mesh=mesh)],
+    )
+    assert len(sol.events) == 1
+    hit = sol.events[0]
+    assert hit.info.get("corrected", False) is True
+    residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), prob.args)
+    assert float(jnp.abs(residual).max()) < 1e-4
