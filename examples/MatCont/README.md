@@ -16,6 +16,13 @@ JAX_PLATFORMS=cpu python3 -m examples.MatCont.run_validation
 # Run one case.
 python3 -m examples.MatCont.run_validation --case MC-EQ-001
 
+# Generate the complete visual-comparison gallery.
+JAX_PLATFORMS=cpu python3 -m examples.example_16_matcont_cubic_overlay
+JAX_PLATFORMS=cpu python3 -m examples.example_17_matcont_vanderpol_overlay
+JAX_PLATFORMS=cpu python3 -m examples.example_18_matcont_adaptive_control_overlay
+JAX_PLATFORMS=cpu python3 -m examples.example_19_matcont_radial_cycle_overlay
+JAX_PLATFORMS=cpu python3 -m examples.example_20_matcont_torbpc_overlay
+
 # Regenerate MatCont output without overwriting reviewed references.
 python3 -m examples.MatCont.run_validation --regenerate-matcont
 
@@ -46,6 +53,38 @@ hashes, source/provenance, MATLAB, MatCont, JaxCont, Python and JAX versions,
 precision, mesh and solver settings. Regeneration writes only to `generated/`;
 verification never promotes or edits reviewed files.
 
+## Visual comparison gallery
+
+The five root modules below are Sphinx-Gallery-compatible visual companions to
+the systematic checks. Each runs the registered JaxCont producer and overlays
+its fresh result on reviewed MatCont 7.6 CSV artifacts; no MATLAB runtime is
+needed. Run them from the repository root with the commands in the previous
+section. Each command writes its PNG below `images/` relative to the current
+working directory.
+
+| Module | Output | Panels and visual meaning |
+|---|---|---|
+| `examples.example_16_matcont_cubic_overlay` | `images/matcont_cubic_overlay.png` | Cubic equilibrium branch with JaxCont and MatCont fold (`LP`) markers. |
+| `examples.example_17_matcont_vanderpol_overlay` | `images/matcont_vanderpol_overlay.png` | Equilibrium branch and spectral abscissa, with the Hopf (`H`) stability crossing. |
+| `examples.example_18_matcont_adaptive_control_overlay` | `images/matcont_adaptive_control_overlay.png` | Adaptive-control equilibrium branch and spectral abscissa, with the Hopf (`H`) crossing. |
+| `examples.example_19_matcont_radial_cycle_overlay` | `images/matcont_radial_cycle_overlay.png` | Periodic-orbit envelope, period, and nontrivial Floquet-multiplier modulus. |
+| `examples.example_20_matcont_torbpc_overlay` | `images/matcont_torbpc_overlay.png` | torBPC envelope and period panels plus an event-centred Floquet multiplier plane. |
+
+The packages retain their native adaptive meshes, so their plotted samples do
+not need to coincide point-for-point. Every panel is limited to the shared
+continuation-parameter domain; visual agreement means that the independently
+sampled geometry, stability, and event locations are consistent. The
+validation CLI remains authoritative: it performs interpolated branch, event,
+stability, spectrum, and tolerance checks against the reviewed references.
+
+The torBPC page (`MC-LC-002`) is deliberately a known-failing diagnostic, not
+evidence of complete correspondence. It retains MatCont LPC, NS, and PD
+references; JaxCont currently reports detected LPC and NS markers but no
+detected PD marker. Its `JaxCont near <type>` multiplier points are spectra at
+the nearest JaxCont branch samples, not event detections. The failure banner
+and unchanged numerical tolerances correspond to the
+[supported-coverage warning](#supported-coverage) below.
+
 ## Supported coverage
 
 | Case | Validation |
@@ -60,10 +99,9 @@ verification never promotes or edits reviewed files.
 | `MC-PRC-001` | adaptx Hopf limit cycle, iPRC adjoint-method curve against MatCont's PRC/Input processor output (phase-in-radians vs. phase-in-cycle-fractions and phase-origin conventions reconciled; dPRC is *not* cross-checked here -- MatCont's exported dPRC is `d(PRC)/dt`, confirmed via `LimitCycle/calcPRC.m`, a different quantity from JaxCont's `dprc_curve` = `d(PRC)/d(alpha)`, which is validated instead by `tests/test_prc.py`) |
 
 `MC-LC-002` deliberately reports the current JaxCont mismatch: MatCont's LPC,
-NS and PD references are retained, while JaxCont presently misses the correctly
-located LPC/PD event labels and exceeds the critical-multiplier tolerance at
-NS. The CLI exits nonzero for this case. Do not hide that result by changing
-tolerances.
+NS and PD references are retained, while JaxCont presently detects LPC and NS
+but not PD and exceeds the critical-multiplier tolerance at NS. The CLI exits
+nonzero for this case. Do not hide that result by changing tolerances.
 
 ## Unsupported matrix
 

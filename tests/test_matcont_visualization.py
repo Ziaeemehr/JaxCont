@@ -94,6 +94,8 @@ def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
     for event_type in ("LPC", "NS", "PD"):
         assert f"MatCont 7.6 {event_type}" in labels
         assert f"JaxCont near {event_type}" in labels
+    assert {"JaxCont detected LPC", "JaxCont detected NS"} <= labels
+    assert "JaxCont detected PD" not in labels
 
 
 def test_equilibrium_overlay_draws_both_branches_and_event_sources(tmp_path):
@@ -288,24 +290,7 @@ def test_equilibrium_overlay_accepts_domain_labels_and_title(tmp_path):
     assert axis.get_title() == "Cubic S-curve: JaxCont vs MatCont 7.6"
 
 
-@pytest.mark.parametrize(
-    ("script_name", "image_name"),
-    [
-        ("example_16_matcont_cubic_overlay.py", "matcont_cubic_overlay.png"),
-        ("example_17_matcont_vanderpol_overlay.py", "matcont_vanderpol_overlay.png"),
-        (
-            "example_18_matcont_adaptive_control_overlay.py",
-            "matcont_adaptive_control_overlay.png",
-        ),
-    ],
-)
-def test_gallery_example_runs_from_outside_repository_root(
-    script_name, image_name, tmp_path
-):
-    """Sphinx-Gallery execution must not depend on the repository root in sys.path."""
-    repository = Path(__file__).resolve().parents[1]
-    obsolete_script = repository / "examples" / "example_16_matcont_overlay.py"
-    assert not obsolete_script.exists()
+def _gallery_environment(repository, tmp_path):
     environment = os.environ.copy()
     environment.update(
         {
@@ -318,6 +303,33 @@ def test_gallery_example_runs_from_outside_repository_root(
             ),
         }
     )
+    return environment
+
+
+@pytest.mark.parametrize(
+    ("script_name", "image_name"),
+    [
+        ("example_16_matcont_cubic_overlay.py", "matcont_cubic_overlay.png"),
+        ("example_17_matcont_vanderpol_overlay.py", "matcont_vanderpol_overlay.png"),
+        (
+            "example_18_matcont_adaptive_control_overlay.py",
+            "matcont_adaptive_control_overlay.png",
+        ),
+        (
+            "example_19_matcont_radial_cycle_overlay.py",
+            "matcont_radial_cycle_overlay.png",
+        ),
+        ("example_20_matcont_torbpc_overlay.py", "matcont_torbpc_overlay.png"),
+    ],
+)
+def test_gallery_example_runs_from_outside_repository_root(
+    tmp_path, script_name, image_name
+):
+    """Sphinx-Gallery execution must not depend on the repository root in sys.path."""
+    repository = Path(__file__).resolve().parents[1]
+    obsolete_script = repository / "examples" / "example_16_matcont_overlay.py"
+    assert not obsolete_script.exists()
+    environment = _gallery_environment(repository, tmp_path)
 
     completed = subprocess.run(
         [sys.executable, str(repository / "examples" / script_name)],
@@ -325,7 +337,7 @@ def test_gallery_example_runs_from_outside_repository_root(
         env=environment,
         text=True,
         capture_output=True,
-        timeout=120,
+        timeout=300,
     )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
