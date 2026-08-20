@@ -33,9 +33,14 @@ rebuild: distclean all
 verify: rebuild
 	@test "$$(pdfinfo $(PDF) | awk '/^Pages:/ {print $$2}')" -gt 0
 	@! rg -n "LaTeX Error|Undefined control sequence|File .* not found|There were undefined references" $(JOB).log
-	@pdftotext $(PDF) - | rg -q "JaxCont v0.3.1"
-	@pdftotext $(PDF) - | rg -q "Current main"
+	@pdftotext $(PDF) - | rg -q "JaxCont v0.4.0"
+	@pdftotext $(PDF) - | rg -q "Available in v0.4.0"
 	@pdftotext $(PDF) - | rg -q "Phase-response"
+	@pdftotext $(PDF) - | rg -q "Two-parameter fold and Hopf curves"
+	@pdftotext $(PDF) - | rg -q "fold_curve_problem"
+	@pdftotext $(PDF) - | rg -q "plot_two_parameter_diagram"
+	@pdftotext $(PDF) - | rg -q "MC-LC-002"
+	@pdftotext $(PDF) - | rg -q "format_version=1"
 
 help:
 	@echo "make          Build $(PDF)"

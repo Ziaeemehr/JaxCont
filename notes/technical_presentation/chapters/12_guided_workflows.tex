@@ -157,8 +157,8 @@ add an analytic oracle or an independent method/package.};
 
 \vfill
 \begin{alertblock}{Do not infer a physical branch ending from missing points}
-The public result does not store residual norms, accepted step sizes, rejection
-history, or a termination reason. Re-evaluate $F$ on valid states and compare
-the last valid point with the configured endpoint and stop conditions.
+The solution records accepted step sizes and Newton counts, but not residual
+norms, rejected attempts, or a termination reason. Re-evaluate $F$ on valid
+states and compare the last valid point with the configured endpoint and stop conditions.
 \end{alertblock}
 \end{frame}

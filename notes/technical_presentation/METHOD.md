@@ -1,7 +1,7 @@
 # Method used to maintain the technical presentation
 
 This document defines how claims, status labels, examples, figures, and
-validation language enter the JaxCont v0.3.1+ deck. It is a maintenance policy,
+validation language enter the JaxCont v0.4.0 deck. It is a maintenance policy,
 not an additional copy of the slide narrative.
 
 ## Evidence hierarchy
@@ -36,31 +36,32 @@ discrepancy. Do not silently combine behavior from different revisions.
 
 ## Version and feature-status rule
 
-“JaxCont v0.3.1+” is the deck label. It means the published v0.3.1 release plus
-selected current-main features intended for v0.4; it does not mean that v0.4
-has been released.
+“JaxCont v0.4.0” is the deck label and identifies the release capability surface.
 
 Before finalizing the deck, check `src/jaxcont/_version.py` and `CHANGELOG.md`,
 then classify each feature with exactly one convention:
 
-- **Available in v0.3.1** — present in the published v0.3.1 release;
-- **Current main — planned for v0.4** — implemented and evidenced on current
-  `main`, but not part of a published v0.4 release;
+- **Available in v0.4.0** — present in the v0.4.0 release;
 - **Future work — not implemented** — a boundary or direction, not an
   available workflow.
 
+An available API may additionally carry an **experimental in v0.4.0** maturity
+qualifier when evidence is incomplete. This is not a third implementation
+status: the capability exists, but its validation boundary must remain visible.
+LPC/PD/NS detection currently has this qualifier because `MC-LC-002` fails.
+
 At the current revision, PRC/dPRC (`prc_curve`, `branch_prc`, `dprc_curve`,
-`plot_prc`, and Examples 13–14) remains current-main/planned-for-v0.4. Hopf
+`plot_prc`, and Examples 13–14), fold/Hopf two-parameter continuation, Hopf
 classification, direct CP/BT/GH/ZH/HH point refinement, phase planes,
-periodic-orbit continuation, and the released validation suite are v0.3.1
-capabilities. If a release changes, update the global label, badges,
+periodic-orbit continuation, and the validation suite are v0.4.0 capabilities.
+If a release changes, update the global label, badges,
 documentation, and speaker notes together; do not promote status from a plan
 or anticipated release date.
 
-Always preserve the explicit future boundary: no branch switching,
-two-parameter bifurcation-curve continuation, automatic cycle discovery from a
-Hopf point, general BVP continuation, or connecting-/homoclinic-/heteroclinic-
-orbit continuation is claimed.
+Always preserve the explicit future boundary: no branch switching, automatic
+cycle discovery from a Hopf point, general BVP continuation,
+connecting-/homoclinic-/heteroclinic-orbit continuation, or periodic-orbit
+codimension-two curve continuation is claimed.
 
 ## Source ownership
 
@@ -71,7 +72,7 @@ The source is intentionally modular:
 - `presentation_setup.tex` owns packages, Beamer/TikZ/listing conventions,
   shared colors, status badges, and chapter-divider components.
 - `chapters/01_orientation.tex` through
-  `chapters/12_scope_and_appendix.tex` own section declarations and frames.
+  `chapters/13_scope_and_appendix.tex` own section declarations and frames.
 - `assets/` owns reviewed deck-specific snapshots; `examples/images/` may be
   referenced directly for a reusable gallery figure.
 - `README.md`, this file, and `SPEAKER_NOTES.md` own build/navigation,
@@ -102,7 +103,7 @@ to read the result and what it does not establish.
 
 Each normal frame has one primary teaching message. Put dense derivations,
 carry fields, traced/eager reassembly, and similar maintainer detail in the
-Chapter 12 appendix. Use descriptive frame/chapter names for cross-references;
+Chapter 13 appendix. Use descriptive frame/chapter names for cross-references;
 page numbers are revision-specific navigation aids.
 
 ## Terminology and interpretation conventions
@@ -124,7 +125,8 @@ Keep these distinctions explicit throughout the deck:
 - Hopf `l1` is a local, scale- and tolerance-aware normal-form quantity, not a
   global periodic-branch prediction;
 - direct codimension-two solvers refine one supplied two-parameter guess; they
-  do not continue fold or Hopf curves;
+  do not themselves continue a curve; the separate seeded fold/Hopf curve
+  factories continue connected codimension-one event curves;
 - JaxCont’s dPRC is `d(PRC)/dp` after reconverging the periodic orbit, not the
   time derivative exported under the dPRC name by MatCont;
 - software tests support implementation behavior, not model truth, causality,

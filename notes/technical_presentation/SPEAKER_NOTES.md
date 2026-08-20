@@ -1,6 +1,6 @@
 # Speaker notes
 
-These notes make the 112-page JaxCont v0.3.1+ deck teachable without assuming
+These notes make the 142-page JaxCont v0.4.0 deck teachable without assuming
 that the audience already knows continuation, bifurcation terminology, or JAX
 transformations. Explain the scientific question and picture before the
 equation. Use frame titles as navigation anchors; page references below match
@@ -8,15 +8,15 @@ the current clean build and must be refreshed if pagination changes.
 
 ## Status language to use aloud
 
-“JaxCont v0.3.1+” means the published v0.3.1 release plus selected current-main
-features intended for v0.4. It does not mean that v0.4 is released.
+“JaxCont v0.4.0” identifies the released capability surface.
 
-- Say **Available in v0.3.1** for released features.
-- Say **Current main — planned for v0.4** for PRC/dPRC, `plot_prc`, and
-  Examples 13–14.
+- Say **Available in v0.4.0** for released features, including PRC/dPRC and
+  fold/Hopf two-parameter continuation.
+- Say **Experimental in v0.4.0** for the available LPC/PD/NS detection APIs
+  while the strict `MC-LC-002` comparison remains failing.
 - Say **Future work — not implemented** for explicit capability boundaries.
 
-Never imply support for branch switching, two-parameter bifurcation-curve
+Never imply support for branch switching, periodic-orbit codimension-two curve
 continuation, automatic cycle discovery from a Hopf point, general BVP
 continuation, or connecting-/homoclinic-/heteroclinic-orbit continuation.
 
@@ -25,22 +25,23 @@ continuation, or connecting-/homoclinic-/heteroclinic-orbit continuation.
 The times are planning ranges, not promises. Add live-demo time separately and
 leave margin for compilation, questions, and discussion.
 
-### Overview route — about 35–45 minutes
+### Overview route — about 50–65 minutes
 
 Use the title; all of Chapters 1 and 2; the Chapter 3 divider plus “A
 fixed-parameter slice fails at the fold”, “Pseudo-arclength changes the
 coordinate”, “Predict along the tangent, correct across it”, and its recap;
-selected Chapter 5 concept/event/result frames; all of Chapters 8 and 11; and
-Chapter 12 through “Main takeaways”.
+selected Chapter 5 concept/event/result frames; the conceptual, API, Example 15,
+and limitation frames from Chapter 8; all of Chapters 9 and 12; and Chapter 13
+through “Main takeaways”.
 
 This route answers: what continuation is, why folds need a new coordinate,
 what representative equilibrium/cycle/visual outputs mean, how to run a
-study, and where the boundaries are. Treat the Chapter 12 appendix as questions
+study, and where the boundaries are. Treat the Chapter 13 appendix as questions
 only.
 
-### Methods route — about 65–85 minutes
+### Methods route — about 80–105 minutes
 
-Show the title and the Chapter 1 status legend, then use Chapters 2–7 and 10.
+Show the title and the Chapter 1 status legend, then use Chapters 2–8 and 11.
 If time is tight, shorten Chapter 4 to the public call, result tree, engine
 dispatch, `vmap`, and the final guarantees table. In Chapter 5, use one of the
 two periodic-event figures rather than both. The appendix pages on bordered
@@ -48,12 +49,12 @@ continuation and the fixed-buffer engine are optional.
 
 This route emphasizes continuation geometry, collocation, equilibrium and
 cycle stability, Hopf refinement, local normal forms, direct codimension-two
-systems, and validation.
+systems, fold/Hopf curve continuation, and validation.
 
-### Complete route — about 105–125 minutes
+### Complete route — about 135–160 minutes
 
-Use Chapters 1–12 through “Main takeaways” (pages 1–105). Plan this as a long
-seminar or two-part workshop. Pages 106–112 add roughly 10–20 minutes and are
+Use Chapters 1–13 through “Main takeaways” (pages 1–134). Plan this as a long
+seminar or two-part workshop. Pages 135–142 add roughly 10–20 minutes and are
 optional technical appendix material. A complete route with two or more live
 demos is better split into two sessions.
 
@@ -69,11 +70,13 @@ array shape can turn a short script into a poor live moment.
 | `example_03_van_der_pol.py` | Reliable live after imports/JIT are warm | Run from `examples/` with `MPLBACKEND=Agg`; show the saved `van_der_pol.png` and stdout. Emphasize that `l1=0` makes this a degenerate center crossing. |
 | `example_10_van_der_pol_limit_cycle.py` | Prefer pre-generated output | The script first integrates a transient, locates a cycle, compiles collocation, and continues it. Use the saved gallery figure; show the command and the period trend. |
 | `example_12_fitzhugh_nagumo_phase_plane.py` | Prefer the direct tracked gallery figure | The reused JPEG is the documented gallery exception, not an `assets/README.md` regenerated snapshot. The script opens interactive figures and saves nothing; use the retained Chapter 8 image unless the GUI has been rehearsed. |
-| `example_13_phase_response_curve.py` | Short live option on the current-main checkout | Run with `MPLBACKEND=Agg`; show the saved two-panel image. State the current-main status before the command. |
+| `example_13_phase_response_curve.py` | Short live option | Run with `MPLBACKEND=Agg`; show the saved two-panel image and identify it as a v0.4.0 capability. |
 | `example_14_prc_shooting_validation.py` | Pre-generate; do not depend on it live | Independent shooting, reconverged finite differences, and plotting make it the slowest route. Use the reviewed four-panel asset and captured exact diagnostics. |
+| `example_15_two_parameter_bt.py` | Good short live option after warm-up | Show the physical parameter plane and exact BT organizer. Fall back to the Chapter 8 diagram and saved example output. |
+| Examples 16–20 MatCont overlays | Use reviewed assets | Pages 107–110 show the comparison gallery; page 110 deliberately preserves the `MC-LC-002` failure. |
 
 The periodic-event Examples 08–09 are also good pre-generated evidence. Their
-reviewed images and analytic crossings are already on pages 47–48.
+reviewed images and analytic crossings are already on pages 49–50.
 
 For headless runs:
 
@@ -98,9 +101,8 @@ choose a scientific question before they see algorithms.
 1. On the divider, say that one model can be viewed as steady states, cycles,
    stability changes, local organizing points, state-space geometry, or phase
    sensitivity.
-2. On “How to read v0.3.1+”, read the plus sign literally. Pause long enough
-   for the audience to see that PRC/dPRC is orange/current-main and that future
-   workflows are red/not implemented.
+2. On “How to read v0.4.0”, distinguish the green released capabilities from
+   the red future workflows.
 3. On the application map, begin at the left-hand questions. The method is a
    response to the scientific object being sought, not a menu chosen for speed.
 4. Use the routes frame to tell the audience what you will skip. This makes a
@@ -184,7 +186,7 @@ public execution model can serve equilibrium and periodic problems.”
 
 ## Chapter 4 — Public API and JAX execution model
 
-**Pages 26–37; source:** `chapters/04_api_and_jax.tex`.
+**Pages 26–38; source:** `chapters/04_api_and_jax.tex`.
 
 Keep public usage separate from implementation mechanics.
 
@@ -221,7 +223,7 @@ make all event logic batchable or parallelize steps within one branch.
 
 ## Chapter 5 — Periodic orbits and Floquet stability
 
-**Pages 38–50; source:** `chapters/05_periodic_orbits.tex`.
+**Pages 39–52; source:** `chapters/05_periodic_orbits.tex`.
 
 The conceptual bridge is: collocation converts one complete cycle and its
 period into one finite nonlinear root.
@@ -243,12 +245,12 @@ period into one finite nonlinear root.
 8. End with fixed-mesh, dense-solve, float32-tolerance, guess-quality, and event
    boundaries.
 
-**Demo cue:** Prefer the saved Example 10 output. Pages 47–48 already contain
+**Demo cue:** Prefer the saved Example 10 output. Pages 49–50 already contain
 reviewed Examples 08–09 with analytic crossings, so they are safer than live
 periodic compilation.
 
 **Likely question — “Why not start a cycle automatically at Hopf?”** That
-requires cycle construction/branch switching. JaxCont v0.3.1 refines and
+requires cycle construction/branch switching. JaxCont v0.4.0 refines and
 continues a supplied coarse cycle; it does not implement that workflow.
 
 **Likely question — “Why not use negative real parts for cycle stability?”** A
@@ -257,7 +259,7 @@ its magnitude. Negative real parts are the continuous-time equilibrium rule.
 
 ## Chapter 6 — Hopf refinement and criticality
 
-**Pages 51–60; source:** `chapters/06_hopf_classification.tex`.
+**Pages 53–62; source:** `chapters/06_hopf_classification.tex`.
 
 The chapter answers two local questions: where exactly is the Hopf point, and
 what local normal form does it have?
@@ -277,8 +279,9 @@ what local normal form does it have?
 6. On `Hopf.refine()`, explain the reported `omega0`, `l1`, `criticality`, and
    method, then repeat that finite diagnostics alone are not a convergence
    certificate. Verify the extended-system residual.
-7. End with what the solve does not do: no automatic cycle, branch switch,
-   Hopf-curve continuation, or global prediction.
+7. End with what the local solve does not do by itself: no automatic cycle,
+   branch switch, or global prediction. Chapter 8 introduces the separate
+   seeded Hopf-curve workflow.
 
 **Likely question — “Does the sign of `l1` tell me the whole cycle branch?”**
 No. It classifies the local Hopf normal form. Distant folds, global stability,
@@ -298,7 +301,7 @@ next object is a direct two-parameter point refinement.”
 
 ## Chapter 7 — Direct codimension-two point solvers
 
-**Pages 61–67; source:** `chapters/07_codim2_solvers.tex`.
+**Pages 63–69; source:** `chapters/07_codim2_solvers.tex`.
 
 Keep “one point from one supplied guess” visible on every frame.
 
@@ -320,7 +323,8 @@ Keep “one point from one supplied guess” visible on every frame.
 
 **Likely question — “Do these solvers draw a two-parameter bifurcation
 diagram?”** No. They refine one nearby root of an extended point-defining
-system. They do not continue fold or Hopf curves.
+system. The separate curve factories in Chapter 8 continue seeded fold or
+Hopf curves.
 
 **Likely question — “Why return vectors and frequencies?”** They witness the
 defining degeneracy. A parameter pair without a converged spectral/normal-form
@@ -334,9 +338,40 @@ unsafe. Establish the local root with `*_point(...)` and its flag first.
 depends on a good seed, convergence, dimension/seed contracts, scaling, and
 nondegeneracy assumptions.
 
-## Chapter 8 — Visualization: parameter space and state space
+## Chapter 8 — Two-parameter fold and Hopf curves
 
-**Pages 68–73; source:** `chapters/08_visualization.tex`.
+**Pages 70–83; source:** `chapters/08_two_parameter_curves.tex`.
+
+Keep the distinction between an isolated organizer and a connected event curve
+visible throughout.
+
+1. Explain the packing first: one physical parameter is solved inside the
+   extended state, while the selected `free` parameter is continued.
+2. The `fold_curve_problem` and `hopf_curve_problem` factories refine their
+   supplied seeds. `p_span[0]` must equal the selected free seed parameter.
+3. Curve-specific CP/BT/GH/ZH/HH events remove the eigenvalue or eigenpair that
+   defines the curve before looking for an additional degeneracy.
+4. Example 15 supplies an exact oracle: the fold parabola passes through the
+   BT point `(p0, p1) = (3, -1)`.
+5. `plot_two_parameter_diagram` decodes the packed state into the two physical
+   parameter axes; inspect the validity mask and original residuals first.
+6. Parameter-only wrappers are gradient-friendly, but establish a converged
+   curve/event result before interpreting sensitivities.
+
+**Demo cue:** Example 15 is suitable live after JAX warm-up. The deck already
+contains an editable parameter-plane diagram if compilation or plotting fails.
+
+**Likely question — “Will this discover every fold or Hopf curve?”** No. It
+traces the connected curve reached from the checked seed; it does not discover
+disconnected components or switch branches automatically.
+
+**Interpretation caution:** Generic stability of the packed extended state is
+not physical equilibrium stability. Use the original model Jacobian and the
+curve event diagnostics.
+
+## Chapter 9 — Visualization: parameter space and state space
+
+**Pages 84–90; source:** `chapters/09_visualization.tex`.
 
 Begin with the question-to-view table. A plot is selected by what it can answer,
 not by which helper is most visually attractive.
@@ -344,8 +379,8 @@ not by which helper is most visually attractive.
 1. A branch diagram varies the parameter; an eigenvalue/Floquet view tracks
    local stability; a branch-state projection relates stored solutions; a 2D
    phase plane freezes one parameter and shows local flow geometry.
-2. On the composable API surface, point out that `plot_prc` is current-main;
-   the other named visualization groups are released.
+2. On the composable API surface, point out that `plot_prc` and the other named
+   visualization groups are released in v0.4.0.
 3. Use the data-flow diagram to separate continuation results from a frozen
    vector field and optional trajectory simulation.
 4. On FitzHugh–Nagumo, read the left panel first: locate the Hopf transition
@@ -365,11 +400,11 @@ one frozen parameter.
 higher-dimensional geometry, automatic branch discovery, or a continued
 periodic orbit. Its trajectory layer uses an explicit simulation.
 
-## Chapter 9 — Phase-response curves and parameter sensitivity
+## Chapter 10 — Phase-response curves and parameter sensitivity
 
-**Pages 74–85; source:** `chapters/09_prc_dprc.tex`.
+**Pages 91–102; source:** `chapters/10_prc_dprc.tex`.
 
-State the current-main/planned-for-v0.4 status before teaching the method.
+Identify PRC/dPRC as a v0.4.0 capability before teaching the method.
 
 1. Use the three-kick picture: the same small state impulse produces different
    first-order phase shifts at different phases.
@@ -387,8 +422,8 @@ State the current-main/planned-for-v0.4 status before teaching the method.
 7. End with the stable-cycle, fixed-mesh, simple-unit-multiplier, periodic-
    closure, and mesh-point-output boundaries.
 
-**Demo cue:** Example 13 is a short current-main demo when the checkout is
-known. Otherwise use the reviewed page-82 figure.
+**Demo cue:** Example 13 is a short v0.4.0 demo. Otherwise use the reviewed
+page-99 figure.
 
 **Likely question — “What exactly is JaxCont’s dPRC?”** It is `d(PRC)/dp` for
 the full map that reconverges the periodic orbit, updates its phase anchor, and
@@ -405,9 +440,9 @@ or cross a basin boundary.
 **Interpretation caution:** Compare PRCs only after aligning phase origin,
 phase units, normalization, state ordering, and the perturbed component.
 
-## Chapter 10 — Validation: from residuals to independent evidence
+## Chapter 11 — Validation: from residuals to independent evidence
 
-**Pages 86–94; source:** `chapters/10_validation.tex`.
+**Pages 103–117; source:** `chapters/11_validation.tex`.
 
 This chapter teaches evidence vocabulary, not a single package-wide pass/fail
 claim.
@@ -417,17 +452,20 @@ claim.
    not excuse failures on lower ones.
 2. Use the evidence matrix to match the validation method to the capability.
    Avoid a universal “validated” label.
-3. The sheared-circle figure has closed-form, collocation, and shooting
+3. Use Examples 16–20 as visual diagnostics, then point to the eight-case
+   matrix: seven pass and `MC-LC-002` fails. The failing `torBPC1` overlay is
+   deliberately visible and does not weaken event or multiplier tolerances.
+4. The sheared-circle figure has closed-form, collocation, and shooting
    evidence. The Van der Pol figure is an independent numerical comparison but
    has no closed-form PRC here.
-4. Treat printed maximum errors as diagnostics unless the source declares a
+5. Treat printed maximum errors as diagnostics unless the source declares a
    metric and tolerance.
-5. On the diagnostics table, preserve partial failure. The reviewed
+6. On the diagnostics table, preserve partial failure. The reviewed
    `MC-LC-002` mismatch is evidence to report, not a reason to weaken a
    threshold.
-6. On convention alignment, describe the rule before applying it. Do not shift,
+7. On convention alignment, describe the rule before applying it. Do not shift,
    reorder, or rescale after seeing the answer merely to minimize error.
-7. Separate released validation evidence from current-main PRC evidence.
+8. Distinguish cross-validated PRC evidence from independently validated dPRC evidence.
 
 **Likely question — “Why do two PRCs agree only after a horizontal shift?”** A
 periodic orbit has an arbitrary phase origin. Apply a reproducible circular
@@ -445,9 +483,9 @@ Choose a declared metric, tolerance, interpolation/alignment rule, and scope.
 support implementation behavior. Model choice, seed, parameter domain,
 resolution, and scientific interpretation need their own evidence.
 
-## Chapter 11 — Guided application workflows
+## Chapter 12 — Guided application workflows
 
-**Pages 95–100; source:** `chapters/11_guided_workflows.tex`.
+**Pages 118–124; source:** `chapters/12_guided_workflows.tex`.
 
 Use this as the practical handoff from concepts to a repeatable study.
 
@@ -458,10 +496,12 @@ Use this as the practical handoff from concepts to a repeatable study.
    familiar Van der Pol cycle.
 3. Demo cards 3–4 separate supplied-cycle continuation from frozen-parameter
    phase-plane simulation.
-4. Demo cards 5–6 are current-main. `dprc_curve` reconverges the orbit, and the
+4. Demo cards 5–6 cover v0.4.0 capabilities. `dprc_curve` reconverges the orbit, and the
    shooting example checks the PRC computation on JaxCont-reconverged orbits;
    it is not independent orbit discovery.
-5. On “How to read a result”, explain what the public result does and does not
+5. Demo card 7 turns Chapter 8 into a reproducible two-parameter study with an
+   exact fold curve and BT organizer.
+6. On “How to read a result”, explain what the public result does and does not
    store. Re-evaluate the model residual on valid states and compare the last
    valid parameter with the requested endpoint and configured stop conditions.
 
@@ -470,27 +510,31 @@ workshop, run the README quick start first, then Example 13 or a pre-rehearsed
 Example 03. Use the other cards as reproducible homework routes.
 
 **Interpretation caution:** Missing points do not prove that a physical branch
-ended. The public result does not store residual norms, rejection history,
-accepted step sizes, or a termination-reason field.
+ended. The solution records accepted step sizes and Newton counts, but not
+residual norms, rejected attempts, or a termination-reason field.
 
 **Transition:** “The final chapter states the claims we can make, the claims we
 cannot make, and the vocabulary needed to revisit the technical details.”
 
-## Chapter 12 — Scope, glossary, and technical appendix
+## Chapter 13 — Scope, release integrity, glossary, and technical appendix
 
-**Pages 101–112; source:** `chapters/12_scope_and_appendix.tex`.
+**Pages 125–142; source:** `chapters/13_scope_and_appendix.tex`.
 
-Pages 101–105 close every route:
+Pages 125–134 close every route:
 
-1. Read the capability matrix by source status. Repeat that v0.4 is not
-   released.
-2. Use the two glossary frames as a question-driven reference rather than
+1. Read the capability matrix by source status. Two-parameter fold/Hopf curves
+   are released; periodic LPC/PD/NS detection remains experimental because
+   `MC-LC-002` still fails.
+2. Teach the v0.4 migration contracts: direct-solver convergence flags,
+   corrected seeds, universal start-parameter equality, fixed-step semantics,
+   real Newton diagnostics, pickle-free persistence, and runtime floors.
+3. Use the two glossary frames as a question-driven reference rather than
    reading every definition aloud.
-3. End on “Main takeaways”. The final sentence is the interpretation boundary:
+4. End on “Main takeaways”. The final sentence is the interpretation boundary:
    a computed diagram is evidence about the supplied mathematical model, not
    automatic validation of the model or a causal claim.
 
-Pages 106–112 are optional:
+Pages 135–142 are optional:
 
 - “natural versus pseudo-arclength” and the scalar cubic derivation answer
   numerical-method questions;
@@ -502,8 +546,8 @@ Do not show the fixed-buffer internals to an overview audience unless asked.
 For a methods audience, the accepted-point pseudocode is usually more useful
 than listing every carry field.
 
-**Final audience check:** Ask participants to state one available capability,
-one current-main capability, one unsupported workflow, and one validation step
+**Final audience check:** Ask participants to state two available capabilities,
+one unsupported workflow, and one validation step
 they would add before making a research claim.
 
 ## Interpretation cautions to repeat
