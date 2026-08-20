@@ -69,6 +69,107 @@ dPRC
 {\small Software tests support implementation behaviour; the research question determines which extra rung the conclusion needs.}
 \end{frame}
 
+\begin{frame}{Five visual companions, one numerical authority}
+\small
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Examples 16--20}
+\begin{itemize}
+  \item equilibrium overlays: cubic, Van der Pol, adaptive control;
+  \item periodic overlays: analytic radial cycle and MatCont \texttt{torBPC1};
+  \item the same reviewed reference artifacts feed both plots and metrics.
+\end{itemize}
+\end{block}
+\column{.48\textwidth}
+\begin{alertblock}{Interpretation rule}
+Visual overlap is a diagnostic for shape, coverage, and convention mistakes.
+The systematic validator remains authoritative because it evaluates declared
+metrics against declared tolerances.
+\end{alertblock}
+\end{columns}
+\vfill
+\centering
+\textbf{A gallery can reveal a problem; it cannot turn a failing case into a pass.}
+\end{frame}
+
+\begin{frame}{MatCont gallery: cubic equilibrium continuation}
+\centering
+\includegraphics[height=.67\textheight]{example_16_matcont_cubic_overlay.png}
+
+\vspace{1mm}
+{\scriptsize \texttt{MC-EQ-001}: branch geometry, two folds, residuals,
+stability, and fold coefficients agree within the systematic tolerances.}
+\end{frame}
+
+\begin{frame}{MatCont gallery: two equilibrium Hopf cases}
+\centering
+\begin{columns}[T,onlytextwidth]
+\column{.49\textwidth}
+\centering
+\includegraphics[height=.55\textheight]{example_17_matcont_vanderpol_overlay.png}
+
+{\scriptsize \texttt{MC-EQ-002}: Van der Pol}
+\column{.49\textwidth}
+\centering
+\includegraphics[height=.55\textheight]{example_18_matcont_adaptive_control_overlay.png}
+
+{\scriptsize \texttt{MC-EQ-003}: adaptive control}
+\end{columns}
+\vspace{1mm}
+
+{\scriptsize Both cases check the Hopf location, frequency, stability change,
+residual, and first Lyapunov coefficient under their declared scope.}
+\end{frame}
+
+\begin{frame}{MatCont gallery: analytic radial periodic orbit}
+\centering
+\includegraphics[height=.67\textheight]{example_19_matcont_radial_cycle_overlay.png}
+
+\vspace{1mm}
+{\scriptsize \texttt{MC-LC-001}: radius, period $2\pi$, collocation residual,
+nontrivial Floquet spectrum, and stability agree with the analytic oracle.}
+\end{frame}
+
+\begin{frame}{MatCont gallery: the known \texttt{torBPC1} failure stays visible}
+\centering
+\includegraphics[height=.49\textheight]{example_20_matcont_torbpc_overlay.png}
+
+\vspace{.5mm}
+\begin{alertblock}{\texttt{MC-LC-002}: systematic comparison FAIL}
+\scriptsize
+Event-location errors are small, but JaxCont still misses the correctly located
+LPC and PD labels; the maximum critical-multiplier error is
+$1.12636070448037\times10^{-2}$, above the $5\times10^{-3}$ tolerance.
+The overlay does not relax either requirement.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Current MatCont validation matrix: seven pass, one fails}
+\scriptsize
+\centering
+\renewcommand{\arraystretch}{1.14}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llp{.58\textwidth}@{}}
+\toprule
+Case & Status & Scope checked\\
+\midrule
+\texttt{MC-EQ-001} & \textcolor{JaxGreen}{\bfseries PASS} & cubic branch, folds, residual, stability, fold coefficients\\
+\texttt{MC-EQ-002} & \textcolor{JaxGreen}{\bfseries PASS} & Van der Pol Hopf, frequency, stability, $l_1$\\
+\texttt{MC-EQ-003} & \textcolor{JaxGreen}{\bfseries PASS} & adaptive-control Hopf, residual, frequency, $l_1$\\
+\texttt{MC-JAX-001} & \textcolor{JaxGreen}{\bfseries PASS} & JIT/\texttt{vmap}, invariance, fold/Hopf sensitivities\\
+\texttt{MC-C2-001} & \textcolor{JaxGreen}{\bfseries PASS} & CP/BT/GH/ZH/HH points, sensitivities, normal forms\\
+\texttt{MC-LC-001} & \textcolor{JaxGreen}{\bfseries PASS} & analytic radial cycle and Floquet spectrum\\
+\texttt{MC-LC-002} & \textcolor{JaxRed}{\bfseries FAIL} & \texttt{torBPC1} LPC/NS/PD and critical multipliers\\
+\texttt{MC-PRC-001} & \textcolor{JaxGreen}{\bfseries PASS} & adaptx iPRC after phase and unit alignment\\
+\bottomrule
+\end{tabular}
+\vfill
+\begin{alertblock}{Release interpretation}
+The strict periodic-event failure keeps LPC/PD/NS detection experimental in
+v0.4.0 even though the APIs and examples are available.
+\end{alertblock}
+\end{frame}
+
 \begin{frame}{Sheared circle: closed form, collocation, and shooting}
 \mainbadge\par
 \vspace{1mm}
