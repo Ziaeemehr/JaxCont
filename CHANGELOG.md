@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-20
+
+### Added
+- MatCont visual comparison gallery: five new example scripts (`example_16`-`example_20`)
+  overlaying JaxCont branches directly on reviewed MatCont 7.6 reference data for the cubic
+  fold, Van der Pol Hopf, adaptive-control Hopf, radial periodic orbit, and torBPC cases, plus
+  a featured comparison figure in the README.
+
 ### Changed
+- **Breaking:** `requires-python` narrowed from `>=3.9` to `>=3.11`. `lyapunov_coefficient`
+  relies on JAX's SVD-JVP rule for `full_matrices=True`, which was only implemented around
+  jax 0.9.0; `jaxlib` never published a `cp310` or `cp39` wheel at or above that version, so
+  Python 3.9/3.10 cannot install a working `jax`/`jaxlib` pair for this codebase at all.
+  Confirmed via CI: both versions failed with `NotImplementedError: Singular value
+  decomposition JVP not implemented for full matrices` on every jax release available to
+  them. Declared `jax`/`jaxlib` floors corrected accordingly, from an untested `>=0.3.0`
+  placeholder to the empirically bisected `>=0.9.0`; `numpy` floor corrected to `>=1.22.0`.
+  CI now tests the full declared Python 3.11-3.12 matrix instead of only 3.11.
 - **Breaking:** `fold_point()` now returns a 4-tuple `(u, p, v, converged)` (was a 3-tuple);
   `hopf_point()` now returns a 6-tuple `(u, p, q1, q2, omega0, converged)` (was a 5-tuple).
   Existing code unpacking the old shape (e.g. `u, p, v = jc.fold_point(...)`) will now raise
