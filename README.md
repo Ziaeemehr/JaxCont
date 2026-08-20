@@ -37,6 +37,13 @@ cross-validated against MatCont) plus their parameter-derivative sensitivity
 this quantity). Branch switching, general connecting-orbit/BVP workflows,
 and two-parameter curve continuation remain future work.
 
+<p align="center">
+  <img src="docs/images/matcont_cubic_overlay.png" width="500" alt="Cubic S-curve: JaxCont vs MatCont 7.6, folds overlaid">
+</p>
+
+<p align="center"><sub>JaxCont's branch (blue) traced independently over MatCont 7.6's reference (orange) —
+more cases, including known limitations, in the <a href="examples/MatCont/README.md">MatCont validation suite</a>.</sub></p>
+
 ## Installation
 
 JaxCont requires Python 3.9 or newer.

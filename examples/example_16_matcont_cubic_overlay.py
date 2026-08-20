@@ -27,7 +27,12 @@ with folds at :math:`(r,x)=(2/3,-1)` and :math:`(-2/3,1)`.
 # systematic MatCont validation CLI. The blue curve is freshly computed by
 # JaxCont; orange open circles come from the reviewed MatCont artifact.
 
+import sys
 from pathlib import Path
+
+_repository_root = Path(__file__).resolve().parents[1]
+if str(_repository_root) not in sys.path:
+    sys.path.insert(0, str(_repository_root))
 
 import matplotlib.pyplot as plt
 
