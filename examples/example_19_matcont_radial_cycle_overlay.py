@@ -27,8 +27,15 @@ MATLAB is not required at runtime.
 import sys
 from pathlib import Path
 
-_repository_root = Path(__file__).resolve().parents[1]
-if str(_repository_root) not in sys.path:
+# sphinx-gallery executes this script without defining __file__ (its exec
+# namespace deliberately omits it -- see sphinx_gallery.gen_rst), and in that
+# context conf.py has already put the repository root on sys.path. Only
+# standalone execution (``python examples/example_19_...py``) needs this.
+try:
+    _repository_root = Path(__file__).resolve().parents[1]
+except NameError:
+    _repository_root = None
+if _repository_root is not None and str(_repository_root) not in sys.path:
     sys.path.insert(0, str(_repository_root))
 
 import jax
