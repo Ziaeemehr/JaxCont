@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `continuation()`'s `p_span[0] == problem.p0` validation now applies to every problem kind
   (previously only checked for `fold_curve`/`hopf_curve` kinds) -- a mismatch that previously
   silently started the branch at the wrong point now raises `ValueError` instead.
+- **Breaking:** `ContinuationSolution.save()`/`.load()` now use a versioned (`format_version=1`),
+  pickle-free `.npz` schema. Archives written by the previous implementation cannot be loaded
+  (the previous format was broken for any solution with an optional field left as `None` -- see
+  Fixed, below -- so no working archives from it exist to migrate).
 
 ### Fixed
 - The continuation seed (`u0`) is now Newton-corrected/validated before entering the branch,
@@ -28,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `convergence_info` entries now report the real Newton iteration count for each accepted
   step instead of a hardcoded `0`, and `continuation(..., verbose=True)` now prints a
   one-line summary instead of doing nothing.
+- `ContinuationSolution.save()`/`.load()` no longer raises `TypeError` when `eigenvalues`,
+  `stability`, or `tangent_vectors` is `None`; these fields now round-trip correctly, along with
+  `convergence_info`, `state_names`, and `param_name`, none of which the previous format
+  preserved at all.
+- `ContinuationSolution.load()` now defaults to `allow_pickle=False`, so loading an untrusted
+  `.npz` file can no longer trigger arbitrary pickle execution.
 
 ## [0.3.1] - 2026-08-05
 
