@@ -299,6 +299,24 @@ def plot_radial_cycle_overlay(
     )
     period_axis.set_ylabel("Period")
 
+    # Auto-scaling alone can zoom in on a numerically negligible gap (e.g.
+    # both curves agreeing with the true period to ~1e-9, well inside the
+    # tolerance already reported in the footer) and make two curves that
+    # agree to 9+ significant figures look like they disagree outright.
+    # Floor the y-range so a near-exact match reads as visually overlapping.
+    period_values = np.concatenate(
+        [jax_periods[jax_in_domain], matcont_periods[matcont_in_domain]]
+    )
+    period_center = float(np.mean(period_values))
+    period_half_range = max(
+        float(np.max(period_values) - np.min(period_values)) / 2.0,
+        abs(period_center) * 0.005,
+        1e-6,
+    )
+    period_axis.set_ylim(
+        period_center - period_half_range, period_center + period_half_range
+    )
+
     multiplier_axis.plot(
         jax_parameters[jax_in_domain],
         np.abs(jax_multipliers[jax_in_domain, 0]),
