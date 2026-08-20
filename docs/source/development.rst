@@ -32,7 +32,9 @@ Defines different types of continuation problems:
 
 - ``EquilibriumProblem``: For finding equilibrium points
 - ``periodic_orbit_problem``: For periodic orbit continuation
-- ``BoundaryValueProblem``: For BVP formulations
+- ``BoundaryValueProblem``: BVP problem definition only -- an unimplemented
+  placeholder; ``solve_collocation``/``solve_shooting`` always raise
+  ``NotImplementedError``
 
 Bifurcations Module
 ^^^^^^^^^^^^^^^^^^^

@@ -16,7 +16,12 @@ MatCont 7.6 CSV data.  It uses no MATLAB runtime dependency.
 # The two solvers retain their native adaptive meshes.  Blue is the fresh
 # JaxCont calculation; orange open circles are the reviewed MatCont artifact.
 
+import sys
 from pathlib import Path
+
+_repository_root = Path(__file__).resolve().parents[1]
+if str(_repository_root) not in sys.path:
+    sys.path.insert(0, str(_repository_root))
 
 import matplotlib.pyplot as plt
 

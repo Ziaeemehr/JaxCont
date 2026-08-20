@@ -9,6 +9,19 @@ import jax.numpy as jnp
 from jax import Array
 
 
+def _json_safe(value):
+    """Recursively convert JAX/NumPy arrays into plain Python lists so a
+    value is safe to pass to ``json.dumps`` — used for the metadata blob
+    :meth:`ContinuationSolution.save` embeds in its ``.npz`` archive."""
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if hasattr(value, "tolist"):
+        return _json_safe(value.tolist())
+    return value
+
+
 @dataclass
 class ContinuationProblem:
     """
@@ -158,38 +171,100 @@ class ContinuationSolution:
     
     def save(self, filename: str):
         """
-        Save solution to file.
-        
+        Save this solution to ``filename`` (an ``.npz`` archive), using a
+        versioned, pickle-free schema (format_version=1).
+
+        Numeric arrays (states, parameters, tangent_vectors, eigenvalues,
+        stability) are stored as native NumPy arrays; an optional array
+        that is ``None`` is simply omitted from the archive rather than
+        stored as ``None`` -- NumPy has no null array value, and storing
+        ``None`` via ``np.array(None)`` both requires pickling on load and
+        round-trips as a 0-d object array, not ``None``. Non-numeric
+        metadata (bifurcations, convergence_info, state_names, param_name)
+        is JSON-encoded into a single ``metadata_json`` entry, which NumPy
+        stores as a plain unicode array -- no pickling needed there either.
+
         Args:
             filename: Path to save file
         """
+        import json
+
         import numpy as np
-        data = {
-            "states": np.array(self.states),
-            "parameters": np.array(self.parameters),
-            "eigenvalues": np.array(self.eigenvalues) if self.eigenvalues is not None else None,
-            "stability": np.array(self.stability) if self.stability is not None else None,
-            "bifurcations": self.bifurcations,
+
+        arrays: dict[str, Any] = {"format_version": np.array(1)}
+        arrays["states"] = np.asarray(self.states)
+        arrays["parameters"] = np.asarray(self.parameters)
+        if self.tangent_vectors is not None:
+            arrays["tangent_vectors"] = np.asarray(self.tangent_vectors)
+        if self.eigenvalues is not None:
+            arrays["eigenvalues"] = np.asarray(self.eigenvalues)
+        if self.stability is not None:
+            arrays["stability"] = np.asarray(self.stability)
+
+        metadata = {
+            "bifurcations": _json_safe(self.bifurcations),
+            "convergence_info": _json_safe(self.convergence_info),
+            "state_names": list(self.state_names) if self.state_names is not None else None,
+            "param_name": self.param_name,
         }
-        np.savez(filename, **data)
-    
+        arrays["metadata_json"] = np.array(json.dumps(metadata))
+
+        np.savez(filename, **arrays)
+
     @classmethod
     def load(cls, filename: str) -> "ContinuationSolution":
         """
-        Load solution from file.
-        
+        Load a solution saved by :meth:`save`.
+
+        Reads with ``allow_pickle=False``: the format_version=1 schema
+        never needs pickling, so this refuses to execute arbitrary pickled
+        payloads from an untrusted ``.npz`` file rather than trusting them
+        by default.
+
         Args:
             filename: Path to load file
-        
+
         Returns:
             ContinuationSolution object
         """
+        import json
+
         import numpy as np
-        data = np.load(filename, allow_pickle=True)
-        return cls(
-            states=jnp.array(data["states"]),
-            parameters=jnp.array(data["parameters"]),
-            eigenvalues=jnp.array(data["eigenvalues"]) if data["eigenvalues"] is not None else None,
-            stability=jnp.array(data["stability"]) if data["stability"] is not None else None,
-            bifurcations=list(data["bifurcations"]) if "bifurcations" in data else [],
-        )
+
+        with np.load(filename, allow_pickle=False) as data:
+            if "format_version" not in data.files:
+                raise ValueError(
+                    f"{filename!r} has no 'format_version' entry -- it is not "
+                    f"a ContinuationSolution.save() archive (or predates this "
+                    f"schema) and cannot be loaded."
+                )
+            version = int(data["format_version"])
+            if version != 1:
+                raise ValueError(
+                    f"{filename!r} uses save/load format_version={version}, "
+                    f"but this version of JaxCont only supports version 1."
+                )
+
+            metadata = json.loads(data["metadata_json"].item())
+            state_names = metadata["state_names"]
+
+            return cls(
+                states=jnp.array(data["states"]),
+                parameters=jnp.array(data["parameters"]),
+                tangent_vectors=(
+                    jnp.array(data["tangent_vectors"])
+                    if "tangent_vectors" in data.files else None
+                ),
+                eigenvalues=(
+                    jnp.array(data["eigenvalues"])
+                    if "eigenvalues" in data.files else None
+                ),
+                stability=(
+                    jnp.array(data["stability"])
+                    if "stability" in data.files else None
+                ),
+                bifurcations=metadata["bifurcations"],
+                convergence_info=metadata["convergence_info"],
+                state_names=tuple(state_names) if state_names is not None else None,
+                param_name=metadata["param_name"],
+            )

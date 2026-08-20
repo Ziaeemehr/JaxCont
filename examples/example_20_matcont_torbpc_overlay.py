@@ -21,7 +21,12 @@ event there. MATLAB is not required at runtime.
 # Event-specific colors connect the reference locations in the parameter
 # panels to their MatCont and nearest-parameter JaxCont spectra.
 
+import sys
 from pathlib import Path
+
+_repository_root = Path(__file__).resolve().parents[1]
+if str(_repository_root) not in sys.path:
+    sys.path.insert(0, str(_repository_root))
 
 import matplotlib.pyplot as plt
 

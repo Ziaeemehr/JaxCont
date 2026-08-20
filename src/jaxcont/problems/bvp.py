@@ -12,10 +12,16 @@ from jax import Array
 class BoundaryValueProblem:
     """
     Two-point boundary value problem.
-    
+
+    **Status: unimplemented placeholder.** This dataclass exists to fix the
+    intended problem-definition shape, but ``solve_collocation`` and
+    ``solve_shooting`` both always raise ``NotImplementedError`` -- there is
+    no working BVP solver in JaxCont yet. Constructing this class is safe;
+    calling either solve method is not.
+
     Solve: du/dt = f(t, u, params)
     Subject to: g(u(0), u(T)) = 0
-    
+
     Attributes:
         rhs: Right-hand side f(t, u, params)
         boundary_conditions: Boundary condition function g(u0, uT)

@@ -24,7 +24,12 @@ MATLAB is not required at runtime.
 # compares periods, and the lower panel removes the one trivial Floquet
 # multiplier nearest +1 before comparing the remaining modulus.
 
+import sys
 from pathlib import Path
+
+_repository_root = Path(__file__).resolve().parents[1]
+if str(_repository_root) not in sys.path:
+    sys.path.insert(0, str(_repository_root))
 
 import matplotlib.pyplot as plt
 

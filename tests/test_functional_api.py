@@ -359,3 +359,40 @@ def test_seed_correction_failure_falls_back_to_finite_u0(scan_fn):
     assert bool(jnp.all(jnp.isfinite(result.states[0])))
     assert jnp.allclose(result.states[0], u0)
     assert not bool(result.converged[0])
+
+
+def test_convergence_info_reports_real_newton_iteration_counts():
+    """Regression test for the fabricated newton_iters=0 diagnostic
+    (2026-08-19 review finding #10)."""
+    def rhs(u, p, args):
+        return u ** 3 - p * u
+
+    prob = jc.bif_problem(rhs, u0=jnp.array([0.01]), p0=-1.0)
+    sol = jc.continuation(
+        prob, jc.PseudoArclength(), p_span=(-1.0, 1.0),
+        settings=jc.ContinuationPar(ds=0.05, max_steps=50, compute_stability=False),
+    )
+
+    iters = [info["newton_iters"] for info in sol._solution.convergence_info]
+    assert any(i > 0 for i in iters), (
+        "at least one accepted step should report a nonzero Newton iteration "
+        "count -- every entry was 0"
+    )
+
+
+def test_verbose_prints_a_bifurcation_summary(capsys):
+    """Regression test for the unused verbose=True flag (2026-08-19 review
+    finding #10)."""
+    def rhs(u, p, args):
+        return u ** 2 - p
+
+    prob = jc.bif_problem(rhs, u0=jnp.array([0.5]), p0=0.25)
+    jc.continuation(
+        prob, jc.PseudoArclength(), p_span=(0.25, -0.25),
+        settings=jc.ContinuationPar(ds=0.05, max_steps=50, compute_stability=True),
+        events=[jc.Fold()],
+        verbose=True,
+    )
+
+    captured = capsys.readouterr()
+    assert captured.out.strip() != "", "verbose=True should print a summary"
