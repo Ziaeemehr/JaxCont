@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of being accepted unconditionally.
 - `PeriodDoubling`/`NeimarkSacker` event refinement now Newton-corrects interpolated periodic
   orbits before evaluating Floquet multipliers, instead of trusting a linear interpolation.
+- `ContinuationPar(adaptive=False)` now actually disables step-size adaptation: a
+  successful step keeps the requested `ds` unchanged instead of silently growing it. A
+  failed fixed-size step still backs off (and the run still terminates via the existing
+  `ds <= ds_min` stall condition) rather than retrying forever.
+- `convergence_info` entries now report the real Newton iteration count for each accepted
+  step instead of a hardcoded `0`, and `continuation(..., verbose=True)` now prints a
+  one-line summary instead of doing nothing.
 
 ## [0.3.1] - 2026-08-05
 

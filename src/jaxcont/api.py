@@ -398,6 +398,7 @@ def _run_scan(
         int(settings.max_steps),
         jnp.asarray(settings.newton_max_iter),
         solvers.linear,
+        jnp.asarray(settings.adaptive),
     )
 
     try:
@@ -441,7 +442,7 @@ def _run_scan(
         {
             "step": i,
             "converged": bool(res.converged[i]),
-            "newton_iters": 0,
+            "newton_iters": int(res.iters[i]),
             "ds": float(res.ds[i]),
         }
         for i in range(n)
@@ -474,6 +475,20 @@ def _run_scan(
             {"type": h.kind, "parameter": h.p, "state": h.u, "index": h.index, **h.info}
             for h in hits
         ]
+
+    if verbose:
+        n_converged = sum(1 for c in convergence_info if c["converged"])
+        kind_counts: dict[str, int] = {}
+        for b in (sol.bifurcations or []):
+            kind_counts[b["type"]] = kind_counts.get(b["type"], 0) + 1
+        bif_summary = (
+            ", ".join(f"{count} {kind}" for kind, count in sorted(kind_counts.items()))
+            or "none"
+        )
+        print(
+            f"continuation(): {n} points ({n_converged} converged), "
+            f"bifurcations: {bif_summary}"
+        )
 
     return _to_result(sol)
 
