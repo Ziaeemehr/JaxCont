@@ -89,7 +89,13 @@ def test_hopf_refine_converges_via_extended_system():
     hopf = Hopf()
     left = BranchPoint(p=-0.05, u=jnp.zeros(2), eigenvalues=eigs_at(jnp.zeros(2), -0.05))
     right = BranchPoint(p=0.05, u=jnp.zeros(2), eigenvalues=eigs_at(jnp.zeros(2), 0.05))
-    hit = hopf.refine(left, right, (3, 4), rhs, tolerance=1e-8, max_iterations=50)
+    # tolerance=1e-6, not 1e-8: the Hopf extended system's achievable float32
+    # residual floor is ~6e-8 (eigenvector-normalization roundoff), the same
+    # phenomenon codim2.py's cusp_point/generalized_hopf_point already
+    # document with their own tol=1e-6 defaults. Since Task 2 wired
+    # hopf_point's own Newton-convergence check into Hopf.refine's pass/fail
+    # gate, 1e-8 here would make even an exact solve report converged=False.
+    hit = hopf.refine(left, right, (3, 4), rhs, tolerance=1e-6, max_iterations=50)
     assert hit.kind == "hopf"
     assert abs(hit.p) < 1e-6
     assert hit.info["method"] == "extended_system"
@@ -118,6 +124,7 @@ def test_hopf_refine_marks_non_finite_result_as_unknown(monkeypatch):
         return (
             jnp.zeros(2), jnp.array(-jnp.inf),
             jnp.array([1.0, 0.0]), jnp.array([0.0, 1.0]), jnp.array(1.0),
+            jnp.array(False),
         )
 
     def fake_lyapunov_coefficient(f, u, p, q1, q2, omega0, args=None):
@@ -146,6 +153,7 @@ def test_hopf_refine_zero_omega_marks_unknown(monkeypatch):
         return (
             jnp.zeros(2), jnp.array(0.02),
             jnp.array([1.0, 0.0]), jnp.array([0.0, 0.0]), jnp.array(0.0),
+            jnp.array(True),
         )
 
     def fake_lyapunov_coefficient(f, u, p, q1, q2, omega0, args=None):
@@ -182,7 +190,11 @@ def test_hopf_refine_supercritical_label_end_to_end():
     hopf = Hopf()
     left = BranchPoint(p=-0.05, u=jnp.zeros(2), eigenvalues=eigs_at(jnp.zeros(2), -0.05))
     right = BranchPoint(p=0.05, u=jnp.zeros(2), eigenvalues=eigs_at(jnp.zeros(2), 0.05))
-    hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-10, max_iterations=50)
+    # tolerance=1e-6, not 1e-10 -- see test_hopf_refine_converges_via_extended_
+    # system's comment: the achievable float32 residual floor for this
+    # extended system is ~6e-8, and Task 2 made Hopf.refine gate on actually
+    # reaching `tolerance`, not just finiteness.
+    hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-6, max_iterations=50)
     assert jnp.isclose(hit.info["l1"], -1.0, atol=1e-4)
     assert hit.info["criticality"] == "supercritical"
 
@@ -203,7 +215,9 @@ def test_hopf_refine_subcritical_label_end_to_end():
     hopf = Hopf()
     left = BranchPoint(p=-0.05, u=jnp.zeros(2), eigenvalues=eigs_at(jnp.zeros(2), -0.05))
     right = BranchPoint(p=0.05, u=jnp.zeros(2), eigenvalues=eigs_at(jnp.zeros(2), 0.05))
-    hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-10, max_iterations=50)
+    # tolerance=1e-6 -- see test_hopf_refine_converges_via_extended_system's
+    # comment (float32 residual floor).
+    hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-6, max_iterations=50)
     assert jnp.isclose(hit.info["l1"], 1.0, atol=1e-4)
     assert hit.info["criticality"] == "subcritical"
 
@@ -391,3 +405,47 @@ def test_neimark_sacker_test_function_no_complex_candidate_returns_nan():
         eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, -0.8 + 0j, -0.8 + 0j]),
     )
     assert jnp.isnan(ns.test_function(point))
+
+
+def test_fold_refine_reports_not_converged_when_no_fold_exists(monkeypatch):
+    # Regression for finding #2: a bracket sign-change is not a convergence
+    # guarantee. Drive refine() with a fake fold_point that reports
+    # converged=False and confirm the EventHit says so instead of silently
+    # publishing an unchecked (u_bif, p_bif).
+    import jaxcont.bifurcations.events as events_mod
+
+    def fake_fold_point(f, u_guess, p_guess, args=None, **kwargs):
+        return jnp.zeros(1), jnp.array(jnp.inf), jnp.zeros(1), jnp.array(False)
+
+    monkeypatch.setattr(events_mod, "fold_point", fake_fold_point)
+
+    def rhs(u, p):
+        return u + p
+
+    fold = Fold()
+    left = BranchPoint(p=-0.05, u=jnp.zeros(1))
+    right = BranchPoint(p=0.05, u=jnp.zeros(1))
+    hit = fold.refine(left, right, (0, 1), rhs, tolerance=1e-8, max_iterations=50)
+    assert hit.info["converged"] is False
+    assert hit.p == right.p
+
+
+def test_hopf_refine_reports_converged_true_on_a_real_hopf_point():
+    # Companion to the two "unknown" monkeypatched tests: confirm a genuine
+    # convergent solve now also carries converged=True in info.
+    def rhs(u, p):
+        x, y = u[0], u[1]
+        return jnp.array([p * x - 0.1 * y, 0.1 * x + p * y])
+
+    def eigs_at(u, p):
+        jac = jacfwd(lambda u_: rhs(u_, p))(u)
+        return jnp.linalg.eigvals(jac)
+
+    hopf = Hopf()
+    left = BranchPoint(p=-0.05, u=jnp.zeros(2), eigenvalues=eigs_at(jnp.zeros(2), -0.05))
+    right = BranchPoint(p=0.05, u=jnp.zeros(2), eigenvalues=eigs_at(jnp.zeros(2), 0.05))
+    # tolerance=1e-6 -- see test_hopf_refine_converges_via_extended_system's
+    # comment (float32 residual floor); at 1e-8 even this exact solve would
+    # report converged=False, defeating the point of this test.
+    hit = hopf.refine(left, right, (3, 4), rhs, tolerance=1e-6, max_iterations=50)
+    assert hit.info["converged"] is True

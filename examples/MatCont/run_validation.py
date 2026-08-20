@@ -12,7 +12,6 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .artifacts import (
-    compare_case_result_to_reference,
     enrich_generated_metadata,
     validate_equilibrium_artifacts,
     validate_periodic_artifacts,
@@ -20,6 +19,7 @@ from .artifacts import (
     verify_case_references,
 )
 from .registry import load_registry, select_cases
+from .validation import evaluate_case_result
 
 _DEFAULT_MATLAB_BIN = "/home/ziaee/prog/Matlab/R2020a/bin/matlab"
 _DEFAULT_MATCONT_ROOT = "/home/ziaee/prog/MatCont/MatCont7p6"
@@ -35,10 +35,14 @@ _EQUATION_FILES = {
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the validation CLI parser without performing any validation work."""
-    parser = argparse.ArgumentParser(description="Run JaxCont's MatCont validation suite.")
+    """Build the validation CLI parser without running validation."""
+    parser = argparse.ArgumentParser(
+        description="Run JaxCont's MatCont validation suite."
+    )
     parser.add_argument(
-        "--case", action="append", help="Validate only this case ID; may be repeated."
+        "--case",
+        action="append",
+        help="Validate only this case ID; may be repeated.",
     )
     parser.add_argument(
         "--regenerate-matcont",
@@ -80,13 +84,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Report case selection without running Python or MATLAB producers.",
+        help=(
+            "Report case selection without running Python or MATLAB "
+            "producers."
+        ),
     )
     return parser
 
 
 def resolve_runtime_paths(args: argparse.Namespace) -> argparse.Namespace:
-    """Resolve every filesystem override before MATLAB changes its working directory."""
+    """Resolve paths before MATLAB changes its working directory."""
     args.reference_dir = Path(args.reference_dir).expanduser().resolve()
     args.generated_dir = Path(args.generated_dir).expanduser().resolve()
     args.matlab_bin = str(Path(args.matlab_bin).expanduser().resolve())
@@ -97,8 +104,10 @@ def resolve_runtime_paths(args: argparse.Namespace) -> argparse.Namespace:
 def validate_case_metadata(
     metadata_path: Path, case_id: str, reference_dir: Path
 ) -> dict:
-    """Validate metadata, requiring review only for the committed oracle directory."""
-    require_reviewed = Path(reference_dir).resolve() == _DEFAULT_REFERENCE_DIR.resolve()
+    """Require reviewed metadata only for the committed oracle."""
+    require_reviewed = (
+        Path(reference_dir).resolve() == _DEFAULT_REFERENCE_DIR.resolve()
+    )
     return validate_reference_metadata(
         metadata_path, case_id, require_reviewed=require_reviewed
     )
@@ -117,9 +126,12 @@ def _run_matlab_function(
 ) -> None:
     matlab_dir = _SUITE_DIR / "matlab"
     unsupported_dir = matlab_dir / "unsupported"
-    arguments = "" if output_dir is None else f"('{_matlab_quote(output_dir)}')"
+    arguments = (
+        "" if output_dir is None else f"('{_matlab_quote(output_dir)}')"
+    )
     expression = (
-        f"addpath('{_matlab_quote(matlab_dir)}','{_matlab_quote(unsupported_dir)}'); "
+        f"addpath('{_matlab_quote(matlab_dir)}',"
+        f"'{_matlab_quote(unsupported_dir)}'); "
         f"{function_name}{arguments}"
     )
     environment = os.environ.copy()
@@ -131,7 +143,9 @@ def _run_matlab_function(
         text=True,
     )
     if completed.returncode:
-        raise RuntimeError(f"MATLAB producer {function_name} exited {completed.returncode}")
+        raise RuntimeError(
+            f"MATLAB producer {function_name} exited {completed.returncode}"
+        )
 
 
 def _equation_path(case: dict, matcont_root: str) -> Path:
@@ -159,7 +173,10 @@ def _regenerate(cases: list[dict], args: argparse.Namespace) -> bool:
                     matcont_root=args.matcont_root,
                     output_dir=None,
                 )
-                print(f"UNSUPPORTED_BY_JAXCONT {case['id']}: MatCont wrapper completed")
+                print(
+                    f"UNSUPPORTED_BY_JAXCONT {case['id']}: "
+                    "MatCont wrapper completed"
+                )
                 continue
             _run_matlab_function(
                 function_name,
@@ -185,74 +202,15 @@ def _load_case_callable(specification: str):
     return getattr(importlib.import_module(module_name), function_name)
 
 
-def _case_result_passes(case_id: str, checks: dict) -> bool:
-    predicates = {
-        "MC-EQ-001": lambda: (
-            checks["fold_count"] == 2
-            and checks["max_fold_error"] < 5e-4
-            and checks["max_residual"] < 2e-5
-            and checks["natural_stalled_at_fold"]
-            and checks["palc_traversed_both_folds"]
-            and checks["max_fold_coefficient_error"] < 1e-4
-            and checks["stability_transition_count"] == 2
-        ),
-        "MC-EQ-002": lambda: (
-            checks["hopf_count"] == 1
-            and checks["max_hopf_error"] < 5e-4
-            and checks["frequency_error"] < 5e-4
-            and checks["max_residual"] < 2e-5
-            and checks["lyapunov_error"] < 1e-4
-            and checks["stable_for_negative_parameter"]
-            and checks["unstable_for_positive_parameter"]
-        ),
-        "MC-EQ-003": lambda: (
-            checks["hopf_count"] == 1
-            and checks["max_hopf_error"] < 5e-4
-            and checks["frequency_error"] < 5e-4
-            and checks["max_residual"] < 2e-5
-            and checks["lyapunov_error"] < 5e-4
-        ),
-        "MC-JAX-001": lambda: (
-            checks["all_finite"]
-            and checks["max_analytic_gradient_error"] < 2e-3
-            and checks["max_finite_difference_error"] < 2e-3
-            and checks["jit_matches_eager"]
-            and checks["vmap_valid_masks_present"]
-            and checks["vmap_valid_masks_match_serial"]
-            and checks["vmap_valid_parameters_match_serial"]
-            and checks["vmap_valid_states_match_serial"]
-            and checks["permutation_invariant"]
-        ),
-        "MC-C2-001": lambda: (
-            checks["all_converged"]
-            and checks["max_parameter_error"] < 1e-3
-            and checks["bt_bifurcationkit_error"] < 1e-3
-            and checks["frequency_error"] < 1e-3
-            and checks["gh_lyapunov_error"] < 1e-4
-            and checks["parameter_gradients_finite"]
-            and checks["max_analytic_gradient_error"] < 2e-3
-            and checks["max_finite_difference_error"] < 2e-3
-        ),
-        "MC-LC-001": lambda: (
-            checks["max_radius_error"] < 5e-3
-            and checks["max_period_error"] < 5e-3
-            and checks["max_collocation_residual"] < 2e-5
-            and checks["max_multiplier_error"] < 5e-3
-            and checks["all_stable"]
-        ),
-        "MC-LC-002": lambda: bool(checks["all_comparisons_pass"]),
-        "MC-PRC-001": lambda: checks["prc_matches_matcont"],
-    }
-    return bool(predicates[case_id]())
-
-
 def _validate_case(case: dict, reference_dir: Path) -> tuple[bool, dict]:
     for filename in case["references"]:
         path = reference_dir / filename
         if filename.endswith("_metadata.json"):
             validate_case_metadata(path, case["id"], reference_dir)
         elif not path.is_file():
-            raise FileNotFoundError(f"missing MatCont reference artifact: {path}")
+            raise FileNotFoundError(
+                f"missing MatCont reference artifact: {path}"
+            )
     if case["id"].startswith("MC-EQ-"):
         validate_equilibrium_artifacts(reference_dir, case["id"])
     elif case["id"] in {"MC-LC-001", "MC-LC-002"}:
@@ -260,18 +218,14 @@ def _validate_case(case: dict, reference_dir: Path) -> tuple[bool, dict]:
     function = _load_case_callable(case["python"])
     parameters = inspect.signature(function).parameters
     result = function(reference_dir) if parameters else function()
-    checks = dict(result.checks)
-    if case["id"] in {"MC-EQ-001", "MC-EQ-002", "MC-EQ-003", "MC-LC-001"}:
-        checks["matcont_reference"] = compare_case_result_to_reference(
-            case, result, reference_dir
-        )
-    return _case_result_passes(case["id"], checks), checks
+    validation = evaluate_case_result(case, result, reference_dir)
+    return validation.passed, validation.checks
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Regenerate, verify, or execute selected validation cases.
 
-    Reviewed references are read-only; regeneration always targets ``generated``.
+    Reviewed references are read-only; regeneration targets ``generated``.
     """
     args = resolve_runtime_paths(build_parser().parse_args(argv))
     registry = load_registry()
@@ -279,7 +233,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         unsupported_requested = sorted(
             case["id"]
             for case in registry["cases"]
-            if case["id"] in set(args.case) and case["support"] == "unsupported"
+            if case["id"] in set(args.case)
+            and case["support"] == "unsupported"
         )
         if unsupported_requested:
             print(
@@ -300,7 +255,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     if case.get("unsupported_execution") == "template"
                     else ""
                 )
-                print(f"UNSUPPORTED_BY_JAXCONT {case['id']}: {case['title']}{suffix}")
+                print(
+                    f"UNSUPPORTED_BY_JAXCONT {case['id']}: "
+                    f"{case['title']}{suffix}"
+                )
             else:
                 print(f"WOULD_RUN {case['id']}: {case['title']}")
         return 0
@@ -345,7 +303,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     matcont_root=args.matcont_root,
                     output_dir=None,
                 )
-                print(f"UNSUPPORTED_BY_JAXCONT {case['id']}: MatCont wrapper completed")
+                print(
+                    f"UNSUPPORTED_BY_JAXCONT {case['id']}: "
+                    "MatCont wrapper completed"
+                )
             except Exception as exc:
                 print(f"FAIL {case['id']}: {exc}", file=sys.stderr)
                 success = False

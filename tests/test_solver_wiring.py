@@ -113,18 +113,29 @@ def test_pseudo_arclength_scan_matches_pre_protocol_baseline():
     # captured on: index 4 of states0 differed by ~3.6e-15 absolute
     # (~6.8e-8 relative) -- squarely float32 cross-hardware noise, not a
     # regression (this test passes bit-exact on the original machine).
+    #
+    # Re-captured 2026-08-19 (Phase 1 correctness hardening, Task 1): slot 0
+    # is now Newton-corrected instead of the raw, invalid seed (see
+    # scan_continuation.py's u0_seed/_natural_correct call). u0=[0.1] at
+    # p0=0.5 isn't itself an equilibrium (residual 0.049); plain Newton
+    # collapses it onto the trivial branch u=0 -- the same branch points
+    # 1..8 of the *old* baseline were already tracking (their states0 were
+    # already ~1e-7, not near 0.1). Starting step 0 from an exact root
+    # instead of an off-branch guess changes the first Newton correction's
+    # iteration count, which cascades through _adapt_ds into a different
+    # step-size/point-count trajectory (n=8 instead of 9) -- expected, not a
+    # regression.
     res = pseudo_arclength_scan(*_SCAN_ARGS)
     n = int(res.n_valid)
-    assert n == 9
+    assert n == 8
     expected_params = [
-        0.5, 0.5298426151275635, 0.6048426032066345, 0.7173426151275635,
-        0.8860926032066345, 1.0860925912857056, 1.2860926389694214,
-        1.4860926866531372, 1.686092734336853,
+        0.5, 0.550000011920929, 0.625, 0.737500011920929,
+        0.90625, 1.1062500476837158, 1.3062500953674316, 1.5062501430511475,
     ]
     expected_states0 = [
-        0.10000000149011612, 9.813811630010605e-08, 8.424652264693577e-08,
-        6.857676737581642e-08, 5.244454825970024e-08, 4.0607286422300604e-08,
-        3.3129602172721206e-08, 2.7977623773267624e-08, 2.4212363669562365e-08,
+        3.082677721977234e-07, 2.7744098929360916e-07, 2.396081129063532e-07,
+        1.9647865201477543e-07, 1.515216752068227e-07, 1.1808241140442988e-07,
+        9.67341833302271e-08, 8.192321132582947e-08,
     ]
     assert jnp.allclose(res.params[:n], jnp.array(expected_params), atol=1e-6)
     assert jnp.allclose(res.states[:n, 0], jnp.array(expected_states0), atol=1e-6)
@@ -157,6 +168,11 @@ def test_continuation_default_solvers_matches_prior_behavior():
     # (ds=0.05, ds_min=1e-5, ds_max=0.2, newton_tol=1e-6, max_steps=60,
     # newton_max_iter=20) rather than ContinuationPar's defaults, so the
     # same reference numbers apply.
+    #
+    # Re-captured 2026-08-19 (Phase 1 correctness hardening, Task 1) along
+    # with test_pseudo_arclength_scan_matches_pre_protocol_baseline above --
+    # see that test's comment for why slot-0 seed correction shifts this
+    # trajectory (same u0/p0/settings, so the same new numbers apply).
     import jaxcont as jc
 
     prob = jc.bif_problem(lambda u, p, args: pitchfork(u, p), u0=jnp.array([0.1]), p0=0.5)
@@ -167,8 +183,7 @@ def test_continuation_default_solvers_matches_prior_behavior():
     result = jc.continuation(prob, p_span=(0.5, 1.5), settings=settings)
 
     expected_params = [
-        0.5, 0.5298426151275635, 0.6048426032066345, 0.7173426151275635,
-        0.8860926032066345, 1.0860925912857056, 1.2860926389694214,
-        1.4860926866531372, 1.686092734336853,
+        0.5, 0.550000011920929, 0.625, 0.737500011920929,
+        0.90625, 1.1062500476837158, 1.3062500953674316, 1.5062501430511475,
     ]
     assert result.branch.params.tolist() == expected_params
