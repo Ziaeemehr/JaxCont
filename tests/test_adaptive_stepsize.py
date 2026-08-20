@@ -145,41 +145,44 @@ class TestAdaptiveVsFixed:
 
     def test_adaptive_handles_difficult_regions(self):
         """
-        Test that a looser step-size-bound configuration reaches at least as
-        far as a tighter one in a difficult region.
+        Test that adaptive step-size control reaches closer to p_end than
+        fixed-step in a difficult region (near a fold bifurcation).
 
-        Reformulated from the pre-migration version, which counted rejected
-        (non-converged) Newton attempts via convergence_info -- the new scan
-        engine only surfaces *accepted* points, not individual rejected
-        attempts (rejections happen inside one jitted lax.while_loop and
-        never get their own buffer slot). The supportable proxy for "adaptive
-        handles this better" is that adaptive continuation reaches at least
-        as many accepted points as fixed continuation in the same difficult
-        region, without needing per-attempt visibility the engine doesn't
-        expose.
+        In a fixed-step run near a fold, failed corrections shrink ds, but the
+        algorithm can wander past the bifurcation without stalling (ds never
+        drops below the minimum), reaching max_steps at a parameter far from
+        the goal. Adaptive control instead grows ds on success and reaches the
+        target parameter in far fewer points, demonstrating it "handles the
+        difficult region better" by actually reaching the goal.
         """
         prob = jc.bif_problem(pitchfork_rhs, u0=jnp.array([0.1]), p0=0.5)
+        p_end = -0.1
 
         sol_fixed = jc.continuation(
-            prob, jc.PseudoArclength(), p_span=(0.5, -0.1),
+            prob, jc.PseudoArclength(), p_span=(0.5, p_end),
             settings=jc.ContinuationPar(
                 ds=0.05, adaptive=False, max_steps=100,
                 newton_max_iter=30, compute_stability=False,
             ),
         )
         sol_adaptive = jc.continuation(
-            prob, jc.PseudoArclength(), p_span=(0.5, -0.1),
+            prob, jc.PseudoArclength(), p_span=(0.5, p_end),
             settings=jc.ContinuationPar(
                 ds=0.05, ds_min=0.01, ds_max=0.1, adaptive=True,
                 max_steps=100, newton_max_iter=30, compute_stability=False,
             ),
         )
 
-        # With relaxed bounds, adaptive should not use significantly more steps
-        # than fixed in this region (allowing both algorithms fair footing).
-        assert sol_adaptive.branch.n_valid <= sol_fixed.branch.n_valid + 20, (
-            f"Adaptive ({sol_adaptive.branch.n_valid} points) should not use significantly more "
-            f"steps than fixed ({sol_fixed.branch.n_valid} points) in a difficult region"
+        # Adaptive should reach closer to the target p_end than fixed-step.
+        p_fixed_final = float(sol_fixed.branch.params[-1])
+        p_adaptive_final = float(sol_adaptive.branch.params[-1])
+        dist_fixed = abs(p_fixed_final - p_end)
+        dist_adaptive = abs(p_adaptive_final - p_end)
+
+        assert dist_adaptive < dist_fixed, (
+            f"Adaptive should reach closer to p_end={p_end} than fixed. "
+            f"Adaptive reached p={p_adaptive_final:.6f} (dist={dist_adaptive:.6f}), "
+            f"fixed reached p={p_fixed_final:.6f} (dist={dist_fixed:.6f})"
         )
 
     def test_disabled_adaptive_keeps_step_constant_after_success(self):
