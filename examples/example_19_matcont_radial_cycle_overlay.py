@@ -31,7 +31,10 @@ _repository_root = Path(__file__).resolve().parents[1]
 if str(_repository_root) not in sys.path:
     sys.path.insert(0, str(_repository_root))
 
+import jax
 import matplotlib.pyplot as plt
+
+jax.config.update("jax_enable_x64", True)
 
 from examples.MatCont.visualize import render_periodic_overlay
 

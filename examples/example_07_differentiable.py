@@ -30,6 +30,9 @@ Two demonstrations of what works today:
 # every result below can be checked against a closed-form answer.
 
 import jax
+
+jax.config.update("jax_enable_x64", True)
+
 import jax.numpy as jnp
 
 import jaxcont as jc

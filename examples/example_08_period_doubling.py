@@ -28,6 +28,10 @@ The orbit :math:`(x,y,w_1,w_2)=(\cos t,\sin t,0,0)` has period
 # module.  The bifurcation event itself is part of the top-level functional
 # API.
 
+import jax
+
+jax.config.update("jax_enable_x64", True)
+
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np

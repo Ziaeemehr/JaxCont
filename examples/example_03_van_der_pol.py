@@ -26,6 +26,10 @@ continued away from this degenerate point via periodic-orbit collocation.
 
 import os
 
+import jax
+
+jax.config.update("jax_enable_x64", True)
+
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
