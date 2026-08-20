@@ -1,6 +1,8 @@
 JaxCont documentation
 =====================
 
+Version |release|
+
 **Vectorize continuation sweeps with** ``jax.vmap`` **and differentiate fold
 locations with** ``jax.grad``.
 
