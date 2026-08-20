@@ -157,10 +157,6 @@ def profile_simple_continuation():
     print(f"Number of points computed: {n}")
     print(f"Time per point: {elapsed / n * 1000:.2f} ms")
 
-    # NOTE: the scan engine's convergence_info hardcodes newton_iters=0 (a
-    # pre-existing limitation -- per-point Newton iteration counts aren't
-    # tracked by pseudo_arclength_scan). This line is kept for structural
-    # parity with the pre-migration profiling report but will always print 0.
     newton_iters = [info["newton_iters"] for info in result._solution.convergence_info[:n]]
     print(f"Average Newton iterations: {jnp.mean(jnp.array(newton_iters)):.2f}")
 

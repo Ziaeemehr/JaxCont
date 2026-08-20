@@ -140,13 +140,23 @@ def _newton_correct(
 def _adapt_ds(ds_mag, iters, converged, ds_min, ds_max, adaptive=True):
     """Grow ds on fast convergence, shrink on slow/failed — branch-free.
 
-    When ``adaptive`` is false, a converged step keeps ``ds_mag`` unchanged
-    (the caller's requested fixed step) instead of growing/shrinking it. A
-    rejected step still backs off by the same ``shrink_fail`` factor as the
-    adaptive path either way, so a fixed-step run that cannot converge at
-    the requested size still terminates via the existing ``stalled``
-    (``ds <= ds_min``) condition below instead of retrying the same failing
-    step until ``max_steps`` runs out.
+    When ``adaptive`` is false, a converged step keeps the current ``ds_mag``
+    unchanged rather than growing it, instead of growing/shrinking it as the
+    adaptive path does. Note this means the step size can still be smaller
+    than the originally requested ``ds`` if an earlier step in this run
+    failed and shrank it -- there is no recovery back up to the requested
+    size, since that would reintroduce adaptation. A rejected step still
+    backs off by the same ``shrink_fail`` factor as the adaptive path either
+    way, so a fixed-step run that cannot converge at the requested size
+    still terminates via the existing ``stalled`` (``ds <= ds_min``)
+    condition below instead of retrying the same failing step until
+    ``max_steps`` runs out.
+
+    The returned value is always clipped to ``[ds_min, ds_max]`` regardless
+    of ``adaptive``, so a caller-requested ``ds`` outside that range is
+    silently clamped on the very first step even under ``adaptive=False``
+    (e.g. ``ContinuationPar(ds=0.5, adaptive=False)`` with the default
+    ``ds_max=0.1`` immediately clamps to ``0.1``).
     """
     grow = ds_mag * 1.5
     shrink_slow = ds_mag * 0.8

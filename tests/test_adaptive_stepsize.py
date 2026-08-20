@@ -118,7 +118,8 @@ class TestAdaptiveVsFixed:
         Test that a looser step-size-bound configuration can use fewer steps
         than a tighter one on a smooth problem, compared against a true
         fixed-step run (`adaptive=False`, wired in via
-        test_disabled_adaptive_keeps_step_constant_after_success above).
+        test_disabled_adaptive_keeps_step_constant_after_success in this
+        same test class).
         """
         prob = jc.bif_problem(smooth_rhs, u0=jnp.array([0.5]), p0=0.5)
 
@@ -168,7 +169,7 @@ class TestAdaptiveVsFixed:
         sol_adaptive = jc.continuation(
             prob, jc.PseudoArclength(), p_span=(0.5, p_end),
             settings=jc.ContinuationPar(
-                ds=0.05, ds_min=0.01, ds_max=0.1, adaptive=True,
+                ds=0.05, ds_min=0.001, ds_max=0.1, adaptive=True,
                 max_steps=100, newton_max_iter=30, compute_stability=False,
             ),
         )
@@ -234,14 +235,17 @@ class TestAdaptiveStepsizeAlgorithm:
         new_ds = _adapt_ds(jnp.array(0.03), 4, jnp.array(True), 0.001, 0.1)
         assert jnp.isclose(new_ds, 0.03), "Step size should remain stable for moderate convergence"
 
+    def test_adapt_stepsize_fixed_mode_still_shrinks_on_failure(self):
+        """Even with adaptive=False, a failed step still backs off (so a
+        run that can't converge at the fixed size still terminates via the
+        existing ds <= ds_min stall condition, rather than retrying forever)."""
+        new_ds = _adapt_ds(jnp.array(0.05), 20, jnp.array(False), 0.001, 0.1, False)
+        assert new_ds == pytest.approx(0.025), "failed step should still shrink by the same factor as the adaptive path"
+
     # NOTE: the pre-migration test_disabled_adaptive_returns_same is not
-    # ported. It tested PredictorCorrector.adapt_stepsize() honoring
-    # `adaptive_stepsize=False` to freeze ds. `_adapt_ds` (the scan engine's
-    # replacement) has no such toggle, and `ContinuationPar.adaptive` was
-    # already not wired into the scan engine before this migration (confirmed
-    # by grep: _run_scan never reads settings.adaptive). This is a
-    # pre-existing gap, not introduced here -- reintroducing an adaptive-off
-    # mode is separate feature work, not part of engine consolidation.
+    # ported as-is; coverage for `adaptive=False` freezing ds now lives in
+    # test_disabled_adaptive_keeps_step_constant_after_success (above, in
+    # TestAdaptiveVsFixed).
 
 
 # NOTE: the pre-migration TestStepsizeNearBifurcations.
