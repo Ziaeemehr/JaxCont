@@ -20,9 +20,35 @@ follow the branch; settings bound the computation; events request diagnostics.
 The return value is always a \texttt{ContinuationResult}.
 \end{block}
 \begin{alertblock}{Starting pair}
-Continuation begins from \texttt{(problem.u0, p\_span[0])}; supply a state that
-solves the model at that starting parameter.
+\texttt{p\_span[0]} must equal \texttt{problem.p0}. Before tangent
+construction, v0.4.0 Newton-corrects and validates \texttt{problem.u0} at that
+parameter; a bad seed is rejected instead of stored as a converged point.
 \end{alertblock}
+\end{frame}
+
+\begin{frame}{The v0.4.0 public surface has four composable layers}
+\small
+\centering
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{p{.18\textwidth}p{.55\textwidth}p{.18\textwidth}}
+\toprule
+Layer & Representative public names & Output \\
+\midrule
+Branches & \texttt{bif\_problem}, \texttt{periodic\_orbit\_problem},
+\texttt{continuation} & result tree \\
+Parameter curves & \texttt{fold\_curve\_problem},
+\texttt{hopf\_curve\_problem}, curve events & result tree \\
+Local roots & \texttt{fold\_point}, \texttt{hopf\_point}, direct
+CP/BT/GH/ZH/HH solvers & tuple + flag \\
+Analysis & stability, PRC/dPRC, visualization, versioned save/load & arrays / axes / NPZ \\
+\bottomrule
+\end{tabular}
+\vspace{4mm}
+\begin{block}{One branch engine, several scientific residuals}
+Equilibria, collocated cycles, and packed fold/Hopf curve systems all enter
+the same continuation contract. Their factories determine what the stored
+state means and which events are scientifically valid.
+\end{block}
 \end{frame}
 
 \begin{frame}{Read the scientific result as a small tree}
@@ -52,7 +78,9 @@ solves the model at that starting parameter.
 \vspace{3mm}
 \begin{block}{Translate names once}
 \texttt{stable} is the stability flag; event fields \texttt{u}, \texttt{p},
-and \texttt{info} are the event state, parameter, and diagnostics.
+and \texttt{info} are the event state, parameter, and diagnostics. The
+underlying \texttt{ContinuationSolution} also provides versioned
+\texttt{save}/\texttt{load} persistence.
 \end{block}
 \end{frame}
 
@@ -113,7 +141,7 @@ Users compose immutable problem, algorithm, settings, and event values.
 both return the same result contract to demos and downstream analysis.
 \end{block}
 \vfill
-{\scriptsize Carry fields, array-selection mechanics, and reassembly details are implementation-appendix material (Chapter 12).}
+{\scriptsize Carry fields, array-selection mechanics, and reassembly details are implementation-appendix material (Chapter 13).}
 \end{frame}
 
 \begin{frame}{``Scan'' names the engine, not the loop primitive}

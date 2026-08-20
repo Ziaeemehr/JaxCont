@@ -96,7 +96,8 @@ system. Check \texttt{converged} before interpreting the returned data.
 \column{.49\textwidth}
 \begin{alertblock}{Scope boundary}
 This is point refinement, not continuation of a fold/Hopf curve in two
-parameters. It does not trace the curves meeting at the point.
+parameters. The point solver itself does not trace a curve; Chapter 8 shows
+how \texttt{fold\_curve\_problem} and \texttt{hopf\_curve\_problem} do.
 \end{alertblock}
 \end{columns}
 \end{frame}
@@ -185,7 +186,9 @@ For HH, both interfaces still require keyword-only \texttt{seed\_b}.
 \end{enumerate}
 \vspace{3mm}
 \begin{alertblock}{Capability boundary}
-JaxCont does not automatically continue the fold or Hopf curves through
-these points, switch branches there, or construct a two-parameter diagram.
+These direct solvers do not automatically switch branches or discover a
+curve. Given a checked fold/Hopf seed, JaxCont v0.4.0 can trace the
+corresponding equilibrium bifurcation curve and construct its parameter-plane
+diagram; that is Chapter 8's separate workflow.
 \end{alertblock}
 \end{frame}

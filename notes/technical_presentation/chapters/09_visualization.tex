@@ -16,6 +16,9 @@ View & Answers & Does not establish\\
 Branch diagram
   & How solutions vary with parameter
   & Basins or full flow geometry\\
+Two-parameter diagram
+  & How fold/Hopf loci move in a physical parameter plane
+  & Branch switching or periodic codim-2 curves\\
 Eigenvalue/Floquet view
   & How local stability changes
   & Nonlinear long-time behavior\\
@@ -62,6 +65,9 @@ State projections
 Phase sensitivity
   & \texttt{plot\_prc}
   & \mainbadge\\
+Parameter planes
+  & \texttt{plot\_two\_parameter\_diagram}
+  & \releasedbadge\\
 \bottomrule
 \end{tabular}
 \vspace{3mm}
@@ -70,6 +76,37 @@ Phase sensitivity
 helper directly when the question needs only nullclines, flow, equilibria, or
 a trajectory.
 \end{block}
+\end{frame}
+
+\begin{frame}[fragile]{Compose a physical two-parameter diagram}
+\small
+\begin{lstlisting}
+ax = jc.plot_two_parameter_diagram(
+    [(fold_result, "fold"),
+     (hopf_result, "hopf")],
+    free=1,
+    labels=["LP curve", "H curve"],
+    annotate=True,
+)
+\end{lstlisting}
+\begin{columns}[T,onlytextwidth]
+\column{.47\textwidth}
+\begin{block}{Input contract}
+Each pair supplies a curve result and its explicit kind. \texttt{free} must
+match the factories that produced the curves.
+\end{block}
+\column{.49\textwidth}
+\begin{block}{Reconstructed axes}
+The horizontal coordinate is the stored free parameter; the vertical
+coordinate is decoded from each packed fold/Hopf state. Refined events use
+the physical vector stored in \texttt{hit.info["p"]}.
+\end{block}
+\end{columns}
+\begin{alertblock}{A fourth distinct view}
+This is not a one-parameter branch diagram, a projection of state variables,
+or a frozen-parameter phase plane. It is bifurcation geometry in parameter
+space.
+\end{alertblock}
 \end{frame}
 
 \begin{frame}{From model data to an interpretable figure}

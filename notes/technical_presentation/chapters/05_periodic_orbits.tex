@@ -232,6 +232,30 @@ torus.}
 \end{columns}
 \end{frame}
 
+\begin{frame}{Refinement returns to the periodic-orbit manifold}
+\small
+\centering
+\begin{tikzpicture}[node distance=5mm,>=Latex,
+ stagebox/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+              minimum width=102mm,minimum height=7.5mm,align=center}]
+  \node[stagebox] (bracket) {bracket a multiplier crossing between two accepted cycles};
+  \node[stagebox,below=of bracket] (interpolate) {interpolate state and parameter to a midpoint candidate};
+  \node[stagebox,below=of interpolate,draw=JaxOrange,fill=JaxOrange!9] (correct)
+    {Newton-correct the collocation residual at the candidate parameter};
+  \node[stagebox,below=of correct,draw=JaxGreen,fill=JaxGreen!10] (evaluate)
+    {evaluate Floquet multipliers only on the corrected periodic orbit};
+  \draw[->,very thick,JaxTeal] (bracket)--(interpolate);
+  \draw[->,very thick,JaxTeal] (interpolate)--(correct);
+  \draw[->,very thick,JaxTeal] (correct)--(evaluate);
+\end{tikzpicture}
+\vspace{2mm}
+\begin{alertblock}{v0.4.0 correctness change}
+PD/NS refinement no longer treats a linear interpolation of two cycles as if
+it automatically solved the nonlinear collocation equations. Failed midpoint
+correction invalidates that refinement attempt.
+\end{alertblock}
+\end{frame}
+
 \begin{frame}{Example 08: a period-doubling crossing}
 \centering
 \includegraphics[width=.84\textwidth]{example_08_period_doubling.png}
@@ -259,7 +283,7 @@ $\alpha=-4.60\times10^{-7}$ (error $4.60\times10^{-7}$).}
 \begin{frame}{Periodic-orbit numerics: practical boundaries}
 \begin{itemize}
   \item \textbf{Fixed mesh:} \texttt{ntst} and \texttt{ncol} fix array shapes;
-        v0.3.1 does not redistribute the mesh adaptively.
+        v0.4.0 does not redistribute the mesh adaptively.
   \item \textbf{Large residual:} collocation expands the unknown, so dense
         Newton and eigenvalue solves become expensive quickly.
   \item \textbf{Float32 tolerance:} examples use \texttt{newton\_tol} around
@@ -290,6 +314,7 @@ array shapes and compilation. This makes the static/traced split explicit.
 \begin{alertblock}{Scope boundary}
 JaxCont continues a supplied/refined periodic orbit. Automatic cycle
 discovery from a Hopf point, general BVP continuation, and connecting-orbit
-continuation are not implemented.
+continuation are not implemented. LPC/PD/NS detection remains experimental
+until the strict \texttt{MC-LC-002} comparison passes.
 \end{alertblock}
 \end{frame}

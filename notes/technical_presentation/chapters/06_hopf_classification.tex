@@ -274,15 +274,16 @@ Tune the threshold in those units.
 \begin{itemize}
   \item no automatic branch switching to a periodic orbit;
   \item no automatic cycle discovery from the Hopf point;
-  \item no two-parameter Hopf-curve continuation;
+  \item Hopf-curve continuation is a separate seeded workflow (Chapter 8);
   \item no claim about global cycle behavior.
 \end{itemize}
 \end{alertblock}
 \end{columns}
 \begin{block}{If $l_1\approx0$}
 Treat the result as a degenerate/generalized-Hopf candidate. Supply a
-two-parameter guess to the direct GH point solver discussed next; that solver
-refines one point and still does not continue a two-parameter curve.
+two-parameter guess to the direct GH point solver discussed next. That solver
+refines one point; a checked Hopf seed can then initialize Chapter 8's separate
+curve-continuation workflow.
 \end{block}
 \end{frame}
 

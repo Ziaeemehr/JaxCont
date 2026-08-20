@@ -89,7 +89,8 @@ meaning of ``dPRC'' must be aligned before comparing results.
   \item Continuation follows connected roots; it is neither time simulation nor disconnected-branch discovery.
   \item Pseudo-arclength can pass ordinary folds by correcting state and parameter together.
   \item Equilibrium eigenvalues and periodic Floquet multipliers answer different stability questions.
-  \item Hopf and codimension-two refinements classify supplied candidates; they do not switch branches or trace two-parameter curves.
+  \item Direct refinements classify supplied candidates; seeded fold/Hopf
+        factories trace equilibrium event curves but do not switch branches.
   \item Fixed buffers make whole-branch JIT and batching possible; read eager results with \texttt{n\_valid} and traced results with their mask/count.
   \item Begin with a trustworthy seed, inspect numerical health, repeat, then seek independent evidence.
 \end{enumerate}

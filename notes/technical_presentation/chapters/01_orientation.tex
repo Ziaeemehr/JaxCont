@@ -1,24 +1,24 @@
 \chapterdivider{1}{Orientation and application map}
   {What can JaxCont compute, and where should a newcomer begin?}
-  {Featured application: one model viewed as branches, cycles, phase geometry, and phase sensitivity}
+  {Featured application: one model viewed as branches, parameter curves, cycles, phase geometry, and phase sensitivity}
 
-\begin{frame}{How to read ``v0.3.1+''}
+\begin{frame}{How to read ``v0.4.0''}
 \small
 \begin{columns}[T,onlytextwidth]
 \column{.30\textwidth}
 \releasedbadge
 \column{.67\textwidth}
-Continuation, periodic orbits, Floquet events, Hopf classification,
-direct codim-2 solvers, phase planes, and the validation suite.
+Continuation, periodic orbits, Floquet events, Hopf classification, direct
+codim-2 solvers, phase planes, PRC/dPRC, and the validation suite.
 \end{columns}
 
 \vspace{4mm}
 \begin{columns}[T,onlytextwidth]
 \column{.30\textwidth}
-\mainbadge
+\releasedbadge
 \column{.67\textwidth}
-\texttt{prc\_curve}, \texttt{branch\_prc}, \texttt{dprc\_curve},
-\texttt{plot\_prc}, and Examples 13--14.
+Fold/Hopf two-parameter continuation, their codimension-two events,
+\texttt{plot\_two\_parameter\_diagram}, and Examples 15--20.
 \end{columns}
 
 \vspace{4mm}
@@ -26,25 +26,24 @@ direct codim-2 solvers, phase planes, and the validation suite.
 \column{.30\textwidth}
 \futurebadge
 \column{.67\textwidth}
-Branch switching, two-parameter curve continuation, and general BVP or
-connecting-orbit workflows.
+Branch switching, general BVP and connecting-orbit workflows, and
+periodic-orbit codimension-two curve continuation.
 \end{columns}
 
 \vfill
-\begin{alertblock}{Read the label literally}
-``+'' means the published v0.3.1 release plus current-main features intended
-for v0.4.\par
-``+'' is a source-status marker, not a released version number.
+\begin{alertblock}{Release scope}
+The green badges identify capabilities included in v0.4.0. Red badges mark
+workflows that remain outside the supported surface.
 \end{alertblock}
 \end{frame}
 
 \begin{frame}{Start from the scientific question}
 \centering
-\begin{tikzpicture}[node distance=3.2mm and 8mm,>=Latex,
+\begin{tikzpicture}[node distance=1.6mm and 8mm,>=Latex,
  question/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
-   minimum width=66mm,minimum height=8mm,align=left,font=\small},
+   minimum width=66mm,minimum height=7mm,align=left,font=\small},
  method/.style={rounded corners,draw=JaxTeal,thick,fill=JaxTeal!9,
-   minimum width=56mm,minimum height=8mm,align=center,font=\small}]
+   minimum width=56mm,minimum height=7mm,align=center,font=\small}]
 \node[question] (q1) {Where do steady states exist?};
 \node[method,right=of q1] (m1) {equilibrium continuation};
 \node[question,below=of q1] (q2) {Where do oscillations exist?};
@@ -53,9 +52,11 @@ for v0.4.\par
 \node[method,right=of q3] (m3) {eigenvalues, Floquet multipliers, events};
 \node[question,below=of q3] (q4) {What kind of local organizing point is this?};
 \node[method,right=of q4] (m4) {Hopf $l_1$ and direct codim-2 refinement};
-\node[question,below=of q4] (q5) {How does an oscillator respond to perturbations?};
-\node[method,right=of q5] (m5) {iPRC and dPRC};
-\foreach \i in {1,...,5}{\draw[->,thick] (q\i)--(m\i);}
+\node[question,below=of q4] (q5) {How does an event move in a parameter plane?};
+\node[method,right=of q5] (m5) {fold/Hopf curve continuation};
+\node[question,below=of q5] (q6) {How does an oscillator respond to perturbations?};
+\node[method,right=of q6] (m6) {iPRC and dPRC};
+\foreach \i in {1,...,6}{\draw[->,thick] (q\i)--(m\i);}
 \end{tikzpicture}
 
 \vfill
@@ -74,9 +75,9 @@ continuation problem, diagnostic, or sensitivity calculation.
 
 \Large 1, 2
 
-\normalsize selected 3, 5, 8
+\normalsize selected 3, 5, 8--9
 
-\Large 11, 12
+\Large 12, 13
 
 \vspace{2mm}
 \small Intuition, representative outputs, workflow, and boundaries.
@@ -87,7 +88,7 @@ continuation problem, diagnostic, or sensitivity calculation.
 \centering
 \small Chapters
 
-\Large 2--7, 10
+\Large 2--8, 11
 
 \vspace{8.4mm}
 \small Algorithms, stability, local refinements, and validation.
@@ -98,7 +99,7 @@ continuation problem, diagnostic, or sensitivity calculation.
 \centering
 \small Chapters
 
-\Large 1--12
+\Large 1--13
 
 \vspace{8.4mm}
 \small The full narrative, including applications and guided workflows.
@@ -107,7 +108,7 @@ continuation problem, diagnostic, or sensitivity calculation.
 
 \vfill
 \centering
-\textcolor{JaxTeal}{Chapter 12 remains available as the scope-and-glossary reference.}
+\textcolor{JaxTeal}{Chapter 13 remains available as the release-integrity, scope, and glossary reference.}
 \end{frame}
 
 \begin{frame}{What you should be able to explain afterwards}
@@ -126,10 +127,11 @@ continuation problem, diagnostic, or sensitivity calculation.
 \begin{enumerate}
   \setcounter{enumi}{5}
   \item State the purpose and limits of CP, BT, GH, ZH, and HH solvers.
-  \item Relate bifurcation diagrams to 2D phase planes.
+  \item Trace fold/Hopf curves and interpret codimension-two curve events.
+  \item Distinguish parameter-plane diagrams, branch plots, and 2D phase planes.
   \item Explain iPRCs and their parameter derivatives.
   \item Run examples, inspect outputs, and choose a validation strategy.
-  \item State the boundaries: no branch switching or two-parameter continuation.
+  \item State the boundaries: no branch switching or periodic codim-2 curves.
 \end{enumerate}
 \end{columns}
 
