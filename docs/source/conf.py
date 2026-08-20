@@ -62,8 +62,8 @@ sphinx_gallery_conf = {
     # this they turn into title-less gallery pages and break the
     # `fail_on_warning` build.
     'ignore_pattern': (
-        r'(__init__|check_installation|profile_continuation'
-        r'|artifacts|compare|registry|run_validation|validation|visualize)\.py'
+        r'(^|/)(__init__|check_installation|profile_continuation'
+        r'|artifacts|compare|registry|run_validation|validation|visualize)\.py$'
     ),
     'filename_pattern': r'/(example_|demo_)',
     'within_subsection_order': 'FileNameSortKey',

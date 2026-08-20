@@ -1,6 +1,6 @@
 # Validation against MatCont
 
-**Validation snapshot (5 August 2026): six of the seven supported cases pass.**
+**Validation snapshot (20 August 2026): seven of the eight supported cases pass.**
 
 | Case | What is checked | Result |
 | --- | --- | --- |
@@ -11,8 +11,9 @@
 | `MC-C2-001` | Direct CP/BT/GH/ZH/HH point solvers, sensitivities, and normal forms | PASS |
 | `MC-LC-001` | Radial periodic orbit radius, period, collocation residual, multipliers, and stability | PASS |
 | `MC-LC-002` | `torBPC1` limit-cycle LPC/NS/PD locations, periods, extrema, and multipliers | FAIL |
+| `MC-PRC-001` | adaptx iPRC curve against MatCont's PRC/Input processor output | PASS |
 
-`MC-LC-002` is the current limitation: event-location errors remain small, but JaxCont is missing the LPC and PD event labels, and its maximum critical-multiplier error is approximately `1.10e-2`.
+`MC-LC-002` is the current limitation: event-location errors remain small, but JaxCont is missing the LPC and PD event labels, and its maximum critical-multiplier error is approximately `1.13e-2`.
 
 Because this comparison remains an open, tracked failure, treat JaxCont's fold-of-cycles, period-doubling, and Neimark-Sacker detection as experimental rather than fully validated until it closes.
 

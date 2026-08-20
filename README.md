@@ -47,7 +47,7 @@ more cases, including known limitations, in the <a href="examples/MatCont/README
 
 ## Installation
 
-JaxCont requires Python 3.9 or newer.
+JaxCont requires Python 3.11 or newer.
 
 ```bash
 pip install jaxcont

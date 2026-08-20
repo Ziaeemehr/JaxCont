@@ -10,12 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.0] - 2026-08-20
 
 ### Added
+- Two-parameter continuation of equilibrium fold and Hopf curves via
+  `fold_curve_problem` and `hopf_curve_problem`, including codimension-two
+  events detected along those curves and `plot_two_parameter_diagram`.
+- Infinitesimal phase-response curves (`prc_curve` and `branch_prc`) and
+  parameter-derivative sensitivity (`dprc_curve`), plus `plot_prc` and
+  independent/MatCont validation coverage.
 - MatCont visual comparison gallery: five new example scripts (`example_16`-`example_20`)
   overlaying JaxCont branches directly on reviewed MatCont 7.6 reference data for the cubic
   fold, Van der Pol Hopf, adaptive-control Hopf, radial periodic orbit, and torBPC cases, plus
   a featured comparison figure in the README.
 
 ### Changed
+- The deprecated `plot_phase_portrait` compatibility alias is retained for one
+  more release and is now scheduled for removal in v0.5.0.
 - **Breaking:** `requires-python` narrowed from `>=3.9` to `>=3.11`. `lyapunov_coefficient`
   relies on JAX's SVD-JVP rule for `full_matrices=True`, which was only implemented around
   jax 0.9.0; `jaxlib` never published a `cp310` or `cp39` wheel at or above that version, so
@@ -107,7 +115,7 @@ top of v0.2.0's periodic-orbit continuation, plus 2D phase-plane visualization.
 ### Changed
 - `plot_phase_portrait` is renamed to `plot_branch_states`, which describes what it does:
   scatter branch points in state space. The old name remains as a deprecated alias and will be
-  removed in v0.4.0.
+  removed in v0.5.0 (its original v0.4.0 removal schedule was deferred).
 
 ### Fixed
 - `bifurcations/taxonomy.py`'s `CP`/`BT`/`ZH`/`HH`/`GH` labels now have real implementations
@@ -205,6 +213,7 @@ continuation.
 - Package structure
 - Basic framework design
 
+[0.4.0]: https://github.com/Ziaeemehr/JaxCont/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/Ziaeemehr/JaxCont/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Ziaeemehr/JaxCont/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Ziaeemehr/JaxCont/compare/v0.1.0...v0.2.0

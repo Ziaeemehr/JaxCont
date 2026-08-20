@@ -6,9 +6,10 @@ Requirements
 
 JaxCont requires:
 
-- Python >= 3.9
-- JAX >= 0.3.0
-- NumPy >= 1.21.0
+- Python >= 3.11
+- JAX >= 0.9.0
+- JAXlib >= 0.9.0
+- NumPy >= 1.22.0
 - SciPy >= 1.7.0
 - Matplotlib >= 3.5.0
 
@@ -69,7 +70,7 @@ Create a dedicated conda environment:
 
 .. code-block:: bash
 
-   conda create -n jaxcont python=3.9
+   conda create -n jaxcont python=3.11
    conda activate jaxcont
    pip install jaxcont
 
@@ -116,6 +117,6 @@ If you have version conflicts, create a fresh environment:
 
 .. code-block:: bash
 
-   conda create -n jaxcont-clean python=3.9
+   conda create -n jaxcont-clean python=3.11
    conda activate jaxcont-clean
    pip install jaxcont

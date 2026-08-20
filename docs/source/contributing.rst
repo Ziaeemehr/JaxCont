@@ -29,7 +29,7 @@ Getting Started
 
    .. code-block:: bash
 
-      conda create -n jaxcont-dev python=3.9
+      conda create -n jaxcont-dev python=3.11
       conda activate jaxcont-dev
       pip install -e ".[dev]"
 

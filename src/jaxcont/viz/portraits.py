@@ -92,10 +92,10 @@ def plot_phase_portrait(*args, **kwargs) -> plt.Figure:
 
     Renamed in v0.3.0: this function scatters branch points in state space, so
     the old name misdescribed it and collided with the real phase-plane plots
-    in :mod:`jaxcont.viz.phase_plane`. Scheduled for removal in v0.4.0.
+    in :mod:`jaxcont.viz.phase_plane`. Scheduled for removal in v0.5.0.
     """
     warnings.warn(
-        "plot_phase_portrait is deprecated and will be removed in v0.4.0; use "
+        "plot_phase_portrait is deprecated and will be removed in v0.5.0; use "
         "plot_branch_states instead. For nullclines and vector fields of a 2D "
         "system, see jaxcont.viz.plot_phase_plane.",
         DeprecationWarning,

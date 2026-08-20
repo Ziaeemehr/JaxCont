@@ -108,7 +108,14 @@ missing-event list is therefore LPC and PD. JaxCont also exceeds the
 critical-multiplier tolerance at NS. The CLI exits nonzero for this case. Do
 not hide that result by changing tolerances.
 
-## Unsupported matrix
+## Validation gaps and unsupported matrix
+
+JaxCont v0.4.0 supports equilibrium fold and Hopf curves through
+`fold_curve_problem` and `hopf_curve_problem`. The MatCont wrappers
+`US-C2-LP-001` and `US-C2-H-001` remain in the registry as validation gaps:
+the suite does not yet pair those MatCont runs with JaxCont producers and
+reviewed comparison artifacts. They must not be read as library capability
+gaps.
 
 These MatCont-only wrappers live in `matlab/unsupported`. They are excluded by
 default, and explicitly requesting one without `--include-unsupported` is an
@@ -120,8 +127,6 @@ selecting one without `--dry-run` exits nonzero with `NON_EXECUTABLE_TEMPLATE`.
 | Registry case | MatCont capability not yet supported by JaxCont |
 |---|---|
 | `US-BP-001` | Bratu equilibrium branch switching |
-| `US-C2-LP-001` | Two-parameter fold curves |
-| `US-C2-H-001` | Two-parameter Hopf curves |
 | `US-C2-PD-001` | Two-parameter period-doubling curves |
 | `US-C2-LPC-001` | Two-parameter limit-point-of-cycles curves |
 | `US-C2-NS-001` | Two-parameter Neimark-Sacker curves |
@@ -130,7 +135,9 @@ selecting one without `--dry-run` exits nonzero with `NON_EXECUTABLE_TEMPLATE`.
 | `US-HET-001` | Heteroclinic setup template requiring problem-specific endpoint seeds (non-executable) |
 
 Direct CP, BT, GH, ZH and HH point solvers are supported and are therefore not
-in this table. Continuation of their two-parameter curves remains unsupported.
+in this table. Fold and Hopf curves, including their supported codimension-two
+events, are also available. Period-doubling, limit-point-of-cycles, and
+Neimark-Sacker curve continuation remain unsupported.
 
 ## Layout and comparison policy
 
