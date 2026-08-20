@@ -1,0 +1,6 @@
+.sidebar-version-badge {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--pst-color-text-muted);
+  margin: -0.5rem 0 0.5rem;
+}

@@ -141,6 +141,21 @@ html_theme = 'sphinx_book_theme'
 # run the examples, but breaks fail_on_warning builds on a fresh checkout
 # (e.g. Read the Docs' `git clone --depth 1`), where it never exists.
 html_static_path = ['_static']
+html_css_files = ['custom.css']
+
+# Sphinx-book-theme's default sidebar stack is navbar-logo, icon-links,
+# search-button-field, sbt-sidebar-nav (see its theme.conf). Insert a small
+# version-badge.html (docs/source/_templates/) right after the logo so the
+# installed version reads directly under it, upper-left.
+html_sidebars = {
+    '**': [
+        'navbar-logo.html',
+        'version-badge.html',
+        'icon-links.html',
+        'search-button-field.html',
+        'sbt-sidebar-nav.html',
+    ],
+}
 
 # Theme options (matches the sibling lyapax project's docs style)
 html_theme_options = {
