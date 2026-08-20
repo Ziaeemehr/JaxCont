@@ -23,3 +23,315 @@ A direct solver can refine a candidate organizer. A fold/Hopf curve then shows
 how the surrounding local event moves through the parameter plane.
 \end{alertblock}
 \end{frame}
+
+\begin{frame}{One physical parameter becomes part of the state}
+\small
+For an equilibrium model $f(u,p_0,p_1)=0$, select one component
+$q=p_{\rm free}$ as the continuation coordinate. The other physical
+parameter is solved inside an extended state.
+\vspace{3mm}
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Fold curve}
+\[
+X_{\rm fold}=(u,p_{\rm fixed},v),
+\qquad q=p_{\rm free}.
+\]
+The residual contains $f=0$, $f_u v=0$, and a normalization for the fold
+null vector $v$.
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Hopf curve}
+\[
+X_{\rm H}=(u,p_{\rm fixed},q_1,q_2,\omega).
+\]
+The residual contains $f=0$, the real/imaginary eigenvector equations, and
+phase/normalization constraints.
+\end{block}
+\end{columns}
+\vfill
+\begin{alertblock}{The reuse is exact}
+To the continuation engine this is again a root $F(X,q)=0$ in one scalar
+parameter. The same fixed-buffer pseudo-arclength machinery can trace it.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Choose which parameter moves}
+\centering
+\begin{tikzpicture}[node distance=6mm and 8mm,>=Latex,
+ box/.style={rounded corners,draw=JaxBlue,thick,fill=SoftBlue,
+             minimum height=9mm,minimum width=42mm,align=center},
+ result/.style={rounded corners,draw=JaxGreen,thick,fill=JaxGreen!10,
+                minimum height=9mm,minimum width=48mm,align=center}]
+  \node[box] (physical) {$p=(p_0,p_1)$\\two physical parameters};
+  \node[box,right=of physical] (choice) {\texttt{free=1}\\continue $q=p_1$};
+  \node[result,right=of choice] (packed) {$p_0$ solved inside $X$\\$p_1$ stored as branch parameter};
+  \draw[->,very thick,JaxTeal] (physical)--(choice);
+  \draw[->,very thick,JaxTeal] (choice)--(packed);
+\end{tikzpicture}
+\vspace{5mm}
+\begin{block}{Two values must agree}
+If the factory receives \texttt{p\_guess = [p0, p1]}, then
+\texttt{continuation(..., p\_span=(p1, end))} must start at
+\texttt{p\_guess[free]}. A mismatch is rejected instead of silently moving
+the initial point.
+\end{block}
+\begin{alertblock}{Shape and index contract}
+\texttt{p\_guess.shape == (2,)} and \texttt{free} is either 0 or 1. These
+factories describe codimension-two parameter geometry, not an arbitrary
+number of free parameters.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}[fragile]{Build and continue a fold curve}
+\small
+\begin{lstlisting}
+prob = jc.fold_curve_problem(
+    rhs,
+    u_guess,
+    jnp.array([p0_guess, p1_guess]),
+    free=1,
+    args=args,
+)
+
+result = jc.continuation(
+    prob,
+    p_span=(p1_guess, p1_end),
+    settings=jc.ContinuationPar(
+        compute_stability=False, newton_tol=1e-5
+    ),
+    events=[jc.BogdanovTakens(
+        raw_f=rhs, free=1, curve="fold", args=args
+    )],
+)
+\end{lstlisting}
+\begin{block}{Two Newton roles}
+The factory first refines the guess with the fold extended system. During the
+sweep, the ordinary continuation corrector advances the already packed curve
+state. Both convergence checks matter.
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{The Hopf-curve factory has the same outer contract}
+\small
+\begin{lstlisting}
+prob = jc.hopf_curve_problem(
+    rhs, u_guess, p_guess, free=0, args=args
+)
+
+result = jc.continuation(
+    prob,
+    p_span=(p_guess[0], p0_end),
+    settings=jc.ContinuationPar(
+        compute_stability=False, newton_tol=1e-5
+    ),
+    events=[
+        jc.GeneralizedHopf(raw_f=rhs, free=0, args=args),
+        jc.ZeroHopf(raw_f=rhs, free=0, curve="hopf",
+                    args=args),
+    ],
+)
+\end{lstlisting}
+\begin{alertblock}{Why \texttt{compute\_stability=False}?}
+The stored state is an extended fold/Hopf system, not the original physical
+state. Curve events evaluate the original Jacobian through \texttt{raw\_f};
+generic stability of the extended state would answer the wrong question.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Which codimension-two events live on which curve?}
+\small
+\centering
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{p{.17\textwidth}p{.28\textwidth}p{.38\textwidth}}
+\toprule
+Curve & Available event classes & Additional condition detected \\
+\midrule
+Fold & CP, BT, ZH & fold coefficient $a=0$; a second zero mode; or an
+additional imaginary pair \\
+Hopf & BT, GH, ZH, HH & $\omega\to0$; $l_1=0$; an additional zero mode; or a
+second distinct imaginary pair \\
+\bottomrule
+\end{tabular}
+\vspace{4mm}
+\begin{block}{Events decode physical coordinates}
+Every curve event carries the original \texttt{raw\_f}, the \texttt{free}
+index, optional model \texttt{args}, and an explicit \texttt{curve} kind.
+Refined hits store the physical parameter vector in \texttt{hit.info["p"]}.
+\end{block}
+\begin{alertblock}{Do not infer the curve type from a branch point}
+The generic event protocol sees packed arrays, not problem metadata. Explicit
+curve identity prevents applying an equilibrium test to the wrong residual.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Discard the condition that defines the curve}
+\small
+\begin{columns}[T,onlytextwidth]
+\column{.47\textwidth}
+\begin{block}{Along a fold curve}
+One eigenvalue is pinned at zero everywhere. Detecting BT or ZH begins by
+removing the entry nearest zero, then asking whether an \emph{additional}
+real-zero or imaginary-pair condition appears.
+\end{block}
+\column{.49\textwidth}
+\begin{block}{Along a Hopf curve}
+The pair nearest $\pm i\omega$ is pinned to the imaginary axis everywhere.
+Detecting ZH or HH removes that pair before searching the remaining spectrum.
+Near BT, both collapsing entries nearest zero must be removed.
+\end{block}
+\end{columns}
+\vspace{4mm}
+\begin{alertblock}{Otherwise every point looks special}
+The defining zero mode or imaginary pair contains no new codimension-two
+information. Counting it again creates false candidates rather than events.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Example 15: an exact Bogdanov--Takens geometry}
+\small
+For shifted variables $x=X-5$, $y=Y-2$, define
+\[
+x'=y,\qquad
+y'=\beta_1+\beta_2x+x^2+xy,
+\]
+with $\beta_1=p_0-3$ and $\beta_2=p_1+1$.
+\begin{columns}[T,onlytextwidth]
+\column{.47\textwidth}
+\begin{block}{Exact fold curve}
+At an equilibrium $y=0$. The fold conditions give
+\[
+p_0=3+\frac{(p_1+1)^2}{4}.
+\]
+The double-zero point is exactly $(p_0,p_1)=(3,-1)$.
+\end{block}
+\column{.49\textwidth}
+\begin{block}{Numerical experiment}
+Start from $(3.25,-2)$, trace with \texttt{free=1}, and attach a
+\texttt{BogdanovTakens(..., curve="fold")} event. The refined hit can be
+compared directly with the exact organizer.
+\end{block}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Example 15: read the parameter-plane diagram}
+\centering
+\small
+\begin{tikzpicture}[x=2.2cm,y=1.1cm,>=Latex]
+  \draw[->] (-2.25,0.0)--(.45,0.0) node[right] {$p_1$ (free)};
+  \draw[->] (-2.1,-.2)--(-2.1,2.45) node[above] {$p_0$ (solved)};
+  \draw[JaxGreen,very thick,domain=-2:0.25,samples=80]
+    plot (\x,{3 + (\x+1)*(\x+1)/4 - 2.75});
+  \filldraw[JaxOrange] (-1,.25) circle (2.7pt)
+    node[above right] {BT: $(p_1,p_0)=(-1,3)$};
+  \node[JaxGreen] at (-.05,1.15) {fold curve};
+\end{tikzpicture}
+\vspace{1mm}
+\begin{block}{Plot the reconstructed physical coordinates}
+\centering
+\texttt{jc.plot\_two\_parameter\_diagram([(result, "fold")], free=1)}
+\end{block}
+\begin{alertblock}{Axes follow \texttt{free}}
+The horizontal axis is $p_{\rm free}$ and the vertical axis is the parameter
+decoded from the packed state. Pass the same \texttt{free} used by the factory.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}[fragile]{Batch curves without rebuilding the factory}
+\small
+\begin{lstlisting}
+base = jc.fold_curve_problem(
+    rhs_shiftable, u_guess, p_guess,
+    free=1, args=0.0,
+)
+
+def endpoint(shift):
+    out = jc.continuation(
+        base.at(args=shift), p_span=(-2.0, 0.0),
+        settings=settings,
+    )
+    last = jnp.sum(out.branch.valid) - 1
+    return jnp.take(out.branch.states, last, axis=0)[2]
+
+endpoints = jax.vmap(endpoint)(shifts)
+\end{lstlisting}
+\begin{alertblock}{Two transformation rules}
+Build the seed-refining factory outside \texttt{vmap}; carry swept values
+through \texttt{args}. In traced output, use \texttt{Branch.valid} rather than
+reading padded buffer slots as real curve points.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}[fragile]{Differentiate a codimension-two location}
+\small
+\begin{lstlisting}
+def bt_p0(shift):
+    p_star = jc.bogdanov_takens_parameters(
+        rhs_shiftable, u_guess, p_guess,
+        args=shift,
+    )
+    return p_star[0]
+
+sensitivity = jax.grad(bt_p0)(0.0)
+\end{lstlisting}
+\begin{columns}[T,onlytextwidth]
+\column{.47\textwidth}
+\begin{block}{What is differentiated?}
+The converged extended-system equation is differentiated by the implicit
+function theorem. Solver iterations are not replayed in reverse.
+\end{block}
+\column{.49\textwidth}
+\begin{alertblock}{Check before composing}
+First call and verify the corresponding \texttt{bogdanov\_takens\_point}
+result. The parameter-only wrapper omits the convergence flag to remain
+grad-ready.
+\end{alertblock}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Practical limits and restart strategy}
+\small
+\begin{columns}[T,onlytextwidth]
+\column{.47\textwidth}
+\begin{block}{Supported in v0.4.0}
+\begin{itemize}
+  \item equilibrium fold and Hopf curves;
+  \item CP/BT/GH/ZH/HH events where applicable;
+  \item parameter-plane plots;
+  \item fixed-shape JIT and batching;
+  \item implicit sensitivities of direct organizers.
+\end{itemize}
+\end{block}
+\column{.49\textwidth}
+\begin{alertblock}{Boundaries}
+\begin{itemize}
+  \item no PD/LPC/NS periodic-orbit curves;
+  \item no branch switching at an organizer;
+  \item no automatic discovery of disconnected curves;
+  \item no adaptive Hopf eigenvector re-anchoring inside a traced buffer.
+\end{itemize}
+\end{alertblock}
+\end{columns}
+\vspace{2mm}
+If the Hopf eigenvector rotates toward orthogonality with its initial anchor,
+restart from a later checked point with a fresh local anchor.
+\end{frame}
+
+\begin{frame}{What to remember}
+\begin{enumerate}
+  \item A two-parameter fold/Hopf curve is an extended root system continued
+        in one selected physical parameter.
+  \item The factory refines the seed; \texttt{p\_span[0]} must match the
+        selected component of the supplied parameter pair.
+  \item Curve events remove the eigenvalue condition already pinned by the
+        curve before testing for an additional degeneracy.
+  \item Build factories outside JAX transforms, pass sweeps through
+        \texttt{args}, and respect traced validity masks.
+\end{enumerate}
+\vfill
+\begin{alertblock}{Scientific interpretation}
+The curve organizes local equilibrium bifurcations in the chosen parameter
+plane. It does not by itself construct the branches or cycles that emanate
+from those events.
+\end{alertblock}
+\end{frame}
