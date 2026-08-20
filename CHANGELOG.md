@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Fixed, below -- so no working archives from it exist to migrate).
 
 ### Fixed
+- `BoundaryValueProblem`'s class docstring now states up front that it is an unimplemented
+  placeholder (`solve_collocation`/`solve_shooting` always raise `NotImplementedError`),
+  instead of only saying so in an inline comment inside each method body.
 - The continuation seed (`u0`) is now Newton-corrected/validated before entering the branch,
   instead of being accepted unconditionally.
 - `PeriodDoubling`/`NeimarkSacker` event refinement now Newton-corrects interpolated periodic
