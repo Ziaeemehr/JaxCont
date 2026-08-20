@@ -7,12 +7,13 @@ locations with** ``jax.grad``.
 JaxCont is a continuation and bifurcation-analysis library whose default
 pseudo-arclength engine runs the whole continuation loop as a compiled JAX
 computation. It supports equilibrium and periodic-orbit continuation,
-principal codimension-one events, direct codimension-two point solvers, and
-phase response curves: infinitesimal PRC (``prc_curve``, cross-validated
-against MatCont) and its parameter-derivative sensitivity (``dprc_curve``,
-validated independently of MatCont, which does not compute this quantity).
-Branch switching, continuation of two-parameter curves, general
-boundary-value problems, and connecting orbits remain unsupported.
+principal codimension-one events, direct codimension-two point solvers,
+two-parameter continuation (fold/Hopf curves with their own
+codimension-two events), and phase response curves: infinitesimal PRC
+(``prc_curve``, cross-validated against MatCont) and its
+parameter-derivative sensitivity (``dprc_curve``, validated independently
+of MatCont, which does not compute this quantity). Branch switching,
+general boundary-value problems, and connecting orbits remain unsupported.
 
 Start here
 ----------

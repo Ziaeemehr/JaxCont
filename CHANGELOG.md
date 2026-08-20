@@ -130,7 +130,7 @@ continuation.
 - `BifurcationDetector`, `FoldBifurcation`, `HopfBifurcation` — superseded by the `Event`
   protocol (`events=[Fold(), Hopf(), ...]`).
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-07-19
 
 ### Added
 - Initial supported release of JaxCont's equilibrium-continuation API.

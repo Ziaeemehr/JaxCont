@@ -31,11 +31,12 @@ automatic differentiation.
 
 The current surface supports equilibrium and periodic-orbit continuation,
 their principal codimension-one events, direct codimension-two point
-solvers, and infinitesimal phase response curves (iPRC, `prc_curve`,
-cross-validated against MatCont) plus their parameter-derivative sensitivity
-(dPRC, `dprc_curve`, validated independently -- MatCont does not compute
-this quantity). Branch switching, general connecting-orbit/BVP workflows,
-and two-parameter curve continuation remain future work.
+solvers, two-parameter continuation (fold/Hopf curves with their own
+codimension-two events), and infinitesimal phase response curves (iPRC,
+`prc_curve`, cross-validated against MatCont) plus their parameter-derivative
+sensitivity (dPRC, `dprc_curve`, validated independently -- MatCont does not
+compute this quantity). Branch switching and general connecting-orbit/BVP
+workflows remain future work.
 
 <p align="center">
   <img src="docs/images/matcont_cubic_overlay.png" width="500" alt="Cubic S-curve: JaxCont vs MatCont 7.6, folds overlaid">
@@ -124,16 +125,17 @@ Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md), the
 
 ## Citation
 
-If JaxCont supports your research, cite the archived release using its
-GitHub/Zenodo DOI. Citation metadata is provided in [`CITATION.cff`](CITATION.cff).
-Until the first archive is minted:
+If JaxCont supports your research, please cite the archived release. Full
+citation metadata (including both DOIs) is in [`CITATION.cff`](CITATION.cff) --
+GitHub renders a "Cite this repository" button from it automatically.
 
 ```bibtex
 @software{ziaeemehr_jaxcont_2026,
   author  = {Ziaeemehr, Abolfazl},
   title   = {JaxCont: Differentiable Continuation and Bifurcation Analysis in JAX},
   year    = {2026},
-  version = {0.3.0},
+  version = {0.3.1},
+  doi     = {10.5281/zenodo.21812717},
   url     = {https://github.com/Ziaeemehr/JaxCont}
 }
 ```
