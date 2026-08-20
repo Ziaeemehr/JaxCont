@@ -6,35 +6,34 @@
 \scriptsize
 \begin{columns}[T,onlytextwidth]
 \column{.32\textwidth}
-\begin{block}{\releasedbadge}
+\begin{block}{\releasedbadge\quad v0.4.0}
 \begin{itemize}
   \item natural and pseudo-arclength equilibrium continuation;
   \item folds, Hopf crossings, stability, JIT and batched branches;
-  \item collocated cycles, Floquet stability, LPC/PD/NS detection;
+  \item seeded two-parameter fold/Hopf curves and curve events;
+  \item collocated cycles and Floquet stability;
   \item Hopf refinement and $l_1$ classification;
   \item direct CP/BT/GH/ZH/HH point refinement;
-  \item 2D phase planes and validation workflows.
+  \item iPRC, parameter dPRC, phase planes, and validation tools.
 \end{itemize}
 \end{block}
 
 \column{.32\textwidth}
-\begin{block}{\mainbadge}
+\begin{block}{\textcolor{JaxOrange}{\bfseries Experimental in v0.4.0}}
 \begin{itemize}
-  \item \texttt{prc\_curve}: one converged orbit's iPRC;
-  \item \texttt{branch\_prc}: batched compatible branch states;
-  \item \texttt{dprc\_curve}: total parameter derivative after re-solving the orbit;
-  \item \texttt{plot\_prc};
-  \item Examples 13--14 and independent shooting evidence.
+  \item LPC, PD, and NS detection APIs and examples are available;
+  \item strict \texttt{MC-LC-002} validation still fails on missing LPC/PD labels and a multiplier tolerance;
+  \item treat these periodic events as experimental until that comparison closes.
 \end{itemize}
 \end{block}
 
 \column{.32\textwidth}
-\begin{block}{\futurebadge}
+\begin{block}{\futurebadge\quad unsupported}
 \begin{itemize}
   \item branch switching or disconnected-branch discovery;
   \item automatic cycle discovery from a Hopf point;
-  \item two-parameter bifurcation-curve continuation;
   \item general BVP continuation;
+  \item periodic codimension-two curves;
   \item connecting-, homoclinic-, or heteroclinic-orbit continuation.
 \end{itemize}
 \end{block}
@@ -43,6 +42,116 @@
 \vfill
 \centering
 \textbf{``v0.4.0'' identifies the released capability surface described by this deck.}
+\end{frame}
+
+\begin{frame}[fragile]{Migration: direct fold and Hopf solvers report success}
+\small
+\begin{lstlisting}
+u, p, v, converged = jc.fold_point(...)
+
+u, p, q1, q2, omega0, converged = jc.hopf_point(...)
+\end{lstlisting}
+\begin{alertblock}{Breaking return-shape change}
+The v0.4.0 tuples have four and six entries. Old three-/five-target unpacking
+raises \texttt{ValueError: too many values to unpack}.
+\end{alertblock}
+\begin{block}{Interpretation rule}
+Always check \texttt{converged} before using the returned state, parameter,
+null/eigenvectors, frequency, normal-form coefficient, or any downstream
+sensitivity. A finite iterate is not by itself a solved bifurcation point.
+\end{block}
+\end{frame}
+
+\begin{frame}{Continuation integrity starts before the first predictor}
+\small
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Seed correction}
+The supplied \texttt{u0} is Newton-corrected and validated before branch
+tracing. A bad seed no longer becomes a silently ``converged'' first point.
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Start-parameter equality}
+Every problem kind requires
+\texttt{p\_span[0] == problem.p0}. A mismatch now raises \texttt{ValueError}
+instead of starting the branch at a different parameter than requested.
+\end{block}
+\end{columns}
+\vfill
+\begin{alertblock}{Why this is release integrity}
+The first stored point anchors every predictor, event bracket, plot, and saved
+archive. Validating it prevents an internally consistent branch from carrying
+the wrong starting claim.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Fixed-step mode, diagnostics, and rejected work}
+\small
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{\texttt{adaptive=False}}
+Successful corrections retain the current step instead of growing or
+shrinking it. A failed correction still halves the step to make progress and
+does not recover upward; \texttt{ds\_min}/\texttt{ds\_max} bounds still apply.
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Visible accepted work}
+\texttt{convergence\_info} now records the real Newton iteration count and
+accepted step size. \texttt{verbose=True} prints a one-line point,
+convergence, and bifurcation summary.
+\end{block}
+\end{columns}
+\vfill
+\begin{alertblock}{``Fixed'' does not mean retry forever}
+Failed-step backoff is a safety mechanism. A run that cannot converge still
+terminates when the effective step reaches the existing stall condition.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}[fragile]{Persistence v1 is versioned and pickle-free}
+\small
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Numeric archive}
+\lstinline|format_version=1|, states, and parameters are always stored.
+Optional tangent, eigenvalue, and stability arrays are represented by key
+presence: absent means \texttt{None}.
+\end{block}
+\column{.48\textwidth}
+\begin{block}{JSON metadata}
+Bifurcations, \texttt{convergence\_info}, state names, and the parameter name
+round-trip through a plain-Unicode \texttt{metadata\_json} entry.
+\end{block}
+\end{columns}
+\vfill
+\begin{alertblock}{Security and compatibility boundary}
+Loading uses \lstinline|allow_pickle=False|. Broken pre-v0.4 archives have no
+supported migration path; missing or unknown format versions are rejected.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Runtime and plotting compatibility for v0.4.0}
+\small
+\begin{columns}[T,onlytextwidth]
+\column{.48\textwidth}
+\begin{block}{Declared and tested floor}
+\begin{itemize}
+  \item Python 3.11 or newer;
+  \item JAX and JAXlib 0.9.0 or newer;
+  \item NumPy 1.22 or newer;
+  \item CI covers Python 3.11--3.12.
+\end{itemize}
+\end{block}
+\column{.48\textwidth}
+\begin{block}{Plotting rename}
+Use \texttt{plot\_branch\_states} for state-space branch scatter plots.
+\texttt{plot\_phase\_portrait} remains a deprecated compatibility alias in
+v0.4.0 and is scheduled for removal in v0.5.0.
+\end{block}
+\end{columns}
+\vfill
+\centering
+\texttt{pip install jaxcont}
 \end{frame}
 
 \begin{frame}{Glossary: branches, local events, and refinement}
@@ -265,7 +374,7 @@ derived from array shape; use the validity mask or \texttt{stats["n\_valid"]}.
   \item Floquet and PRC calculations: \texttt{src/jaxcont/stability/floquet.py} and \texttt{prc.py};
   \item phase-plane and PRC plotting: \texttt{src/jaxcont/viz/phase\_plane.py} and \texttt{prc.py};
   \item release evidence: \texttt{src/jaxcont/\_version.py} and \texttt{CHANGELOG.md};
-  \item runnable evidence: README quick start, Examples 03, 10, 12--14,
+  \item runnable evidence: README quick start, Examples 03, 10, 12--20,
         \texttt{examples/MatCont}, \texttt{examples/BifurcationKit}, and the corresponding tests.
 \end{itemize}
 
@@ -282,7 +391,10 @@ rerun examples and validation tolerances before external publication.
 \Large\texttt{pip install jaxcont}
 \end{beamercolorbox}
 
-\vspace{8mm}
+\vspace{3mm}
+{\small Python $\geq3.11$; JAX/JAXlib $\geq0.9.0$}
+
+\vspace{5mm}
 \begin{columns}[T,onlytextwidth]
 \column{.48\textwidth}
 \begin{block}{Code}

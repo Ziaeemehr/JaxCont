@@ -1,6 +1,6 @@
 \chapterdivider{12}{Guided application workflows}
   {How should a newcomer plan, run, inspect, and validate a JaxCont study?}
-  {Featured applications: six reproducible paths through the example gallery}
+  {Featured applications: seven reproducible paths through the example gallery}
 
 \begin{frame}{A research study is a six-stage loop}
 \centering
@@ -106,6 +106,28 @@ and $1.87\times10^{-4}/5.54\times10^{-4}$ (Van der Pol).\\
 \textbf{Caution:} this one-off script validates the PRC computation, not
 independent periodic-orbit discovery; its orbit seed is still reconverged by JaxCont.
 \end{block}
+\end{frame}
+
+\begin{frame}{Demo card 7: trace a fold curve in a physical parameter plane}
+\scriptsize
+\begin{block}{7 \quad Exact Bogdanov--Takens geometry}
+\textbf{Objective:} continue a fold while $(p_0,p_1)$ vary and refine the BT organizer.\quad
+\textbf{File:} \texttt{examples/example\_15\_two\_parameter\_bt.py}.\\
+\textbf{Run:} \texttt{cd examples \&\& MPLBACKEND=Agg}\,$\backslash$\\
+\hspace*{8mm}\texttt{python example\_15\_two\_parameter\_bt.py}\\
+\textbf{Expected:} \texttt{images/example\_15\_two\_parameter\_bt.png}; the
+fold follows $p_0=3+(p_1+1)^2/4$ and the refined BT point lies at
+$(p_0,p_1)=(3,-1)$ within the printed tolerance.\\
+\textbf{Caution:} this is seeded continuation of one connected fold curve,
+not automatic discovery of every fold or branch in the plane.
+\end{block}
+
+\begin{alertblock}{Workflow contract}
+Define the two-parameter model and choose \texttt{free}; supply a nearby,
+checked fold/Hopf seed; build the curve problem; start \texttt{p\_span} at
+the free seed parameter; attach curve-specific events; plot decoded physical
+parameters; then check residuals, event conditions, and an independent oracle.
+\end{alertblock}
 \end{frame}
 
 \begin{frame}{How to read a result}
