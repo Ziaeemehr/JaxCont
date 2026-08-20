@@ -84,6 +84,11 @@ def test_round_trip_with_none_optional_fields_does_not_raise(tmp_path):
     assert loaded.tangent_vectors is None
     assert jnp.allclose(loaded.states, sol.states)
 
+    assert loaded.bifurcations == []
+    assert loaded.convergence_info is None
+    assert loaded.state_names is None
+    assert loaded.param_name is None
+
 
 def test_load_rejects_a_file_with_no_format_version(tmp_path):
     path = tmp_path / "not_a_solution.npz"
