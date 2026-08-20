@@ -1,89 +1,43 @@
 Roadmap
 =======
 
-Current Version: 0.1.0
-----------------------
+Current Version: 0.3.1
+-----------------------
 
-**Status**: Alpha - Core framework implemented, under active development
+**Status**: Alpha/Beta -- broad functional coverage (equilibrium and
+periodic-orbit continuation, codimension-one and codimension-two events,
+two-parameter continuation, phase response curves) with extensive
+analytic, MatCont, and BifurcationKit cross-validation. Under active
+hardening before a stable 1.0 release.
 
-Phase 1: Core Functionality (v0.1.x)
--------------------------------------
+Completed (through v0.3.1)
+---------------------------
 
-✅ Completed
-^^^^^^^^^^^^
+- Natural and pseudo-arclength continuation, both as fully JIT-compiled,
+  ``vmap``-safe whole-loop engines
+- Newton solver with JAX autodiff; adaptive step-size control
+- Equilibrium and periodic-orbit (limit-cycle) problem definitions, the
+  latter via Gauss-Legendre orthogonal collocation
+- Codimension-one event detection and refinement: fold, Hopf,
+  period-doubling, Neimark-Sacker
+- Floquet multiplier computation via the collocation monodromy matrix
+- Hopf normal-form classification (first Lyapunov coefficient,
+  criticality) and five direct codimension-two point solvers (cusp,
+  Bogdanov-Takens, generalized Hopf, zero-Hopf, double Hopf), all
+  differentiable via the implicit function theorem
+- Two-parameter continuation: fold-curve and Hopf-curve problems with
+  their own codimension-two event detection
+- Infinitesimal phase response curves (iPRC) and their
+  parameter-derivative sensitivity (dPRC)
+- 2D phase-plane visualization and stability-aware bifurcation-diagram
+  plotting
+- Differentiable bifurcation locations (``jax.grad``/``jax.jacfwd``
+  through fold/Hopf solvers) for inverse design
+- Batched continuation sweeps with ``jax.vmap``
+- Analytic, MatCont 7.6, and BifurcationKit cross-validation suites
 
-- Package structure and build system
-- Basic continuation framework
-- Natural continuation
-- Pseudo-arclength continuation  
-- Newton solver with autodiff
-- Equilibrium problem definitions
-- Basic plotting utilities
-- Example scripts
-
-🚧 In Progress
-^^^^^^^^^^^^^^
-
-- Full test coverage
-- Bifurcation detection validation
-- Stability analysis implementation
-- Documentation completion
-
-📋 Planned
-^^^^^^^^^^
-
-- Comprehensive validation on known examples
-- Performance benchmarking
-- Bug fixes and stability improvements
-
-Phase 2: Bifurcation Analysis (v0.2.0)
----------------------------------------
-
-**Target**: Q1 2026
-
-Features:
-
-- ✅ Fold bifurcation detection
-- ✅ Hopf bifurcation detection  
-- ⬜ Branch point detection
-- ⬜ Precise bifurcation location (bisection)
-- ⬜ Normal form computation
-- ⬜ First Lyapunov coefficient
-- ⬜ Criticality determination
-
-Phase 3: Periodic Orbits (v0.3.0)
-----------------------------------
-
-**Target**: Q2 2026
-
-Features:
-
-- ⬜ Single shooting method
-- ⬜ Multiple shooting for stability
-- ⬜ Orthogonal collocation
-- ⬜ Phase conditions
-- ⬜ Floquet multiplier computation
-- ⬜ Period-doubling detection
-- ⬜ Torus bifurcation detection
-
-Phase 4: Two-Parameter Continuation (v0.4.0)
----------------------------------------------
-
-**Target**: Q3 2026
-
-Features:
-
-- ⬜ Two-parameter framework
-- ⬜ Fold curve continuation
-- ⬜ Hopf curve continuation
-- ⬜ Codimension-2 bifurcations
-- ⬜ 2D bifurcation diagrams
-- ⬜ Parameter space exploration
-
-Phase 5: Advanced Features (v0.5.0)
-------------------------------------
-
-**Target**: Q4 2026
+Next: Advanced Features
+------------------------
 
 Features:
 
@@ -94,10 +48,8 @@ Features:
 - ⬜ Symmetry exploitation
 - ⬜ Parallel continuation
 
-Phase 6: Performance & Polish (v0.6.0)
----------------------------------------
-
-**Target**: Q1 2027
+Later: Performance & Polish
+----------------------------
 
 Features:
 
@@ -110,8 +62,6 @@ Features:
 
 Version 1.0: Production Ready
 ------------------------------
-
-**Target**: Q2 2027
 
 Goals:
 
@@ -184,7 +134,20 @@ Priority is given to:
 Version History
 ---------------
 
-**v0.1.0** (November 2025)
+**v0.3.1** (August 2026)
+   - Floquet near-unit-circle detection margin widened (bugfix)
+   - Read the Docs build fix
+
+**v0.3.0** (August 2026)
+   - Hopf normal-form classification and five direct codimension-two solvers
+   - 2D phase-plane visualization
+
+**v0.2.0** (July 2026)
+   - First PyPI release
+   - Periodic-orbit continuation, Floquet multipliers, period-doubling/
+     Neimark-Sacker detection
+
+**v0.1.0** (July 2026)
    - Initial release
    - Core continuation framework
    - Basic bifurcation detection
