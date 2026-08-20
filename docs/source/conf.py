@@ -117,7 +117,6 @@ exclude_patterns = [
     '**.ipynb_checkpoints',
     'api/core.rst',
     'development.rst',
-    'roadmap.rst',
     'tutorials/index.rst',
     'user_guide/index.rst',
     'examples/index.rst',
