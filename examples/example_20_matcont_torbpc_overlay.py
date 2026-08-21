@@ -40,6 +40,27 @@ import matplotlib.pyplot as plt
 
 jax.config.update("jax_enable_x64", True)
 
+try:
+    import examples.MatCont  # noqa: F401
+except ModuleNotFoundError:
+    # A notebook downloaded from the docs gallery and run standalone (e.g.
+    # uploaded to Google Colab) has no repository checkout, so
+    # `examples.MatCont` isn't importable. Fetch just that package --
+    # including its committed reference/ data, which needs no MATLAB/MatCont
+    # install to read -- instead of requiring a full clone.
+    import subprocess
+
+    Path("examples").mkdir(exist_ok=True)
+    subprocess.run(
+        [
+            "svn", "export", "-q", "--force",
+            "https://github.com/Ziaeemehr/JaxCont/trunk/examples/MatCont",
+            "examples/MatCont",
+        ],
+        check=True,
+    )
+    sys.path.insert(0, str(Path.cwd()))
+
 from examples.MatCont.visualize import render_periodic_overlay
 
 figure = render_periodic_overlay(

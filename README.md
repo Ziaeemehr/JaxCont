@@ -56,6 +56,12 @@ pip install jaxcont
 See the [JAX installation guide](https://docs.jax.dev/en/latest/installation.html)
 when selecting CPU, GPU, or TPU support.
 
+> **Installing on Google Colab:** pip's resolver may print a dependency
+> conflict warning about `numba` needing an older `numpy` than the one JAX
+> pulls in. This is expected — JaxCont does not depend on numba, it's just
+> preinstalled in the Colab image — and is safe to ignore unless your
+> notebook separately uses numba.
+
 ## Quick start
 
 Continue `u² + p = 0` through its fold at `p = 0`:
