@@ -42,18 +42,25 @@ except ModuleNotFoundError:
     # uploaded to Google Colab) has no repository checkout, so
     # `examples.MatCont` isn't importable. Fetch just that package --
     # including its committed reference/ data, which needs no MATLAB/MatCont
-    # install to read -- instead of requiring a full clone.
-    import subprocess
+    # install to read -- using only the standard library, since neither svn
+    # nor git is guaranteed to be present in a notebook runtime.
+    import io
+    import urllib.request
+    import zipfile
 
-    Path("examples").mkdir(exist_ok=True)
-    subprocess.run(
-        [
-            "svn", "export", "-q", "--force",
-            "https://github.com/Ziaeemehr/JaxCont/trunk/examples/MatCont",
-            "examples/MatCont",
-        ],
-        check=True,
+    with urllib.request.urlopen(
+        "https://github.com/Ziaeemehr/JaxCont/archive/refs/heads/main.zip"
+    ) as response:
+        archive = zipfile.ZipFile(io.BytesIO(response.read()))
+    prefix = next(
+        name for name in archive.namelist() if name.endswith("/examples/MatCont/")
     )
+    for member in archive.namelist():
+        if member.startswith(prefix) and not member.endswith("/"):
+            target = Path("examples/MatCont") / member[len(prefix):]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(archive.read(member))
+
     sys.path.insert(0, str(Path.cwd()))
 
 from examples.MatCont.visualize import render_equilibrium_overlay
