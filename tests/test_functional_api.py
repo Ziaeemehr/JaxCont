@@ -12,6 +12,13 @@ import pytest
 import jaxcont as jc
 from jaxcont.core.scan_continuation import natural_scan, pseudo_arclength_scan
 
+
+def test_bp_and_branch_switch_are_exported_at_top_level():
+    assert hasattr(jc, "BP")
+    assert hasattr(jc, "branch_switch")
+    assert jc.BP().kind == "branch_point"
+
+
 # --- test systems ---------------------------------------------------------
 
 def pitchfork(u, p, args):

@@ -38,6 +38,12 @@ def test_style_for_known_type_returns_table_entry():
     assert style_for("fold") == BIFURCATION_STYLES["fold"]
 
 
+def test_branch_point_style_is_registered():
+    from jaxcont.viz.styles import BIFURCATION_STYLES, style_for
+    assert "branch_point" in BIFURCATION_STYLES
+    assert style_for("branch_point").label == "BP"
+
+
 def test_style_for_unknown_type_falls_back_with_raw_label():
     style = style_for("some-future-type")
     assert style.marker == DEFAULT_STYLE.marker

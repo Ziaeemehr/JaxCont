@@ -29,6 +29,7 @@ BIFURCATION_STYLES: dict[str, BifStyle] = {
     "hopf": BifStyle("^", "#CC79A7", "H"),
     "period-doubling": BifStyle("v", "#E69F00", "PD"),
     "branch-point": BifStyle("D", "#7B61A8", "BP"),
+    "branch_point": BifStyle("D", "#7B61A8", "BP"),
     "cusp": BifStyle("P", "#0072B2", "CP"),
     "bogdanov_takens": BifStyle("*", "#D55E00", "BT"),
     "zero_hopf": BifStyle("X", "#56B4E9", "ZH"),

@@ -23,6 +23,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from jaxcont.bifurcations.events import (
+    BP,
     Event,
     EventHit,
     Fold,
@@ -35,6 +36,7 @@ from jaxcont.core.continuation import ContinuationSolution
 from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
 
 __all__ = [
+    "BP",
     "BifProblem",
     "Branch",
     "ContinuationAlgorithm",

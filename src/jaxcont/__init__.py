@@ -14,6 +14,7 @@ __license__ = "MIT"
 # Functional API -- the blessed public surface: bif_problem() + continuation()
 from jaxcont.api import (
     BifProblem,
+    BP,
     Branch,
     ContinuationAlgorithm,
     ContinuationPar,
@@ -49,6 +50,11 @@ from jaxcont.bifurcations.codim2_events import (
     GeneralizedHopf,
     ZeroHopf,
 )
+
+# Branch-point switching: detect a pitchfork/transcritical crossing (BP)
+# and compute the crossing branch's tangent. See
+# docs/superpowers/specs/2026-08-26-branch-point-switching-design.md
+from jaxcont.bifurcations.branch_switch import branch_switch
 
 # NOTE: v0.1.0 shipped equilibria only. Periodic-orbit continuation and
 # Floquet-multiplier computation are real (not stubs) but intentionally not
@@ -112,6 +118,7 @@ __all__ = [
     # Functional API (blessed surface)
     "BifProblem",
     "BogdanovTakens",
+    "BP",
     "Branch",
     # Utilities
     "Config",
@@ -147,6 +154,7 @@ __all__ = [
     "bif_problem",
     "bogdanov_takens_parameters",
     "bogdanov_takens_point",
+    "branch_switch",
     # Stability
     "compute_eigenvalues",
     "continuation",
