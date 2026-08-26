@@ -1,16 +1,26 @@
 # JaxCont Roadmap — Single Source of Truth
 
-**Last updated:** 2026-08-05
-**Current version:** 0.3.1 — tagged `v0.3.1`, GitHub release cut, published to PyPI
-(https://pypi.org/project/jaxcont/). Patch release fixing a `PeriodDoubling`/`NeimarkSacker`
-detector-margin fragility and a Read the Docs Sphinx-Gallery build break, both found right after
-v0.3.0 (which itself added phase-plane visualization, the Hopf normal form / `l₁` criticality
-classifier, five direct codim-2 bifurcation point solvers (`CP`/`BT`/`GH`/`ZH`/`HH`), and the
-MatCont validation suite on top of v0.2.0's periodic-orbit continuation). **Zenodo DOI: minted**
-2026-08-05 — concept DOI `10.5281/zenodo.21812716` (always resolves to the latest archive, used
-in the README badge), version DOI `10.5281/zenodo.21812717` for this v0.3.1 archive (in
-`CITATION.cff`). The GitHub-Zenodo integration is enabled; every future GitHub release archives
-automatically.
+**Last updated:** 2026-08-26
+**Current version:** 0.4.0 — tagged `v0.4.0` (2026-08-20), GitHub release cut, published to PyPI
+(https://pypi.org/project/jaxcont/). This release bundled two independent threads: (1) new
+features — two-parameter fold/Hopf curve continuation with five codim-2 events (done
+2026-08-17, see the v0.3.0+ section below), infinitesimal phase-response curves (`prc_curve`/
+`branch_prc`/`dprc_curve`, closing the "PRC — demand-driven" item this file used to list), and a
+five-script MatCont visual-comparison gallery; (2) correctness hardening driven by an independent
+project review (`PROJECT_REVIEW_2026-08.md`, 2026-08-19): the continuation seed is now
+Newton-corrected/validated instead of accepted unconditionally, `fold_point`/`hopf_point` now
+return an explicit `converged` flag (breaking: 4-/6-tuple, was 3-/5-tuple), `p_span[0] ==
+problem.p0` is enforced for every problem kind, `ContinuationPar(adaptive=False)` actually
+disables step adaptation, periodic event refinement Newton-corrects onto the collocation manifold
+before evaluating Floquet multipliers, solution persistence is a versioned pickle-free `.npz`
+schema (`allow_pickle=False`), and `requires-python` was corrected to `>=3.11` (3.9/3.10 cannot
+install a working `jax`/`jaxlib` pair for this codebase — see `CHANGELOG.md`). Full findings/fix
+mapping: `notes/PROJECT_REVIEW_2026-08.md`. **Zenodo DOI:** minted 2026-08-05 against v0.3.1 —
+concept DOI `10.5281/zenodo.21812716` (always resolves to the latest archive, used in the README
+badge), version DOI `10.5281/zenodo.21812717` for the v0.3.1 archive (in `CITATION.cff`). The
+GitHub-Zenodo integration auto-archives every release, so a v0.4.0 version DOI should already
+exist on Zenodo; **`CITATION.cff`'s version DOI has not been checked/updated since v0.3.1** —
+worth a follow-up to confirm and repoint it.
 **Scope decision:** Ship a focused **equilibrium continuation** library first. See [PROJECT_REVIEW_2026-07.md](PROJECT_REVIEW_2026-07.md) for the full rationale.
 **API design:** Committed to a functional, diffrax-style surface (`continuation(problem, alg, ...)`).
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provisional v0.2+ API.
@@ -97,25 +107,28 @@ now 98%** (was 51% — the one gap the roadmap named explicitly; fixed this sess
    hidden. → needs a real fix in `bifurcations/detector.py` (likely: de-duplicate near-coincident
    fold/Hopf flags, and tighten the fold test function to reduce false positives) before the
    detector can be trusted unsupervised; not done here, flagged for v0.1.0 hardening.
-8. ℹ️ **`run()` only continues in one direction per call.** BifurcationKit.jl's `bothside=true`
-   explores both directions from the initial point in one call; JaxCont's `run()` picks a single
-   direction from `param_range` vs. the starting parameter. Not a bug — pseudo-arclength still
-   passes folds and can reach the region of interest with a well-chosen range (see
-   `example_02_lorenz.py`) — but it's a real ergonomics gap vs. BifurcationKit.jl worth a
-   `bothside` option in the functional API (`ContinuationPar` or `continuation()`) later.
-10. ⚠️ **`natural_continuation.py` still has both bugs that #1/#2 supposedly fixed — only the
-   pseudo-arclength path was fixed.** *(found 2026-07-19, re-reading the source)*
-   `NaturalContinuation.compute_tangent()` computes `df/dparam` by **central finite difference**
-   (`eps=1e-6`) instead of `jacfwd`, and wraps the tangent's `jnp.linalg.solve` in a **bare
-   `except:`** that silently returns a zero tangent on any failure (not just `LinAlgError`).
-   `pseudo_arclength.py` got the `jacfwd` + bordered-solve fix; this sibling class, which
-   implements the exact same predictor-corrector interface, did not. Root cause: three parallel
-   implementations of the same algorithm (`natural_continuation.py`,
-   `pseudo_arclength.py`'s legacy class, `scan_continuation.py`) mean a fix in one doesn't
-   propagate to the others. Low severity today (natural continuation is a teaching/comparison
-   path, not the default engine, and is exercised only by
-   `examples/example_04_continuation_methods.py`), but worth fixing or deleting before v0.2 adds
-   more algorithm variants on top of this pattern — see "Engineering recommendations" below.
+8. ✅ **`run()` only continued in one direction per call.** *(done 2026-08-26)*
+   BifurcationKit.jl's `bothside=true` explores both directions from the initial point in one
+   call; JaxCont's `continuation()` picked a single direction from `p_span` vs. the starting
+   parameter. Fixed with `ContinuationPar(bothside=True)`: `api.py` runs the existing
+   single-direction `core/scan_continuation.py` engine twice (once toward each bound of
+   `p_span`, which for `bothside=True` is read as an order-independent `[p_min, p_max]` window
+   that `problem.p0` must lie within) and stitches the two legs into one `Branch` — no engine
+   changes, since direction there was already just `sign(p_end - p0)`. Events are detected
+   independently on each leg (each already starts at the shared seed point) rather than on the
+   stitched array, specifically to avoid a real trap: the tangent's parameter-direction
+   component genuinely flips sign at the stitch seam (the two legs turn around there), so
+   scanning across it directly would misfire a phantom fold. Eager-only — raises
+   `NotImplementedError` under `jax.vmap`/`jax.jit`, matching the existing `events=[...]`
+   restriction. See `tests/test_functional_api.py::TestBothside`.
+10. ✅ **`natural_continuation.py`'s FD/bare-except bugs.** *(confirmed moot 2026-08-26)* This
+   item (found 2026-07-19) predates "Engineering recommendations for v0.2" item 1 below, which
+   deleted `core/natural_continuation.py` outright on 2026-07-22 rather than patching it (see
+   that item's writeup for why: three parallel implementations of one algorithm, collapsed onto
+   the scan engine). The roadmap's "Next up" list kept citing this as a live low-severity item
+   after the file was already gone — confirmed via `grep -rn "class NaturalContinuation" src/`
+   (no match) and `grep -rn "except:" src/jaxcont/` (no bare excepts anywhere in the source
+   tree) before removing the stale reference here.
 11. ℹ️ **Local dev-machine GPU: usable, but cuDNN is broken and noisy — verified, not just
    suspected, 2026-07-19.** *(revised after actually running real GPU workloads — see the v0.1.0
    GPU-smoke-test entry below)* This machine has a real GPU (`nvidia-smi`: RTX A5000, driver
@@ -864,12 +877,22 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
     (`US-C2-LP-001`/`US-C2-H-001`) — the MATLAB drivers already run
     (`examples/MatCont/matlab/unsupported/run_two_parameter_{fold,hopf}_curve.m`), but the
     Python transcription, reference generation, and `cases.json` promotion are not done.
-20. **Next up** — no single item is blocking; pick by what's wanted:
-    - **Ergonomics:** `bothside` continuation (issue #8) and the legacy `natural_continuation.py`
-      FD/bare-except cleanup (issue #10) are still open, low-severity, non-blocking items.
+20. ✅ **Independent project review + Phase 1-3 correctness/API/release hardening, and PRC**
+    (done 2026-08-20, tagged/released/published as `v0.4.0`) — see the header note above and
+    `notes/PROJECT_REVIEW_2026-08.md`/`CHANGELOG.md` for the full findings-to-fix mapping. Also
+    closes the "phase response curves — demand-driven" item this file previously pointed at:
+    `prc_curve`/`branch_prc`/`dprc_curve` plus `plot_prc` and MatCont validation coverage shipped
+    alongside the hardening work.
+22. ✅ **`bothside` continuation (issue #8)** — done 2026-08-26, see issue #8's writeup above.
+    Issue #10 (`natural_continuation.py`'s FD/bare-except bugs) turned out to already be moot —
+    that file was deleted in the 2026-07-22 engine consolidation, before this session started;
+    see issue #10's updated writeup above.
+23. **Next up** — no single item is blocking; pick by what's wanted:
     - **Deferred follow-up from item 19:** promote `US-C2-LP-001`/`US-C2-H-001` to `supported`
       in `examples/MatCont/cases.json` — MATLAB drivers are scaffolded and runnable already;
       needs the Python-side model, a live MatCont reference run, and the `cases.json` flip.
+    - **Doc follow-up from item 20:** confirm/repoint `CITATION.cff`'s version DOI to the
+      v0.4.0 Zenodo archive (still points at v0.3.1).
     - **Larger v0.3.0+ epic:** branch switching — the one item from this section's original list
       that two-parameter continuation's completion doesn't touch.
 

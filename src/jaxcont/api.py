@@ -222,6 +222,7 @@ class ContinuationPar:
     newton_tol: float = 1e-6
     newton_max_iter: int = 20
     compute_stability: bool = True
+    bothside: bool = False
 
 
 @dataclass(frozen=True)
@@ -333,64 +334,12 @@ jax.tree_util.register_pytree_node(
 # ---------------------------------------------------------------------------
 
 
-def _run_scan(
-    scan_fn,
-    problem: BifProblem,
-    p_span: tuple[float, float],
-    settings: ContinuationPar,
-    events: Sequence[Event],
-    solvers: Solvers,
-    verbose: bool,
-) -> ContinuationResult:
-    """
-    Run ``scan_fn`` (``pseudo_arclength_scan`` or ``natural_scan``) and
-    reassemble a legacy-shaped :class:`ContinuationSolution` so
-    detection/plotting reuse existing code.
-    """
-    from jaxcont.core.scan_continuation import branch_eigenvalues
-    from jaxcont.stability.floquet import branch_floquet_multipliers, floquet_stable
-
-    args = problem.args
-    rhs2 = lambda u, p: problem.f(u, p, args)
-
-    p_start, p_end = p_span
-    u0 = jnp.asarray(problem.u0)
-    dtype = u0.dtype
-
-    if problem.kind in ("fold_curve", "hopf_curve"):
-        if settings.compute_stability:
-            raise ValueError(
-                f"compute_stability=True is not meaningful for "
-                f"kind={problem.kind!r}: the branch state is an extended-"
-                f"system vector, so eigendecomposing its Jacobian does not "
-                f"give the original system's spectrum. Pass "
-                f"ContinuationPar(compute_stability=False); the codim-2 "
-                f"events in bifurcations/codim2_events.py carry their own "
-                f"raw_f and compute the original spectrum themselves."
-            )
-
-    try:
-        # Check p_span[0] == problem.p0 only in eager mode; traced calls
-        # (jax.vmap/jax.jit) have p_start as a tracer and would raise
-        # TracerBoolConversionError on the jnp.allclose result.
-        if not jnp.allclose(jnp.asarray(p_start, dtype), problem.p0):
-            raise ValueError(
-                f"p_span[0]={float(p_start)} must equal the problem's starting "
-                f"parameter p0={float(problem.p0)}. continuation() treats "
-                f"p_span[0] as the literal starting value rather than reading "
-                f"it off the problem, so a mismatch would start the run at a "
-                f"point that is not the problem's actual seed."
-            )
-    except jax.errors.ConcretizationTypeError:
-        # Traced call: p_start cannot be concretized to test equality, so
-        # the check is deferred to eager execution. Skip it here.
-        pass
-
-    res = scan_fn(
+def _call_scan(scan_fn, rhs2, u0, p_from, p_to, settings: ContinuationPar, solvers: Solvers, dtype):
+    return scan_fn(
         rhs2,
         u0,
-        jnp.asarray(p_start, dtype),
-        jnp.asarray(p_end, dtype),
+        jnp.asarray(p_from, dtype),
+        jnp.asarray(p_to, dtype),
         jnp.asarray(settings.ds, dtype),
         jnp.asarray(settings.ds_min, dtype),
         jnp.asarray(settings.ds_max, dtype),
@@ -401,14 +350,29 @@ def _run_scan(
         jnp.asarray(settings.adaptive),
     )
 
-    try:
-        n = int(res.n_valid)
-    except jax.errors.ConcretizationTypeError:
-        # Traced call (jax.vmap/jax.jit over this problem/settings): n_valid
-        # can't become a concrete Python int, so there is no single trim
-        # length. Fall back to the fixed-size-buffer + mask representation.
-        return _run_scan_traced(res, problem, rhs2, settings, events, solvers)
 
+def _assemble_leg(
+    res,
+    problem: BifProblem,
+    rhs2: Callable[[Array, Array], Array],
+    settings: ContinuationPar,
+    events: Sequence[Event],
+    solvers: Solvers,
+):
+    """
+    Trim one ``scan_fn`` result to its ``n_valid`` real points, compute
+    eigenvalues/stability, and detect events on it in isolation.
+
+    Isolation matters for :func:`_run_scan_bothside`: each leg starts at the
+    problem's own seed point, so scanning it for events independently (as
+    opposed to scanning a single array stitched from both legs) never lets a
+    fold/Hopf test function see the artificial tangent-direction reversal at
+    the stitch seam.
+    """
+    from jaxcont.core.scan_continuation import branch_eigenvalues
+    from jaxcont.stability.floquet import branch_floquet_multipliers, floquet_stable
+
+    n = int(res.n_valid)
     states = res.states[:n]
     params = res.params[:n]
     tangents = res.tangents[:n]
@@ -416,13 +380,13 @@ def _run_scan(
     # Curve-kind problems (fold_curve/hopf_curve) never need Branch.eigen-
     # values: the branch state is an extended-system vector, so eigen-
     # decomposing its Jacobian wouldn't give the original system's
-    # spectrum anyway (see the compute_stability=True guard above), and
-    # every codim-2 event in bifurcations/codim2_events.py carries its own
-    # raw_f and computes the original spectrum itself via BranchPoint.u --
-    # it never reads BranchPoint.eigenvalues. Computing eigenvalues here
-    # whenever events=[...] was non-empty (the old `len(events) > 0`
-    # clause) wasted real time re-eigendecomposing a Jacobian nothing
-    # reads.
+    # spectrum anyway (see the compute_stability=True guard in _run_scan),
+    # and every codim-2 event in bifurcations/codim2_events.py carries its
+    # own raw_f and computes the original spectrum itself via
+    # BranchPoint.u -- it never reads BranchPoint.eigenvalues. Computing
+    # eigenvalues here whenever events=[...] was non-empty (the old
+    # `len(events) > 0` clause) wasted real time re-eigendecomposing a
+    # Jacobian nothing reads.
     is_curve_kind = problem.kind in ("fold_curve", "hopf_curve")
     eigenvalues = None
     stability = None
@@ -448,6 +412,30 @@ def _run_scan(
         for i in range(n)
     ]
 
+    # Curve-kind problems intentionally have eigenvalues=None (see above)
+    # but their codim-2 events are self-contained and never read
+    # BranchPoint.eigenvalues, so detection must still run for them.
+    hits: list[EventHit] = []
+    if len(events) > 0 and (eigenvalues is not None or is_curve_kind):
+        hits = detect_events(
+            events, params, states, tangents, eigenvalues, rhs2,
+            ds=float(settings.ds), tolerance=1e-6,
+        )
+
+    return states, params, tangents, eigenvalues, stability, convergence_info, hits
+
+
+def _finish_result(
+    problem: BifProblem,
+    states,
+    params,
+    tangents,
+    eigenvalues,
+    stability,
+    convergence_info,
+    hits: list[EventHit],
+    verbose: bool,
+) -> ContinuationResult:
     sol = ContinuationSolution(
         states=states,
         parameters=params,
@@ -458,39 +446,190 @@ def _run_scan(
         state_names=problem.state_names,
         param_name=problem.param_name,
     )
-
-    # Detect events with the Event protocol (bifurcations/events.py).
-    # Curve-kind problems intentionally have eigenvalues=None (see above)
-    # but their codim-2 events are self-contained and never read
-    # BranchPoint.eigenvalues, so detection must still run for them.
-    if len(events) > 0 and (eigenvalues is not None or is_curve_kind):
-        hits = detect_events(
-            events, params, states, tangents, eigenvalues, rhs2,
-            ds=float(settings.ds), tolerance=1e-6,
-        )
-        # sol.bifurcations stays dict-shaped: viz/core.py's plotting and
-        # ContinuationSolution.get_bifurcations_by_type both read
-        # bif.get("type")/bif.get("parameter")/bif.get("state") directly.
-        sol.bifurcations = [
-            {"type": h.kind, "parameter": h.p, "state": h.u, "index": h.index, **h.info}
-            for h in hits
-        ]
+    # sol.bifurcations stays dict-shaped: viz/core.py's plotting and
+    # ContinuationSolution.get_bifurcations_by_type both read
+    # bif.get("type")/bif.get("parameter")/bif.get("state") directly.
+    sol.bifurcations = [
+        {"type": h.kind, "parameter": h.p, "state": h.u, "index": h.index, **h.info}
+        for h in hits
+    ]
 
     if verbose:
         n_converged = sum(1 for c in convergence_info if c["converged"])
         kind_counts: dict[str, int] = {}
-        for b in (sol.bifurcations or []):
+        for b in sol.bifurcations:
             kind_counts[b["type"]] = kind_counts.get(b["type"], 0) + 1
         bif_summary = (
             ", ".join(f"{count} {kind}" for kind, count in sorted(kind_counts.items()))
             or "none"
         )
         print(
-            f"continuation(): {n} points ({n_converged} converged), "
+            f"continuation(): {len(params)} points ({n_converged} converged), "
             f"bifurcations: {bif_summary}"
         )
 
     return _to_result(sol)
+
+
+def _run_scan(
+    scan_fn,
+    problem: BifProblem,
+    p_span: tuple[float, float],
+    settings: ContinuationPar,
+    events: Sequence[Event],
+    solvers: Solvers,
+    verbose: bool,
+) -> ContinuationResult:
+    """
+    Run ``scan_fn`` (``pseudo_arclength_scan`` or ``natural_scan``) and
+    reassemble a legacy-shaped :class:`ContinuationSolution` so
+    detection/plotting reuse existing code.
+    """
+    args = problem.args
+    rhs2 = lambda u, p: problem.f(u, p, args)
+
+    p_start, p_end = p_span
+    u0 = jnp.asarray(problem.u0)
+    dtype = u0.dtype
+
+    if problem.kind in ("fold_curve", "hopf_curve"):
+        if settings.compute_stability:
+            raise ValueError(
+                f"compute_stability=True is not meaningful for "
+                f"kind={problem.kind!r}: the branch state is an extended-"
+                f"system vector, so eigendecomposing its Jacobian does not "
+                f"give the original system's spectrum. Pass "
+                f"ContinuationPar(compute_stability=False); the codim-2 "
+                f"events in bifurcations/codim2_events.py carry their own "
+                f"raw_f and compute the original spectrum themselves."
+            )
+
+    if settings.bothside:
+        return _run_scan_bothside(
+            scan_fn, problem, rhs2, u0, p_span, settings, events, solvers, verbose, dtype,
+        )
+
+    try:
+        # Check p_span[0] == problem.p0 only in eager mode; traced calls
+        # (jax.vmap/jax.jit) have p_start as a tracer and would raise
+        # TracerBoolConversionError on the jnp.allclose result.
+        if not jnp.allclose(jnp.asarray(p_start, dtype), problem.p0):
+            raise ValueError(
+                f"p_span[0]={float(p_start)} must equal the problem's starting "
+                f"parameter p0={float(problem.p0)}. continuation() treats "
+                f"p_span[0] as the literal starting value rather than reading "
+                f"it off the problem, so a mismatch would start the run at a "
+                f"point that is not the problem's actual seed."
+            )
+    except jax.errors.ConcretizationTypeError:
+        # Traced call: p_start cannot be concretized to test equality, so
+        # the check is deferred to eager execution. Skip it here.
+        pass
+
+    res = _call_scan(scan_fn, rhs2, u0, p_start, p_end, settings, solvers, dtype)
+
+    try:
+        int(res.n_valid)
+    except jax.errors.ConcretizationTypeError:
+        # Traced call (jax.vmap/jax.jit over this problem/settings): n_valid
+        # can't become a concrete Python int, so there is no single trim
+        # length. Fall back to the fixed-size-buffer + mask representation.
+        return _run_scan_traced(res, problem, rhs2, settings, events, solvers)
+
+    states, params, tangents, eigenvalues, stability, convergence_info, hits = _assemble_leg(
+        res, problem, rhs2, settings, events, solvers
+    )
+    return _finish_result(
+        problem, states, params, tangents, eigenvalues, stability,
+        convergence_info, hits, verbose,
+    )
+
+
+def _run_scan_bothside(
+    scan_fn,
+    problem: BifProblem,
+    rhs2: Callable[[Array, Array], Array],
+    u0: Array,
+    p_span: tuple[float, float],
+    settings: ContinuationPar,
+    events: Sequence[Event],
+    solvers: Solvers,
+    verbose: bool,
+    dtype,
+) -> ContinuationResult:
+    """
+    ``ContinuationPar(bothside=True)``: explore both directions from
+    ``problem.p0`` in one call (issue #8), by running ``scan_fn`` twice --
+    once toward each bound of ``p_span`` -- and stitching the two legs into
+    one branch. No changes to core/scan_continuation.py: direction there is
+    already just ``sign(p_end - p0)``.
+
+    Eager-only, like ``events=[...]``: needs two full Python-level
+    ``scan_fn`` calls plus list-based stitching (and, with events, of their
+    independently-detected hit lists), none of which is traceable.
+    """
+    p_a, p_b = p_span
+    try:
+        p_a_f = float(p_a)
+        p_b_f = float(p_b)
+        p0_f = float(problem.p0)
+    except jax.errors.ConcretizationTypeError:
+        raise NotImplementedError(
+            "ContinuationPar(bothside=True) is not supported when "
+            "continuation() runs inside jax.vmap/jax.jit: it needs two "
+            "full Python-level scan_fn calls plus list-based stitching of "
+            "the two legs, none of which is traceable. Call continuation() "
+            "eagerly per problem instead."
+        )
+
+    p_lo, p_hi = min(p_a_f, p_b_f), max(p_a_f, p_b_f)
+    if not (p_lo <= p0_f <= p_hi):
+        raise ValueError(
+            f"bothside=True requires problem.p0={p0_f} to lie within "
+            f"p_span's bounds [{p_lo}, {p_hi}]."
+        )
+
+    fwd_res = _call_scan(scan_fn, rhs2, u0, p0_f, p_hi, settings, solvers, dtype)
+    bwd_res = _call_scan(scan_fn, rhs2, u0, p0_f, p_lo, settings, solvers, dtype)
+
+    f_states, f_params, f_tangents, f_eig, f_stab, f_conv, f_hits = _assemble_leg(
+        fwd_res, problem, rhs2, settings, events, solvers
+    )
+    b_states, b_params, b_tangents, b_eig, b_stab, b_conv, b_hits = _assemble_leg(
+        bwd_res, problem, rhs2, settings, events, solvers
+    )
+
+    # Reverse the backward leg (dropping its index-0 point -- the same seed
+    # the forward leg's index 0 already is) so arc length runs low -> high
+    # across the stitch, then prepend it to the forward leg.
+    def _stitch(back, fwd):
+        if back is None or fwd is None:
+            return None
+        return jnp.concatenate([jnp.flip(back[1:], axis=0), fwd], axis=0)
+
+    states = _stitch(b_states, f_states)
+    params = _stitch(b_params, f_params)
+    tangents = _stitch(b_tangents, f_tangents)
+    eigenvalues = _stitch(b_eig, f_eig)
+    stability = _stitch(b_stab, f_stab)
+
+    n_back = len(b_conv) - 1  # excludes the shared seed point
+    convergence_info = [
+        {**c, "step": i} for i, c in enumerate(reversed(b_conv[1:]))
+    ] + [
+        {**c, "step": i + n_back} for i, c in enumerate(f_conv)
+    ]
+
+    # Each leg is scanned for events in isolation (see _assemble_leg's
+    # docstring) -- both start at the same p0, so their hit lists never
+    # need cross-leg deduping; a genuine bifurcation can only land in
+    # whichever leg's disjoint parameter interval actually contains it.
+    hits = list(b_hits) + list(f_hits)
+
+    return _finish_result(
+        problem, states, params, tangents, eigenvalues, stability,
+        convergence_info, hits, verbose,
+    )
 
 
 def _run_scan_traced(

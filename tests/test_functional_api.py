@@ -396,3 +396,83 @@ def test_verbose_prints_a_bifurcation_summary(capsys):
 
     captured = capsys.readouterr()
     assert captured.out.strip() != "", "verbose=True should print a summary"
+
+
+class TestBothside:
+    """Issue #8: continuation() only explored one direction from p0 per call.
+
+    ``ContinuationPar(bothside=True)`` runs the existing single-direction
+    scan engine twice (toward each bound of ``p_span``) and stitches the
+    two legs into one branch -- no changes to core/scan_continuation.py.
+    """
+
+    def test_covers_both_directions_from_p0(self):
+        # f(u, p) = p*u - u**3: u=0 is a trivial equilibrium for every p,
+        # so both legs continue cleanly with no bifurcation in the way.
+        prob = jc.bif_problem(pitchfork, u0=jnp.array([0.0]), p0=-0.5)
+        sol = jc.continuation(
+            prob, p_span=(-1.5, 0.5),
+            settings=jc.ContinuationPar(
+                ds=0.05, max_steps=60, newton_tol=1e-6, bothside=True,
+            ),
+        )
+        params = sol.branch.params
+        assert float(jnp.min(params)) <= -1.4
+        assert float(jnp.max(params)) >= 0.4
+        assert _max_residual(pitchfork, sol.branch.states, params) < 1e-5
+        # exactly one point should sit at the shared seed p0 -- stitching
+        # must not duplicate it.
+        assert int(jnp.sum(jnp.isclose(params, -0.5, atol=1e-6))) == 1
+
+    def test_asymmetric_p_span(self):
+        prob = jc.bif_problem(pitchfork, u0=jnp.array([0.0]), p0=-0.5)
+        sol = jc.continuation(
+            prob, p_span=(-2.0, 0.5),
+            settings=jc.ContinuationPar(
+                ds=0.05, max_steps=80, newton_tol=1e-6, bothside=True,
+            ),
+        )
+        params = sol.branch.params
+        assert float(jnp.min(params)) <= -1.9
+        assert float(jnp.max(params)) >= 0.4
+
+    def test_p0_outside_span_raises(self):
+        prob = jc.bif_problem(pitchfork, u0=jnp.array([0.0]), p0=1.0)
+        with pytest.raises(ValueError, match="p0"):
+            jc.continuation(
+                prob, p_span=(-1.0, 0.5),
+                settings=jc.ContinuationPar(bothside=True),
+            )
+
+    def test_events_detected_on_both_legs(self):
+        # f(u, p) = u**2 - p has a fold at p=0; starting past it (p0=1) and
+        # sweeping bothside through p_span=(-1, 2) should still find it, even
+        # though bothside's stitch seam sits at p0=1, nowhere near the fold.
+        def f(u, p, args):
+            return jnp.array([u[0] ** 2 - p])
+
+        prob = jc.bif_problem(f, u0=jnp.array([1.0]), p0=1.0)
+        sol = jc.continuation(
+            prob, p_span=(-1.0, 2.0),
+            settings=jc.ContinuationPar(
+                ds=0.05, max_steps=60, newton_tol=1e-6, bothside=True,
+            ),
+            events=[jc.Fold()],
+        )
+        folds = [e for e in sol.events if e.kind == "fold"]
+        assert len(folds) == 1
+        assert folds[0].p == pytest.approx(0.0, abs=0.02)
+
+    def test_raises_under_vmap(self):
+        def f(u, p, args):
+            return u - p
+
+        def run(p0):
+            prob = jc.bif_problem(f, u0=jnp.array([0.0]), p0=p0)
+            return jc.continuation(
+                prob, p_span=(-1.0, 1.0),
+                settings=jc.ContinuationPar(bothside=True, max_steps=20),
+            )
+
+        with pytest.raises(NotImplementedError, match="bothside"):
+            jax.vmap(run)(jnp.array([0.0, 0.1]))

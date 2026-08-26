@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `ContinuationPar(bothside=True)`: explore both directions from `problem.p0` in one
+  `continuation()` call (issue #8), matching BifurcationKit.jl's `bothside=true`. Runs the
+  existing single-direction scan engine twice and stitches the two legs into one branch; no
+  changes to `core/scan_continuation.py`. Eager-only (raises `NotImplementedError` under
+  `jax.vmap`/`jax.jit`, matching the existing `events=[...]` restriction).
+
 ## [0.4.0] - 2026-08-20
 
 ### Added
