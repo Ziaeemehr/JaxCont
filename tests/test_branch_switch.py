@@ -67,3 +67,62 @@ def test_branch_switch_rejects_a_non_branch_point_event():
     fake = EventHit(kind="fold", p=0.0, u=jnp.array([0.0]), index=(0, 1), info={})
     with pytest.raises(ValueError, match="branch_point"):
         branch_switch(_pitchfork, fake)
+
+
+def test_branch_switch_is_differentiable_in_args():
+    def imperfect_pitchfork(u, p, b):
+        return jnp.array([p * u[0] - u[0] ** 3 + b])
+
+    event = _find_bp(lambda u, p, a: imperfect_pitchfork(u, p, 0.0), jnp.array([0.0]), -0.5, (-0.5, 0.5))
+
+    def new_branch_start_state(b):
+        new_prob = branch_switch(imperfect_pitchfork, event, args=b, ds=0.05)
+        return new_prob.u0[0]
+
+    b0 = jnp.array(0.0)
+    analytic = jax.grad(new_branch_start_state)(b0)
+
+    eps = 1e-3
+    finite_diff = (new_branch_start_state(b0 + eps) - new_branch_start_state(b0 - eps)) / (2 * eps)
+
+    assert jnp.isfinite(analytic)
+    assert float(jnp.abs(analytic - finite_diff)) < 2e-2
+
+
+def test_branch_switch_vmap_batches_over_a_second_parameter():
+    def shifted_pitchfork(u, p, b):
+        shifted_u = u[0] - b
+        return jnp.array([p * shifted_u - shifted_u ** 3])
+
+    def switch_for_b(b):
+        event = _find_bp(lambda u, p, a: shifted_pitchfork(u, p, b), jnp.array([b]), -0.5, (-0.5, 0.5))
+        new_prob = branch_switch(shifted_pitchfork, event, args=b, ds=0.05)
+        return new_prob.u0[0], new_prob.p0
+
+    # _find_bp calls continuation() with events=[...], which is eager-only
+    # (see events.py's module docstring) -- vmap only the branch_switch()
+    # call itself, using a pre-detected event per batch element built
+    # outside the trace. This matches how events=[...] under vmap is
+    # documented as unsupported elsewhere in this codebase.
+    bs = jnp.linspace(-0.05, 0.05, 4)
+    events = [
+        _find_bp(lambda u, p, a: shifted_pitchfork(u, p, float(b)), jnp.array([b]), -0.5, (-0.5, 0.5))
+        for b in bs
+    ]
+    u_stars = jnp.array([e.u[0] for e in events])
+    p_stars = jnp.array([e.p for e in events])
+    tangents = jnp.array([e.info["tangent"] for e in events])
+
+    def switch_one(u_star, p_star, tangent, b):
+        from jaxcont.bifurcations.events import EventHit
+        fake_event = EventHit(kind="branch_point", p=p_star, u=jnp.array([u_star]),
+                              index=(0, 1), info={"tangent": tangent})
+        new_prob = branch_switch(shifted_pitchfork, fake_event, args=b, ds=0.05)
+        return new_prob.u0[0], new_prob.p0
+
+    batched = jax.vmap(switch_one)(u_stars, p_stars, tangents, bs)
+    assert batched[0].shape == (4,)
+    for i, b in enumerate(bs):
+        serial_u, serial_p = switch_for_b(float(b))
+        assert float(batched[0][i]) == pytest.approx(float(serial_u), abs=1e-4)
+        assert float(batched[1][i]) == pytest.approx(float(serial_p), abs=1e-4)

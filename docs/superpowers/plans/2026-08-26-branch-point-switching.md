@@ -623,12 +623,24 @@ def test_branch_switch_is_differentiable_in_args():
 
 
 def test_branch_switch_vmap_batches_over_a_second_parameter():
-    def imperfect_pitchfork(u, p, b):
-        return jnp.array([p * u[0] - u[0] ** 3 + b])
+    # NOT imperfect_pitchfork: adding a constant symmetry-breaking term (as
+    # the differentiability test's fixture does) destroys the pitchfork's
+    # bifurcation entirely for b != 0 -- there is no real BP to find, so a
+    # batch of imperfect_pitchfork(b) fixtures has no event for _find_bp to
+    # return except at b=0. Use a family that keeps a genuine BP for every
+    # b instead: b translates WHERE the pitchfork sits in u, not whether it
+    # has one -- v = u - b is an ordinary pitchfork in v, so this has a real
+    # BP at (u, p) = (b, 0) for every b. (Found via a real failure during
+    # this plan's own implementation: the original imperfect_pitchfork
+    # fixture here made _find_bp legitimately return no events, well before
+    # vmap was even involved.)
+    def shifted_pitchfork(u, p, b):
+        shifted_u = u[0] - b
+        return jnp.array([p * shifted_u - shifted_u ** 3])
 
     def switch_for_b(b):
-        event = _find_bp(lambda u, p, a: imperfect_pitchfork(u, p, b), jnp.array([0.0]), -0.5, (-0.5, 0.5))
-        new_prob = branch_switch(imperfect_pitchfork, event, args=b, ds=0.05)
+        event = _find_bp(lambda u, p, a: shifted_pitchfork(u, p, b), jnp.array([b]), -0.5, (-0.5, 0.5))
+        new_prob = branch_switch(shifted_pitchfork, event, args=b, ds=0.05)
         return new_prob.u0[0], new_prob.p0
 
     # _find_bp calls continuation() with events=[...], which is eager-only
@@ -638,7 +650,7 @@ def test_branch_switch_vmap_batches_over_a_second_parameter():
     # documented as unsupported elsewhere in this codebase.
     bs = jnp.linspace(-0.05, 0.05, 4)
     events = [
-        _find_bp(lambda u, p, a: imperfect_pitchfork(u, p, float(b)), jnp.array([0.0]), -0.5, (-0.5, 0.5))
+        _find_bp(lambda u, p, a: shifted_pitchfork(u, p, float(b)), jnp.array([b]), -0.5, (-0.5, 0.5))
         for b in bs
     ]
     u_stars = jnp.array([e.u[0] for e in events])
@@ -647,9 +659,9 @@ def test_branch_switch_vmap_batches_over_a_second_parameter():
 
     def switch_one(u_star, p_star, tangent, b):
         from jaxcont.bifurcations.events import EventHit
-        fake_event = EventHit(kind="branch_point", p=float(p_star), u=jnp.array([u_star]),
+        fake_event = EventHit(kind="branch_point", p=p_star, u=jnp.array([u_star]),
                                index=(0, 1), info={"tangent": tangent})
-        new_prob = branch_switch(imperfect_pitchfork, fake_event, args=b, ds=0.05)
+        new_prob = branch_switch(shifted_pitchfork, fake_event, args=b, ds=0.05)
         return new_prob.u0[0], new_prob.p0
 
     batched = jax.vmap(switch_one)(u_stars, p_stars, tangents, bs)
