@@ -15,12 +15,11 @@ disables step adaptation, periodic event refinement Newton-corrects onto the col
 before evaluating Floquet multipliers, solution persistence is a versioned pickle-free `.npz`
 schema (`allow_pickle=False`), and `requires-python` was corrected to `>=3.11` (3.9/3.10 cannot
 install a working `jax`/`jaxlib` pair for this codebase — see `CHANGELOG.md`). Full findings/fix
-mapping: `notes/PROJECT_REVIEW_2026-08.md`. **Zenodo DOI:** minted 2026-08-05 against v0.3.1 —
-concept DOI `10.5281/zenodo.21812716` (always resolves to the latest archive, used in the README
-badge), version DOI `10.5281/zenodo.21812717` for the v0.3.1 archive (in `CITATION.cff`). The
-GitHub-Zenodo integration auto-archives every release, so a v0.4.0 version DOI should already
-exist on Zenodo; **`CITATION.cff`'s version DOI has not been checked/updated since v0.3.1** —
-worth a follow-up to confirm and repoint it.
+mapping: `notes/PROJECT_REVIEW_2026-08.md`. **Zenodo DOI:** concept DOI `10.5281/zenodo.21812716`
+(always resolves to the latest archive, used in the README badge) now resolves to the v0.4.0
+archive, version DOI `10.5281/zenodo.22035548` — confirmed 2026-08-26 (GitHub-Zenodo
+auto-archived it on the 2026-08-20 release; `CITATION.cff`/README's BibTeX block had been left
+pointing at v0.3.1's `10.5281/zenodo.21812717` until repointed the same day this was confirmed).
 **Scope decision:** Ship a focused **equilibrium continuation** library first. See [PROJECT_REVIEW_2026-07.md](PROJECT_REVIEW_2026-07.md) for the full rationale.
 **API design:** Committed to a functional, diffrax-style surface (`continuation(problem, alg, ...)`).
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full spine contract and provisional v0.2+ API.
@@ -887,12 +886,12 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
     Issue #10 (`natural_continuation.py`'s FD/bare-except bugs) turned out to already be moot —
     that file was deleted in the 2026-07-22 engine consolidation, before this session started;
     see issue #10's updated writeup above.
-23. **Next up** — no single item is blocking; pick by what's wanted:
+23. ✅ **Confirm/repoint `CITATION.cff`'s version DOI to v0.4.0** — done 2026-08-26, see the
+    header note above; the README BibTeX block was stale the same way and got the same fix.
+24. **Next up** — no single item is blocking; pick by what's wanted:
     - **Deferred follow-up from item 19:** promote `US-C2-LP-001`/`US-C2-H-001` to `supported`
       in `examples/MatCont/cases.json` — MATLAB drivers are scaffolded and runnable already;
       needs the Python-side model, a live MatCont reference run, and the `cases.json` flip.
-    - **Doc follow-up from item 20:** confirm/repoint `CITATION.cff`'s version DOI to the
-      v0.4.0 Zenodo archive (still points at v0.3.1).
     - **Larger v0.3.0+ epic:** branch switching — the one item from this section's original list
       that two-parameter continuation's completion doesn't touch.
 

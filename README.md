@@ -140,8 +140,8 @@ GitHub renders a "Cite this repository" button from it automatically.
   author  = {Ziaeemehr, Abolfazl},
   title   = {JaxCont: Differentiable Continuation and Bifurcation Analysis in JAX},
   year    = {2026},
-  version = {0.3.1},
-  doi     = {10.5281/zenodo.21812717},
+  version = {0.4.0},
+  doi     = {10.5281/zenodo.22035548},
   url     = {https://github.com/Ziaeemehr/JaxCont}
 }
 ```
