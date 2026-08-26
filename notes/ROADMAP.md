@@ -872,10 +872,23 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
 19. ✅ **Two-parameter continuation** (v0.3.0+, done 2026-08-17) — fold/Hopf curve factories,
     five codim-2 events, `plot_two_parameter_diagram`, one independent-tool cross-validation
     (BifurcationKit.jl Lorenz-84 BT) plus a closed-form cusp check — see the v0.3.0+ section
-    above for the full writeup. **Follow-up, deliberately deferred:** MatCont cross-validation
-    (`US-C2-LP-001`/`US-C2-H-001`) — the MATLAB drivers already run
-    (`examples/MatCont/matlab/unsupported/run_two_parameter_{fold,hopf}_curve.m`), but the
-    Python transcription, reference generation, and `cases.json` promotion are not done.
+    above for the full writeup. **Follow-up, done 2026-08-26:** `US-C2-LP-001`/`US-C2-H-001`
+    promoted to `support: "supported"` in `examples/MatCont/cases.json` — a live run of the
+    (already-scaffolded) MATLAB drivers against the local MatCont 7.6 install exported the real
+    catalytic-oscillator LP/Hopf curves; new `python_cases/codim2_curves.py` transcribes the
+    model, independently detects the same LP/H seed points via JaxCont's own equilibrium
+    continuation (matches MatCont's `find(...,1)`-selected points to ~1e-5, itself a check, since
+    that selection isn't simply "smallest parameter" — the equilibrium branch's own folds make
+    its parameter non-monotonic), then continues `fold_curve_problem`/`hopf_curve_problem` and
+    compares nearest-point distance to hardcoded MatCont reference rows (<1e-3, both curves). Not
+    a generic 2D-curve comparison addition to `compare.py` (would over-build for two cases) —
+    follows `MC-C2-001`'s existing pattern of hardcoded reference values instead. Real finding
+    during validation: the LP curve passes through a cusp (MatCont's own console output labels it
+    `CP`) where the curve in the `(q2, k)` plane doubles back on itself, so continuing from the
+    shared seed in the wrong `k` direction traces a different-but-valid stretch of the same curve
+    that MatCont's own 25-point sample never visited — not a bug, but real enough to cost real
+    debugging time before being understood; documented in the module docstring so it isn't
+    rediscovered. See `tests/test_matcont_suite.py::test_two_parameter_{fold,hopf}_curve_matches_matcont`.
 20. ✅ **Independent project review + Phase 1-3 correctness/API/release hardening, and PRC**
     (done 2026-08-20, tagged/released/published as `v0.4.0`) — see the header note above and
     `notes/PROJECT_REVIEW_2026-08.md`/`CHANGELOG.md` for the full findings-to-fix mapping. Also
@@ -888,12 +901,10 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
     see issue #10's updated writeup above.
 23. ✅ **Confirm/repoint `CITATION.cff`'s version DOI to v0.4.0** — done 2026-08-26, see the
     header note above; the README BibTeX block was stale the same way and got the same fix.
-24. **Next up** — no single item is blocking; pick by what's wanted:
-    - **Deferred follow-up from item 19:** promote `US-C2-LP-001`/`US-C2-H-001` to `supported`
-      in `examples/MatCont/cases.json` — MATLAB drivers are scaffolded and runnable already;
-      needs the Python-side model, a live MatCont reference run, and the `cases.json` flip.
-    - **Larger v0.3.0+ epic:** branch switching — the one item from this section's original list
-      that two-parameter continuation's completion doesn't touch.
+24. **Next up:** branch switching — the one item from this section's original list that
+    two-parameter continuation's completion doesn't touch, and the last thing standing between
+    the current feature set and "matches MatCont's most-used subset" per the strategic-direction
+    recommendation below.
 
 ---
 

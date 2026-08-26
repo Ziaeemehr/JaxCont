@@ -25,6 +25,10 @@ from examples.MatCont.compare import (
     scaled_close,
 )
 from examples.MatCont.python_cases.codim2 import run_codim2_points
+from examples.MatCont.python_cases.codim2_curves import (
+    run_two_parameter_fold_curve,
+    run_two_parameter_hopf_curve,
+)
 from examples.MatCont.python_cases.equilibrium import (
     run_adaptive_control_hopf,
     run_cubic_fold,
@@ -138,6 +142,28 @@ def test_codim2_case_recovers_all_shifted_points():
     assert result.checks["parameter_gradients_finite"]
     assert result.checks["max_analytic_gradient_error"] < 2e-3
     assert result.checks["max_finite_difference_error"] < 2e-3
+
+
+@pytest.mark.slow
+def test_two_parameter_fold_curve_matches_matcont():
+    """A curve on the wrong side of the catalytic oscillator's cusp, or a
+    seed that isn't the same LP MatCont's driver finds, must fail this."""
+    result = run_two_parameter_fold_curve()
+
+    assert result.checks["lp_found"]
+    assert result.checks["lp_seed_error"] < 1e-3
+    assert result.checks["max_curve_error"] < 1e-3
+
+
+@pytest.mark.slow
+def test_two_parameter_hopf_curve_matches_matcont():
+    """A curve on the wrong side of the cusp-adjacent region, or a seed
+    that isn't the same H MatCont's driver finds, must fail this."""
+    result = run_two_parameter_hopf_curve()
+
+    assert result.checks["hopf_found"]
+    assert result.checks["hopf_seed_error"] < 1e-3
+    assert result.checks["max_curve_error"] < 1e-3
 
 
 @pytest.mark.slow
@@ -513,6 +539,15 @@ def test_unsupported_registry_covers_every_deferred_feature_family():
       ``tests/test_prc.py``, not by a MatCont cross-check), and MC-PRC-001's
       own title/observations already document, at the case level, why no
       MatCont cross-check exists for it.
+    - ``two-parameter-fold-curve``/``two-parameter-hopf-curve`` are no
+      longer deferred either: ``US-C2-LP-001``/``US-C2-H-001`` promote them
+      to ``support: "supported"``, cross-validated against a real MatCont
+      7.6 run of the catalytic-oscillator LP/Hopf curves
+      (``python_cases/codim2_curves.py``). ``two-parameter-pd-curve``/
+      ``-lpc-curve``/``-ns-curve`` (curves of *periodic*-orbit bifurcations)
+      remain deferred -- they need the collocation system nested inside the
+      extended system, their own epic (see ROADMAP.md's two-parameter
+      continuation entry).
     """
     unsupported_features = {
         feature
@@ -523,8 +558,6 @@ def test_unsupported_registry_covers_every_deferred_feature_family():
 
     assert {
         "branch-switching",
-        "two-parameter-fold-curve",
-        "two-parameter-hopf-curve",
         "two-parameter-pd-curve",
         "two-parameter-lpc-curve",
         "two-parameter-ns-curve",
@@ -534,6 +567,8 @@ def test_unsupported_registry_covers_every_deferred_feature_family():
     } <= unsupported_features
     assert "prc" not in unsupported_features
     assert "dprc" not in unsupported_features
+    assert "two-parameter-fold-curve" not in unsupported_features
+    assert "two-parameter-hopf-curve" not in unsupported_features
 
 
 def _complete_metadata(case_id: str) -> dict:

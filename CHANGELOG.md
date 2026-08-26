@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   existing single-direction scan engine twice and stitches the two legs into one branch; no
   changes to `core/scan_continuation.py`. Eager-only (raises `NotImplementedError` under
   `jax.vmap`/`jax.jit`, matching the existing `events=[...]` restriction).
+- MatCont cross-validation for two-parameter fold/Hopf curves: `examples/MatCont/cases.json`'s
+  `US-C2-LP-001`/`US-C2-H-001` promoted to `supported`, cross-checked against a live MatCont 7.6
+  run of the catalytic-oscillator LP/Hopf curves (`examples/MatCont/python_cases/codim2_curves.py`).
 
 ## [0.4.0] - 2026-08-20
 

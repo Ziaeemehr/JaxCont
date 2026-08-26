@@ -87,6 +87,16 @@ def case_result_passes(case_id: str, checks: dict[str, Any]) -> bool:
         ),
         "MC-LC-002": lambda: bool(checks["all_comparisons_pass"]),
         "MC-PRC-001": lambda: checks["prc_matches_matcont"],
+        "US-C2-LP-001": lambda: (
+            checks["lp_found"]
+            and checks["lp_seed_error"] < 1e-3
+            and checks["max_curve_error"] < 1e-3
+        ),
+        "US-C2-H-001": lambda: (
+            checks["hopf_found"]
+            and checks["hopf_seed_error"] < 1e-3
+            and checks["max_curve_error"] < 1e-3
+        ),
     }
     return bool(predicates[case_id]())
 
