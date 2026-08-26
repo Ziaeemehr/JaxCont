@@ -455,7 +455,19 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
 ## v0.3.0+ — Advanced (demand-driven)
 - [x] Phase-plane visualization for 2D autonomous systems: nullclines, vector fields,
       streamlines, continuation equilibria, and trajectories.
-- [ ] Branch switching
+- [x] Branch switching (equilibrium BP only; period-doubling switching remains a
+      future item) -- *(done 2026-08-26, see
+      [plan](../docs/superpowers/plans/2026-08-26-branch-point-switching.md) and its
+      [design spec](../docs/superpowers/specs/2026-08-26-branch-point-switching-design.md))*.
+      New `BP` event (`bifurcations/events.py`) distinguishes a genuine branch point from
+      an ordinary fold via the augmented Jacobian `[f_u | f_p]`'s rank (both give the same
+      real-eigenvalue-crossing signal); `branch_switch()` (`bifurcations/branch_switch.py`)
+      computes the crossing branch's tangent via SVD of that same matrix and returns a
+      seeded `BifProblem`. `Event.refine()`'s protocol widened to `Optional[EventHit]` so a
+      false-positive candidate (a plain fold) can report "not a real hit" -- the first
+      `Event` to need this. Verified against closed-form pitchfork/transcritical fixtures
+      (with a plain-fold negative control confirming the classification actually
+      discriminates), `vmap`-batched, and differentiable in `args`.
 - [x] Two-parameter continuation: curves of folds and Hopf points, five codim-2
       events — *(done 2026-08-17, see
       [plan](../docs/superpowers/plans/2026-08-17-two-parameter-continuation.md) and its
@@ -905,6 +917,12 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
     two-parameter continuation's completion doesn't touch, and the last thing standing between
     the current feature set and "matches MatCont's most-used subset" per the strategic-direction
     recommendation below.
+25. ✅ **Branch switching (equilibrium BP)** — done 2026-08-26, see the v0.3.0+ section above for
+    the full writeup. No plain-ODE MatCont `init_BP_EP` testrun exists locally to cross-validate
+    against (only the already-`unsupported` BVP `testbratu2.m` matches `init_BP_EP`), so
+    correctness rests on closed-form pitchfork/transcritical fixtures, a plain-fold negative
+    control, and `vmap`/differentiability checks instead of a MatCont-reference comparison.
+    Period-doubling branch switching remains a separate, deferred future item.
 
 ---
 

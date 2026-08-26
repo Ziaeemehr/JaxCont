@@ -389,9 +389,13 @@ Sketched so the surface stays coherent as features land. **Do not implement or o
                          events=[jc.PeriodDoubling(), jc.Fold()])
   # Floquet multipliers land in Branch.eigenvalues for kind="periodic"
   ```
-- **v0.3 Branch switching** (from a detected event):
+- **Branch switching** (shipped -- see
+  docs/superpowers/specs/2026-08-26-branch-point-switching-design.md):
   ```python
-  new = jc.branch_switch(sol, event=sol.events[0], settings=...)
+  sol = jc.continuation(prob, p_span=..., events=[jc.BP()])
+  bp_event = [e for e in sol.events if e.kind == "branch_point"][0]
+  new_prob = jc.branch_switch(f, bp_event, args=..., ds=0.01)
+  new_sol = jc.continuation(new_prob, p_span=...)
   ```
 - **Normal forms / Lyapunov coefficient**: `jc.normal_form(sol, event)` -> criticality.
 
