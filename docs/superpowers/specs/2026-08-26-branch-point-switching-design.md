@@ -126,11 +126,20 @@ At a `refine()`-confirmed BP `(u*, p*)`:
    `branch_switch` cannot recompute from `f`/`u*`/`p*`/`args` alone) — is one vector in
    that 2-D space, up to normalization. Project it out of the two SVD vectors and
    normalize the remainder — this is the new branch's direction, `t_new`.
-4. Take one predictor step `(u0, p0) = (u*, p*) + ds * t_new` (small fixed `ds`, a
+4. Take one predictor step `x_pred = (u*, p*) + ds * t_new` (small fixed `ds`, a
    `branch_switch` keyword, not reusing `ContinuationPar.ds` — this is a one-off hop, not
-   a continuation run) and Newton-correct it back onto `f(u, p, args) = 0` holding `p`
-   fixed (an ordinary corrector, not an extended-system solve — the point is regular
-   once off the singular locus).
+   a continuation run), then Newton-correct **jointly in `(u, p)`** via a pseudo-arclength
+   corrector, not a fixed-`p` corrector: solve the `(n+1)`-equation system
+   `[f(u, p, args); t_new . ((u,p) - x_pred)] = 0` for `x = (u, p)`. **This is a real
+   correctness requirement, not a simplification available to skip:** for a pitchfork,
+   `t_new` is exactly `(1, 0, ..., 0)` in `(u, p)`-order — the new branch is tangent to
+   the `p`-axis at the BP, i.e. `dp/ds = 0` there — so a fixed-`p` corrector holding
+   `p = p*` would try to solve `f(u, p*, args) = 0`, which at `p* = 0` has no root other
+   than the trivial one (found and verified during this feature's implementation: a
+   fixed-`p` corrector silently snaps back onto the original branch for exactly this
+   case, passing no test that doesn't check against it explicitly). The pseudo-arclength
+   corrector is the same style the engine's own predictor-corrector already uses
+   (`core/scan_continuation.py`), just done once here instead of iterated.
 5. Return `jc.bif_problem(f, u0=u_corrected, p0=p_corrected, args=...)` — an ordinary
    `BifProblem`, `kind="equilibrium"`, ready for `continuation()` exactly like any other
    problem. No new `BifProblem.kind` needed.

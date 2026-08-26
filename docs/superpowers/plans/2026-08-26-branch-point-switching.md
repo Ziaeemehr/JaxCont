@@ -372,12 +372,13 @@ from jaxcont.solvers.implicit import differentiable_root
 PyTree = Any
 
 
-def _switching_seed(f, u_star, p_star, incoming_tangent, args, ds, n):
-    """(u_pred, p_pred): one predictor step along the crossing branch's
-    tangent, recomputed here (not precomputed by the caller) so it stays
-    theta(=args)-dependent when this is called from inside branch_switch's
-    differentiable_root closures -- see the module docstring and
-    solvers/implicit.py's "seed must be callable when theta-dependent" rule.
+def _switching_tangent(f, u_star, p_star, incoming_tangent, args, n):
+    """t_new, shape (n+1,) in (u, p)-order: the crossing branch's unit
+    tangent at the confirmed BP. Recomputed from scratch every call (never
+    precomputed by the caller) so it stays theta(=args)-dependent when
+    called from inside branch_switch's differentiable_root closures -- see
+    the module docstring and solvers/implicit.py's "seed must be callable
+    when theta-dependent" rule.
     """
     f_u = jacfwd(lambda u: f(u, p_star, args))(u_star)
     f_p = jacfwd(lambda p: f(u_star, p, args))(p_star)
@@ -392,10 +393,7 @@ def _switching_seed(f, u_star, p_star, incoming_tangent, args, ds, n):
 
     c1, c2 = project_out(v1), project_out(v2)
     t_new_raw = jnp.where(jnp.linalg.norm(c1) > jnp.linalg.norm(c2), c1, c2)
-    t_new = t_new_raw / jnp.linalg.norm(t_new_raw)
-
-    du, dp = t_new[:n], t_new[n]
-    return u_star + ds * du, p_star + ds * dp
+    return t_new_raw / jnp.linalg.norm(t_new_raw)
 
 
 def branch_switch(
@@ -409,9 +407,10 @@ def branch_switch(
 ) -> BifProblem:
     """
     From a detected BP (``jaxcont.bifurcations.events.BP``), compute the
-    crossing branch's tangent, take one predictor step, Newton-correct back
-    onto ``f(u, p, args) = 0``, and return a ready-to-continue
-    :class:`BifProblem`.
+    crossing branch's tangent, take one predictor step, and Newton-correct
+    it back onto ``f(u, p, args) = 0`` with a pseudo-arclength corrector
+    (jointly solving for ``(u, p)``, NOT holding ``p`` fixed -- see below),
+    returning a ready-to-continue :class:`BifProblem`.
 
     ``event`` must be a ``kind="branch_point"`` hit (from
     ``continuation(..., events=[BP()])``); anything else raises
@@ -420,6 +419,19 @@ def branch_switch(
     ``fold_curve_problem``/``hopf_curve_problem`` already use applies (the
     check becomes a no-op rather than raising, since ``bool()`` on a
     tracer would itself raise ``TracerBoolConversionError``).
+
+    Why a pseudo-arclength corrector and not a simpler fixed-``p``
+    corrector: for a pitchfork, the crossing branch's tangent is exactly
+    ``(1, 0, ..., 0)`` in ``(u, p)``-order -- it is tangent to the ``p``
+    axis at the BP itself (``dp/ds = 0`` there). A fixed-``p`` corrector
+    would try to solve ``f(u, p*, args) = 0`` at the BP's own parameter
+    value, which for a supercritical pitchfork has no root other than the
+    trivial one -- it silently snaps back onto the ORIGINAL branch instead
+    of finding the new one. The pseudo-arclength corrector below (jointly
+    solving ``f(u,p,args)=0`` plus an arc-length pinning equation) is the
+    same style the engine's own predictor-corrector already uses
+    (``core/scan_continuation.py``), just applied once here instead of
+    iterated.
 
     The switching direction's sign is arbitrary (an SVD sign convention,
     not a physical choice) -- callers that care which of the two crossing
@@ -437,17 +449,22 @@ def branch_switch(
     p_star = jnp.asarray(event.p)
     n = u_star.shape[0]
     incoming_tangent = jnp.asarray(event.info["tangent"])
+    x_star = jnp.concatenate([u_star, jnp.reshape(p_star, (1,))])
 
-    def G(u, theta):
-        u_pred, p_pred = _switching_seed(f, u_star, p_star, incoming_tangent, theta, ds, n)
-        return f(u, p_pred, theta)
+    def G(x, theta):
+        t_new = _switching_tangent(f, u_star, p_star, incoming_tangent, theta, n)
+        x_pred = x_star + ds * t_new
+        u, p = x[:n], x[n]
+        residual = f(u, p, theta)
+        arclength = jnp.dot(t_new, x - x_pred)
+        return jnp.concatenate([residual, jnp.reshape(arclength, (1,))])
 
     def x0(theta):
-        u_pred, _ = _switching_seed(f, u_star, p_star, incoming_tangent, theta, ds, n)
-        return u_pred
+        t_new = _switching_tangent(f, u_star, p_star, incoming_tangent, theta, n)
+        return x_star + ds * t_new
 
-    u_corrected = differentiable_root(G, x0, args, tol=tol, max_iter=max_iter)
-    _, p_corrected = _switching_seed(f, u_star, p_star, incoming_tangent, args, ds, n)
+    x_corrected = differentiable_root(G, x0, args, tol=tol, max_iter=max_iter)
+    u_corrected, p_corrected = x_corrected[:n], x_corrected[n]
 
     return bif_problem(f, u0=u_corrected, p0=p_corrected, args=args)
 ```
@@ -455,7 +472,7 @@ def branch_switch(
 - [ ] **Step 4: Run tests**
 
 Run: `JAX_PLATFORMS=cpu /home/ziaee/envs/jaxcont/bin/python -m pytest tests/test_branch_switch.py -v`
-Expected: PASS. If `test_switch_lands_on_the_pitchfork_second_branch`'s continuation assertion fails because the corrected seed is numerically too close to the trivial branch (Newton correcting back onto `u=0` instead of the intended branch), increase `ds` in the test (e.g. `0.1`) -- the predictor step needs to be large enough to land in the new branch's basin of attraction; this is a real tuning parameter, not a bug, and is exactly why `branch_switch`'s `ds` defaults to `0.01` but is caller-overridable.
+Expected: PASS with the pseudo-arclength corrector above. (An earlier draft of this task used a simpler fixed-`p` corrector; it failed `test_switch_lands_on_the_pitchfork_second_branch` for every `ds` tried, because the pitchfork's crossing tangent has `dp/ds = 0` exactly at the BP -- verified during this plan's own development, see the design spec §4 step 4. If you see that exact failure mode -- `new_prob.p0` staying at the BP's own parameter value regardless of `ds` -- you have the old fixed-`p` version; use the code above instead.) If tests still fail for a different reason, increase `ds` (e.g. `0.1`) before assuming a deeper bug -- the predictor step needs to be large enough to land in the new branch's basin of attraction.
 
 Then the full suite:
 
@@ -647,7 +664,7 @@ def test_branch_switch_vmap_batches_over_a_second_parameter():
 
 Run: `JAX_PLATFORMS=cpu /home/ziaee/envs/jaxcont/bin/python -m pytest tests/test_branch_switch.py -k "differentiable or vmap" -v`
 
-If `test_branch_switch_is_differentiable_in_args` fails with a shape/tracer error rather than a numeric mismatch, the likely cause is `_switching_seed`'s SVD or the `jnp.where` sign-selection not tracing cleanly under `jax.grad` -- debug by first checking `jax.grad` on `_switching_seed` alone (a standalone scratch script, not part of the test suite) before touching `branch_switch`'s structure. Do not add `lax.stop_gradient` anywhere to make this pass -- that would silently produce a wrong (not just approximate) gradient, since the switching direction genuinely depends on `args` here; the earlier codebase precedent for `stop_gradient` (GH/ZH/HH's Hopf-seed) applies to a `jnp.linalg.eig` gradient-rule gap that does not exist for `jnp.linalg.svd`, so it does not apply here.
+If `test_branch_switch_is_differentiable_in_args` fails with a shape/tracer error rather than a numeric mismatch, the likely cause is `_switching_tangent`'s SVD or the `jnp.where` sign-selection not tracing cleanly under `jax.grad` -- debug by first checking `jax.grad` on `_switching_tangent` alone (a standalone scratch script, not part of the test suite) before touching `branch_switch`'s structure. Do not add `lax.stop_gradient` anywhere to make this pass -- that would silently produce a wrong (not just approximate) gradient, since the switching direction genuinely depends on `args` here; the earlier codebase precedent for `stop_gradient` (GH/ZH/HH's Hopf-seed) applies to a `jnp.linalg.eig` gradient-rule gap that does not exist for `jnp.linalg.svd`, so it does not apply here.
 
 - [ ] **Step 3: Fix any real numerical issues found, then confirm both pass**
 
