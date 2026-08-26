@@ -20,7 +20,9 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from jaxcont.bifurcations.events import EventHit
 from jaxcont.bifurcations.pd_switch import _doubling_measure, _pd_eigenvector
+from jaxcont.bifurcations.pd_switch import branch_switch_pd
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 
@@ -113,3 +115,76 @@ def test_doubling_measure_separates_a_doubled_orbit_from_a_retraced_one():
     # Closed form: d = 2*amp, scale = sqrt(1 + amp^2)  ->  ~0.436
     assert d_doubled == pytest.approx(2 * amp / np.sqrt(1 + amp**2), abs=1e-3)
     assert d_doubled > 0.4
+
+
+def pd_event_at_origin():
+    """An EventHit at the exact PD point (alpha = 0), built directly.
+
+    Building the event directly rather than running a continuation keeps these
+    tests fast and deterministic; Task 4's example covers the detect-then-switch
+    path end to end.
+    """
+    prob, mesh = base_problem(0.0)
+    event = EventHit(kind="period_doubling", p=float(prob.p0), u=prob.u0, index=None)
+    return event, mesh, prob
+
+
+def transverse_amplitude(prob, mesh):
+    """max |w| over the mesh points of a doubled-period problem."""
+    ntst = mesh.ntst
+    ms = np.asarray(prob.u0[: ntst * N_STATE].reshape(ntst, N_STATE))
+    return float(np.max(np.sqrt(ms[:, 2] ** 2 + ms[:, 3] ** 2)))
+
+
+def test_switch_lands_on_the_period_doubled_branch():
+    event, mesh, _ = pd_event_at_origin()
+    dp = 0.05
+    switched = branch_switch_pd(rhs, event, mesh, dp=dp)
+
+    doubled_mesh = Collocation(ntst=2 * mesh.ntst, ncol=mesh.ncol)
+    # Closed-form ground truth: |w| = sqrt(alpha/c), period = 2T.
+    assert transverse_amplitude(switched, doubled_mesh) == pytest.approx(
+        np.sqrt(dp / C_SAT), abs=1e-3
+    )
+    assert float(switched.u0[-1]) == pytest.approx(2 * T_EXACT, abs=1e-3)
+    assert float(switched.p0) == pytest.approx(dp, abs=1e-6)
+    assert switched.kind == "periodic"
+
+
+def test_switch_doubles_the_mesh():
+    event, mesh, _ = pd_event_at_origin()
+    switched = branch_switch_pd(rhs, event, mesh, dp=0.05)
+    expected_len = 2 * mesh.ntst * (1 + mesh.ncol) * N_STATE + 1
+    assert switched.u0.shape[-1] == expected_len
+
+
+def test_switch_finds_the_branch_without_being_told_which_side_it_is_on():
+    # The doubled branch exists only for alpha > 0 here. The default search
+    # spans both signs, so it must succeed without a dp_sign hint.
+    event, mesh, _ = pd_event_at_origin()
+    switched = branch_switch_pd(rhs, event, mesh, dp=0.05, dp_sign=None)
+    assert float(switched.p0) > 0
+
+
+def test_switch_raises_on_the_wrong_side_when_the_sign_is_pinned():
+    # Pinned to the side with no doubled branch: every eps collapses, so this
+    # must raise rather than hand back the retraced original orbit.
+    event, mesh, _ = pd_event_at_origin()
+    with pytest.raises(ValueError, match="could not find"):
+        branch_switch_pd(rhs, event, mesh, dp=0.05, dp_sign=-1)
+
+
+def test_switch_raises_rather_than_returning_a_collapsed_branch():
+    # THE key regression test for this feature's main hazard: an under-sized
+    # seed converges cleanly (residual ~7e-6) onto the ORIGINAL orbit traversed
+    # twice. Without the detector this returns a plausible, wrong BifProblem.
+    event, mesh, _ = pd_event_at_origin()
+    with pytest.raises(ValueError, match="collapsed"):
+        branch_switch_pd(rhs, event, mesh, dp=0.05, eps_ladder=(0.01, 0.02))
+
+
+def test_switch_rejects_a_non_period_doubling_event():
+    _event, mesh, prob = pd_event_at_origin()
+    fold_event = EventHit(kind="fold", p=float(prob.p0), u=prob.u0, index=None)
+    with pytest.raises(ValueError, match="period_doubling"):
+        branch_switch_pd(rhs, fold_event, mesh, dp=0.05)
