@@ -55,6 +55,7 @@ from jaxcont.bifurcations.codim2_events import (
 # and compute the crossing branch's tangent. See
 # docs/superpowers/specs/2026-08-26-branch-point-switching-design.md
 from jaxcont.bifurcations.branch_switch import branch_switch
+from jaxcont.bifurcations.pd_switch import branch_switch_pd
 
 # NOTE: v0.1.0 shipped equilibria only. Periodic-orbit continuation and
 # Floquet-multiplier computation are real (not stubs) but intentionally not
@@ -155,6 +156,7 @@ __all__ = [
     "bogdanov_takens_parameters",
     "bogdanov_takens_point",
     "branch_switch",
+    "branch_switch_pd",
     # Stability
     "compute_eigenvalues",
     "continuation",

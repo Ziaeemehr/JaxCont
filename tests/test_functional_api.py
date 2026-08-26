@@ -19,6 +19,13 @@ def test_bp_and_branch_switch_are_exported_at_top_level():
     assert jc.BP().kind == "branch_point"
 
 
+def test_branch_switch_pd_is_exported_at_top_level():
+    import jaxcont as jc
+
+    assert hasattr(jc, "branch_switch_pd")
+    assert "branch_switch_pd" in jc.__all__
+
+
 # --- test systems ---------------------------------------------------------
 
 def pitchfork(u, p, args):

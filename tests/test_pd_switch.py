@@ -20,6 +20,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+import jaxcont as jc
 from jaxcont.bifurcations.events import EventHit
 from jaxcont.bifurcations.pd_switch import _doubling_measure, _pd_eigenvector
 from jaxcont.bifurcations.pd_switch import branch_switch_pd
@@ -188,3 +189,36 @@ def test_switch_rejects_a_non_period_doubling_event():
     fold_event = EventHit(kind="fold", p=float(prob.p0), u=prob.u0, index=None)
     with pytest.raises(ValueError, match="period_doubling"):
         branch_switch_pd(rhs, fold_event, mesh, dp=0.05)
+
+
+def test_detect_then_switch_end_to_end():
+    """Continue the base branch, detect the PD event with jc.PeriodDoubling, and
+    switch on the detected event.
+
+    Continuing the switched branch is covered by
+    examples/example_22_period_doubling_switch.py rather than here, to keep this
+    test's runtime down -- the switch itself is what this file is testing."""
+    prob, mesh = base_problem(-0.1)
+    result = jc.continuation(
+        prob,
+        p_span=(-0.1, 0.1),
+        settings=jc.ContinuationPar(
+            ds=0.02, max_steps=40, newton_tol=1e-5, compute_stability=True
+        ),
+        events=[jc.PeriodDoubling(raw_f=rhs, mesh=mesh)],
+    )
+    pd_events = [e for e in result.events if e.kind == "period_doubling"]
+    assert pd_events, "no period-doubling event detected on the base branch"
+
+    event = pd_events[0]
+    assert event.p == pytest.approx(0.0, abs=2e-2)
+
+    dp = 0.05
+    switched = jc.branch_switch_pd(rhs, event, mesh, dp=dp)
+    doubled_mesh = Collocation(ntst=2 * mesh.ntst, ncol=mesh.ncol)
+    amp = transverse_amplitude(switched, doubled_mesh)
+    # Ground truth is sqrt((p_switched - p_bif)/c); the detected p_bif carries
+    # the event's own bisection error, so this is looser than the exact-point test.
+    expected = np.sqrt(max(float(switched.p0) - event.p, 0.0) / C_SAT)
+    assert amp == pytest.approx(expected, abs=2e-2)
+    assert float(switched.u0[-1]) == pytest.approx(2 * T_EXACT, abs=1e-2)
