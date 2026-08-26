@@ -210,6 +210,12 @@ just "it ran".
   session (hardcoded reference values checked against a live MatCont run, not a
   `compare.py` extension) rather than inventing a third comparison mechanism.
 
+  No plain-ODE MatCont `init_BP_EP` testrun was found among the checked MatCont 7.6
+  testruns. The feature's correctness evidence therefore rests on the closed-form
+  pitchfork/transcritical fixtures above plus the differentiability and `vmap` checks.
+  `US-BP-001` (Bratu, BVP-based) remains `unsupported` pending BVP support; that
+  limitation is unrelated to this feature's own completeness.
+
 ## 7. Deliverables
 
 - `bifurcations/events.py`: `BranchPoint` event; `Event.refine()` protocol widened to
