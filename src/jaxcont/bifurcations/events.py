@@ -27,7 +27,7 @@ from typing import (
 )
 
 import jax.numpy as jnp
-from jax import Array
+from jax import Array, jacfwd
 
 from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.bifurcations.hopf_normal_form import hopf_point, lyapunov_coefficient
@@ -64,8 +64,10 @@ class Event(Protocol):
         *,
         tolerance: float,
         max_iterations: int,
-    ) -> EventHit:
-        """Precisely locate the event between `left` and `right`."""
+    ) -> Optional[EventHit]:
+        """Precisely locate the event between `left` and `right`, or
+        return None if what looked like a candidate isn't a real hit
+        (e.g. BP's classification step rejecting an ordinary fold)."""
         ...
 
 
@@ -203,6 +205,63 @@ class Hopf(Event):
         )
 
 
+@dataclass(frozen=True)
+class BP(Event):
+    """A branch point: two equilibrium branches crossing (pitchfork,
+    transcritical). See docs/superpowers/specs/2026-08-26-branch-point-
+    switching-design.md for the full derivation.
+
+    Test function: the real eigenvalue nearest zero -- the SAME signal an
+    ordinary fold gives (df/du singular). This is deliberate, not an
+    oversight: distinguishing a branch point from a plain fold requires a
+    strictly stronger condition (the augmented [df/du | df/dp] matrix ALSO
+    dropping rank, i.e. df/dp lying in the range of df/du) that only
+    refine() can afford to check. test_function will fire at every plain
+    LP too; refine() rejects those by returning None.
+
+    Abbreviation **BP**, see jaxcont.bifurcations.taxonomy.describe("BP").
+    """
+
+    kind: str = "branch_point"
+    tolerance: float = 1e-6       # |Im(eigenvalue)| below this counts as "real"
+    rank_tolerance: float = 1e-4  # smallest singular value of [f_u|f_p] below
+                                   # this counts as "rank-deficient" (a true BP);
+                                   # calibrated in Step 5 below against the
+                                   # pitchfork/transcritical/saddle-node fixtures
+
+    def test_function(self, point: BranchPoint) -> float:
+        eigs = point.eigenvalues
+        real_mask = jnp.abs(jnp.imag(eigs)) < self.tolerance
+        if not jnp.any(real_mask):
+            return float("nan")
+        real_eigs = jnp.real(eigs[real_mask])
+        idx = jnp.argmin(jnp.abs(real_eigs))
+        return float(real_eigs[idx])
+
+    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> Optional[EventHit]:
+        u_guess = (left.u + right.u) / 2
+        p_guess = (left.p + right.p) / 2
+        u_bif, p_bif, _null_vector, converged = fold_point(
+            lambda u, p, _args: rhs(u, p),
+            u_guess, p_guess, tol=tolerance, max_iter=max_iterations,
+        )
+        if not bool(converged):
+            return None
+
+        n = u_bif.shape[0]
+        f_u = jacfwd(lambda u: rhs(u, p_bif))(u_bif)
+        f_p = jacfwd(lambda p: rhs(u_bif, p))(p_bif)
+        augmented = jnp.concatenate([f_u, f_p.reshape(n, 1)], axis=1)
+        smallest_singular_value = jnp.linalg.svd(augmented, compute_uv=False)[-1]
+        if not bool(smallest_singular_value < self.rank_tolerance):
+            return None  # ordinary fold, not a branch point
+
+        return EventHit(
+            kind="branch_point", p=float(p_bif), u=u_bif, index=index,
+            info={"tangent": right.tangent, "converged": True, "method": "extended_system"},
+        )
+
+
 def detect_events(
     events: Sequence[Event],
     params: Array,
@@ -260,10 +319,12 @@ def detect_events(
         for i in range(len(points) - 1):
             if test_vals[i] * test_vals[i + 1] < 0:
                 kwargs = {} if select is None else {"prev_value": selected[i]}
-                hits.append(event.refine(
+                hit = event.refine(
                     points[i], points[i + 1], (i, i + 1), rhs,
                     tolerance=tolerance, max_iterations=max_iterations, **kwargs,
-                ))
+                )
+                if hit is not None:
+                    hits.append(hit)
 
     hits.sort(key=lambda h: h.p)
     merge_window = 2.0 * abs(ds)

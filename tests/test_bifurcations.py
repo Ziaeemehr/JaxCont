@@ -9,8 +9,11 @@ docs/superpowers/specs/2026-07-23-event-protocol-rewrite-design.md).
 from dataclasses import dataclass
 
 import jax.numpy as jnp
+import pytest
 from jax import jacfwd
 
+import jaxcont as jc
+from jaxcont.bifurcations.events import BP, BranchPoint as EventPoint
 from jaxcont.bifurcations.events import (
     BranchPoint,
     EventHit,
@@ -20,6 +23,50 @@ from jaxcont.bifurcations.events import (
     PeriodDoubling,
     detect_events,
 )
+
+
+def _pitchfork(u, p, args):
+    return jnp.array([p * u[0] - u[0] ** 3])
+
+
+def _saddle_node(u, p, args):
+    # f = u^2 + p: an ordinary fold at (u, p) = (0, 0), NOT a branch point.
+    return jnp.array([u[0] ** 2 + p])
+
+
+def test_bp_fires_on_pitchfork_but_not_on_a_plain_fold():
+    prob = jc.bif_problem(_pitchfork, u0=jnp.array([0.0]), p0=-0.5)
+    sol = jc.continuation(
+        prob, jc.PseudoArclength(), p_span=(-0.5, 0.5),
+        settings=jc.ContinuationPar(ds=0.02, max_steps=60, newton_tol=1e-6),
+        events=[BP()],
+    )
+    bp_hits = [e for e in sol.events if e.kind == "branch_point"]
+    assert len(bp_hits) == 1
+    assert bp_hits[0].p == pytest.approx(0.0, abs=1e-3)
+    assert bp_hits[0].u[0] == pytest.approx(0.0, abs=1e-3)
+    assert "tangent" in bp_hits[0].info
+
+    # Negative control: a plain fold must NOT be classified as a branch
+    # point, even though it gives the same real-eigenvalue-crossing signal.
+    fold_prob = jc.bif_problem(_saddle_node, u0=jnp.array([1.0]), p0=-1.0)
+    fold_sol = jc.continuation(
+        fold_prob, jc.PseudoArclength(), p_span=(-1.0, 1.0),
+        settings=jc.ContinuationPar(ds=0.05, max_steps=60, newton_tol=1e-6),
+        events=[BP()],
+    )
+    assert [e for e in fold_sol.events if e.kind == "branch_point"] == []
+
+
+def test_refine_returning_none_is_skipped_by_detect_events():
+    # Direct unit test of the widened protocol, independent of continuation().
+    left = EventPoint(p=-0.1, u=jnp.array([0.1]), tangent=jnp.array([1.0, 0.0]))
+    right = EventPoint(p=0.1, u=jnp.array([-0.1]), tangent=jnp.array([1.0, 0.0]))
+    hit = BP().refine(
+        left, right, (0, 1), lambda u, p: _saddle_node(u, p, None),
+        tolerance=1e-6, max_iterations=50,
+    )
+    assert hit is None
 
 
 def test_fold_test_function_is_tangent_dp_component():
