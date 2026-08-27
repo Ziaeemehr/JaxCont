@@ -136,6 +136,21 @@
       }
     },
     {
+      "id": "MC-LC-003",
+      "title": "MatCont adaptx period-doubling branch switch",
+      "support": "supported",
+      "features": ["periodic-orbit", "period-doubling", "branch-switching", "floquet-multipliers"],
+      "python": "examples.MatCont.python_cases.pd_switch:run_adaptx_pd_switch",
+      "matlab": null,
+      "references": [],
+      "manual_source": "MatCont 7.6 Testruns/testadapt2.m and TestSystems/adaptx.m (live 2026-08-27 export)",
+      "tolerances": {
+        "parameter_atol": 0.002,
+        "period_atol": 0.005,
+        "residual_atol": 0.00002
+      }
+    },
+    {
       "id": "US-BP-001",
       "title": "Bratu branch switching",
       "support": "unsupported",

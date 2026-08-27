@@ -204,6 +204,30 @@ the period to float precision.
   switching case (`init_PD_LC`). If none is usable, document the fallback the
   way the equilibrium spec did rather than forcing a fit.
 
+  **MatCont cross-validation outcome (2026-08-27):** `Testruns/testadapt2.m`
+  is a plain three-state ODE case using `TestSystems/adaptx.m` and
+  `init_PD_LC`. A live MatCont 7.6 run located the source PD at
+  `alpha=0.630302040837`, `T=6.3640713323`, and the first PD on the switched
+  doubled branch at `alpha=0.579629869689`, `T=12.7343655405`. JaxCont
+  independently continued the transcribed `adaptx` cycle, located the
+  Floquet `-1` crossing, then switched it with `jc.branch_switch_pd` at
+  `dp=-0.05`; it obtained `alpha=0.629574656`, `T=6.36421783` before the
+  switch and a doubled period `T=12.73437309` after it. The supported
+  `MC-LC-003` registry case and `test_adaptx_period_doubling_switch_matches_matcont`
+  now pin this comparison, including the non-collapsed doubled-orbit check.
+
+  **What is and is not compared.** JaxCont's *switched parameter* is just the
+  detected PD offset by this case's fixed `dp`, so it is checked only for
+  internal consistency — comparing it to any MatCont value would test
+  arithmetic, not the switch. The switch itself is validated three ways
+  instead: the doubled period against MatCont's doubled-branch start
+  (`T = 12.7281426646`, which is *exactly* twice the base period); the
+  period ratio against 2 (phase-invariant and `dp`-independent, measured
+  error 9.3e-4); and, most tightly, the period against MatCont's reported
+  point at the same alpha (measured error 7.6e-6) — guarded by an explicit
+  assertion that the two alphas still coincide, so a future `dp` change fails
+  loudly instead of quietly comparing unrelated points.
+
 ## 7. Deliverables
 
 - `bifurcations/pd_switch.py`: `branch_switch_pd()`. No changes to

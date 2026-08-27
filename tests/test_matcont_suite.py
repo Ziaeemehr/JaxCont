@@ -39,12 +39,14 @@ from examples.MatCont.python_cases.periodic import (
     run_radial_cycle,
     run_torbpc_cycle,
 )
+from examples.MatCont.python_cases.pd_switch import run_adaptx_pd_switch
 from examples.MatCont.python_cases.transforms import (
     _batched_branch,
     run_transform_checks,
 )
 from examples.MatCont.registry import load_registry, select_cases
 from examples.MatCont.run_validation import build_parser, resolve_runtime_paths
+from examples.MatCont.validation import case_result_passes
 
 REQUIRED_CASE_FIELDS = {
     "id",
@@ -176,6 +178,38 @@ def test_radial_cycle_matches_exact_floquet_formula():
     assert result.checks["max_collocation_residual"] < 2e-5
     assert result.checks["max_multiplier_error"] < 5e-3
     assert result.checks["all_stable"]
+
+
+@pytest.mark.slow
+def test_adaptx_period_doubling_switch_matches_matcont():
+    """A switch from the wrong PD point or onto a retraced orbit must fail.
+
+    The PD expectations are hardcoded from a live MatCont 7.6
+    ``Testruns/testadapt2.m`` run, not derived by the JaxCont case: JaxCont
+    continues ``adaptx``'s limit cycle from its own Hopf-direction seed and
+    never consumes MatCont orbit data.
+
+    The switch itself is checked against MatCont's doubled branch period
+    rather than against its switched *parameter* -- the parameter is just the
+    detected PD offset by this case's fixed ``dp``, so comparing it to any
+    MatCont value would test arithmetic rather than the switch. See
+    ``python_cases/pd_switch.py``'s module comment.
+    """
+    result = run_adaptx_pd_switch()
+
+    assert result.checks["pd_found"]
+    assert result.checks["pd_parameter_error"] < 2e-3
+    assert result.checks["pd_period_error"] < 5e-3
+    assert result.checks["switched_parameter_offset_error"] < 1e-5
+    assert result.checks["doubled_period_error"] < 2e-2
+    assert result.checks["doubled_period_ratio_error"] < 5e-3
+    # Guard first: the period comparison below is only meaningful while
+    # JaxCont's switched alpha still coincides with MatCont's reference point.
+    assert result.checks["doubled_branch_alphas_match"]
+    assert result.checks["doubled_branch_period_error"] < 1e-3
+    assert result.checks["switch_residual"] < 2e-5
+    assert result.checks["genuine_doubled_orbit"]
+    assert case_result_passes("MC-LC-003", result.checks)
 
 
 def _write_torbpc_reference(path: Path) -> None:
@@ -364,17 +398,18 @@ def test_registry_cases_have_the_required_comparison_metadata():
     assert all(REQUIRED_CASE_FIELDS <= set(case) for case in cases)
 
 
-def test_registry_exposes_both_periodic_validation_cases():
-    """Dropping either periodic entry would silently remove it from default runs."""
+def test_registry_exposes_all_periodic_validation_cases():
+    """Dropping a periodic entry would silently remove it from default runs."""
     periodic = {
         case["id"]: case
         for case in load_registry()["cases"]
         if "periodic-orbit" in case["features"]
     }
 
-    assert set(periodic) == {"MC-LC-001", "MC-LC-002"}
+    assert set(periodic) == {"MC-LC-001", "MC-LC-002", "MC-LC-003"}
     assert periodic["MC-LC-001"]["python"].endswith(":run_radial_cycle")
     assert periodic["MC-LC-002"]["python"].endswith(":run_torbpc_cycle")
+    assert periodic["MC-LC-003"]["python"].endswith(":run_adaptx_pd_switch")
 
 
 def test_select_cases_filters_ids_without_reordering_registry_entries():

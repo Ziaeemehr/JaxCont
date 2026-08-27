@@ -86,6 +86,18 @@ def case_result_passes(case_id: str, checks: dict[str, Any]) -> bool:
             and checks["all_stable"]
         ),
         "MC-LC-002": lambda: bool(checks["all_comparisons_pass"]),
+        "MC-LC-003": lambda: (
+            checks["pd_found"]
+            and checks["pd_parameter_error"] < 2e-3
+            and checks["pd_period_error"] < 5e-3
+            and checks["switched_parameter_offset_error"] < 1e-5
+            and checks["doubled_period_error"] < 2e-2
+            and checks["doubled_period_ratio_error"] < 5e-3
+            and checks["doubled_branch_alphas_match"]
+            and checks["doubled_branch_period_error"] < 1e-3
+            and checks["switch_residual"] < 2e-5
+            and checks["genuine_doubled_orbit"]
+        ),
         "MC-PRC-001": lambda: checks["prc_matches_matcont"],
         "US-C2-LP-001": lambda: (
             checks["lp_found"]
