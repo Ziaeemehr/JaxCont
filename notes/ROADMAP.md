@@ -455,10 +455,14 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
 ## v0.3.0+ — Advanced (demand-driven)
 - [x] Phase-plane visualization for 2D autonomous systems: nullclines, vector fields,
       streamlines, continuation equilibria, and trajectories.
-- [x] Branch switching (equilibrium BP only; period-doubling switching remains a
-      future item) -- *(done 2026-08-26, see
-      [plan](../docs/superpowers/plans/2026-08-26-branch-point-switching.md) and its
-      [design spec](../docs/superpowers/specs/2026-08-26-branch-point-switching-design.md))*.
+- [x] Branch switching (equilibrium BP and period-doubling; branch points on
+      cycles remain out of scope) -- *(equilibrium BP done 2026-08-26,
+      period-doubling done 2026-08-27; equilibrium BP:
+      [plan](../docs/superpowers/plans/2026-08-26-branch-point-switching.md) /
+      [design spec](../docs/superpowers/specs/2026-08-26-branch-point-switching-design.md),
+      period-doubling:
+      [plan](../docs/superpowers/plans/2026-08-27-period-doubling-switching.md) /
+      [design spec](../docs/superpowers/specs/2026-08-27-period-doubling-switching-design.md))*.
       New `BP` event (`bifurcations/events.py`) distinguishes a genuine branch point from
       an ordinary fold via the augmented Jacobian `[f_u | f_p]`'s rank (both give the same
       real-eigenvalue-crossing signal); `branch_switch()` (`bifurcations/branch_switch.py`)
@@ -468,6 +472,12 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
       `Event` to need this. Verified against closed-form pitchfork/transcritical fixtures
       (with a plain-fold negative control confirming the classification actually
       discriminates), `vmap`-batched, and differentiable in `args`.
+      `branch_switch_pd()` (`bifurcations/pd_switch.py`) covers the period-doubling half:
+      it seeds the doubled cycle from the `-1` Floquet eigenvector and corrects it with the
+      **existing** `periodic_orbit_problem`, and verifies the result is genuinely
+      period-doubled rather than the original orbit retraced (an under-sized seed converges
+      cleanly onto the retraced orbit, so this check is mandatory, not hardening). Unlike the
+      equilibrium half it is eager-only, not `vmap`/`grad`-batched -- see item 27 below.
 - [x] Two-parameter continuation: curves of folds and Hopf points, five codim-2
       events — *(done 2026-08-17, see
       [plan](../docs/superpowers/plans/2026-08-17-two-parameter-continuation.md) and its
@@ -923,6 +933,37 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
     correctness rests on closed-form pitchfork/transcritical fixtures, a plain-fold negative
     control, and `vmap`/differentiability checks instead of a MatCont-reference comparison.
     Period-doubling branch switching remains a separate, deferred future item.
+26. ✅ **Period-doubling branch switching** — done 2026-08-27, see
+    [plan](../docs/superpowers/plans/2026-08-27-period-doubling-switching.md) and its
+    [design spec](../docs/superpowers/specs/2026-08-27-period-doubling-switching-design.md).
+    New `bifurcations/pd_switch.py`: `branch_switch_pd()` turns a detected
+    `PeriodDoubling` event into a seeded doubled-period `BifProblem`. Design was settled by
+    numerical probing rather than assumption, and two probe results shaped it: (1) correcting
+    at the bifurcation parameter collapses to the trivial branch, but stepping `p` off it
+    first lets the **existing** `periodic_orbit_problem` fixed-`p` solve reach the doubled
+    branch directly — so no pseudo-arclength corrector (unlike the equilibrium sub-project)
+    and no variational eigenfunction solve were needed, and `events.py`/`collocation.py`/
+    `periodic.py` are untouched; (2) an under-sized seed converges *cleanly* (residual ~7e-6)
+    onto the original orbit traversed twice — a silent wrong answer with no error signal — so
+    a doubling detector (`max_i ||u[i] - u[i + ntst/2]|| / scale`, ~0.44 genuine vs ~1e-6
+    collapsed) is mandatory, and the factory searches both `dp` signs × an `eps` ladder and
+    **raises** rather than returning an unverified branch. Validated against a
+    cubic-saturated fixture with closed-form ground truth (`|w| = sqrt(alpha/c)`, period
+    `2T`) and cross-validated against MatCont 7.6's `Testruns/testadapt2.m` (`init_PD_LC` on
+    the plain 3-state `adaptx` system) via the new supported registry case `MC-LC-003`, with
+    JaxCont independently continuing `adaptx`'s limit cycle from its own Hopf-direction seed
+    (never consuming MatCont orbit data) and matching MatCont's PD point to 7.3e-4 in `alpha`
+    and 1.5e-4 in period. Eager-only: inherits `periodic_orbit_problem`'s construction-time
+    `vmap`/`grad` limitation (see item 27). Branch points on cycles (BPC) remain out of scope.
+27. **Next up:** make `periodic_orbit_problem` construction `vmap`/`grad`-safe. Its
+    phase-condition reference derivative is computed from `p0` *before* the internal
+    refinement's `lax.while_loop`, so wrapping the factory in `jax.grad`/`jax.vmap` can leak a
+    tracer across that boundary (documented in `problems/periodic.py`'s own docstring). Fixing
+    it means recomputing that reference inside the differentiable solve. This blocks the usual
+    "ship a vmap-batched + differentiable example" convention for both periodic-orbit
+    continuation and period-doubling switching, so it benefits more than one feature — but it
+    touches shared machinery current tests depend on, which is why it is its own item rather
+    than folded into the switching work.
 
 ---
 

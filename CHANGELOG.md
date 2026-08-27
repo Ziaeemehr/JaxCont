@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `jc.BP`/`jc.branch_switch`: detect equilibrium branch points (pitchfork/transcritical
   crossings) and compute the crossing branch's tangent, closing the last v0.3.0+ roadmap
   item. Period-doubling switching remains a separate future item.
+- `jc.branch_switch_pd`: switch from a detected period-doubling bifurcation onto the
+  period-doubled cycle, completing the branch-switching feature. Verifies the switched
+  orbit is genuinely period-doubled rather than the original orbit traversed twice, and
+  raises instead of returning an unverified branch. Eager-only.
 
 ## [0.4.0] - 2026-08-20
 

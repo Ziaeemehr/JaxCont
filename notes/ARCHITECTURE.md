@@ -397,6 +397,17 @@ Sketched so the surface stays coherent as features land. **Do not implement or o
   new_prob = jc.branch_switch(f, bp_event, args=..., ds=0.01)
   new_sol = jc.continuation(new_prob, p_span=...)
   ```
+- **Period-doubling switching** (shipped -- see
+  docs/superpowers/specs/2026-08-27-period-doubling-switching-design.md):
+  ```python
+  sol = jc.continuation(periodic_prob, p_span=...,
+                        events=[jc.PeriodDoubling(raw_f=f, mesh=mesh)])
+  pd = [e for e in sol.events if e.kind == "period_doubling"][0]
+  doubled_prob = jc.branch_switch_pd(f, pd, mesh, dp=0.05)
+  doubled_sol = jc.continuation(doubled_prob, p_span=...)
+  ```
+  Eager-only (inherits `periodic_orbit_problem`'s construction-time
+  `vmap`/`grad` limitation).
 - **Normal forms / Lyapunov coefficient**: `jc.normal_form(sol, event)` -> criticality.
 
 ---
