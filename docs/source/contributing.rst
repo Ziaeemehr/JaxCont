@@ -25,13 +25,13 @@ Getting Started
       git clone https://github.com/Ziaeemehr/JaxCont.git
       cd JaxCont
 
-3. Create a development environment:
+3. Create a development environment with `uv <https://docs.astral.sh/uv/>`_:
 
    .. code-block:: bash
 
-      conda create -n jaxcont-dev python=3.11
-      conda activate jaxcont-dev
-      pip install -e ".[dev]"
+      uv venv --python 3.11
+      source .venv/bin/activate  # Windows: .venv\Scripts\activate
+      uv pip install -e ".[dev]"
 
 4. Create a branch for your changes:
 

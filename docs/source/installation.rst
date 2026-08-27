@@ -63,16 +63,16 @@ Run the test suite:
 
    pytest tests/
 
-Conda Environment (Recommended)
--------------------------------
+Virtual Environment (Recommended)
+----------------------------------
 
-Create a dedicated conda environment:
+Create a dedicated environment with `uv <https://docs.astral.sh/uv/>`_:
 
 .. code-block:: bash
 
-   conda create -n jaxcont python=3.11
-   conda activate jaxcont
-   pip install jaxcont
+   uv venv --python 3.11
+   source .venv/bin/activate  # Windows: .venv\Scripts\activate
+   uv pip install jaxcont
 
 Optional Dependencies
 ---------------------
@@ -117,6 +117,6 @@ If you have version conflicts, create a fresh environment:
 
 .. code-block:: bash
 
-   conda create -n jaxcont-clean python=3.11
-   conda activate jaxcont-clean
-   pip install jaxcont
+   uv venv --python 3.11 --clear
+   source .venv/bin/activate  # Windows: .venv\Scripts\activate
+   uv pip install jaxcont
