@@ -51,15 +51,10 @@ def periodic_orbit_problem(
     engine's generic corrector, and produces a better-conditioned starting
     tangent for the branch that follows.
 
-    Note: this factory's *construction* (this function call itself) is not
-    guaranteed safe under an outer ``jax.grad``/``jax.vmap`` -- the
-    phase-condition reference derivative is computed from ``p0`` before the
-    internal refinement's ``lax.while_loop``, so wrapping this whole call in
-    ``jax.grad`` can leak a tracer across that boundary. The *returned*
-    ``BifProblem``, once built, is fully ``jit``/``vmap``/``grad``-safe when
-    passed to ``jc.continuation()`` (that's an ordinary call into the
-    existing scan engine). Making construction itself differentiable is a
-    possible future enhancement, not required by the current design spec.
+    This factory's *construction* (this function call itself) is safe under
+    outer ``jax.grad``, ``jax.vmap``, and ``jax.jit`` transformations,
+    including when the caller's own trajectory and period guesses depend on
+    the differentiated parameter.
 
     Note: pass ``settings=jc.ContinuationPar(newton_tol=1e-5, ...)`` (not
     the default ``1e-6``) to ``jc.continuation()`` for the returned
@@ -101,7 +96,7 @@ def periodic_orbit_problem(
 
     def pack(mesh_states: Array, coll_states: Array, T: Array) -> Array:
         return jnp.concatenate(
-            [mesh_states.flatten(), coll_states.flatten(), jnp.array([T])]
+            [mesh_states.flatten(), coll_states.flatten(), jnp.reshape(T, (1,))]
         )
 
     def unpack(U: Array):
@@ -136,11 +131,30 @@ def periodic_orbit_problem(
             [defect.flatten(), continuity.flatten(), jnp.array([phase])]
         )
 
-    U_guess = pack(mesh_guess, coll_guess, jnp.asarray(period0, dtype=mesh_guess.dtype))
-    uref_prime_coll = jax.vmap(jax.vmap(lambda u: f(u, p0, None)))(coll_guess)
+    dtype = mesh_guess.dtype
+    p0_arr = jnp.asarray(p0, dtype=dtype)
+    period0_arr = jnp.asarray(period0, dtype=dtype)
+    uref_prime_coll = jax.vmap(jax.vmap(lambda u: f(u, p0_arr, None)))(coll_guess)
     args: PyTree = (coll_guess, uref_prime_coll, f, mesh)
 
-    p0_arr = jnp.asarray(p0, dtype=mesh_guess.dtype)
+    # Every p0-dependent value travels through `theta` instead of being
+    # captured by the closure below. Capturing `uref_prime_coll` (which is
+    # built from `p0`) used to leak a tracer across `lax.while_loop`'s trace
+    # boundary, so `jax.grad` through this factory raised
+    # `UnexpectedTracerError`. These values are still computed once, here,
+    # outside the Newton loop -- passing them as `theta` entries costs no
+    # extra work per iteration, it just makes the dependency explicit to JAX.
+    # `differentiable_root`'s callable-seed form does the same for the seed.
+    theta = (p0_arr, mesh_guess, coll_guess, uref_prime_coll, period0_arr)
+
+    def _seed(th):
+        _p, seed_mesh, seed_coll, _uref_prime, seed_period = th
+        return pack(seed_mesh, seed_coll, seed_period)
+
+    def _extended(U, th):
+        p, _seed_mesh, ref_coll, ref_prime, _seed_period = th
+        return residual(U, p, (ref_coll, ref_prime, f, mesh))
+
     # tol=1e-5, not differentiable_root's default 1e-8: this project runs
     # float32 by default (no jax_enable_x64 anywhere -- see
     # tests/test_functional_api.py's "tol=1e-6 (float32-reachable)" note),
@@ -150,6 +164,6 @@ def periodic_orbit_problem(
     # would just burn all max_iter iterations without ever satisfying
     # "done". Verified during design: with tol=1e-5 (comfortably above
     # that floor), residual converges cleanly to ~3.4e-6.
-    U0 = differentiable_root(lambda U, p: residual(U, p, args), U_guess, p0_arr, tol=1e-5)
+    U0 = differentiable_root(_extended, _seed, theta, tol=1e-5)
 
     return BifProblem(f=residual, u0=U0, p0=p0_arr, args=args, kind="periodic")

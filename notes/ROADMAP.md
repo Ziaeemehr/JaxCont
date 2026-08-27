@@ -477,7 +477,9 @@ Implementation plan: [docs/superpowers/plans/2026-07-22-viz-module.md](../docs/s
       **existing** `periodic_orbit_problem`, and verifies the result is genuinely
       period-doubled rather than the original orbit retraced (an under-sized seed converges
       cleanly onto the retraced orbit, so this check is mandatory, not hardening). Unlike the
-      equilibrium half it is eager-only, not `vmap`/`grad`-batched -- see item 27 below.
+      equilibrium half it is eager-only: its `(sign, eps)` search evaluates residuals as
+      concrete Python values, branches on them, and may raise, so that search loop cannot be
+      traced even though `periodic_orbit_problem` construction itself is now transform-safe.
 - [x] Two-parameter continuation: curves of folds and Hopf points, five codim-2
       events — *(done 2026-08-17, see
       [plan](../docs/superpowers/plans/2026-08-17-two-parameter-continuation.md) and its
@@ -953,17 +955,20 @@ worth resolving before, not during, the v0.2 periodic-orbit push:
     the plain 3-state `adaptx` system) via the new supported registry case `MC-LC-003`, with
     JaxCont independently continuing `adaptx`'s limit cycle from its own Hopf-direction seed
     (never consuming MatCont orbit data) and matching MatCont's PD point to 7.3e-4 in `alpha`
-    and 1.5e-4 in period. Eager-only: inherits `periodic_orbit_problem`'s construction-time
-    `vmap`/`grad` limitation (see item 27). Branch points on cycles (BPC) remain out of scope.
-27. **Next up:** make `periodic_orbit_problem` construction `vmap`/`grad`-safe. Its
-    phase-condition reference derivative is computed from `p0` *before* the internal
-    refinement's `lax.while_loop`, so wrapping the factory in `jax.grad`/`jax.vmap` can leak a
-    tracer across that boundary (documented in `problems/periodic.py`'s own docstring). Fixing
-    it means recomputing that reference inside the differentiable solve. This blocks the usual
-    "ship a vmap-batched + differentiable example" convention for both periodic-orbit
-    continuation and period-doubling switching, so it benefits more than one feature — but it
-    touches shared machinery current tests depend on, which is why it is its own item rather
-    than folded into the switching work.
+    and 1.5e-4 in period. Eager-only: its `(sign, eps)` search loop calls `float(...)` on
+    residuals, branches on `if measure > doubling_tol`, and raises when no candidate passes,
+    all of which require concrete values and cannot be traced. Branch points on cycles (BPC)
+    remain out of scope.
+27. ✅ **Differentiable periodic-orbit construction** — done 2026-08-27. Only `jax.grad` was
+    broken: `jax.vmap` and `jax.jit` over `periodic_orbit_problem(...)` construction already
+    worked correctly. The phase-condition reference derivative depended on `p0` but was
+    captured by the closure passed across the internal `lax.while_loop` trace boundary,
+    causing `UnexpectedTracerError`. Construction now threads every `p0`-dependent value
+    explicitly through `differentiable_root`'s `theta` and uses its callable-seed form; those
+    values are still computed once outside Newton, with no per-iteration recomputation. This
+    unblocks batched/differentiable periodic-orbit construction and its example. It does not
+    make `branch_switch_pd` traceable: that factory remains eager-only because its own
+    `(sign, eps)` search needs concrete values for Python conversion, branching, and errors.
 
 ---
 

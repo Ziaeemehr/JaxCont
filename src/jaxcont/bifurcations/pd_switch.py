@@ -160,8 +160,9 @@ def branch_switch_pd(
     :func:`_doubling_measure`, and returns the first that passes. If none does it
     raises, rather than returning a plausible but wrong branch.
 
-    This factory is eager-only: it calls ``periodic_orbit_problem``, whose
-    construction is not safe under an outer ``jax.grad``/``jax.vmap``. The
+    This factory is eager-only because its ``(sign, eps)`` search loop converts
+    residuals to concrete Python values, branches on the doubling measure, and
+    raises if no candidate passes; those operations cannot be traced. The
     returned ``BifProblem`` is itself fine to pass to ``jc.continuation``.
 
     Raises:

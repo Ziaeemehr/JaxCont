@@ -406,8 +406,9 @@ Sketched so the surface stays coherent as features land. **Do not implement or o
   doubled_prob = jc.branch_switch_pd(f, pd, mesh, dp=0.05)
   doubled_sol = jc.continuation(doubled_prob, p_span=...)
   ```
-  Eager-only (inherits `periodic_orbit_problem`'s construction-time
-  `vmap`/`grad` limitation).
+  Eager-only: its `(sign, eps)` verification search converts residuals to
+  concrete Python values, branches on them, and may raise. That loop cannot be
+  traced; `periodic_orbit_problem` construction itself is `jit`/`vmap`/`grad`-safe.
 - **Normal forms / Lyapunov coefficient**: `jc.normal_form(sol, event)` -> criticality.
 
 ---

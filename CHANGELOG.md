@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   orbit is genuinely period-doubled rather than the original orbit traversed twice, and
   raises instead of returning an unverified branch. Eager-only.
 
+### Fixed
+- `periodic_orbit_problem(...)` construction is now safe under `jax.grad`, including when
+  trajectory and period guesses depend on the differentiated parameter. All parameter-dependent
+  phase-reference and seed values are passed explicitly through the implicit solve instead of
+  leaking captured tracers across its Newton `lax.while_loop`; existing `jax.vmap` and `jax.jit`
+  construction behavior is preserved.
+
 ## [0.4.0] - 2026-08-20
 
 ### Added

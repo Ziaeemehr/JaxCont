@@ -23,9 +23,9 @@ the doubled cycle has zero amplitude exactly at the bifurcation, so
 continues from there. Correcting at the bifurcation parameter itself would just
 collapse back onto the base cycle.
 
-Note: period-doubling switching is eager-only -- it builds a new
-periodic-orbit problem, and that construction is not safe under an outer
-``jax.vmap``/``jax.grad``.
+Note: period-doubling switching is eager-only because its ``(sign, eps)``
+verification search needs concrete residual values for Python branching and
+errors. Periodic-orbit problem construction itself is transform-safe.
 """
 
 import os

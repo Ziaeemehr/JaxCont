@@ -6,6 +6,7 @@ rho=1 -- independent of any external reference tool. See
 docs/superpowers/specs/2026-07-24-periodic-orbit-collocation-design.md.
 """
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -34,6 +35,20 @@ def _coarse_wrong_trajectory():
         [0.8 * np.cos(theta(t_traj)), 0.8 * np.sin(theta(t_traj))], axis=1
     )
     return jnp.asarray(u_traj), jnp.asarray(t_traj)
+
+
+_AD_MESH = Collocation(ntst=10, ncol=4)
+_AD_T = jnp.linspace(0.0, 2 * jnp.pi, 120, endpoint=False)
+
+
+def _cycle_radius(p, *, parameter_dependent_guess):
+    guess_radius = jnp.sqrt(p) if parameter_dependent_guess else 1.0
+    u_guess = guess_radius * jnp.stack([jnp.cos(_AD_T), jnp.sin(_AD_T)], axis=1)
+    problem = periodic_orbit_problem(
+        _rhs, u_guess, _AD_T, 2 * jnp.pi, p, _AD_MESH
+    )
+    mesh_states = problem.u0[: 2 * _AD_MESH.ntst].reshape(_AD_MESH.ntst, 2)
+    return jnp.mean(jnp.linalg.norm(mesh_states, axis=1))
 
 
 def test_periodic_orbit_problem_refines_to_exact_circle():
@@ -114,3 +129,41 @@ def test_periodic_orbit_problem_args_carries_raw_f_and_mesh():
     # exercises the fixed destructuring line inside residual()).
     r = prob.f(prob.u0, prob.p0, prob.args)
     assert float(jnp.linalg.norm(r)) < 1e-5
+
+
+def test_construction_grad_matches_exact_radius_derivative_with_fixed_guess():
+    parameters = jnp.array([0.5, 1.0, 1.5])
+    actual = jax.vmap(jax.grad(lambda p: _cycle_radius(p, parameter_dependent_guess=False)))(
+        parameters
+    )
+    expected = 1.0 / (2.0 * jnp.sqrt(parameters))
+    np.testing.assert_allclose(actual, expected, atol=5e-3, rtol=0.0)
+
+
+def test_construction_grad_matches_exact_radius_derivative_with_parameter_dependent_guess():
+    parameters = jnp.array([0.5, 1.0, 1.5])
+    actual = jax.vmap(jax.grad(lambda p: _cycle_radius(p, parameter_dependent_guess=True)))(
+        parameters
+    )
+    expected = 1.0 / (2.0 * jnp.sqrt(parameters))
+    np.testing.assert_allclose(actual, expected, atol=5e-3, rtol=0.0)
+
+
+def test_vmap_over_construction_matches_eager_radii():
+    parameters = jnp.array([0.5, 1.0, 1.5])
+    eager = jnp.stack(
+        [_cycle_radius(p, parameter_dependent_guess=True) for p in parameters]
+    )
+    batched = jax.vmap(
+        lambda p: _cycle_radius(p, parameter_dependent_guess=True)
+    )(parameters)
+    np.testing.assert_array_equal(batched, eager)
+
+
+def test_jit_over_construction_matches_eager_radius():
+    p = jnp.asarray(1.25)
+    eager = _cycle_radius(p, parameter_dependent_guess=True)
+    compiled = jax.jit(
+        lambda value: _cycle_radius(value, parameter_dependent_guess=True)
+    )(p)
+    np.testing.assert_allclose(compiled, eager, atol=2e-7, rtol=0.0)
