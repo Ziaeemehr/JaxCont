@@ -523,7 +523,7 @@ class NeimarkSacker(Event):
         bootstrap (dropped once `prev_value` anchors continuity tracking);
         here the bootstrap pool is genuinely-complex multipliers (imaginary
         part above `tolerance`) instead of real ones, and the bootstrap
-        target is the unit circle (|mult|=1) instead of -1.
+        target is the unit circle (``|mult|=1``) instead of -1.
         """
         mult = point.eigenvalues
         trivial_idx = jnp.argmin(jnp.abs(mult - 1.0))

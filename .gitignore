@@ -107,3 +107,7 @@ docs/_templates/
 !docs/images/*.png
 !docs/images/*.svg
 !docs/images/logo/*.svg
+
+# task-observer skill's log -- written into the repo root by the skill
+# itself instead of its own workspace folder; not project content.
+skill-observations/

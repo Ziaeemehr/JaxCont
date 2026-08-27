@@ -19,13 +19,37 @@ Problem and continuation
 Algorithms and events
 ---------------------
 
+.. autoclass:: jaxcont.ContinuationAlgorithm
+
 .. autoclass:: jaxcont.PseudoArclength
 
 .. autoclass:: jaxcont.Natural
 
+.. autoclass:: jaxcont.Event
+
 .. autoclass:: jaxcont.Fold
 
 .. autoclass:: jaxcont.Hopf
+
+.. autoclass:: jaxcont.BP
+
+.. autoclass:: jaxcont.PeriodDoubling
+
+.. autoclass:: jaxcont.NeimarkSacker
+
+Branch switching
+-----------------
+
+Switch off a detected bifurcation onto the branch that crosses there, rather
+than continuing to follow the original branch through it. See
+``docs/superpowers/specs/2026-08-26-branch-point-switching-design.md`` (an
+equilibrium branch point, from ``BP``) and
+``docs/superpowers/specs/2026-08-27-period-doubling-switching-design.md`` (a
+period-doubled cycle, from ``PeriodDoubling``).
+
+.. autofunction:: jaxcont.branch_switch
+
+.. autofunction:: jaxcont.branch_switch_pd
 
 Results
 -------
@@ -88,6 +112,34 @@ functions return a bare ``p*`` array with no flag, for direct use under
 
 .. autofunction:: jaxcont.double_hopf_parameters
 
+Codim-2 events
+--------------
+
+``Event`` implementations usable via ``continuation(..., events=[...])`` on a
+fold or Hopf curve (see "Two-parameter continuation" below): each is a test
+function built on the matching direct solver above.
+
+.. autoclass:: jaxcont.Cusp
+
+.. autoclass:: jaxcont.BogdanovTakens
+
+.. autoclass:: jaxcont.GeneralizedHopf
+
+.. autoclass:: jaxcont.ZeroHopf
+
+.. autoclass:: jaxcont.DoubleHopf
+
+Two-parameter continuation
+---------------------------
+
+Curves of folds or Hopf points through a two-parameter plane, traced by the
+same scan engine as ordinary equilibrium continuation -- see
+``docs/superpowers/specs/2026-08-17-two-parameter-continuation-design.md``.
+
+.. autofunction:: jaxcont.fold_curve_problem
+
+.. autofunction:: jaxcont.hopf_curve_problem
+
 Low-level scan engine
 ---------------------
 
@@ -106,6 +158,10 @@ Visualization
 .. autofunction:: jaxcont.viz.plot_eigenvalues
 
 .. autofunction:: jaxcont.viz.plot_branch_states
+
+.. autofunction:: jaxcont.viz.plot_bifurcation_diagram
+
+.. autofunction:: jaxcont.viz.plot_two_parameter_diagram
 
 2D phase planes
 ~~~~~~~~~~~~~~~
@@ -126,3 +182,45 @@ are not generally equilibria.
 .. autofunction:: jaxcont.viz.plot_equilibria
 
 .. autofunction:: jaxcont.viz.plot_trajectory
+
+Stability analysis
+-------------------
+
+.. autofunction:: jaxcont.analyze_stability
+
+.. autofunction:: jaxcont.compute_eigenvalues
+
+Lower-level problem and solver infrastructure
+-----------------------------------------------
+
+The core dataclasses ``bif_problem``/``continuation`` build on, and the
+pluggable linear-algebra/corrector protocols behind ``Solvers`` -- most users
+should not need these directly.
+
+.. autoclass:: jaxcont.EquilibriumProblem
+   :members:
+
+.. autoclass:: jaxcont.ContinuationProblem
+   :members:
+
+.. autoclass:: jaxcont.ContinuationSolution
+   :members:
+
+.. autoclass:: jaxcont.Solvers
+
+.. autoclass:: jaxcont.LinearSolver
+
+.. autoclass:: jaxcont.Dense
+
+.. autoclass:: jaxcont.EigenSolver
+
+.. autoclass:: jaxcont.DenseEigen
+
+.. autoclass:: jaxcont.Corrector
+   :members:
+
+.. autoclass:: jaxcont.NewtonSolver
+   :members:
+
+.. autoclass:: jaxcont.Config
+   :members:

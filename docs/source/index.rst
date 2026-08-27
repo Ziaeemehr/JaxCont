@@ -14,8 +14,10 @@ two-parameter continuation (fold/Hopf curves with their own
 codimension-two events), and phase response curves: infinitesimal PRC
 (``prc_curve``, cross-validated against MatCont) and its
 parameter-derivative sensitivity (``dprc_curve``, validated independently
-of MatCont, which does not compute this quantity). Branch switching,
-general boundary-value problems, and connecting orbits remain unsupported.
+of MatCont, which does not compute this quantity), and branch switching
+(``branch_switch`` off an equilibrium branch point, ``branch_switch_pd``
+off a period-doubling bifurcation). General boundary-value problems and
+connecting orbits remain unsupported.
 
 Start here
 ----------
