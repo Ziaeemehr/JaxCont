@@ -10,6 +10,12 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.11"
+  jobs:
+    post_checkout:
+      # RTD's default shallow clone hides the git tags setuptools_scm needs
+      # to compute the package version (v0.4.0, v0.4.1.dev3+g..., etc.).
+      - git fetch --unshallow || true
+      - git fetch --tags
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:

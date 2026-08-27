@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77.0", "wheel"]
+requires = ["setuptools>=77.0", "setuptools_scm[toml]>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -67,8 +67,8 @@ Changelog = "https://jaxcont.readthedocs.io/en/latest/changelog.html"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools.dynamic]
-version = {attr = "jaxcont._version.__version__"}
+[tool.setuptools_scm]
+write_to = "src/jaxcont/_version.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
