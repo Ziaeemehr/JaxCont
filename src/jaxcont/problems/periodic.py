@@ -53,6 +53,25 @@ def periodic_residual(U: Array, p: Array, args: PeriodicArgs) -> Array:
     return jnp.concatenate([defect.flatten(), continuity.flatten(), jnp.array([phase])])
 
 
+def periodic_step_update(args: PeriodicArgs, U: Array, p: Array) -> PeriodicArgs:
+    """Re-anchor the phase condition on the accepted orbit ``U`` at ``p``.
+
+    The reference becomes ``U``'s collocation states and their time
+    derivative ``raw_f(u, p, user_args)``, so the integral phase condition
+    always compares a step against the previous orbit, not the seed. Shapes
+    and dtypes of ``args`` are preserved.
+    """
+    ntst, ncol = args.mesh.ntst, args.mesh.ncol
+    n = args.u_ref_coll.shape[-1]
+    coll = U[ntst * n : ntst * n + ntst * ncol * n].reshape(ntst, ncol, n)
+    prime = jax.vmap(jax.vmap(lambda u: args.raw_f(u, p, args.user_args)))(coll)
+    return PeriodicArgs(
+        coll.astype(args.u_ref_coll.dtype),
+        prime.astype(args.uref_prime_coll.dtype),
+        args.user_args, args.raw_f, args.mesh,
+    )
+
+
 def periodic_orbit_problem(
     f: Callable[[Array, Array, PyTree], Array],
     u_trajectory: Array,
@@ -81,7 +100,9 @@ def periodic_orbit_problem(
     everywhere it is evaluated, and is differentiable (``jax.grad`` of the
     converged orbit with respect to it works). The returned problem's own
     ``args`` is a :class:`~jaxcont.problems.periodic_args.PeriodicArgs` that
-    wraps it together with the phase-condition reference data.
+    wraps it together with the phase-condition reference data. The problem's
+    ``step_update`` is :func:`periodic_step_update`, so during continuation
+    the phase condition is re-anchored on each accepted orbit.
 
     ``u_trajectory``/``t_trajectory`` is a caller-supplied coarse trajectory
     guess (from the caller's own simulation -- JaxCont does not integrate
@@ -188,4 +209,7 @@ def periodic_orbit_problem(
         if not bool(amplitude > 10 * tol * (1 + jnp.linalg.norm(mean))):
             raise ValueError("refined orbit amplitude is too small")
 
-    return BifProblem(f=periodic_residual, u0=U0, p0=p0_arr, args=pargs, kind="periodic")
+    return BifProblem(
+        f=periodic_residual, u0=U0, p0=p0_arr, args=pargs, kind="periodic",
+        step_update=periodic_step_update,
+    )

@@ -2,6 +2,7 @@
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 import jaxcont as jc
@@ -286,3 +287,46 @@ def test_hopf_curve_events_do_not_eigendecompose_the_extended_jacobian():
     hits = [h for h in sol.events if h.kind == "generalized_hopf"]
     assert len(hits) == 1
     assert abs(hits[0].p - 0.4) < 5e-2
+
+
+_FLIP_CENTRE = jnp.array([0.5, -0.3, 0.2])
+
+
+def _flipping_hopf(u, p, args):
+    """Hopf point at mu = p0 - p1 = 0 (exact curve p0 == p1, omega == 1).
+
+    The oscillation plane turns by pi about the x axis as p0 goes from 0 to
+    1, so the critical eigenvector at p0 >= 1 is the complex conjugate of
+    the one at p0 = 0, i.e. orthogonal to it.
+    """
+    s = jnp.clip(p[0], 0.0, 1.0)
+    a = jnp.pi * s**3 * (10.0 - 15.0 * s + 6.0 * s**2)
+    c, sn = jnp.cos(a), jnp.sin(a)
+    o, z0 = jnp.ones_like(c), jnp.zeros_like(c)
+    R = jnp.array([[o, z0, z0], [z0, c, -sn], [z0, sn, c]])
+    z = R.T @ (u - _FLIP_CENTRE)
+    mu = p[0] - p[1]
+    r2 = z[0] ** 2 + z[1] ** 2
+    dz = jnp.array([mu * z[0] - z[1] - z[0] * r2, z[0] + mu * z[1] - z[1] * r2, -z[2]])
+    return R @ dz
+
+
+def test_hopf_curve_survives_eigenvector_rotation():
+    prob = hopf_curve_problem(
+        _flipping_hopf, _FLIP_CENTRE, jnp.array([0.0, 0.0]), free=1,
+    )
+    sol = jc.continuation(
+        prob,
+        p_span=(0.0, 2.0),
+        settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5, max_steps=200),
+    )
+    assert sol.status == "reached_end"
+    # Consecutive points stay within two ds_max (= 0.1) of each other: no
+    # jump across a degenerate phase condition.
+    steps = np.diff(np.column_stack([sol.branch.states, sol.branch.params]), axis=0)
+    assert np.max(np.linalg.norm(steps, axis=1)) <= 0.2
+    for i in range(sol.branch.params.shape[0]):
+        p1 = float(sol.branch.params[i])
+        _, p0, _, _, omega = unpack_hopf_curve(sol.branch.states[i], n=3)
+        assert abs(float(p0) - p1) < 1e-3
+        assert abs(float(omega) - 1.0) < 1e-3

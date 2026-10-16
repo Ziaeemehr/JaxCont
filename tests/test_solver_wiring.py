@@ -50,7 +50,7 @@ class _CountingEigenSolver:
 
 
 _SCAN_ARGS = (
-    pitchfork, jnp.array([0.1]), jnp.array(0.5), jnp.array(1.5), None,
+    pitchfork, None, jnp.array([0.1]), jnp.array(0.5), jnp.array(1.5), None,
     jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
     jnp.array(1e-6), 60, jnp.array(20),
 )
@@ -91,7 +91,7 @@ def test_pseudo_arclength_scan_accepts_independently_constructed_dense_instances
 def test_pseudo_arclength_scan_vmap_with_explicit_linear_solver():
     def run(p0):
         return pseudo_arclength_scan(
-            pitchfork, jnp.array([0.1]), p0, p0 + 1.0, None,
+            pitchfork, None, jnp.array([0.1]), p0, p0 + 1.0, None,
             jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
             jnp.array(1e-6), 80, jnp.array(20), Dense(),
         )

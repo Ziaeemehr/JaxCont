@@ -7,10 +7,12 @@ Kept fast: small `max_steps`, `tol=1e-6` (float32-reachable), tiny systems.
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 import jaxcont as jc
 from jaxcont.core.scan_continuation import Status, natural_scan, pseudo_arclength_scan
+from jaxcont.solvers.protocols import Dense
 
 
 def test_bp_and_branch_switch_are_exported_at_top_level():
@@ -239,7 +241,7 @@ class TestScanEngine:
 
         def run(p0):
             return pseudo_arclength_scan(
-                f, jnp.array([0.1]), p0, p0 + 1.0, None,
+                f, None, jnp.array([0.1]), p0, p0 + 1.0, None,
                 jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
                 jnp.array(1e-6), 80, jnp.array(20),
             )
@@ -252,7 +254,7 @@ class TestScanEngine:
         # r - tanh(x): the branch that hung the interim corrector must terminate.
         f = lambda u, p, args: jnp.array([p - jnp.tanh(u[0])])
         res = pseudo_arclength_scan(
-            f, jnp.array([0.5]), jnp.array(0.5), jnp.array(1.5), None,
+            f, None, jnp.array([0.5]), jnp.array(0.5), jnp.array(1.5), None,
             jnp.array(0.005), jnp.array(0.001), jnp.array(0.2),
             jnp.array(1e-6), 200, jnp.array(20),
         )
@@ -263,7 +265,7 @@ class TestScanEngine:
         f = pitchfork
 
         res = pseudo_arclength_scan(
-            f, jnp.array([0.1]), jnp.array(0.5), jnp.array(1.5), None,
+            f, None, jnp.array([0.1]), jnp.array(0.5), jnp.array(1.5), None,
             jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
             jnp.array(1e-6), 60, jnp.array(20),
         )
@@ -280,7 +282,7 @@ class TestNaturalScanEngine:
         f = lambda u, p, args: jnp.array([p - u[0]])
 
         res = natural_scan(
-            f, jnp.array([0.0]), jnp.array(0.0), jnp.array(1.0), None,
+            f, None, jnp.array([0.0]), jnp.array(0.0), jnp.array(1.0), None,
             jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
             jnp.array(1e-6), 40, jnp.array(20),
         )
@@ -296,7 +298,7 @@ class TestNaturalScanEngine:
         f = lambda u, p, args: jnp.array([p - u[0] ** 2])
 
         res = natural_scan(
-            f, jnp.array([1.0]), jnp.array(1.0), jnp.array(-1.0), None,
+            f, None, jnp.array([1.0]), jnp.array(1.0), jnp.array(-1.0), None,
             jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
             jnp.array(1e-6), 60, jnp.array(20),
         )
@@ -312,7 +314,7 @@ class TestNaturalScanEngine:
 
         def run(p0):
             return natural_scan(
-                f, jnp.array([0.0]), p0, p0 + 1.0, None,
+                f, None, jnp.array([0.0]), p0, p0 + 1.0, None,
                 jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
                 jnp.array(1e-6), 40, jnp.array(20),
             )
@@ -366,7 +368,7 @@ def test_seed_correction_failure_falls_back_to_finite_u0(scan_fn):
     u0 = jnp.array([0.0])
     p0 = jnp.array(1.0)  # no real root exists for p > 0
     result = scan_fn(
-        f, u0, p0, jnp.array(2.0), None,
+        f, None, u0, p0, jnp.array(2.0), None,
         jnp.array(0.01), jnp.array(1e-6), jnp.array(0.1),
         jnp.array(1e-8), 5, jnp.array(50),
     )
@@ -522,7 +524,7 @@ def test_grad_wrt_args_through_engine_forward():
 
     def run(a):
         return pseudo_arclength_scan(
-            f, jnp.array([0.3]), jnp.array(0.5), jnp.array(1.5), a,
+            f, None, jnp.array([0.3]), jnp.array(0.5), jnp.array(1.5), a,
             jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
             jnp.array(1e-4), 30, jnp.array(20),
         )
@@ -679,3 +681,54 @@ def test_bothside_tangents_follow_stitched_direction():
     )
     tangents = out.branch.tangents
     assert bool(jnp.all(jnp.sum(tangents[:-1] * tangents[1:], axis=1) > 0))
+
+
+def _shifted(u, p, args):
+    return u - args["c"] * args["k"]
+
+
+def _shift_by_one(args, u, p):
+    return {"c": u / args["k"] + 1.0, "k": args["k"]}
+
+
+def test_scan_applies_step_update_to_the_seed_and_each_accepted_step():
+    # u = c, and step_update sets c = u + 1: the seed is corrected with the
+    # original c, every later point with the update of the point before it.
+    res = natural_scan(
+        _shifted, _shift_by_one, jnp.array([0.3]), jnp.array(0.0), jnp.array(1.0),
+        {"c": jnp.array([2.0]), "k": jnp.array(1.0)},
+        jnp.array(0.1), jnp.array(1e-5), jnp.array(0.1),
+        jnp.array(1e-4), 5, jnp.array(20), Dense(), jnp.array(False),
+    )
+    n = int(res.n_valid)
+    assert n == 6
+    np.testing.assert_allclose(np.asarray(res.states[:n, 0]), 2.0 + np.arange(n), rtol=1e-5)
+
+
+def test_step_update_sees_full_args_and_keeps_compile_cache():
+    # "k" is a Python scalar, bound statically; step_update still sees it.
+    prob = jc.bif_problem(
+        _shifted, u0=jnp.array([0.0]), p0=0.0,
+        args={"c": jnp.array([1.0]), "k": 2.0}, step_update=_shift_by_one,
+    )
+    settings = jc.ContinuationPar(ds=0.1, ds_max=0.1, max_steps=4, compute_stability=False)
+    res = jc.continuation(prob, jc.Natural(), p_span=(0.0, 1.0), settings=settings)
+    np.testing.assert_allclose(
+        np.asarray(res.branch.states[:, 0]), 2.0 * (1.0 + np.arange(5)), rtol=1e-5
+    )
+    size = natural_scan._cache_size()
+    jc.continuation(prob, jc.Natural(), p_span=(0.0, 1.0), settings=settings)
+    assert natural_scan._cache_size() == size
+
+
+def test_step_update_may_not_change_static_args():
+    prob = jc.bif_problem(
+        _shifted, u0=jnp.array([1.0]), p0=0.0,
+        args={"c": jnp.array([1.0]), "k": 1.0},
+        step_update=lambda a, u, p: {"c": a["c"], "k": 3.0},
+    )
+    with pytest.raises(ValueError, match="only change the array leaves"):
+        jc.continuation(
+            prob, p_span=(0.0, 1.0),
+            settings=jc.ContinuationPar(max_steps=3, compute_stability=False),
+        )

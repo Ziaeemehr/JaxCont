@@ -109,6 +109,7 @@ def test_vmap_sweep_runs_on_gpu():
     def run_one(b):
         res = pseudo_arclength_scan(
             make_rhs(b),
+            None,                # step_update (static)
             jnp.array([0.05]),   # u0
             jnp.array(-1.0),     # p0
             jnp.array(2.0),      # p_end

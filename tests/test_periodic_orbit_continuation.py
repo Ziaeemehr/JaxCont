@@ -115,3 +115,91 @@ def test_fold_events_zero_false_positives_on_periodic_branch():
     )
     assert sol.branch.n_valid > 1
     assert sol.events == []
+
+
+def _brusselator(u, p, args):
+    x, y = u[0], u[1]
+    return jnp.array([1.0 - (p + 1.0) * x + x**2 * y, p * x - x**2 * y])
+
+
+def test_long_branch_non_symmetric_orbit():
+    # Example 11's Brusselator over its full documented range, b in [2.5, 4]:
+    # the cycle is not symmetric and its shape changes strongly.
+    from scipy.integrate import solve_ivp
+    from scipy.signal import find_peaks
+
+    def rhs_np(t, u):
+        x, y = u
+        return [1.0 - 3.5 * x + x**2 * y, 2.5 * x - x**2 * y]
+
+    raw = solve_ivp(rhs_np, [0.0, 80.0], [1.1, 1.1], max_step=0.01, dense_output=True)
+    tail = np.linspace(60.0, 80.0, 6000)
+    peaks, _ = find_peaks(raw.sol(tail)[0])
+    peak_times = tail[peaks]
+    period = float(np.mean(np.diff(peak_times)))
+    t_traj = np.linspace(0.0, period, 60, endpoint=False)
+    u_traj = raw.sol(t_traj + peak_times[-2]).T
+
+    prob = periodic_orbit_problem(
+        _brusselator, jnp.asarray(u_traj), jnp.asarray(t_traj), period, 2.5,
+        Collocation(ntst=20, ncol=4), tol=1e-4,
+    )
+    sol = jc.continuation(
+        prob, p_span=(2.5, 4.0),
+        settings=jc.ContinuationPar(
+            ds=0.05, max_steps=350, newton_tol=1e-4, compute_stability=False
+        ),
+    )
+    assert sol.status == "reached_end"
+    assert float(sol.branch.params[-1]) >= 4.0
+
+
+def _flip_angle(p):
+    """Rotation angle of the cycle's plane: 0 at p <= 0, pi at p >= 1 (C^2)."""
+    s = jnp.clip(p, 0.0, 1.0)
+    return jnp.pi * s**3 * (10.0 - 15.0 * s + 6.0 * s**2)
+
+
+def _rot_x(a):
+    c, s = jnp.cos(a), jnp.sin(a)
+    o, z = jnp.ones_like(c), jnp.zeros_like(c)
+    return jnp.array([[o, z, z], [z, c, -s], [z, s, c]])
+
+
+def _flipping_cycle(u, p, args):
+    """A unit-circle cycle of period 2*pi whose plane turns by pi about the
+    x axis as p goes from 0 to 1: at p >= 1 the same circle runs backwards."""
+    R = _rot_x(_flip_angle(p))
+    z = R.T @ u
+    r2 = z[0] ** 2 + z[1] ** 2
+    dz = jnp.array([(1 - r2) * z[0] - z[1], (1 - r2) * z[1] + z[0], -z[2]])
+    return R @ dz
+
+
+def test_periodic_branch_survives_reversal_of_the_cycle():
+    # A phase condition anchored to the starting cycle vanishes identically
+    # once the cycle runs backwards, so the reference must follow the branch.
+    t = np.linspace(0.0, 2 * np.pi, 60, endpoint=False)
+    u = np.stack([np.cos(t), np.sin(t), np.zeros_like(t)], axis=1)
+    ntst = 10
+    prob = periodic_orbit_problem(
+        _flipping_cycle, jnp.asarray(u), jnp.asarray(t), 2 * np.pi, 0.0,
+        Collocation(ntst=ntst, ncol=4),
+    )
+    sol = jc.continuation(
+        prob, p_span=(0.0, 2.0),
+        settings=jc.ContinuationPar(
+            ds=0.05, max_steps=200, newton_tol=1e-5, compute_stability=False
+        ),
+    )
+    assert sol.status == "reached_end"
+    # Consecutive points stay within two ds_max (= 0.1) of each other.
+    steps = np.diff(np.column_stack([sol.branch.states, sol.branch.params]), axis=0)
+    assert np.max(np.linalg.norm(steps, axis=1)) <= 0.2
+    last = np.asarray(sol.branch.states[-1])
+    mesh_states = last[: ntst * 3].reshape(ntst, 3)
+    np.testing.assert_allclose(last[-1], 2 * np.pi, rtol=1e-4)
+    np.testing.assert_allclose(np.linalg.norm(mesh_states, axis=1), 1.0, atol=1e-4)
+    # Reversed sense of rotation: x * y' - y * x' < 0 around the cycle.
+    x, y = mesh_states[:, 0], mesh_states[:, 1]
+    assert np.all(x * np.roll(y, -1) - y * np.roll(x, -1) < 0)

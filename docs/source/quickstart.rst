@@ -48,14 +48,16 @@ The fixed-shape scan result can be transformed directly. Here each value of
    from jaxcont.core.scan_continuation import pseudo_arclength_scan
 
    def run_branch(b):
-       def rhs(u, p):
+       def rhs(u, p, args):
            return jnp.array([p * u[0] - u[0] ** 3 + b])
 
        return pseudo_arclength_scan(
            rhs,
+           None,  # step_update
            jnp.array([0.05]),
            jnp.array(-1.0),
            jnp.array(2.0),
+           None,  # args
            jnp.array(0.05),
            jnp.array(1e-5),
            jnp.array(0.2),

@@ -115,19 +115,24 @@ def _seed(f, u, p, args, n):
 
 def _extended_residual(x, f, args, n, u_guess, p_guess):
     """G(x, args) for the Hopf extended system."""
-    u, p, q1, q2, omega = _unpack(x, n)
     # Recomputing the seed (including jnp.linalg.eig) on every Newton
     # iteration is deliberate, not an oversight: differentiable_root's
     # documented contract requires theta-dependent seeds to be computed
     # inside the traced primal (here, under stop_gradient), not hoisted out
     # as a loop-invariant -- see differentiable_root's own docstring.
     q1_seed, q2_seed, _ = _seed(f, u_guess, p_guess, lax.stop_gradient(args), n)
+    return _anchored_residual(x, f, args, n, q1_seed, q2_seed)
+
+
+def _anchored_residual(x, f, args, n, q1_anchor, q2_anchor):
+    """G(x, args) with G5 anchored to the given ``(q1_anchor, q2_anchor)``."""
+    u, p, q1, q2, omega = _unpack(x, n)
     jac = jacfwd(f, argnums=0)(u, p, args)
     g1 = f(u, p, args)
     g2 = jac @ q1 + omega * q2
     g3 = jac @ q2 - omega * q1
     g4 = jnp.dot(q1, q1) + jnp.dot(q2, q2) - 1.0
-    g5 = jnp.dot(q1_seed, q2) - jnp.dot(q2_seed, q1)
+    g5 = jnp.dot(q1_anchor, q2) - jnp.dot(q2_anchor, q1)
     return jnp.concatenate([g1, g2, g3, jnp.reshape(g4, (1,)), jnp.reshape(g5, (1,))])
 
 

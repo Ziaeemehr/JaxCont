@@ -84,8 +84,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Event.test_function` values are evaluated in one `jax.vmap` call where the function is
   array-pure, per point otherwise; `Fold.test_function` now returns an array.
   `detect_events` takes an optional `ds_values`.
+- `pseudo_arclength_scan` / `natural_scan` take a static `step_update` (or `None`) as their
+  second positional argument, right after `f`; positional calls must insert it.
+- A Hopf-curve problem's `args` is now `jaxcont.bifurcations.curves.HopfCurveArgs`
+  (`q1_anchor`, `q2_anchor`, `user_args`) instead of the caller's `args`, which moves to
+  `user_args`. The phase condition is anchored to that eigenvector instead of one recomputed
+  from the seed point, and is re-anchored on every accepted point, so a curve whose critical
+  eigenvector rotates far from the seed's no longer stalls or jumps.
+- Periodic-orbit continuation re-anchors the integral phase condition on each accepted orbit
+  (`periodic_step_update`), so the residual of a branch point is zero with the phase reference
+  of the point before it, not with the problem's original `args`. A cycle that turns far from
+  its starting orbit (e.g. reverses its sense of rotation) no longer stalls.
 
 ### Added
+- `BifProblem.step_update(args, u, p) -> args` (and `bif_problem(..., step_update=...)`):
+  per-step refresh of auxiliary `args` data such as a phase-condition reference. The scan
+  engines carry `args` and apply it to the corrected seed and after every accepted step;
+  `detect_events(..., step_update=, f=)` refines each bracket with
+  `step_update(args, u_left, p_left)`. `jaxcont.problems.periodic.periodic_step_update` and
+  `jaxcont.bifurcations.curves.hopf_curve_step_update` are the periodic and Hopf-curve hooks.
 - `ContinuationResult.rejected_events` and `EventHit.status` (`"validated"` or `"failed"`),
   with `info["reason"]` in `"not_converged"`, `"outside_bracket"`, `"spectral_check_failed"`.
 - `ContinuationResult.status` (`"reached_end"`, `"max_steps"`, `"stalled"`, `"nonfinite"`,

@@ -18,8 +18,15 @@ Everything operates on a pure ``f(u, p, args) -> residual``. The continuation
 parameter is the explicit scalar ``p``; ``args`` is a *dynamic* PyTree input
 (traced, not closed over), so changing ``args`` values reuses the compiled
 kernel and the result is differentiable with respect to ``args``. Only ``f``
-itself is static: a fresh lambda ``f`` per call still recompiles, so pass a
-module-level function (or a reused callable) to benefit from the cache.
+(and ``step_update``) are static: a fresh lambda per call still recompiles, so
+pass a module-level function (or a reused callable) to benefit from the cache.
+
+``step_update(args, u, p) -> args`` (static, optional) refreshes auxiliary
+data in ``args`` -- a phase-condition reference orbit, an eigenvector anchor
+-- from each accepted point, so the next step is corrected against data that
+follows the branch. It runs once on the corrected seed and once after every
+accepted step, and must return a PyTree of the same structure, shapes and
+dtypes (it is part of the ``lax.while_loop`` carry).
 
 Design note (adaptivity): a rejected step shrinks ``ds`` and re-enters the loop
 without advancing the write index, so rejections do not consume ``max_steps``;
@@ -197,6 +204,20 @@ def _attempt_budget(max_attempts, max_steps):
     return jnp.asarray(max_attempts, jnp.int32)
 
 
+def _apply_step_update(step_update, args, u, p, accepted):
+    """``step_update(args, u, p)`` where ``accepted``, else ``args`` unchanged."""
+    if step_update is None:
+        return args
+    updated = step_update(args, u, p)
+    if jax.tree_util.tree_structure(updated) != jax.tree_util.tree_structure(args):
+        raise ValueError(
+            "step_update must return args with the same PyTree structure it was given"
+        )
+    return jax.tree_util.tree_map(
+        lambda new, old: jnp.where(accepted, new, old), updated, args,
+    )
+
+
 def _final_status(final, seed_converged, max_steps):
     """Status of a finished loop: seed failure, the recorded stop reason, else the exhausted budget."""
     status = jnp.where(
@@ -211,9 +232,10 @@ def _final_status(final, seed_converged, max_steps):
 # Whole-loop continuation
 # ---------------------------------------------------------------------------
 
-@partial(jax.jit, static_argnums=(0, 9, 11))
+@partial(jax.jit, static_argnums=(0, 1, 10, 12))
 def pseudo_arclength_scan(
     f: Callable[[Array, Array, PyTree], Array],
+    step_update: Optional[Callable[[PyTree, Array, Array], PyTree]],
     u0: Array,
     p0: Array,
     p_end: Array,
@@ -231,7 +253,8 @@ def pseudo_arclength_scan(
     """
     Continue ``f(u, p, args) = 0`` in ``p`` from ``(u0, p0)`` toward ``p_end``.
 
-    ``f`` and ``max_steps`` are static (they set the compiled program & buffer
+    ``f``, ``step_update`` (``None`` or see the module docstring) and
+    ``max_steps`` are static (they set the compiled program & buffer
     sizes); everything else, including the ``args`` PyTree, may be traced, so this whole function is
     ``jit``/``vmap``/``grad``-friendly. ``linear_solver`` is also static (a
     strategy object, not a traced value) -- see ``solvers/protocols.py``.
@@ -259,6 +282,7 @@ def pseudo_arclength_scan(
     # finite value, not the solver's possibly-non-finite output.
     # `seed_converged` itself is unchanged -- only the value written differs.
     u0_seed = jnp.where(seed_converged, u0_corrected, u0)
+    args = _apply_step_update(step_update, args, u0_seed, p0, seed_converged)
 
     # Initial tangent: seed prev with the parameter axis pointing in `direction`,
     # so the branch is traversed toward p_end.
@@ -285,6 +309,7 @@ def pseudo_arclength_scan(
         stop: Array       # bool
         reason: Array     # int32 Status recorded when ``stop`` is set
         attempts: Array   # int32 corrector attempts so far
+        args: PyTree      # the args the next step is corrected with
         P: Array
         Q: Array
         T: Array
@@ -306,11 +331,12 @@ def pseudo_arclength_scan(
         u_pred = c.u + c.ds * du0
         p_pred = c.p + c.ds * dp0
         u_new, p_new, converged, iters = _newton_correct(
-            f, u_pred, p_pred, args, c.u, c.p, du0, dp0, c.ds, tol, max_iter, linear_solver
+            f, u_pred, p_pred, c.args, c.u, c.p, du0, dp0, c.ds, tol, max_iter, linear_solver
         )
 
         # New tangent only meaningful if we accept; compute anyway (branch-free).
-        tan_new = _tangent(f, u_new, p_new, args, c.tan, linear_solver)
+        tan_new = _tangent(f, u_new, p_new, c.args, c.tan, linear_solver)
+        args = _apply_step_update(step_update, c.args, u_new, p_new, converged)
 
         write = c.idx + 1  # slot for the next accepted point
         P = c.P.at[write].set(jnp.where(converged, u_new, c.P[write]))
@@ -341,13 +367,13 @@ def pseudo_arclength_scan(
             jnp.where(nonfinite, int(Status.NONFINITE), int(Status.STALLED)),
         ).astype(jnp.int32)
 
-        return Carry(u, p, tan, ds, idx, stop, reason, c.attempts + 1, P, Q, T, C, D, I)
+        return Carry(u, p, tan, ds, idx, stop, reason, c.attempts + 1, args, P, Q, T, C, D, I)
 
     init = Carry(
         u=u0_seed, p=p0, tan=tan0, ds=ds_mag0,
         idx=jnp.array(0, jnp.int32), stop=jnp.array(False),
         reason=jnp.array(int(Status.REACHED_END), jnp.int32),
-        attempts=jnp.array(0, jnp.int32),
+        attempts=jnp.array(0, jnp.int32), args=args,
         P=P, Q=Q, T=T, C=C, D=D, I=I,
     )
     final = lax.while_loop(cond_fun, body, init)
@@ -410,9 +436,10 @@ def _natural_correct(f, u_pred, p_fixed, args, tol, max_iter, linear_solver: Lin
     return u_f, converged, it_f
 
 
-@partial(jax.jit, static_argnums=(0, 9, 11))
+@partial(jax.jit, static_argnums=(0, 1, 10, 12))
 def natural_scan(
     f: Callable[[Array, Array, PyTree], Array],
+    step_update: Optional[Callable[[PyTree, Array, Array], PyTree]],
     u0: Array,
     p0: Array,
     p_end: Array,
@@ -436,7 +463,8 @@ def natural_scan(
     ``pseudo_arclength_scan`` uses, rather than hanging.
 
     Same fixed-size-buffer / jit / vmap contract as ``pseudo_arclength_scan``:
-    ``f`` and ``max_steps`` are static, ``args`` is dynamic; buffers are ``(max_steps + 1, ...)``.
+    ``f``, ``step_update`` and ``max_steps`` are static, ``args`` is dynamic;
+    buffers are ``(max_steps + 1, ...)``.
     Returns the same :class:`ScanResult` shape -- ``tangents`` is zero-filled
     (natural continuation has no tangent concept) so both engines share one
     reassembly path in ``api.py``. ``linear_solver`` is static -- same
@@ -454,6 +482,7 @@ def natural_scan(
     # original (finite) u0 rather than publishing a possibly-inf failed
     # correction into the branch. `seed_converged` itself is unchanged.
     u0_seed = jnp.where(seed_converged, u0_corrected, u0)
+    args = _apply_step_update(step_update, args, u0_seed, p0, seed_converged)
 
     P = jnp.zeros((max_steps + 1, n), dtype).at[0].set(u0_seed)
     Q = jnp.zeros((max_steps + 1,), dtype).at[0].set(p0)
@@ -472,6 +501,7 @@ def natural_scan(
         stop: Array
         reason: Array
         attempts: Array
+        args: PyTree
         P: Array
         Q: Array
         T: Array
@@ -487,7 +517,8 @@ def natural_scan(
 
     def body(c: Carry):
         p_pred = c.p + direction * c.ds
-        u_new, converged, iters = _natural_correct(f, c.u, p_pred, args, tol, max_iter, linear_solver)
+        u_new, converged, iters = _natural_correct(f, c.u, p_pred, c.args, tol, max_iter, linear_solver)
+        args = _apply_step_update(step_update, c.args, u_new, p_pred, converged)
 
         write = c.idx + 1
         P = c.P.at[write].set(jnp.where(converged, u_new, c.P[write]))
@@ -511,13 +542,13 @@ def natural_scan(
             jnp.where(nonfinite, int(Status.NONFINITE), int(Status.STALLED)),
         ).astype(jnp.int32)
 
-        return Carry(u, p, ds, idx, stop, reason, c.attempts + 1, P, Q, c.T, C, D, I)
+        return Carry(u, p, ds, idx, stop, reason, c.attempts + 1, args, P, Q, c.T, C, D, I)
 
     init = Carry(
         u=u0_seed, p=p0, ds=ds_mag0,
         idx=jnp.array(0, jnp.int32), stop=jnp.array(False),
         reason=jnp.array(int(Status.REACHED_END), jnp.int32),
-        attempts=jnp.array(0, jnp.int32),
+        attempts=jnp.array(0, jnp.int32), args=args,
         P=P, Q=Q, T=T, C=C, D=D, I=I,
     )
     final = lax.while_loop(cond_fun, body, init)

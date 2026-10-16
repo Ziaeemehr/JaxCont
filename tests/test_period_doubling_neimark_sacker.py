@@ -122,7 +122,10 @@ def test_period_doubling_refine_result_satisfies_collocation_residual():
     assert len(sol.events) == 1
     hit = sol.events[0]
     assert hit.info.get("corrected", False) is True
-    residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), prob.args)
+    # Refinement anchors the phase condition on the bracket's left point.
+    i = hit.index[0]
+    bracket_args = prob.step_update(prob.args, sol.branch.states[i], sol.branch.params[i])
+    residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), bracket_args)
     assert float(jnp.abs(residual).max()) < 1e-4
 
 
@@ -138,7 +141,10 @@ def test_neimark_sacker_refine_result_satisfies_collocation_residual():
     assert len(sol.events) == 1
     hit = sol.events[0]
     assert hit.info.get("corrected", False) is True
-    residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), prob.args)
+    # Refinement anchors the phase condition on the bracket's left point.
+    i = hit.index[0]
+    bracket_args = prob.step_update(prob.args, sol.branch.states[i], sol.branch.params[i])
+    residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), bracket_args)
     assert float(jnp.abs(residual).max()) < 1e-4
 
 

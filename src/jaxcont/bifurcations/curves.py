@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax import Array, lax
@@ -35,7 +36,7 @@ from jaxcont.bifurcations.fold_solve import (
 from jaxcont.bifurcations.fold_solve import _pack as _fold_pack
 from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.bifurcations.hopf_normal_form import (
-    _extended_residual as _hopf_extended_residual,
+    _anchored_residual as _hopf_anchored_residual,
 )
 from jaxcont.bifurcations.hopf_normal_form import _pack as _hopf_pack
 from jaxcont.bifurcations.hopf_normal_form import hopf_point
@@ -168,6 +169,29 @@ def fold_curve_problem(
     )
 
 
+class HopfCurveArgs(eqx.Module):
+    """The ``args`` of a Hopf-curve :class:`~jaxcont.api.BifProblem`.
+
+    ``(q1_anchor, q2_anchor)`` is the eigenvector the phase condition
+    ``q1_anchor . q2 - q2_anchor . q1 = 0`` is anchored to;
+    :func:`hopf_curve_step_update` moves it to each accepted point.
+    ``user_args`` is the pytree handed to the user's right-hand side.
+    """
+
+    q1_anchor: Array
+    q2_anchor: Array
+    user_args: PyTree
+
+
+def hopf_curve_step_update(args: HopfCurveArgs, X: Array, q: Array) -> HopfCurveArgs:
+    """Anchor the Hopf phase condition on the accepted point's ``(q1, q2)``."""
+    n = args.q1_anchor.shape[0]
+    _u, _p_fixed, q1, q2, _omega = unpack_hopf_curve(X, n)
+    return HopfCurveArgs(
+        q1.astype(args.q1_anchor.dtype), q2.astype(args.q2_anchor.dtype), args.user_args,
+    )
+
+
 def unpack_hopf_curve(
     X: Array, n: int
 ) -> tuple[Array, Array, Array, Array, Array]:
@@ -196,13 +220,11 @@ def hopf_curve_problem(
     seed ``ValueError`` below is an eager-mode-only check (a no-op under
     ``jax.jit``/``jax.vmap`` tracing).
 
-    Known limitation: the phase condition anchors to a seed eigenvector
-    recomputed from the refined starting point at each ``q``, so it tracks
-    gently along the curve. If the eigenvector rotates far enough to become
-    orthogonal to that seed, the phase row degenerates and the curve stalls.
-    Fixed-shape buffers (which the jit/vmap story depends on) rule out
-    MatCont-style adaptive re-anchoring; the remedy is restarting from a
-    later point.
+    The returned problem's ``args`` is a :class:`HopfCurveArgs` holding the
+    caller's ``args`` and the eigenvector the phase condition is anchored
+    to. Its ``step_update`` (:func:`hopf_curve_step_update`) re-anchors that
+    condition on every accepted point, so the curve follows the critical
+    eigenvector however far it rotates.
 
     Measured residual floor at refined seed: 5.96e-8 (float32).
     GPU: No precision fix (TF32) needed; CPU and GPU numerics match at newton_tol=1e-5.
@@ -235,9 +257,9 @@ def hopf_curve_problem(
         pass
 
     def F(X, q, a):
-        return _hopf_extended_residual(
-            X, lambda u, p_fixed, aa: reduced(u, p_fixed, aa, q), a, n,
-            lax.stop_gradient(u_star), lax.stop_gradient(p_star),
+        return _hopf_anchored_residual(
+            X, lambda u, p_fixed, aa: reduced(u, p_fixed, aa, q), a.user_args, n,
+            lax.stop_gradient(a.q1_anchor), lax.stop_gradient(a.q2_anchor),
         )
 
     X0 = _hopf_pack(u_star, p_star, q1_star, q2_star, omega_star)
@@ -245,7 +267,10 @@ def hopf_curve_problem(
         f=F,
         u0=X0,
         p0=jnp.asarray(q0, X0.dtype),
-        args=args,
+        args=HopfCurveArgs(
+            lax.stop_gradient(q1_star), lax.stop_gradient(q2_star), args,
+        ),
         kind="hopf_curve",
         param_name=f"p[{free}]",
+        step_update=hopf_curve_step_update,
     )

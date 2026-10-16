@@ -94,7 +94,7 @@ from jaxcont.core.scan_continuation import pseudo_arclength_scan
 def branch_observable(b, slot=8):
     rhs = lambda u, p, args: jnp.array([p * u[0] - u[0] ** 3 + b])
     res = pseudo_arclength_scan(
-        rhs, jnp.array([0.6]), jnp.array(0.5), jnp.array(2.0), None,
+        rhs, None, jnp.array([0.6]), jnp.array(0.5), jnp.array(2.0), None,
         jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
         jnp.array(1e-6), 80, jnp.array(20),
     )

@@ -411,6 +411,8 @@ def detect_events(
     tolerance: float | None = None,
     max_iterations: int = 20,
     args: PyTree = None,
+    step_update: Optional[Callable[[PyTree, Array, Array], PyTree]] = None,
+    f: Optional[Callable[[Array, Array, PyTree], Array]] = None,
 ) -> list[EventHit]:
     """Detect and refine all requested events along a branch, deduped.
 
@@ -430,6 +432,13 @@ def detect_events(
     ``needs_args`` (the Floquet events read the periodic problem's right-hand
     side, mesh and user ``args`` from it).
 
+    With the problem's `step_update` (see :class:`~jaxcont.api.BifProblem`)
+    and its `f(u, p, args)`, each bracket ``(left, right)`` is refined with
+    ``step_update(args, left.u, left.p)`` -- the args its right end was
+    corrected with -- both as the ``args`` of ``needs_args`` events and in
+    the ``rhs(u, p) = f(u, p, bracket_args)`` handed to ``refine``. Test
+    functions read only the branch points, so they need no args.
+
     The result holds the validated hits (sorted, deduped) followed by the
     failed ones (``status == "failed"``), which are never deduped.
     """
@@ -446,6 +455,16 @@ def detect_events(
         np.full(len(points), abs(float(ds))) if ds_values is None
         else np.abs(np.asarray(ds_values, dtype=float))
     )
+    if step_update is not None and f is None:
+        raise ValueError("detect_events: step_update requires the problem's f(u, p, args)")
+
+    def bracket_inputs(left):
+        if step_update is None:
+            return rhs, args
+        u = jnp.asarray(left.u)
+        b_args = step_update(args, u, jnp.asarray(left.p, u.dtype))
+        return (lambda uu, pp: f(uu, pp, b_args)), b_args
+
     hits: list[EventHit] = []
     starts: dict[int, int] = {}
     for event in events:
@@ -460,10 +479,11 @@ def detect_events(
             ]
         for i, j, mode in brackets:
             kwargs = {} if scan is None else {"mode": mode}
+            b_rhs, b_args = bracket_inputs(points[i])
             if getattr(event, "needs_args", False):
-                kwargs["args"] = args
+                kwargs["args"] = b_args
             hit = event.refine(
-                points[i], points[j], (i, j), rhs,
+                points[i], points[j], (i, j), b_rhs,
                 tolerance=tolerance, max_iterations=max_iterations, **kwargs,
             )
             if hit is None:

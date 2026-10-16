@@ -84,11 +84,20 @@ class BifProblem:
     ``state_names``/``param_name`` are display labels only (e.g. for
     ``plot_continuation``); they carry no numerical meaning.
 
+    ``step_update(args, u, p) -> args`` (optional) refreshes auxiliary data in
+    ``args`` from each accepted point -- the periodic phase-condition
+    reference, the Hopf-curve eigenvector anchor. It must return ``args``
+    with the same structure, shapes and dtypes, and may only change data that
+    selects among equivalent solutions (a phase or normalization anchor), not
+    the solution set itself: eigenvalues and event test functions are
+    evaluated with ``args``, while each event bracket is refined with
+    ``step_update(args, u_left, p_left)``.
+
     Registered as a JAX PyTree: ``u0``, ``p0``, ``args`` are dynamic leaves;
-    ``f``, ``kind``, ``state_names`` and ``param_name`` are static. This makes
-    ``jax.vmap(..., in_axes=...)`` over a batched problem structurally valid
-    (full end-to-end vmap awaits the lax.scan loop rewrite; see
-    ARCHITECTURE.md §3.1).
+    ``f``, ``kind``, ``state_names``, ``param_name`` and ``step_update`` are
+    static. This makes ``jax.vmap(..., in_axes=...)`` over a batched problem
+    structurally valid (full end-to-end vmap awaits the lax.scan loop
+    rewrite; see ARCHITECTURE.md §3.1).
     """
 
     f: Callable[[Array, Array, PyTree], Array]
@@ -100,6 +109,7 @@ class BifProblem:
     ] = "equilibrium"
     state_names: Optional[tuple[str, ...]] = None
     param_name: Optional[str] = None
+    step_update: Optional[Callable[[PyTree, Array, Array], PyTree]] = None
 
     def at(
         self,
@@ -130,16 +140,16 @@ class BifProblem:
 
 def _bifproblem_flatten(prob: BifProblem):
     children = (prob.u0, prob.p0, prob.args)
-    aux = (prob.f, prob.kind, prob.state_names, prob.param_name)
+    aux = (prob.f, prob.kind, prob.state_names, prob.param_name, prob.step_update)
     return children, aux
 
 
 def _bifproblem_unflatten(aux, children):
-    f, kind, state_names, param_name = aux
+    f, kind, state_names, param_name, step_update = aux
     u0, p0, args = children
     return BifProblem(
         f=f, u0=u0, p0=p0, args=args, kind=kind,
-        state_names=state_names, param_name=param_name,
+        state_names=state_names, param_name=param_name, step_update=step_update,
     )
 
 
@@ -157,10 +167,12 @@ def bif_problem(
     kind: str = "equilibrium",
     state_names: Optional[Sequence[str]] = None,
     param_name: Optional[str] = None,
+    step_update: Optional[Callable[[PyTree, Array, Array], PyTree]] = None,
 ) -> BifProblem:
     """
     Front-door factory for a :class:`BifProblem` (mirrors lyapax's
-    ``ode_problem``). Coerces ``u0``/``p0`` to JAX arrays.
+    ``ode_problem``). Coerces ``u0``/``p0`` to JAX arrays. ``step_update``
+    is described on :class:`BifProblem`.
 
     ``state_names``/``param_name`` are optional display labels (used by
     ``plot_continuation`` and friends) -- purely cosmetic, no effect on the
@@ -180,6 +192,7 @@ def bif_problem(
         kind=kind,
         state_names=tuple(state_names) if state_names is not None else None,
         param_name=param_name,
+        step_update=step_update,
     )
 
 
@@ -380,28 +393,66 @@ class _BoundF:
         return hash(self._key())
 
 
+class _BoundStepUpdate(_BoundF):
+    """Static engine ``step_update`` over the same split of ``args`` as :class:`_BoundF`.
+
+    Takes and returns the list of dynamic leaves; the wrapped ``step_update``
+    sees the full ``args``. Its result must keep the treedef and the static
+    leaves, so the engine's loop carry keeps its structure.
+    """
+
+    def __call__(self, dyn, u, p):
+        dyn_it, static_it = iter(dyn), iter(self.static)
+        leaves = [next(dyn_it) if m else next(static_it) for m in self.mask]
+        new = self.f(jax.tree_util.tree_unflatten(self.treedef, leaves), u, p)
+        new_leaves, new_treedef = jax.tree_util.tree_flatten(new)
+        new_static = tuple(x for x, m in zip(new_leaves, self.mask) if not m)
+        if new_treedef != self.treedef or any(
+            a is not b and a != b for a, b in zip(new_static, self.static)
+        ):
+            raise ValueError(
+                "step_update may only change the array leaves of args; it "
+                "must return args with the same structure and the same "
+                "non-array leaves"
+            )
+        return [x for x, m in zip(new_leaves, self.mask) if m]
+
+    def __eq__(self, other):
+        return isinstance(other, _BoundStepUpdate) and self._key() == other._key()
+
+    def __hash__(self):
+        return hash(("step_update",) + self._key())
+
+
 def _engine_f_args(problem: BifProblem):
-    """Return ``(f, args)`` for the scan engine.
+    """Return ``(f, step_update, args)`` for the scan engine.
 
     Only ``jax.Array`` / ``np.ndarray`` leaves of ``problem.args`` are dynamic
     engine inputs (compile-cache reuse across changed values). Every other leaf
     -- Python scalars, callables such as the one periodic problems carry -- is
     bound statically and stays concrete inside ``f``, so it may be used as a
     shape, loop bound or ``if`` flag; changing its value recompiles.
+    ``step_update`` (``None`` when the problem has none) is wrapped over the
+    same split.
     """
     leaves, treedef = jax.tree_util.tree_flatten(problem.args)
     mask = tuple(isinstance(x, (jax.Array, np.ndarray)) for x in leaves)
     if all(mask):
-        return problem.f, problem.args
+        return problem.f, problem.step_update, problem.args
     dyn = [x for x, m in zip(leaves, mask) if m]
     static = tuple(x for x, m in zip(leaves, mask) if not m)
-    return _BoundF(problem.f, treedef, mask, static), dyn
+    step_update = (
+        None if problem.step_update is None
+        else _BoundStepUpdate(problem.step_update, treedef, mask, static)
+    )
+    return _BoundF(problem.f, treedef, mask, static), step_update, dyn
 
 
 def _call_scan(scan_fn, problem: BifProblem, u0, p_from, p_to, settings: ContinuationPar, solvers: Solvers, dtype):
-    f, args = _engine_f_args(problem)
+    f, step_update, args = _engine_f_args(problem)
     return scan_fn(
         f,
+        step_update,
         u0,
         jnp.asarray(p_from, dtype),
         jnp.asarray(p_to, dtype),
@@ -512,6 +563,8 @@ def _assemble_leg(
         hits = detect_events(
             events, params, states, tangents, eigenvalues, rhs2,
             ds=float(settings.ds), ds_values=ds, args=problem.args,
+            step_update=problem.step_update,
+            f=None if problem.step_update is None else problem.f,
         )
 
     return states, params, tangents, eigenvalues, stability, convergence_info, hits

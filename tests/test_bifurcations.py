@@ -835,3 +835,47 @@ def test_batched_test_values_match_per_point_and_fallback_works():
     for ev in (batched, HostSide()):
         hits = detect_events([ev], ps, states, None, None, lambda u, p: u, ds=0.01)
         assert [h.index for h in hits] == [(1, 2)]
+
+
+def test_detect_events_refines_each_bracket_with_step_updated_args():
+    # Bracket (i, i+1) is refined with step_update(args, u_i, p_i): the args
+    # its right end was corrected with. Both needs_args events and the rhs
+    # handed to refine see them.
+    seen = []
+
+    class Probe:
+        kind = "probe"
+        needs_args = True
+
+        def test_function(self, point):
+            return np.cos(3.0 * point.p)
+
+        def refine(self, left, right, index, rhs, *, tolerance, max_iterations, args=None):
+            seen.append((index, args, float(rhs(left.u, left.p)[0])))
+            return None
+
+    def f(u, p, args):
+        return u - args["ref"]
+
+    def step_update(args, u, p):
+        return {"ref": u + p}
+
+    params = jnp.linspace(0.0, 3.0, 7)
+    states = params[:, None] * 2.0
+    hits = detect_events(
+        [Probe()], params, states, None, None, lambda u, p: f(u, p, {"ref": 0.0}),
+        ds=0.5, args={"ref": jnp.array([0.0])}, step_update=step_update, f=f,
+    )
+    assert hits == []
+    assert [index for index, _, _ in seen] == [(1, 2), (3, 4), (5, 6)]
+    for (i, j), b_args, r in seen:
+        np.testing.assert_allclose(b_args["ref"], states[i] + params[i])
+        np.testing.assert_allclose(r, -float(params[i]))
+
+
+def test_detect_events_step_update_requires_f():
+    with pytest.raises(ValueError, match="requires the problem's f"):
+        detect_events(
+            [Fold()], jnp.zeros(2), jnp.zeros((2, 1)), None, None, lambda u, p: u,
+            ds=0.1, step_update=lambda a, u, p: a,
+        )
