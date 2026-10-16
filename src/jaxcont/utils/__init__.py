@@ -8,7 +8,6 @@ from jaxcont.utils.config import (
     test_jax_cuda,
     test_package_imports,
 )
-from jaxcont.viz import plot_bifurcation_diagram, plot_continuation
 
 __all__ = [
     "Config",
@@ -20,3 +19,13 @@ __all__ = [
     "test_jax_cuda",
     "test_package_imports",
 ]
+
+
+def __getattr__(name):
+    # viz imports the engine, which imports utils.precision; resolving the
+    # plotting names lazily keeps `jaxcont.utils.precision` import-cycle free.
+    if name in ("plot_bifurcation_diagram", "plot_continuation"):
+        from jaxcont import viz
+
+        return getattr(viz, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

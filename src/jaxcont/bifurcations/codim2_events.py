@@ -37,6 +37,7 @@ from jaxcont.bifurcations.curves import (
 from jaxcont.bifurcations.events import BranchPoint, Event, EventHit
 from jaxcont.bifurcations.fold_normal_form import fold_coefficient
 from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
+from jaxcont.utils.precision import default_tol
 
 PyTree = Any
 
@@ -119,6 +120,12 @@ def _drop_nearest_pinned_pair(values: Array, omega, near_zero: float = 1e-6) -> 
     return _drop_nearest(values, 1j * omega) & _drop_nearest(values, -1j * omega)
 
 
+def _refine_tol(tolerance, dtype):
+    """Solver tolerance for a refine step: never tighter than ``dtype``'s default."""
+    floor = default_tol(dtype)
+    return floor if tolerance is None else max(tolerance, floor)
+
+
 @dataclass(frozen=True)
 class Cusp(_CurveEvent, Event):
     """A cusp (CP) point on a fold curve.
@@ -146,7 +153,7 @@ class Cusp(_CurveEvent, Event):
         u_r, p_r, _ = self._decode(right)
         u_star, p_star, _v, converged = cusp_point(
             self.raw_f, (u_l + u_r) / 2, (p_l + p_r) / 2, self.args,
-            tol=max(tolerance, 1e-6), max_iter=max_iterations,
+            tol=_refine_tol(tolerance, u_l.dtype), max_iter=max_iterations,
         )
         # codim2 solvers return `converged` as a JAX bool and can return
         # non-finite values on a failed solve. Both `nan < 0` and
@@ -224,7 +231,7 @@ class BogdanovTakens(_CurveEvent, Event):
         u_r, p_r, _ = self._decode(right)
         u_star, p_star, _v0, _v1, converged = bogdanov_takens_point(
             self.raw_f, (u_l + u_r) / 2, (p_l + p_r) / 2, self.args,
-            tol=max(tolerance, 1e-6), max_iter=max_iterations,
+            tol=_refine_tol(tolerance, u_l.dtype), max_iter=max_iterations,
         )
         ok = bool(converged) and bool(jnp.all(jnp.isfinite(p_star)))
         if not ok:
@@ -296,7 +303,7 @@ class ZeroHopf(_CurveEvent, Event):
         u_r, p_r, _ = self._decode(right)
         result = zero_hopf_point(
             self.raw_f, (u_l + u_r) / 2, (p_l + p_r) / 2, self.args,
-            tol=max(tolerance, 1e-6), max_iter=max_iterations,
+            tol=_refine_tol(tolerance, u_l.dtype), max_iter=max_iterations,
         )
         u_star, p_star, _v, _q1, _q2, omega_star, converged = result
         ok = bool(converged) and bool(jnp.all(jnp.isfinite(p_star)))
@@ -343,7 +350,7 @@ class GeneralizedHopf(_CurveEvent, Event):
         u_r, p_r, _ = self._decode(right)
         result = generalized_hopf_point(
             self.raw_f, (u_l + u_r) / 2, (p_l + p_r) / 2, self.args,
-            tol=max(tolerance, 1e-6), max_iter=max_iterations,
+            tol=_refine_tol(tolerance, u_l.dtype), max_iter=max_iterations,
         )
         u_star, p_star, _q1, _q2, omega_star, converged = result
         ok = bool(converged) and bool(jnp.all(jnp.isfinite(p_star)))
@@ -432,7 +439,7 @@ class DoubleHopf(_CurveEvent, Event):
         result = double_hopf_point(
             self.raw_f, (u_l + u_r) / 2, (p_l + p_r) / 2, self.args,
             seed_b=seed_b,
-            tol=max(tolerance, 1e-6), max_iter=max_iterations,
+            tol=_refine_tol(tolerance, u_l.dtype), max_iter=max_iterations,
             separation_tolerance=self.separation_tolerance,
         )
         # double_hopf_point returns a 9-tuple:

@@ -137,7 +137,7 @@ def cusp_point(
     p_guess: Array,
     args: PyTree = None,
     *,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> tuple[Array, Array, Array, Array]:
     """
@@ -174,7 +174,7 @@ def cusp_parameters(
     p_guess: Array,
     args: PyTree = None,
     *,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> Array:
     """
@@ -223,7 +223,7 @@ def bogdanov_takens_point(
     p_guess: Array,
     args: PyTree = None,
     *,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> tuple[Array, Array, Array, Array, Array]:
     """
@@ -262,7 +262,7 @@ def bogdanov_takens_parameters(
     p_guess: Array,
     args: PyTree = None,
     *,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> Array:
     """
@@ -335,7 +335,7 @@ def generalized_hopf_point(
     p_guess: Array,
     args: PyTree = None,
     *,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> tuple[Array, Array, Array, Array, Array, Array]:
     """
@@ -384,7 +384,7 @@ def generalized_hopf_parameters(
     p_guess: Array,
     args: PyTree = None,
     *,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> Array:
     """
@@ -435,7 +435,7 @@ def zero_hopf_point(
     p_guess: Array,
     args: PyTree = None,
     *,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> tuple[Array, Array, Array, Array, Array, Array, Array]:
     """
@@ -477,7 +477,7 @@ def zero_hopf_parameters(
     p_guess: Array,
     args: PyTree = None,
     *,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> Array:
     """
@@ -527,7 +527,7 @@ def double_hopf_point(
     args: PyTree = None,
     *,
     seed_b: Array,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
     separation_tolerance: float = 1e-3,
 ) -> tuple[Array, ...]:
@@ -619,7 +619,7 @@ def double_hopf_parameters(
     args: PyTree = None,
     *,
     seed_b: Array,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
     separation_tolerance: float = 1e-3,
 ) -> Array:

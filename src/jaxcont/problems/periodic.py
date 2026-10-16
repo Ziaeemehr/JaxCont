@@ -15,6 +15,7 @@ from jax import Array
 from jaxcont.api import BifProblem
 from jaxcont.core.collocation import Collocation, collocation_matrices
 from jaxcont.solvers.implicit import differentiable_root
+from jaxcont.utils.precision import collocation_tol
 
 PyTree = Any
 
@@ -55,14 +56,6 @@ def periodic_orbit_problem(
     outer ``jax.grad``, ``jax.vmap``, and ``jax.jit`` transformations,
     including when the caller's own trajectory and period guesses depend on
     the differentiated parameter.
-
-    Note: pass ``settings=jc.ContinuationPar(newton_tol=1e-5, ...)`` (not
-    the default ``1e-6``) to ``jc.continuation()`` for the returned
-    problem. The collocation residual's achievable precision floor on this
-    project's default float32 (~3e-6, verified during design) is tighter
-    than the default corrector tolerance can reliably satisfy every step,
-    which stalls continuation (every step rejected, step size shrinks to
-    ``ds_min``, branch terminates after the initial point).
 
     Note: do not pass ``events=[jc.Hopf()]`` for the returned problem --
     ``Hopf`` eigendecomposes the full collocation Jacobian, which is not a
@@ -155,15 +148,8 @@ def periodic_orbit_problem(
         p, _seed_mesh, ref_coll, ref_prime, _seed_period = th
         return residual(U, p, (ref_coll, ref_prime, f, mesh))
 
-    # tol=1e-5, not differentiable_root's default 1e-8: this project runs
-    # float32 by default (no jax_enable_x64 anywhere -- see
-    # tests/test_functional_api.py's "tol=1e-6 (float32-reachable)" note),
-    # and even with the matmul-precision fix inside residual() above, this
-    # ~100-dimensional collocation Newton solve's achievable float32
-    # residual floor is ~3e-6 -- below default tol=1e-8's threshold, which
-    # would just burn all max_iter iterations without ever satisfying
-    # "done". Verified during design: with tol=1e-5 (comfortably above
-    # that floor), residual converges cleanly to ~3.4e-6.
-    U0 = differentiable_root(_extended, _seed, theta, tol=1e-5)
+    U0 = differentiable_root(
+        _extended, _seed, theta, tol=collocation_tol(mesh_guess.dtype)
+    )
 
     return BifProblem(f=residual, u0=U0, p0=p0_arr, args=args, kind="periodic")

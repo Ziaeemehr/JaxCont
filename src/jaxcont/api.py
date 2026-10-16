@@ -34,6 +34,7 @@ from jaxcont.bifurcations.events import (
 )
 from jaxcont.core.continuation import ContinuationSolution
 from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
+from jaxcont.utils.precision import default_tol
 
 __all__ = [
     "BP",
@@ -221,7 +222,7 @@ class ContinuationPar:
     ds_max: float = 0.1
     max_steps: int = 1000
     adaptive: bool = True
-    newton_tol: float = 1e-6
+    newton_tol: Optional[float] = None
     newton_max_iter: int = 20
     compute_stability: bool = True
     bothside: bool = False
@@ -345,7 +346,9 @@ def _call_scan(scan_fn, rhs2, u0, p_from, p_to, settings: ContinuationPar, solve
         jnp.asarray(settings.ds, dtype),
         jnp.asarray(settings.ds_min, dtype),
         jnp.asarray(settings.ds_max, dtype),
-        jnp.asarray(settings.newton_tol, dtype),
+        jnp.asarray(
+            default_tol(dtype) if settings.newton_tol is None else settings.newton_tol, dtype
+        ),
         int(settings.max_steps),
         jnp.asarray(settings.newton_max_iter),
         solvers.linear,
@@ -421,7 +424,7 @@ def _assemble_leg(
     if len(events) > 0 and (eigenvalues is not None or is_curve_kind):
         hits = detect_events(
             events, params, states, tangents, eigenvalues, rhs2,
-            ds=float(settings.ds), tolerance=1e-6,
+            ds=float(settings.ds),
         )
 
     return states, params, tangents, eigenvalues, stability, convergence_info, hits

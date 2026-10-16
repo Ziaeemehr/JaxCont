@@ -56,7 +56,7 @@ def branch_switch(
     *,
     args: PyTree = None,
     ds: float = 0.01,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> BifProblem:
     """

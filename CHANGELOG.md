@@ -5,6 +5,15 @@ All notable changes to JaxCont will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - Unreleased
+
+### Breaking
+- `ContinuationPar.newton_tol` and the `tol` arguments of the solvers, fold/Hopf/codim-2
+  point finders, curve factories, `branch_switch` and `dprc_curve` now default to `None`,
+  resolved from the state dtype (`1e-9` for float64, `1e-5` for float32). Previous fixed
+  defaults (`1e-6`/`1e-8`) are gone; `detect_events(tolerance=...)` likewise. Periodic-orbit
+  problems no longer need an explicit `newton_tol=1e-5`.
+
 ## [Unreleased]
 
 ### Added

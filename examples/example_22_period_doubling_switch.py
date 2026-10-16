@@ -58,10 +58,7 @@ def rhs(u, p, args):
 # Continue the base cycle and detect the flip
 # ----------------------------------------------
 #
-# ``newton_tol=1e-5``, not the default ``1e-6``: the collocation residual's
-# achievable float32 floor for this system is ~3.4e-6, and a tighter
-# tolerance stalls continuation (every step rejected, branch terminates at
-# the first point). ``jc.PeriodDoubling`` needs the raw right-hand side and
+# ``jc.PeriodDoubling`` needs the raw right-hand side and
 # mesh explicitly because it recomputes Floquet multipliers at bisection
 # midpoints -- unlike an equilibrium event, it cannot work from the generic
 # collocation residual alone.
@@ -79,7 +76,7 @@ result = jc.continuation(
     base,
     p_span=(-0.1, 0.1),
     settings=jc.ContinuationPar(
-        ds=0.02, max_steps=40, newton_tol=1e-5, compute_stability=True
+        ds=0.02, max_steps=40, compute_stability=True
     ),
     events=[jc.PeriodDoubling(raw_f=rhs, mesh=mesh)],
 )
@@ -121,7 +118,7 @@ doubled = jc.continuation(
     switched,
     p_span=(float(switched.p0), 0.3),
     settings=jc.ContinuationPar(
-        ds=0.02, max_steps=40, newton_tol=1e-5, compute_stability=False
+        ds=0.02, max_steps=40, compute_stability=False
     ),
 )
 

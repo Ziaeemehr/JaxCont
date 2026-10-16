@@ -163,14 +163,14 @@ class TestAdaptiveVsFixed:
             prob, jc.PseudoArclength(), p_span=(0.5, p_end),
             settings=jc.ContinuationPar(
                 ds=0.05, adaptive=False, max_steps=100,
-                newton_max_iter=30, compute_stability=False,
+                newton_max_iter=30, newton_tol=1e-6, compute_stability=False,
             ),
         )
         sol_adaptive = jc.continuation(
             prob, jc.PseudoArclength(), p_span=(0.5, p_end),
             settings=jc.ContinuationPar(
                 ds=0.05, ds_min=0.001, ds_max=0.1, adaptive=True,
-                max_steps=100, newton_max_iter=30, compute_stability=False,
+                max_steps=100, newton_max_iter=30, newton_tol=1e-6, compute_stability=False,
             ),
         )
 

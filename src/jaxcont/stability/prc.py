@@ -91,7 +91,7 @@ def branch_prc(
 def dprc_curve(
     problem: BifProblem,
     linear_solver: LinearSolver = Dense(),
-    newton_tol: float = 1e-5,
+    newton_tol: float | None = None,
 ) -> Array:
     """Parameter derivative of the iPRC curve, ``d(prc_curve)/dp``, shape
     ``(ntst, n) + p.shape``. Takes the periodic orbit's ``BifProblem``

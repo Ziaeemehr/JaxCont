@@ -107,7 +107,9 @@ def test_cusp_agrees_with_the_codim1_fold_solver_there():
     def f_scalar(u, p, args):
         return _cusp_shifted(u, jnp.array([p, p_c[1]]), args)
 
-    u_f, p_f, _, _converged = fold_point(f_scalar, jnp.array([2.1]), float(p_c[0]) + 0.05)
+    u_f, p_f, _, _converged = fold_point(
+        f_scalar, jnp.array([2.1]), float(p_c[0]) + 0.05, tol=1e-8,  # degenerate (cusp) fold converges slowly
+    )
     assert jnp.allclose(u_f, u_c, atol=1e-3)
     assert jnp.isclose(float(p_f), float(p_c[0]), atol=1e-3)
 

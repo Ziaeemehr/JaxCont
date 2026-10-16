@@ -33,6 +33,7 @@ from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.bifurcations.hopf_normal_form import hopf_point, lyapunov_coefficient
 from jaxcont.solvers.implicit import differentiable_root_checked
 from jaxcont.stability.floquet import floquet_multipliers
+from jaxcont.utils.precision import collocation_tol
 
 PyTree = Any
 
@@ -271,7 +272,7 @@ def detect_events(
     rhs: Callable[[Array, float], Array],
     *,
     ds: float,
-    tolerance: float = 1e-6,
+    tolerance: float | None = None,
     max_iterations: int = 20,
 ) -> list[EventHit]:
     """Detect and refine all requested events along a branch, deduped.
@@ -446,6 +447,9 @@ class PeriodDoubling(Event):
         t_left = self.test_value(v_left)
         t_right = self.test_value(v_right)
         corrected_all = True
+        root_tol = collocation_tol(jnp.asarray(u_left).dtype)
+        if tolerance is None:
+            tolerance = root_tol
         for _ in range(max_iterations):
             if abs(p_right - p_left) < tolerance:
                 break
@@ -457,11 +461,8 @@ class PeriodDoubling(Event):
             # branch. Correct it back onto the residual manifold at the
             # interpolated parameter before trusting its Floquet multipliers
             # -- otherwise a narrow reported parameter bracket does not by
-            # itself imply an accurate multiplier crossing. tol=1e-5 matches
-            # problems/periodic.py's own calibrated float32 residual floor
-            # for this exact collocation residual (~3.4e-6); a tighter
-            # default would spuriously report `corrected=False` every step.
-            u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=1e-5)
+            # itself imply an accurate multiplier crossing.
+            u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=root_tol)
             if not bool(corrected):
                 corrected_all = False
                 break
@@ -556,6 +557,9 @@ class NeimarkSacker(Event):
         t_left = self.test_value(v_left)
         t_right = self.test_value(v_right)
         corrected_all = True
+        root_tol = collocation_tol(jnp.asarray(u_left).dtype)
+        if tolerance is None:
+            tolerance = root_tol
         for _ in range(max_iterations):
             if abs(p_right - p_left) < tolerance:
                 break
@@ -565,7 +569,7 @@ class NeimarkSacker(Event):
             # See PeriodDoubling.refine for why the interpolated state must
             # be Newton-corrected back onto the collocation residual
             # manifold before its Floquet multipliers can be trusted.
-            u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=1e-5)
+            u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=root_tol)
             if not bool(corrected):
                 corrected_all = False
                 break

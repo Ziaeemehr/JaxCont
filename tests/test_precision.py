@@ -31,3 +31,34 @@ def test_scan_float32_inputs_under_x64():
         )
     assert res.states.dtype == jnp.float32
     assert res.params.dtype == jnp.float32
+
+
+def test_newton_tol_none_resolves_by_dtype():
+    import jax
+    import jaxcont as jc
+
+    assert jc.ContinuationPar().newton_tol is None
+
+    def f(u, p, args):
+        return u**2 + p
+
+    problem = jc.bif_problem(f, u0=jnp.array([1.0]), p0=jnp.array(-1.0))
+    result = jc.continuation(
+        problem, jc.PseudoArclength(), p_span=(-1.0, -0.2),
+        settings=jc.ContinuationPar(ds=0.05, max_steps=40, compute_stability=False),
+    )
+    assert result.branch.states.shape[0] > 5
+    resid = jnp.abs(result.branch.states[:, 0] ** 2 + result.branch.params)
+    if jax.config.jax_enable_x64:
+        assert float(jnp.max(resid)) < 1e-9
+    else:
+        assert float(jnp.max(resid)) < 1e-4
+
+
+def test_solver_tol_none_resolves_by_dtype():
+    from jaxcont.solvers.implicit import differentiable_root_checked
+
+    x0 = jnp.array([1.5])
+    x, ok = differentiable_root_checked(lambda x, th: x**2 - th, x0, jnp.asarray(2.0, x0.dtype))
+    assert bool(ok)
+    assert float(jnp.abs(x[0] ** 2 - 2.0)) < default_tol(x0.dtype)

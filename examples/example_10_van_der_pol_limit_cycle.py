@@ -114,7 +114,6 @@ result = jc.continuation(
     settings=jc.ContinuationPar(
         ds=0.05,
         max_steps=250,
-        newton_tol=1e-5,
         compute_stability=True,
     ),
 )

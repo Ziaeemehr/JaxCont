@@ -77,7 +77,7 @@ def fold_curve_problem(
     *,
     free: int = 1,
     args: PyTree = None,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> BifProblem:
     """
@@ -184,7 +184,7 @@ def hopf_curve_problem(
     *,
     free: int = 1,
     args: PyTree = None,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> BifProblem:
     """

@@ -67,7 +67,6 @@ def run_radial_cycle() -> CaseResult:
             ds=0.05,
             ds_max=0.08,
             max_steps=35,
-            newton_tol=1e-5,
         ),
     )
     branch = result.branch
@@ -244,6 +243,8 @@ def _run_torbpc_jaxcont():
             ds_min=1e-5,
             ds_max=0.02,
             max_steps=300,
+            # This stiff torus case (multipliers of order 6-7) has a float64
+            # corrector floor near 1e-6, above the dtype default.
             newton_tol=1e-5,
         ),
         events=[

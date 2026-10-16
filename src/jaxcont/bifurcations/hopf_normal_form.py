@@ -138,7 +138,7 @@ def hopf_point(
     p_guess: float | Array,
     args: PyTree = None,
     *,
-    tol: float = 1e-8,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> tuple[Array, Array, Array, Array, Array, Array]:
     """
@@ -172,7 +172,7 @@ def hopf_parameter(
     p_guess: float | Array,
     args: PyTree = None,
     *,
-    tol: float = 1e-8,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> Array:
     """

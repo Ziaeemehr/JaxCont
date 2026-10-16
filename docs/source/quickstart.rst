@@ -99,6 +99,27 @@ reverse-mode differentiation through JAX's dynamic ``lax.while_loop`` is not
 supported. :doc:`auto_examples/example_07_differentiable` demonstrates both
 paths and a gradient-based inverse-design loop.
 
+Precision
+---------
+
+For analysis work, enable 64-bit arithmetic before importing anything else
+from JAX or ``jaxcont``:
+
+.. code-block:: python
+
+   import jax
+   jax.config.update("jax_enable_x64", True)
+
+Single precision (``float32``, the JAX default) is faster and uses less
+memory, but its roundoff limits how tightly Newton's method can converge,
+so residuals stall around ``1e-6`` and bifurcation points are located less
+accurately. JaxCont never changes this setting itself; the choice is yours.
+
+Tolerances follow the dtype automatically. ``ContinuationPar.newton_tol``
+and the ``tol`` arguments of the solvers default to ``None``, which means
+``1e-9`` for ``float64`` and ``1e-5`` for ``float32``. Pass a number to
+override it.
+
 Next steps
 ----------
 
