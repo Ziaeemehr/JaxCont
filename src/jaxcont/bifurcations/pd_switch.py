@@ -47,6 +47,7 @@ def _pd_eigenvector(
     p: Array,
     mesh: Collocation,
     *,
+    args: PyTree = None,
     pd_tol: float = 1e-2,
     imag_tol: float = 1e-3,
 ) -> Array:
@@ -66,7 +67,7 @@ def _pd_eigenvector(
     D_np, E_np, _, _ = collocation_matrices(mesh.ncol)
     D, E = jnp.asarray(D_np), jnp.asarray(E_np)
     Phi = monodromy_matrix(
-        raw_f, D, E, 1.0 / mesh.ntst, mesh_states, coll_states, T, p
+        raw_f, D, E, 1.0 / mesh.ntst, mesh_states, coll_states, T, p, args
     )
     values, vectors = jnp.linalg.eig(Phi)
     idx = int(jnp.argmin(jnp.abs(values + 1.0)))
@@ -131,6 +132,7 @@ def branch_switch_pd(
     event: EventHit,
     mesh: Collocation,
     *,
+    args: PyTree = None,
     dp: float = 0.05,
     dp_sign: Optional[int] = None,
     eps_ladder: Sequence[float] = (0.05, 0.1, 0.2, 0.4, 0.8),
@@ -142,7 +144,9 @@ def branch_switch_pd(
     """Seed the period-doubled cycle bifurcating at a ``PeriodDoubling`` event.
 
     ``raw_f`` is the ODE right-hand side (``f(u, p, args)``), not the assembled
-    collocation residual. ``mesh`` is the ``Collocation`` the original branch was
+    collocation residual; ``args`` is the user pytree it is called with (the
+    original problem's ``args.user_args``) and is carried into the returned
+    problem. ``mesh`` is the ``Collocation`` the original branch was
     continued on; the returned problem lives on ``Collocation(ntst=2*ntst,
     ncol=ncol)``, which preserves per-unit-time resolution across the twice-as-long
     period.
@@ -182,7 +186,7 @@ def branch_switch_pd(
     T = float(T_arr)
 
     v0 = np.asarray(
-        _pd_eigenvector(raw_f, U_star, jnp.asarray(p_star), mesh, pd_tol=pd_tol)
+        _pd_eigenvector(raw_f, U_star, jnp.asarray(p_star), mesh, args=args, pd_tol=pd_tol)
     )
     orbit_scale = float(jnp.max(jnp.linalg.norm(mesh_states, axis=1)))
 
@@ -212,6 +216,7 @@ def branch_switch_pd(
                     2 * T,
                     p_star + sign * dp,
                     doubled_mesh,
+                    args=args,
                 )
             except Exception as exc:  # noqa: BLE001 - reported, not swallowed
                 attempts.append(f"{label}: correction raised {type(exc).__name__}")

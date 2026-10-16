@@ -410,6 +410,7 @@ def detect_events(
     ds_values: Optional[Array] = None,
     tolerance: float | None = None,
     max_iterations: int = 20,
+    args: PyTree = None,
 ) -> list[EventHit]:
     """Detect and refine all requested events along a branch, deduped.
 
@@ -424,6 +425,10 @@ def detect_events(
     and never merge; hits of different kinds are never merged. A test value
     that is exactly zero at a sample is reported once (see
     `modes.crossings`).
+
+    `args` is the problem's ``args``; it is handed to events that declare
+    ``needs_args`` (the Floquet events read the periodic problem's right-hand
+    side, mesh and user ``args`` from it).
 
     The result holds the validated hits (sorted, deduped) followed by the
     failed ones (``status == "failed"``), which are never deduped.
@@ -455,6 +460,8 @@ def detect_events(
             ]
         for i, j, mode in brackets:
             kwargs = {} if scan is None else {"mode": mode}
+            if getattr(event, "needs_args", False):
+                kwargs["args"] = args
             hit = event.refine(
                 points[i], points[j], (i, j), rhs,
                 tolerance=tolerance, max_iterations=max_iterations, **kwargs,
@@ -512,11 +519,17 @@ class _FloquetEvent:
         where = self._mode_mask(spectra, tol) & _nontrivial_mask(spectra)
         return mode_brackets(spectra, self._test_value(spectra), where)
 
-    def _multipliers(self, u, p) -> np.ndarray:
-        return np.asarray(floquet_multipliers(self.raw_f, self.mesh, u, p))
+    needs_args = True
+
+    @staticmethod
+    def _multipliers(u, p, args) -> np.ndarray:
+        return np.asarray(
+            floquet_multipliers(args.raw_f, args.mesh, u, p, args=args.user_args)
+        )
 
     def refine(
         self, left, right, index, rhs, *, tolerance, max_iterations, mode=None,
+        args=None,
     ) -> Optional[EventHit]:
         if mode is None:
             brackets = self.scan([left, right])
@@ -554,7 +567,7 @@ class _FloquetEvent:
             u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=root_tol)
             if not bool(corrected):
                 return failed("not_converged")
-            row_mid = track_modes(np.stack([row_left, self._multipliers(u_mid, p_mid)]))[1]
+            row_mid = track_modes(np.stack([row_left, self._multipliers(u_mid, p_mid, args)]))[1]
             t_mid = float(self._test_value(row_mid[k]))
             if t_left * t_mid < 0:
                 p_right, u_right, t_right = p_mid, u_mid, t_mid
@@ -573,7 +586,7 @@ class _FloquetEvent:
         if not bool(corrected):
             return failed("not_converged")
 
-        multipliers = self._multipliers(u_bif, p_bif)
+        multipliers = self._multipliers(u_bif, p_bif, args)
         tracked = track_modes(np.stack([row_left, multipliers]))[1][k]
         keep = np.arange(multipliers.shape[0]) != _trivial_index(multipliers)
         distance = np.where(keep, np.abs(multipliers - self._critical(tracked)), np.inf)
@@ -603,17 +616,14 @@ class PeriodDoubling(_FloquetEvent, Event):
     ``Hopf()``-on-periodic footgun: not enforced by a raise, just
     meaningless.
 
-    ``raw_f``/``mesh`` are required (no meaningful default) because
-    ``refine`` must recompute Floquet multipliers at bisection midpoints via
-    ``stability.floquet.floquet_multipliers``, whose signature
-    (``raw_f, mesh, U, p``) is incompatible with ``detect_events``'s generic
-    ``rhs`` parameter (the assembled collocation *residual*, not the raw
-    ODE) -- so this event carries its own copy of what
-    ``periodic_orbit_problem`` was built with.
+    ``refine`` recomputes Floquet multipliers at bisection midpoints, which
+    needs the raw ODE right-hand side and the mesh rather than
+    ``detect_events``'s generic ``rhs`` (the assembled collocation
+    *residual*); it reads them, and the user ``args``, from the problem's
+    :class:`~jaxcont.problems.periodic_args.PeriodicArgs` that
+    ``detect_events`` passes as ``args``.
     """
 
-    raw_f: Callable[[Array, Array, PyTree], Array]
-    mesh: Any
     kind: str = "period_doubling"
     corrector_tol: Optional[float] = None  # collocation re-correction; None -> default_tol(dtype)
     # |Im| at or below this counts as real; None -> see _classify_tol.
@@ -646,12 +656,10 @@ class NeimarkSacker(_FloquetEvent, Event):
     sign. The refined point is accepted only if the multiplier nearest the
     tracked mode's projection onto the unit circle is complex. See
     ``PeriodDoubling``'s docstring for the shared rationale
-    (equilibrium-branch footgun, ``raw_f``/``mesh`` fields, why
-    ``detect_events``'s generic ``rhs`` isn't used).
+    (equilibrium-branch footgun, why ``detect_events``'s generic ``rhs``
+    isn't used).
     """
 
-    raw_f: Callable[[Array, Array, PyTree], Array]
-    mesh: Any
     kind: str = "neimark_sacker"
     corrector_tol: Optional[float] = None  # collocation re-correction; None -> default_tol(dtype)
     # |Im| above this counts as complex; None -> see _classify_tol.

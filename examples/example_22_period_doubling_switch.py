@@ -78,7 +78,7 @@ result = jc.continuation(
     settings=jc.ContinuationPar(
         ds=0.02, max_steps=40, compute_stability=True
     ),
-    events=[jc.PeriodDoubling(raw_f=rhs, mesh=mesh)],
+    events=[jc.PeriodDoubling()],
 )
 
 pd_events = [e for e in result.events if e.kind == "period_doubling"]

@@ -479,9 +479,10 @@ def _assemble_leg(
     want_eigs = not is_curve_kind and (settings.compute_stability or len(events) > 0)
     if want_eigs and states.shape[0] > 0:
         if problem.kind == "periodic":
-            _, _, raw_f, mesh = problem.args
+            pargs = problem.args
             eigenvalues = branch_floquet_multipliers(
-                raw_f, mesh, states, params, eigen_solver=solvers.eigen
+                pargs.raw_f, pargs.mesh, states, params,
+                eigen_solver=solvers.eigen, args=pargs.user_args,
             )
             stability = floquet_stable(eigenvalues)
         else:
@@ -510,7 +511,7 @@ def _assemble_leg(
     if len(events) > 0 and (eigenvalues is not None or is_curve_kind):
         hits = detect_events(
             events, params, states, tangents, eigenvalues, rhs2,
-            ds=float(settings.ds), ds_values=ds,
+            ds=float(settings.ds), ds_values=ds, args=problem.args,
         )
 
     return states, params, tangents, eigenvalues, stability, convergence_info, hits
@@ -777,9 +778,10 @@ def _run_scan_traced(
     stability = None
     if settings.compute_stability:
         if problem.kind == "periodic":
-            _, _, raw_f, mesh = problem.args
+            pargs = problem.args
             eigenvalues = branch_floquet_multipliers(
-                raw_f, mesh, states, params, eigen_solver=solvers.eigen
+                pargs.raw_f, pargs.mesh, states, params,
+                eigen_solver=solvers.eigen, args=pargs.user_args,
             )
             stability = floquet_stable(eigenvalues)
         else:

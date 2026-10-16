@@ -249,8 +249,8 @@ def _run_torbpc_jaxcont():
         ),
         events=[
             jc.Fold(),
-            jc.NeimarkSacker(raw_f=_torbpc_rhs, mesh=mesh, corrector_tol=1e-5),
-            jc.PeriodDoubling(raw_f=_torbpc_rhs, mesh=mesh, corrector_tol=1e-5),
+            jc.NeimarkSacker(corrector_tol=1e-5),
+            jc.PeriodDoubling(corrector_tol=1e-5),
         ],
     )
     return result, mesh

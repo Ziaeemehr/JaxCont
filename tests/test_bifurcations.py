@@ -8,6 +8,7 @@ docs/superpowers/specs/2026-07-23-event-protocol-rewrite-design.md).
 """
 
 from dataclasses import dataclass, field
+import types
 
 import jax.numpy as jnp
 import numpy as np
@@ -537,7 +538,7 @@ def test_pd_not_reported_for_complex_pair_crossing_re_minus_one():
         rows.append([1.0, 1e-3, *pair])
     multipliers = jnp.asarray(np.array(rows, dtype=complex))
     hits = detect_events(
-        [_StubPeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)],
+        [_StubPeriodDoubling()],
         jnp.asarray(t), jnp.zeros((t.size, 1)), None, multipliers,
         lambda u, p: u, ds=0.05,
     )
@@ -576,7 +577,7 @@ def test_period_doubling_scan_follows_the_crossing_multiplier_far_past_minus_one
     # decaying multiplier and the trivial one never open a bracket.
     moving = -np.geomspace(0.5, 20.0, 12)
     spectra = np.stack([1.0 + 0 * moving, 3.4e-6 + 0 * moving, moving], axis=1)
-    pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
+    pd = PeriodDoubling()
     brackets = pd.scan(_points(spectra))
     assert len(brackets) == 1
     i, j, mode = brackets[0]
@@ -586,7 +587,7 @@ def test_period_doubling_scan_follows_the_crossing_multiplier_far_past_minus_one
 def test_period_doubling_scan_excludes_trivial_multiplier():
     # Only the trivial multiplier moves (and sits nearest 1 throughout).
     spectra = np.stack([np.linspace(0.99, 1.01, 5), -0.5 + 0 * np.ones(5)], axis=1)
-    pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
+    pd = PeriodDoubling()
     assert pd.scan(_points(spectra)) == []
 
 
@@ -594,7 +595,7 @@ def test_neimark_sacker_scan_brackets_complex_pair_leaving_unit_circle():
     radius = np.linspace(0.7, 1.3, 6)
     pair = radius * np.exp(0.6j)
     spectra = np.stack([1.0 + 0 * radius, pair, np.conj(pair), -0.5 + 0 * radius], axis=1)
-    ns = NeimarkSacker(raw_f=lambda u, p, args: u, mesh=None)
+    ns = NeimarkSacker()
     brackets = ns.scan(_points(spectra))
     assert [(i, j) for i, j, _ in brackets] == [(2, 3)]
 
@@ -603,7 +604,7 @@ def test_neimark_sacker_scan_ignores_real_multiplier_crossing():
     moving = np.linspace(-0.8, -1.2, 5)
     spectra = np.stack([1.0 + 0 * moving, moving, 0.5 + 0.5j + 0 * moving,
                         0.5 - 0.5j + 0 * moving], axis=1)
-    ns = NeimarkSacker(raw_f=lambda u, p, args: u, mesh=None)
+    ns = NeimarkSacker()
     assert ns.scan(_points(spectra)) == []
 
 
@@ -689,16 +690,17 @@ def test_floquet_refine_spectral_check_failed(monkeypatch, event_cls, row, final
     )
     monkeypatch.setattr(
         events_mod, "floquet_multipliers",
-        lambda raw_f, mesh, u, p: jnp.asarray(np.array(final, dtype=complex)),
+        lambda raw_f, mesh, u, p, args=None: jnp.asarray(np.array(final, dtype=complex)),
     )
     row = np.array(row, dtype=complex)
     mode = TrackedMode(1, row, row)
     # A zero-width bracket skips bisection and goes straight to the re-check.
     point = BranchPoint(p=0.0, u=jnp.zeros(1))
-    event = event_cls(raw_f=lambda u, p, args: u, mesh=None)
+    event = event_cls()
+    stub_args = types.SimpleNamespace(raw_f=None, mesh=None, user_args=None)
     hit = event.refine(
         point, point, (0, 1), lambda u, p: u,
-        tolerance=None, max_iterations=20, mode=mode,
+        tolerance=None, max_iterations=20, mode=mode, args=stub_args,
     )
     assert hit.status == "failed"
     assert hit.info["reason"] == "spectral_check_failed"

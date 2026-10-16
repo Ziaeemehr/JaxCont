@@ -57,16 +57,13 @@ from jaxcont.bifurcations.codim2_events import (
 from jaxcont.bifurcations.branch_switch import branch_switch
 from jaxcont.bifurcations.pd_switch import branch_switch_pd
 
-# NOTE: v0.1.0 shipped equilibria only. Periodic-orbit continuation and
-# Floquet-multiplier computation are real (not stubs) but intentionally not
-# exported at the top level yet (see the project roadmap) -- import from
-# their submodules, e.g.:
-#     from jaxcont.problems.periodic import periodic_orbit_problem
-#     from jaxcont.stability.floquet import floquet_multipliers
-# The bifurcation-detection Events that consume them (Fold, Hopf,
-# PeriodDoubling, NeimarkSacker) ARE exported at the top level above, since
-# events=[...] is passed to the top-level continuation() call regardless of
-# problem kind. BVP continuation remains an unimplemented stub.
+# Periodic orbits: collocation problem factory, mesh config and the
+# phase-response-curve tools. Floquet multipliers live in
+# jaxcont.stability.floquet.
+from jaxcont.core.collocation import Collocation
+from jaxcont.problems.periodic import periodic_orbit_problem
+from jaxcont.stability.prc import branch_prc, dprc_curve, prc_curve
+
 # Two-parameter continuation: fold/Hopf curves + codim-2 events along them.
 # See docs/superpowers/specs/2026-08-17-two-parameter-continuation-design.md
 from jaxcont.bifurcations.curves import fold_curve_problem, hopf_curve_problem
@@ -129,6 +126,7 @@ __all__ = [
     "ContinuationProblem",
     "ContinuationResult",
     "ContinuationSolution",
+    "Collocation",
     "Corrector",
     "Cusp",
     "Dense",
@@ -167,6 +165,8 @@ __all__ = [
     "fold_coefficient",
     # Two-parameter continuation
     "fold_curve_problem",
+    "branch_prc",
+    "dprc_curve",
     "fold_parameter",
     "fold_point",
     "generalized_hopf_parameters",
@@ -175,9 +175,11 @@ __all__ = [
     "hopf_parameter",
     "hopf_point",
     "lyapunov_coefficient",
+    "periodic_orbit_problem",
     "plot_bifurcation_diagram",
     "plot_continuation",
     "plot_two_parameter_diagram",
+    "prc_curve",
     "zero_hopf_parameters",
     "zero_hopf_point",
 ]

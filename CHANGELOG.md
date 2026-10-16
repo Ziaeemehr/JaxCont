@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0] - Unreleased
 
 ### Breaking
+- A periodic problem's `args` is now `jaxcont.problems.periodic_args.PeriodicArgs` (an
+  `eqx.Module`: dynamic `u_ref_coll`, `uref_prime_coll`, `user_args`; static `raw_f`, `mesh`)
+  instead of the tuple `(u_ref_coll, uref_prime_coll, raw_f, mesh)`, and the problem's `f` is the
+  module-level `periodic_residual`, so repeated continuations of the same `raw_f` and mesh share one
+  compiled kernel. `raw_f` is always called as `raw_f(u, p, user_args)`; the internal `None` is gone.
+- `PeriodDoubling` and `NeimarkSacker` no longer take `raw_f`/`mesh`: write `jc.PeriodDoubling()`.
+  `continuation()` hands them the problem's `PeriodicArgs` through `detect_events(..., args=...)`.
 - `BP.rank_tolerance` now thresholds a scale-invariant ratio: the smallest singular
   value of `[f_u | f_p]` at the refined point divided by the largest singular value of
   that matrix over the two bracket endpoints and the refined point, replacing the
@@ -77,6 +84,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `"seed_failed"`, `"max_attempts"`) and `stats["n_attempts"]` / `stats["status"]`; under
   `jit`/`vmap` `status` is `None` and `stats["status"]` is the integer
   `jaxcont.core.scan_continuation.Status` code. `ScanResult` gains `status` and `n_attempts`.
+- `periodic_orbit_problem(..., args=...)`: user `args` reach the right-hand side at every
+  evaluation and are differentiable (`jax.grad` of the converged period with respect to them).
+  `floquet_multipliers`, `branch_floquet_multipliers`, `prc_curve`, `branch_prc` and
+  `branch_switch_pd` take a keyword `args=` for the same purpose; `detect_events` takes
+  `args=` (the problem's `args`).
+- Top-level exports `periodic_orbit_problem`, `Collocation`, `prc_curve`, `branch_prc`,
+  `dprc_curve`, and `PeriodicArgs` in `jaxcont.problems.periodic_args`.
 
 ## [Unreleased]
 

@@ -97,7 +97,7 @@ result = jc.continuation(
         max_steps=50,
         compute_stability=True,
     ),
-    events=[jc.NeimarkSacker(raw_f=neimark_sacker_rhs, mesh=mesh)],
+    events=[jc.NeimarkSacker()],
 )
 
 events = [event for event in result.events if event.kind == "neimark_sacker"]

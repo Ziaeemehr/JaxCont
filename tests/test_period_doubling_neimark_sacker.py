@@ -60,7 +60,7 @@ def _sweep(beta, event_cls, span):
         settings=jc.ContinuationPar(
             compute_stability=True, ds=0.02, max_steps=50, newton_tol=1e-5
         ),
-        events=[event_cls(raw_f=rhs, mesh=mesh)],
+        events=[event_cls()],
     )
     return sol
 
@@ -117,7 +117,7 @@ def test_period_doubling_refine_result_satisfies_collocation_residual():
         settings=jc.ContinuationPar(
             compute_stability=True, ds=0.02, max_steps=50, newton_tol=1e-5
         ),
-        events=[jc.PeriodDoubling(raw_f=rhs, mesh=mesh)],
+        events=[jc.PeriodDoubling()],
     )
     assert len(sol.events) == 1
     hit = sol.events[0]
@@ -133,7 +133,7 @@ def test_neimark_sacker_refine_result_satisfies_collocation_residual():
         settings=jc.ContinuationPar(
             compute_stability=True, ds=0.02, max_steps=50, newton_tol=1e-5
         ),
-        events=[jc.NeimarkSacker(raw_f=rhs, mesh=mesh)],
+        events=[jc.NeimarkSacker()],
     )
     assert len(sol.events) == 1
     hit = sol.events[0]
@@ -174,7 +174,7 @@ def test_pd_second_multiplier_crossing_detected():
     sol = jc.continuation(
         prob, p_span=span,
         settings=jc.ContinuationPar(compute_stability=True, ds=0.02, max_steps=50),
-        events=[jc.PeriodDoubling(raw_f=rhs, mesh=mesh)],
+        events=[jc.PeriodDoubling()],
     )
     pd = [e for e in sol.events if e.kind == "period_doubling"]
     assert len(pd) == 1

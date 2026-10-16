@@ -24,13 +24,17 @@ def floquet_multipliers(
     U: Array,
     p: Array,
     eigen_solver: EigenSolver = DenseEigen(),
+    *,
+    args: PyTree = None,
 ) -> Array:
     """Floquet multipliers (eigenvalues of the monodromy matrix ``Phi(T)``)
     at one converged periodic-orbit branch point. ``U`` is the flat
     collocation unknown vector (same layout as a periodic ``BifProblem``'s
     ``u0``: ``ntst`` mesh-point states, then ``ntst*ncol`` collocation-point
     states, then the period ``T``). ``raw_f`` is the ODE right-hand side
-    (``args=None`` internally), not the assembled collocation residual.
+    called as ``raw_f(u, p, args)`` with the caller's ``args`` (the
+    ``PeriodicArgs.user_args`` of the problem), not the assembled collocation
+    residual.
     ``mesh`` has no ``n`` (state dimension) field, so it is derived
     algebraically from ``U``'s length."""
     ntst, ncol = mesh.ntst, mesh.ncol
@@ -44,7 +48,7 @@ def floquet_multipliers(
     coll_states = U[ntst * n : ntst * n + ntst * ncol * n].reshape(ntst, ncol, n)
     T = U[-1]
 
-    Phi = monodromy_matrix(raw_f, D, E, h, mesh_states, coll_states, T, p)
+    Phi = monodromy_matrix(raw_f, D, E, h, mesh_states, coll_states, T, p, args)
     return eigen_solver(Phi)
 
 
@@ -54,12 +58,14 @@ def branch_floquet_multipliers(
     states: Array,
     params: Array,
     eigen_solver: EigenSolver = DenseEigen(),
+    *,
+    args: PyTree = None,
 ) -> Array:
     """Vectorized (vmap) Floquet multipliers along a stored periodic branch
     -- the periodic-orbit analogue of
     ``core.scan_continuation.branch_eigenvalues``."""
     def at(U, p):
-        return floquet_multipliers(raw_f, mesh, U, p, eigen_solver)
+        return floquet_multipliers(raw_f, mesh, U, p, eigen_solver, args=args)
 
     return jax.vmap(at)(states, params)
 
