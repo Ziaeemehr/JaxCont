@@ -215,15 +215,11 @@ def lyapunov_coefficient(
     ordinary reverse-mode chain-rule composition; never calls
     jnp.linalg.eig itself.
 
-    ``f`` must be complex-analytic (holomorphic) in ``u`` for this formula
-    to be correct: the derivatives above are evaluated at a complexified
-    ``u`` (real ``u`` cast to complex, then perturbed along complex
-    directions via ``jax.jvp``). Polynomial, ``exp``, ``tanh``, ``sigmoid``
-    right-hand sides are all fine (everything in this repo's examples), but
-    an RHS with an ``abs``/``clip``/comparison-based ``jnp.where`` that is
-    actually active in ``u`` near the Hopf point is not holomorphic there
-    and may produce silently wrong derivatives (and hence a silently wrong
-    ``l1``).
+    B and C are the complex multilinear extensions of real second and
+    third directional derivatives. The RHS receives only real states and
+    need only be three times differentiable near the Hopf point; inactive
+    comparisons and clipping are supported. Derivatives at nonsmooth points
+    follow JAX's derivative rules.
 
     The left eigenvector p_left (Aᵀ p_left = -i*omega0*p_left, normalized
     so conj(p_left)@q == 1) is solved directly in complex arithmetic on the
@@ -238,7 +234,6 @@ def lyapunov_coefficient(
     """
     n = u.shape[0]
     complex_dtype = jnp.complex128 if u.dtype == jnp.float64 else jnp.complex64
-    u_c = u.astype(complex_dtype)
     q = (q1 + 1j * q2).astype(complex_dtype)
     qbar = jnp.conj(q)
 
@@ -257,11 +252,11 @@ def lyapunov_coefficient(
     p_left = jnp.linalg.solve(bordered, rhs)[:n]
     p_left = p_left / jnp.conj(jnp.vdot(p_left, q))
 
-    def f_c(uu):
-        return f(uu, p, args).astype(complex_dtype)
+    def f_real(uu):
+        return f(uu, p, args)
 
     def d1(uu, y):
-        return jvp(f_c, (uu,), (y,))[1]
+        return jvp(f_real, (uu,), (y,))[1]
 
     def d2(uu, y, z):
         return jvp(lambda uu_: d1(uu_, y), (uu,), (z,))[1]
@@ -269,8 +264,20 @@ def lyapunov_coefficient(
     def d3(uu, y, z, w):
         return jvp(lambda uu_: d2(uu_, y, z), (uu,), (w,))[1]
 
-    B = lambda x, y: d2(u_c, x, y)
-    C = lambda x, y, z: d3(u_c, x, y, z)
+    def B(x, y):
+        a, b = jnp.real(x), jnp.imag(x)
+        c, d = jnp.real(y), jnp.imag(y)
+        return (d2(u, a, c) - d2(u, b, d)
+                + 1j * (d2(u, a, d) + d2(u, b, c)))
+
+    def C(x, y, z):
+        a, b = jnp.real(x), jnp.imag(x)
+        c, d = jnp.real(y), jnp.imag(y)
+        e, g = jnp.real(z), jnp.imag(z)
+        return (d3(u, a, c, e) - d3(u, a, d, g)
+                - d3(u, b, c, g) - d3(u, b, d, e)
+                + 1j * (d3(u, a, c, g) + d3(u, a, d, e)
+                        + d3(u, b, c, e) - d3(u, b, d, g)))
 
     term1 = jnp.vdot(p_left, C(q, q, qbar))
     a_inv_b = jnp.linalg.solve(Ac, B(q, qbar))

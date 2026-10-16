@@ -196,3 +196,37 @@ def test_l1_grad_with_repeated_stable_modes():
         assert jnp.allclose(derivative, central, rtol=1e-4, atol=1e-9)
         assert jnp.abs(derivative) < 1e-9
         assert jnp.allclose(l1(a), -2.0)
+
+
+def test_l1_with_non_holomorphic_rhs():
+    def f(u, p, args):
+        x, y = u
+        r2 = x**2 + y**2
+        r2 = jnp.maximum(1.0 + r2, 0.0) - 1.0
+        return jnp.array([-y + x * (p - r2), x + y * (p - r2)])
+
+    u, p, q1, q2, omega, converged = hopf_point(f, jnp.zeros(2), 0.05)
+    assert converged
+    actual = lyapunov_coefficient(f, u, p, q1, q2, omega)
+    polynomial = lyapunov_coefficient(_textbook_hopf, u, p, q1, q2, omega)
+    assert jnp.allclose(actual, polynomial)
+    assert jnp.isclose(actual, -2.0, atol=1e-4)
+
+
+def test_hopf_without_classification_skips_l1(monkeypatch):
+    from jaxcont.bifurcations import events
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("l1 must not be computed")
+
+    monkeypatch.setattr(events, "lyapunov_coefficient", forbidden)
+    left = events.BranchPoint(u=jnp.zeros(2), p=-0.05)
+    right = events.BranchPoint(u=jnp.zeros(2), p=0.05)
+    hit = events.Hopf(classify=False).refine(
+        left, right, 0, lambda u, p: _textbook_hopf(u, p, None),
+        tolerance=1e-5, max_iterations=50,
+    )
+    assert hit.info["converged"]
+    assert hit.info["criticality"] == "unknown"
+    assert "l1" not in hit.info
+    assert jnp.isclose(hit.p, 0.0, atol=1e-5)

@@ -190,6 +190,9 @@ class Hopf(Event):
     convention (unit-norm q, denominator 2*omega0). Double thresholds tuned
     for the former 4*omega0 convention; the default remains 1e-6.
 
+    With ``classify=False``, refinement skips the first Lyapunov coefficient
+    entirely, omits ``l1`` from event info, and sets ``criticality="unknown"``.
+
     Abbreviation **H**, see ``jaxcont.bifurcations.taxonomy.describe("H")``.
     """
 
@@ -206,6 +209,7 @@ class Hopf(Event):
     # too eagerly or too rarely. This threshold uses the MatCont/Kuznetsov
     # coefficient with unit-norm q and denominator 2*omega0.
     l1_tolerance: float = 1e-6
+    classify: bool = True
 
     def scan(self, points: Sequence[BranchPoint]) -> list[tuple[int, int, Any]]:
         spectra = _branch_spectra(points)
@@ -224,17 +228,22 @@ class Hopf(Event):
             tol=tolerance, max_iter=max_iterations,
             eigenvalue=None if mode is None else (mode.left[mode.column] + mode.right[mode.column]) / 2,
         )
-        l1 = lyapunov_coefficient(lambda u, p, _args: rhs(u, p), u, p, q1, q2, omega0)
+        l1 = None
+        if self.classify:
+            l1 = lyapunov_coefficient(lambda u, p, _args: rhs(u, p), u, p, q1, q2, omega0)
+        l1_info = {} if l1 is None else {"l1": float(l1)}
         # A converged extended-system solve can still be no Hopf point: a
         # non-finite p/l1/omega0 or omega0 <= 0 (a genuine Hopf point has a
         # nonzero critical frequency) is rejected, never labelled.
-        finite = jnp.isfinite(p) & jnp.isfinite(l1) & jnp.isfinite(omega0)
+        finite = jnp.isfinite(p) & jnp.isfinite(omega0)
+        if l1 is not None:
+            finite = finite & jnp.isfinite(l1)
         if not bool(converged):
             return failed_hit("hopf", index, "not_converged", method="extended_system")
         if not (bool(finite) and float(omega0) > 0.0):
             return failed_hit(
                 "hopf", index, "spectral_check_failed",
-                omega0=float(omega0), l1=float(l1), method="extended_system",
+                omega0=float(omega0), **l1_info, method="extended_system",
             )
         eigs = _jacobian_eigenvalues(rhs, u, p)
         nearest = eigs[np.argmin(np.abs(eigs - 1j * float(omega0)))]
@@ -244,12 +253,13 @@ class Hopf(Event):
                 omega0=float(omega0), eigenvalue=complex(nearest), method="extended_system",
             )
         criticality = (
+            "unknown" if l1 is None else
             "degenerate" if abs(l1) < self.l1_tolerance
             else "supercritical" if l1 < 0 else "subcritical"
         )
         return EventHit(
             kind="hopf", p=float(p), u=u, index=index,
-            info={"omega0": float(omega0), "l1": float(l1),
+            info={"omega0": float(omega0), **l1_info,
                   "criticality": criticality, "converged": True,
                   "method": "extended_system"},
         )
