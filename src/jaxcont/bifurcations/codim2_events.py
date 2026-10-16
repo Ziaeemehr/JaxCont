@@ -17,9 +17,10 @@ See docs/superpowers/specs/2026-08-17-two-parameter-continuation-design.md.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import jax.numpy as jnp
+import numpy as np
 from jax import Array, jacfwd
 
 from jaxcont.bifurcations.codim2 import (
@@ -34,9 +35,16 @@ from jaxcont.bifurcations.curves import (
     unpack_fold_curve,
     unpack_hopf_curve,
 )
-from jaxcont.bifurcations.events import BranchPoint, Event, EventHit, failed_hit
+from jaxcont.bifurcations.events import (
+    BranchPoint,
+    Event,
+    EventHit,
+    _classify_tol,
+    failed_hit,
+)
 from jaxcont.bifurcations.fold_normal_form import fold_coefficient
 from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
+from jaxcont.bifurcations.modes import crossings, mode_brackets, track_modes
 from jaxcont.utils.precision import default_tol
 
 PyTree = Any
@@ -80,6 +88,36 @@ class _CurveEvent:
         system's, which is what the branch state actually holds."""
         jac = jacfwd(lambda uu: self.raw_f(uu, p, self.args))(u)
         return jnp.linalg.eigvals(jac)
+
+    def _tracked_spectra(self, points):
+        """``(spectra, extras)``: the original system's spectra at ``points``
+        in tracked-mode order (``(N, n)``), and each point's decoded
+        ``extra`` (see ``_decode``)."""
+        rows, extras = [], []
+        for point in points:
+            u, p, extra = self._decode(point)
+            rows.append(np.asarray(self._eigenvalues(u, p)))
+            extras.append(extra)
+        return track_modes(np.stack(rows)), extras
+
+    def _pinned_mask(self, spectra, extras):
+        """``(N, n)`` mask excluding the eigenvalues pinned by the curve's
+        own defining condition: the zero on a fold curve, the pair
+        ``+-i*omega`` on a Hopf curve."""
+        if self.curve == "fold":
+            rows = [_drop_nearest(jnp.asarray(r), 0.0 + 0.0j) for r in spectra]
+        else:
+            rows = [
+                _drop_nearest_pinned_pair(jnp.asarray(r), extra[2])
+                for r, extra in zip(spectra, extras)
+            ]
+        return np.asarray(jnp.stack(rows))
+
+    def _scan_modes(self, points):
+        """Brackets from ``self.mode_values`` (a tracked-mode ``scan``)."""
+        if len(points) < 2:
+            return []
+        return mode_brackets(*self.mode_values(points))
 
 
 def _drop_nearest(values: Array, target: complex) -> Array:
@@ -180,10 +218,14 @@ class Cusp(_CurveEvent, Event):
 class BogdanovTakens(_CurveEvent, Event):
     """A Bogdanov-Takens (BT) point, where fold and Hopf curves meet.
 
-    On a FOLD curve: the second eigenvalue reaches zero (the first is
-    pinned at zero by the curve's own defining condition).
-    On a HOPF curve: the critical frequency ``omega`` reaches zero, i.e.
-    the imaginary pair collides into a double zero.
+    On a FOLD curve: a tracked real mode other than the pinned zero
+    eigenvalue changes sign.
+    On a HOPF curve: the critical frequency ``omega`` changes sign, i.e.
+    the imaginary pair collides into a double zero. A Hopf curve that ends
+    with ``|omega| < 10 * default_tol`` and no sign change has stalled at
+    the BT point instead of passing it; that is recorded as a failed hit
+    with reason ``"curve_terminated"`` (in ``rejected_events``), not as a
+    located BT.
 
     Abbreviation **BT**, see ``bifurcations.taxonomy.describe("BT")``.
     """
@@ -193,39 +235,35 @@ class BogdanovTakens(_CurveEvent, Event):
     curve: str = "fold"
     args: PyTree = None
     kind: str = "bogdanov_takens"
-    tolerance: float = 1e-6
-    # How far a candidate may sit from the critical set before it is
-    # treated as "never relevant". Serves the same purpose as
-    # PeriodDoubling.near_unit_circle: without a pre-filter, argmin can
-    # silently latch onto an unrelated, always-far eigenvalue and fire a
-    # false positive; with too tight a window, the genuine candidate is
-    # dropped and the detection is silently lost.
-    #
-    # This is a PLAIN absolute bound on |eigenvalue|, NOT the log-magnitude
-    # window PeriodDoubling needs. The difference is real: Floquet
-    # multipliers cluster multiplicatively around 1, so a linear window
-    # there is capped below 1.0 by construction (a ~0-magnitude multiplier
-    # sits at exactly distance 1), which is what caused the v0.3.1 false
-    # negative. Eigenvalues cluster additively around 0, so distance from
-    # zero is already the natural measure and has no such ceiling.
-    near_critical: float = 2.0
+    # |Im| at or below this counts as real; None -> events._classify_tol.
+    tolerance: Optional[float] = None
 
-    def test_function(self, point: BranchPoint) -> float:
-        u, p, extra = self._decode(point)
-        if self.curve == "hopf":
-            _q1, _q2, omega = extra
-            return float(omega)
-        eigs = self._eigenvalues(u, p)
-        keep = _drop_nearest(eigs, 0.0 + 0.0j)
-        near = jnp.abs(eigs) < self.near_critical
-        mask = keep & near & (jnp.abs(jnp.imag(eigs)) < self.tolerance)
-        if not jnp.any(mask):
-            return float("nan")
-        candidates = jnp.where(mask, eigs, jnp.nan)
-        idx = jnp.nanargmin(jnp.abs(jnp.real(candidates)))
-        return float(jnp.real(eigs[idx]))
+    def mode_values(self, points):
+        """``(spectra, values, where)`` on a fold curve: tracked spectra,
+        their real parts, and the mask of real, non-pinned modes."""
+        spectra, extras = self._tracked_spectra(points)
+        tol = _classify_tol(self.tolerance, spectra)
+        where = self._pinned_mask(spectra, extras) & (np.abs(spectra.imag) <= tol)
+        return spectra, spectra.real, where
 
-    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+    def scan(self, points):
+        if self.curve != "hopf":
+            return self._scan_modes(points)
+        omega = np.array([float(self._decode(pt)[2][2]) for pt in points])
+        brackets = [(i, i + 1, None) for i in crossings(omega, np.isfinite(omega))]
+        if not brackets and len(points) >= 2:
+            tol = default_tol(jnp.asarray(points[-1].u).dtype)
+            if abs(omega[-1]) < 10 * tol:
+                n = len(points)
+                brackets = [(n - 2, n - 1, "curve_terminated")]
+        return brackets
+
+    def refine(
+        self, left, right, index, rhs, *, tolerance, max_iterations, mode=None,
+    ) -> EventHit:
+        if mode == "curve_terminated":
+            _u, _p, (_q1, _q2, omega) = self._decode(right)
+            return failed_hit(self.kind, index, "curve_terminated", omega=float(omega))
         u_l, p_l, _ = self._decode(left)
         u_r, p_r, _ = self._decode(right)
         u_star, p_star, _v0, _v1, converged = bogdanov_takens_point(
@@ -253,10 +291,11 @@ class ZeroHopf(_CurveEvent, Event):
     """A zero-Hopf (ZH) point: a zero eigenvalue coincides with an
     imaginary pair. Requires ``n >= 3``.
 
-    On a HOPF curve: a REAL eigenvalue crosses zero (the imaginary pair is
-    pinned to the axis by the curve's defining condition).
-    On a FOLD curve: a complex pair's real part crosses zero (the zero
-    eigenvalue is pinned by the curve's defining condition).
+    On a HOPF curve: a tracked REAL mode changes sign (the imaginary pair
+    pinned by the curve's defining condition is excluded).
+    On a FOLD curve: a tracked complex mode's real part changes sign (the
+    pinned zero eigenvalue is excluded; the upper member of each conjugate
+    pair is used, so a pair opens one bracket).
 
     Abbreviation **ZH**, see ``bifurcations.taxonomy.describe("ZH")``.
     """
@@ -266,37 +305,27 @@ class ZeroHopf(_CurveEvent, Event):
     curve: str = "hopf"
     args: PyTree = None
     kind: str = "zero_hopf"
-    tolerance: float = 1e-6
-    near_critical: float = 2.0
+    # |Im| threshold between real and complex; None -> events._classify_tol.
+    tolerance: Optional[float] = None
 
-    def test_function(self, point: BranchPoint) -> float:
-        u, p, extra = self._decode(point)
-        eigs = self._eigenvalues(u, p)
+    def mode_values(self, points):
+        """``(spectra, values, where)``: tracked spectra, their real parts,
+        and the mask of non-pinned candidate modes (real on a Hopf curve,
+        upper-half-plane complex on a fold curve)."""
+        spectra, extras = self._tracked_spectra(points)
+        tol = _classify_tol(self.tolerance, spectra)
         if self.curve == "hopf":
-            # Exclude the pinned imaginary pair; watch a real eigenvalue.
-            # The candidate IS real here, so its full magnitude equals the
-            # quantity being watched -- |eigs| is the correct pre-filter.
-            near = jnp.abs(eigs) < self.near_critical
-            _q1, _q2, omega = extra
-            keep = _drop_nearest_pinned_pair(eigs, omega)
-            mask = keep & near & (jnp.abs(jnp.imag(eigs)) < self.tolerance)
+            kind_ok = np.abs(spectra.imag) <= tol
         else:
-            # Exclude the pinned zero; watch a complex pair's REAL PART
-            # crossing zero. The pre-filter must gate on that real part,
-            # not the full complex magnitude |eigs| -- a genuine candidate
-            # can have Re(eigs) ~ 0 while sitting at a large |eigs| (e.g.
-            # omega=3), which the magnitude filter would wrongly reject.
-            # Matches DoubleHopf._second_pair's identical situation below.
-            near = jnp.abs(jnp.real(eigs)) < self.near_critical
-            keep = _drop_nearest(eigs, 0.0 + 0.0j)
-            mask = keep & near & (jnp.abs(jnp.imag(eigs)) > self.tolerance)
-        if not jnp.any(mask):
-            return float("nan")
-        candidates = jnp.where(mask, eigs, jnp.nan)
-        idx = jnp.nanargmin(jnp.abs(jnp.real(candidates)))
-        return float(jnp.real(eigs[idx]))
+            kind_ok = spectra.imag > tol
+        return spectra, spectra.real, self._pinned_mask(spectra, extras) & kind_ok
 
-    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+    def scan(self, points):
+        return self._scan_modes(points)
+
+    def refine(
+        self, left, right, index, rhs, *, tolerance, max_iterations, mode=None,
+    ) -> EventHit:
         u_l, p_l, _ = self._decode(left)
         u_r, p_r, _ = self._decode(right)
         result = zero_hopf_point(
@@ -370,13 +399,17 @@ class GeneralizedHopf(_CurveEvent, Event):
 @dataclass(frozen=True)
 class DoubleHopf(_CurveEvent, Event):
     """A double-Hopf (HH) point on a Hopf curve: a SECOND complex pair's
-    real part crosses zero while the first pair is pinned to the axis.
+    real part changes sign while the first pair is pinned to the axis.
+
+    Detection (``scan``): on tracked modes, excluding the pinned pair, a
+    complex mode (``Im > tolerance``, the upper member of each conjugate
+    pair) has its real part change sign.
 
     ``double_hopf_point`` requires a caller-supplied ``seed_b`` (no
     default) because it cannot guess the second pair and degenerates to
     ``nan`` if both blocks land on the same physical pair. Detection along
-    the curve produces that second pair naturally, so this event supplies
-    ``seed_b`` itself.
+    the curve produces that second pair naturally (the tracked mode), so
+    this event supplies ``seed_b`` itself.
 
     Abbreviation **HH**, see ``bifurcations.taxonomy.describe("HH")``.
     """
@@ -386,49 +419,39 @@ class DoubleHopf(_CurveEvent, Event):
     args: PyTree = None
     kind: str = "double_hopf"
     curve: str = "hopf"
-    tolerance: float = 1e-6
-    near_critical: float = 2.0
+    # |Im| above this counts as complex; None -> events._classify_tol.
+    tolerance: Optional[float] = None
     separation_tolerance: float = 1e-3
 
-    def _second_pair(self, point: BranchPoint):
-        """Full eigendecomposition of the ORIGINAL system's Jacobian at
-        ``point``, masked to the SECOND complex pair (the pinned pair
-        excluded via ``_drop_nearest_pinned_pair``). Returns
-        ``(eigs, evecs, mask)``.
+    def mode_values(self, points):
+        """``(spectra, values, where)``: tracked spectra, their real parts,
+        and the mask of non-pinned upper-half-plane complex modes."""
+        spectra, extras = self._tracked_spectra(points)
+        tol = _classify_tol(self.tolerance, spectra)
+        where = self._pinned_mask(spectra, extras) & (spectra.imag > tol)
+        return spectra, spectra.real, where
 
-        Unlike ``_CurveEvent._eigenvalues`` (which uses ``eigvals`` only),
-        this needs the eigenVECTORS too: ``refine()`` must hand
-        ``double_hopf_point`` a real direction (``seed_b``) pointing at
-        this pair, not just its eigenvalue.
-        """
-        u, p, (_q1, _q2, omega) = self._decode(point)
-        jac = jacfwd(lambda uu: self.raw_f(uu, p, self.args))(u)
-        eigs, evecs = jnp.linalg.eig(jac)
-        keep = _drop_nearest_pinned_pair(eigs, omega)
-        near = jnp.abs(jnp.real(eigs)) < self.near_critical
-        mask = keep & near & (jnp.abs(jnp.imag(eigs)) > self.tolerance)
-        return eigs, evecs, mask
+    def scan(self, points):
+        return self._scan_modes(points)
 
-    def test_function(self, point: BranchPoint) -> float:
-        eigs, _evecs, mask = self._second_pair(point)
-        if not jnp.any(mask):
-            return float("nan")
-        candidates = jnp.where(mask, eigs, jnp.nan)
-        idx = jnp.nanargmin(jnp.abs(jnp.real(candidates)))
-        return float(jnp.real(eigs[idx]))
-
-    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+    def refine(
+        self, left, right, index, rhs, *, tolerance, max_iterations, mode=None,
+    ) -> Optional[EventHit]:
+        if mode is None:
+            brackets = self.scan([left, right])
+            if not brackets:
+                return None
+            mode = brackets[0][2]
         u_l, p_l, _ = self._decode(left)
         u_r, p_r, _ = self._decode(right)
         # seed_b: a real direction pointing at the second Hopf pair, built
         # the same way hopf_normal_form._seed builds a block's q1 -- the
-        # real part of the eigenvector at the nearest-to-critical
-        # surviving complex eigenvalue, taken from the bracket's right
-        # endpoint. This is exactly what double_hopf_point cannot guess
-        # for itself; it is the whole reason this event exists.
-        eigs, evecs, mask = self._second_pair(right)
-        candidates = jnp.where(mask, eigs, jnp.nan)
-        idx = jnp.nanargmin(jnp.abs(jnp.real(candidates)))
+        # real part of the eigenvector of the tracked mode at the bracket's
+        # right endpoint. This is exactly what double_hopf_point cannot
+        # guess for itself.
+        jac = jacfwd(lambda uu: self.raw_f(uu, p_r, self.args))(u_r)
+        eigs, evecs = jnp.linalg.eig(jac)
+        idx = jnp.argmin(jnp.abs(eigs - mode.right[mode.column]))
         seed_b = jnp.real(evecs[:, idx])
         seed_b = seed_b / jnp.linalg.norm(seed_b)
 
@@ -439,10 +462,7 @@ class DoubleHopf(_CurveEvent, Event):
             separation_tolerance=self.separation_tolerance,
         )
         # double_hopf_point returns a 9-tuple:
-        # (u*, p*, q1a, q2a, omega_a, q1b, q2b, omega_b, converged) --
-        # confirmed against the live docstring (Task 7 Step 1). Unpacked
-        # by full position, not the brief's `result[-3:]` slice, which
-        # would have misaligned (that lands on q2b, omega_b, converged).
+        # (u*, p*, q1a, q2a, omega_a, q1b, q2b, omega_b, converged).
         (u_star, p_star, _q1a, _q2a, omega_a,
          _q1b, _q2b, omega_b, converged) = result
         ok = bool(converged) and bool(jnp.all(jnp.isfinite(p_star)))

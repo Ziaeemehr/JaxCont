@@ -28,10 +28,12 @@ from typing import (
 )
 
 import jax.numpy as jnp
+import numpy as np
 from jax import Array, jacfwd
 
 from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.bifurcations.hopf_normal_form import hopf_point, lyapunov_coefficient
+from jaxcont.bifurcations.modes import mode_brackets, track_modes
 from jaxcont.solvers.implicit import differentiable_root_checked
 from jaxcont.stability.floquet import floquet_multipliers
 from jaxcont.utils.precision import default_tol
@@ -51,11 +53,19 @@ class BranchPoint:
 
 @runtime_checkable
 class Event(Protocol):
-    kind: str
+    """A detectable event along a branch.
 
-    def test_function(self, point: BranchPoint) -> float:
-        """Scalar; a sign change between consecutive points signals an event."""
-        ...
+    Detection is one of two hooks. ``test_function(point) -> float`` is a
+    scalar whose sign change between consecutive points opens a bracket; it
+    suits events whose test is continuous along the branch by construction
+    (Fold, Cusp, GeneralizedHopf). ``scan(points) -> list[(i, j, mode)]``
+    returns the brackets itself, plus a mode identity that ``detect_events``
+    passes to ``refine(..., mode=mode)``; spectral events use it to follow
+    one tracked mode (``bifurcations.modes``) instead of re-selecting a
+    candidate at every point. ``detect_events`` uses ``scan`` when present.
+    """
+
+    kind: str
 
     def refine(
         self,
@@ -139,22 +149,47 @@ class Fold(Event):
         )
 
 
+def _classify_tol(tolerance: Optional[float], values) -> float:
+    """Threshold on ``|Im|`` separating real from complex eigenvalues.
+
+    ``None`` resolves to ``sqrt(default_tol)`` of the eigenvalues' real
+    dtype. The square root is deliberate: a perturbed double eigenvalue
+    splits by the square root of the perturbation, and Floquet multipliers
+    also carry the collocation discretization error, so a real double
+    multiplier can come back as a complex pair with an imaginary part far
+    above roundoff.
+    """
+    if tolerance is not None:
+        return tolerance
+    return default_tol(jnp.finfo(jnp.asarray(values).dtype).dtype) ** 0.5
+
+
+def _branch_spectra(points: Sequence[BranchPoint]) -> Optional[np.ndarray]:
+    """The points' spectra as one ``(N, n)`` array in tracked-mode order."""
+    if len(points) == 0 or any(pt.eigenvalues is None for pt in points):
+        return None
+    return track_modes(np.stack([np.asarray(pt.eigenvalues) for pt in points]))
+
+
+def _jacobian_eigenvalues(rhs, u, p) -> np.ndarray:
+    return np.asarray(jnp.linalg.eigvals(jacfwd(lambda uu: rhs(uu, p))(u)))
+
+
 @dataclass(frozen=True)
 class Hopf(Event):
     """A Hopf bifurcation of equilibria.
 
-    Test function: real part of the complex-conjugate eigenvalue pair with
-    smallest ``|Re|`` (``nan`` if no eigenvalue is genuinely complex --
-    NOT ``inf``: ``inf`` produces a false sign-change whenever the branch's
-    eigenvalue structure transitions from all-real to complex, regardless
-    of whether the resulting pair is anywhere near the imaginary axis;
-    ``nan`` avoids this for free since ``nan < 0`` is always ``False``).
+    Detection (``scan``): on tracked modes, ``Re lambda_k`` changes sign
+    while ``Im lambda_k > tolerance`` at both bracket ends (the upper member
+    of each conjugate pair, so a pair opens one bracket). A refined point is
+    accepted only if the eigenvalue nearest ``i*omega0`` is complex.
 
     Abbreviation **H**, see ``jaxcont.bifurcations.taxonomy.describe("H")``.
     """
 
     kind: str = "hopf"
-    tolerance: float = 1e-6
+    # |Im| above this counts as complex; None -> see _classify_tol.
+    tolerance: Optional[float] = None
     # Absolute threshold on a scale-dependent, float32-computed quantity
     # (the first Lyapunov coefficient): l1's magnitude depends on the
     # system's own units/normalization, so a genuinely-degenerate Hopf point
@@ -165,16 +200,16 @@ class Hopf(Event):
     # too eagerly or too rarely.
     l1_tolerance: float = 1e-6
 
-    def test_function(self, point: BranchPoint) -> float:
-        eigs = point.eigenvalues
-        complex_mask = jnp.abs(jnp.imag(eigs)) > self.tolerance
-        if not jnp.any(complex_mask):
-            return float("nan")
-        complex_eigs = eigs[complex_mask]
-        idx = jnp.argmin(jnp.abs(jnp.real(complex_eigs)))
-        return float(jnp.real(complex_eigs[idx]))
+    def scan(self, points: Sequence[BranchPoint]) -> list[tuple[int, int, Any]]:
+        spectra = _branch_spectra(points)
+        if spectra is None:
+            return []
+        tol = _classify_tol(self.tolerance, spectra)
+        return mode_brackets(spectra, spectra.real, spectra.imag > tol)
 
-    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+    def refine(
+        self, left, right, index, rhs, *, tolerance, max_iterations, mode=None,
+    ) -> EventHit:
         u_guess = (left.u + right.u) / 2
         p_guess = (left.p + right.p) / 2
         u, p, q1, q2, omega0, converged = hopf_point(
@@ -182,18 +217,9 @@ class Hopf(Event):
             tol=tolerance, max_iter=max_iterations,
         )
         l1 = lyapunov_coefficient(lambda u, p, _args: rhs(u, p), u, p, q1, q2, omega0)
-        # hopf_point's Newton solve (via differentiable_root) has no
-        # convergence guarantee: if the bracket's sign change wasn't a real
-        # Hopf point (a known occurrence -- see the "no close match --
-        # spurious" branches in examples/example_05_neural_mass.py), p/l1/
-        # omega0 can come back non-finite (e.g. p=-inf, l1=nan), or --the
-        # gap `converged` closes -- come back finite but never actually
-        # satisfy the extended-system residual within tol. Both `abs(nan) <
-        # tol` and `nan < 0` are False, so without these guards a
-        # non-convergent solve would silently fall through to the
-        # "subcritical" else-branch below -- a confident-looking label for
-        # a result that isn't a Hopf point at all. omega0 > 0 is checked too
-        # since a genuine Hopf point always has a nonzero critical frequency.
+        # A converged extended-system solve can still be no Hopf point: a
+        # non-finite p/l1/omega0 or omega0 <= 0 (a genuine Hopf point has a
+        # nonzero critical frequency) is rejected, never labelled.
         finite = jnp.isfinite(p) & jnp.isfinite(l1) & jnp.isfinite(omega0)
         if not bool(converged):
             return failed_hit("hopf", index, "not_converged", method="extended_system")
@@ -201,6 +227,13 @@ class Hopf(Event):
             return failed_hit(
                 "hopf", index, "spectral_check_failed",
                 omega0=float(omega0), l1=float(l1), method="extended_system",
+            )
+        eigs = _jacobian_eigenvalues(rhs, u, p)
+        nearest = eigs[np.argmin(np.abs(eigs - 1j * float(omega0)))]
+        if not abs(nearest.imag) > _classify_tol(self.tolerance, eigs):
+            return failed_hit(
+                "hopf", index, "spectral_check_failed",
+                omega0=float(omega0), eigenvalue=complex(nearest), method="extended_system",
             )
         criticality = (
             "degenerate" if abs(l1) < self.l1_tolerance
@@ -220,34 +253,36 @@ class BP(Event):
     transcritical). See docs/superpowers/specs/2026-08-26-branch-point-
     switching-design.md for the full derivation.
 
-    Test function: the real eigenvalue nearest zero -- the SAME signal an
-    ordinary fold gives (df/du singular). This is deliberate, not an
-    oversight: distinguishing a branch point from a plain fold requires a
-    strictly stronger condition (the augmented [df/du | df/dp] matrix ALSO
-    dropping rank, i.e. df/dp lying in the range of df/du) that only
-    refine() can afford to check. test_function will fire at every plain
-    LP too; refine() rejects those by returning None.
+    Detection (``scan``): a tracked real mode (``|Im lambda_k| <=
+    tolerance`` at both bracket ends) changes sign -- the SAME signal an
+    ordinary fold gives (df/du singular). Distinguishing a branch point from
+    a plain fold requires a strictly stronger condition (the augmented
+    [df/du | df/dp] matrix ALSO dropping rank, i.e. df/dp lying in the range
+    of df/du) that only refine() can afford to check; refine() rejects
+    plain folds by returning None. A refined point is accepted only if the
+    eigenvalue nearest 0 is real.
 
     Abbreviation **BP**, see jaxcont.bifurcations.taxonomy.describe("BP").
     """
 
     kind: str = "branch_point"
-    tolerance: float = 1e-6       # |Im(eigenvalue)| below this counts as "real"
+    # |Im| at or below this counts as real; None -> see _classify_tol.
+    tolerance: Optional[float] = None
     rank_tolerance: float = 1e-4  # smallest singular value of [f_u|f_p] below
                                    # this counts as "rank-deficient" (a true BP);
                                    # calibrated in Step 5 below against the
                                    # pitchfork/transcritical/saddle-node fixtures
 
-    def test_function(self, point: BranchPoint) -> float:
-        eigs = point.eigenvalues
-        real_mask = jnp.abs(jnp.imag(eigs)) < self.tolerance
-        if not jnp.any(real_mask):
-            return float("nan")
-        real_eigs = jnp.real(eigs[real_mask])
-        idx = jnp.argmin(jnp.abs(real_eigs))
-        return float(real_eigs[idx])
+    def scan(self, points: Sequence[BranchPoint]) -> list[tuple[int, int, Any]]:
+        spectra = _branch_spectra(points)
+        if spectra is None:
+            return []
+        tol = _classify_tol(self.tolerance, spectra)
+        return mode_brackets(spectra, spectra.real, np.abs(spectra.imag) <= tol)
 
-    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> Optional[EventHit]:
+    def refine(
+        self, left, right, index, rhs, *, tolerance, max_iterations, mode=None,
+    ) -> Optional[EventHit]:
         u_guess = (left.u + right.u) / 2
         p_guess = (left.p + right.p) / 2
         u_bif, p_bif, _null_vector, converged = fold_point(
@@ -256,6 +291,14 @@ class BP(Event):
         )
         if not bool(converged):
             return failed_hit("branch_point", index, "not_converged", method="extended_system")
+
+        eigs = _jacobian_eigenvalues(rhs, u_bif, p_bif)
+        nearest = eigs[np.argmin(np.abs(eigs))]
+        if not abs(nearest.imag) <= _classify_tol(self.tolerance, eigs):
+            return failed_hit(
+                "branch_point", index, "spectral_check_failed",
+                eigenvalue=complex(nearest), method="extended_system",
+            )
 
         n = u_bif.shape[0]
         f_u = jacfwd(lambda u: rhs(u, p_bif))(u_bif)
@@ -334,43 +377,32 @@ def detect_events(
 
     hits: list[EventHit] = []
     for event in events:
-        # PeriodDoubling/NeimarkSacker opt into continuity-based candidate
-        # tracking via `select_candidate` (see their docstrings for why: a
-        # per-point absolute-window filter recurringly false-negatived under
-        # hardware-dependent float32 adaptive-step noise). Events without it
-        # (Fold, Hopf) fall back to the plain per-point test_function scan.
-        select = getattr(event, "select_candidate", None)
-        if select is None:
-            test_vals = [event.test_function(pt) for pt in points]
-            selected: list[Any] = [None] * len(points)
+        scan = getattr(event, "scan", None)
+        if scan is not None:
+            brackets = scan(points)
         else:
-            test_vals = []
-            selected = []
-            prev_value = None
-            for pt in points:
-                value = select(pt, prev_value)
-                selected.append(value)
-                test_vals.append(float("nan") if value is None else event.test_value(value))
-                if value is not None:
-                    prev_value = value
-        for i in range(len(points) - 1):
-            if test_vals[i] * test_vals[i + 1] < 0:
-                kwargs = {} if select is None else {"prev_value": selected[i]}
-                hit = event.refine(
-                    points[i], points[i + 1], (i, i + 1), rhs,
-                    tolerance=tolerance, max_iterations=max_iterations, **kwargs,
-                )
-                if hit is None:
-                    continue
-                if hit.status == "validated":
-                    # Locality: a refined root must lie within the bracket
-                    # widened by one bracket width on each side; a solve that
-                    # wandered to a distant root is not this bracket's event.
-                    if not _within_bracket(hit, points[i], points[i + 1]):
-                        hit = failed_hit(
-                            hit.kind, hit.index, "outside_bracket", refined_p=hit.p,
-                        )
-                hits.append(hit)
+            test_vals = [event.test_function(pt) for pt in points]
+            brackets = [
+                (i, i + 1, None) for i in range(len(points) - 1)
+                if test_vals[i] * test_vals[i + 1] < 0
+            ]
+        for i, j, mode in brackets:
+            kwargs = {} if scan is None else {"mode": mode}
+            hit = event.refine(
+                points[i], points[j], (i, j), rhs,
+                tolerance=tolerance, max_iterations=max_iterations, **kwargs,
+            )
+            if hit is None:
+                continue
+            if hit.status == "validated":
+                # Locality: a refined root must lie within the bracket
+                # widened by one bracket width on each side; a solve that
+                # wandered to a distant root is not this bracket's event.
+                if not _within_bracket(hit, points[i], points[j]):
+                    hit = failed_hit(
+                        hit.kind, hit.index, "outside_bracket", refined_p=hit.p,
+                    )
+            hits.append(hit)
 
     rejected = [h for h in hits if h.status == "failed"]
     hits = [h for h in hits if h.status == "validated"]
@@ -387,14 +419,121 @@ def detect_events(
     return deduped + rejected
 
 
+def _trivial_index(multipliers) -> int:
+    """Index of the trivial Floquet multiplier: the one nearest 1."""
+    return int(np.argmin(np.abs(np.asarray(multipliers) - 1.0)))
+
+
+def _nontrivial_mask(spectra: np.ndarray) -> np.ndarray:
+    """``(N, n)`` mask that is False at each row's trivial multiplier."""
+    mask = np.ones(spectra.shape, dtype=bool)
+    mask[np.arange(spectra.shape[0]), [_trivial_index(row) for row in spectra]] = False
+    return mask
+
+
+class _FloquetEvent:
+    """Shared detection and refinement for events on Floquet multipliers.
+
+    Not a dataclass: it declares no fields and only shares methods.
+    Subclasses define the per-mode test value (``_test_value``), the mode
+    condition used while scanning (``_mode_mask``), the critical value the
+    refined spectrum is checked against (``_critical``) and the condition the
+    multiplier nearest it must satisfy (``_spectral_ok``).
+    """
+
+    def scan(self, points: Sequence[BranchPoint]) -> list[tuple[int, int, Any]]:
+        spectra = _branch_spectra(points)
+        if spectra is None:
+            return []
+        tol = _classify_tol(self.tolerance, spectra)
+        where = self._mode_mask(spectra, tol) & _nontrivial_mask(spectra)
+        return mode_brackets(spectra, self._test_value(spectra), where)
+
+    def _multipliers(self, u, p) -> np.ndarray:
+        return np.asarray(floquet_multipliers(self.raw_f, self.mesh, u, p))
+
+    def refine(
+        self, left, right, index, rhs, *, tolerance, max_iterations, mode=None,
+    ) -> Optional[EventHit]:
+        if mode is None:
+            brackets = self.scan([left, right])
+            if not brackets:
+                return None
+            mode = brackets[0][2]
+        k = mode.column
+        p_left, p_right = left.p, right.p
+        u_left, u_right = left.u, right.u
+        row_left = mode.left
+        t_left = float(self._test_value(mode.left[k]))
+        t_right = float(self._test_value(mode.right[k]))
+        dtype = jnp.asarray(u_left).dtype
+        root_tol = default_tol(dtype) if self.corrector_tol is None else self.corrector_tol
+        if tolerance is None:
+            tolerance = default_tol(dtype)
+
+        def failed(reason, **info):
+            return failed_hit(self.kind, index, reason, method="bisection", **info)
+
+        # An exact zero at a bracket end is the event itself.
+        if t_left == 0.0:
+            p_right, u_right = p_left, u_left
+        elif t_right == 0.0:
+            p_left, u_left, row_left = p_right, u_right, mode.right
+        for _ in range(max_iterations):
+            if abs(p_right - p_left) < tolerance:
+                break
+            p_mid = (p_left + p_right) / 2
+            alpha = (p_mid - p_left) / (p_right - p_left)
+            u_interp = u_left + alpha * (u_right - u_left)
+            # An interpolated collocation state is not on the residual
+            # manifold of a curved branch; its multipliers are trusted only
+            # after correction at the interpolated parameter.
+            u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=root_tol)
+            if not bool(corrected):
+                return failed("not_converged")
+            row_mid = track_modes(np.stack([row_left, self._multipliers(u_mid, p_mid)]))[1]
+            t_mid = float(self._test_value(row_mid[k]))
+            if t_left * t_mid < 0:
+                p_right, u_right, t_right = p_mid, u_mid, t_mid
+            elif t_mid * t_right < 0:
+                p_left, u_left, t_left, row_left = p_mid, u_mid, t_mid, row_mid
+            else:
+                if t_mid == 0.0:
+                    p_left = p_right = p_mid
+                    u_left = u_right = u_mid
+                    row_left = row_mid
+                break
+        p_bif = (p_left + p_right) / 2
+        u_bif, corrected = differentiable_root_checked(
+            rhs, (u_left + u_right) / 2, p_bif, tol=root_tol,
+        )
+        if not bool(corrected):
+            return failed("not_converged")
+
+        multipliers = self._multipliers(u_bif, p_bif)
+        tracked = track_modes(np.stack([row_left, multipliers]))[1][k]
+        keep = np.arange(multipliers.shape[0]) != _trivial_index(multipliers)
+        distance = np.where(keep, np.abs(multipliers - self._critical(tracked)), np.inf)
+        nearest = multipliers[np.argmin(distance)]
+        if not self._spectral_ok(nearest, _classify_tol(self.tolerance, multipliers)):
+            return failed("spectral_check_failed", multiplier=complex(nearest))
+        return EventHit(
+            kind=self.kind, p=float(p_bif), u=u_bif, index=index,
+            info={"method": "bisection", "corrected": True, "multiplier": complex(nearest)},
+        )
+
+
 @dataclass(frozen=True)
-class PeriodDoubling(Event):
+class PeriodDoubling(_FloquetEvent, Event):
     """A period-doubling (flip) bifurcation of a periodic orbit.
 
-    Test function: a real Floquet multiplier crosses ``-1`` -- the
-    periodic-orbit analogue of ``Hopf``'s imaginary-axis crossing, but a
-    magnitude/sign condition on multipliers, not a real-part condition (see
-    ``docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md``).
+    Detection (``scan``): on tracked Floquet multipliers (trivial multiplier
+    excluded), a real ``mu_k`` (``|Im mu_k| <= tolerance`` at both bracket
+    ends) has ``Re mu_k + 1`` change sign. Refinement bisects on the same
+    tracked mode, correcting each midpoint onto the collocation residual, and
+    accepts the result only if the non-trivial multiplier nearest ``-1`` is
+    real. See ``docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md``.
+
     Only meaningful for ``kind="periodic"`` branches (``point.eigenvalues``
     must be Floquet multipliers, not equilibrium eigenvalues) -- using this
     on an equilibrium branch is the mirror image of the existing
@@ -414,239 +553,59 @@ class PeriodDoubling(Event):
     mesh: Any
     kind: str = "period_doubling"
     corrector_tol: Optional[float] = None  # collocation re-correction; None -> default_tol(dtype)
-    tolerance: float = 1e-6
-    # Only used to pick the FIRST point's candidate (no prior selection to
-    # track continuity from yet) -- see select_candidate. Every later point
-    # tracks continuity from the previous step's selected multiplier instead
-    # of re-filtering by this absolute window, which is what let a recurring
-    # false negative resurface three times (v0.3.0, v0.3.1, and again on CI
-    # after the log-magnitude fix): whatever window is chosen, an adaptive
-    # step can grow the true candidate's magnitude by hardware-dependent
-    # amounts (different Newton iteration counts feed the step controller
-    # under this project's float32-by-default policy) and land the very next
-    # sample just outside it, turning that bracket point's test_function to
-    # nan and silently dropping the crossing (0 events instead of 1,
-    # reproduced on CI, not locally -- nan comparisons are never `< 0`, so
-    # detect_events's sign-change scan sees nothing to report). Nearest-
-    # neighbor continuity tracking has no such window to outrun: the
-    # candidate is "whichever multiplier is closest to where we last saw it,"
-    # which holds regardless of step size, as long as no other multiplier
-    # crosses closer to the previous value first (a genericity assumption
-    # standard continuation software like AUTO/MatCont also relies on). See
-    # docs/superpowers/specs/2026-07-24-period-doubling-neimark-sacker-design.md
-    # for the filter's original rationale and events.py's git history for the
-    # three false-negative incidents this replaces.
-    near_unit_circle: float = 2.0
+    # |Im| at or below this counts as real; None -> see _classify_tol.
+    tolerance: Optional[float] = None
 
-    def select_candidate(self, point: BranchPoint, prev_value: Optional[Array]) -> Optional[Array]:
-        """Pick the real Floquet multiplier tracked as the PD candidate.
+    @staticmethod
+    def _test_value(multipliers):
+        return np.real(multipliers) + 1.0
 
-        With `prev_value=None` (first point on the branch, or refine's own
-        bootstrap), picks the real multiplier nearest -1 within the
-        `near_unit_circle` log-magnitude window, excluding the ~1
-        trivial-like multiplier. With `prev_value` set, ignores both the
-        window AND the real/imaginary classification, picking whichever
-        multiplier (still excluding trivial) is nearest `prev_value` in the
-        complex plane -- continuity, not a threshold. Dropping the
-        real/imaginary gate here matters: a multiplicity-2 real multiplier
-        (this module's own test system deliberately has one -- see
-        tests/test_period_doubling_neimark_sacker.py's module docstring) is
-        a degenerate eigenvalue, and eigensolvers routinely return degenerate
-        real roots as a complex-conjugate pair with a tiny (float32-noise
-        scale, ~1e-6) nonzero imaginary part. That's comfortably past
-        `tolerance` (1e-6) on some steps, which would otherwise make the
-        genuinely-tracked candidate fail its OWN classification check and
-        fall back to whatever else remains in the pool -- including the
-        always-present near-zero decaying multiplier this filter exists to
-        reject in the first place. The classification only needs to hold at
-        bootstrap, to pick the right *kind* of candidate to start tracking;
-        once tracking is anchored to a specific multiplier's trajectory,
-        nearest-in-value is a strictly more reliable identity check than
-        re-classifying its noisy imaginary part every step.
-        """
-        mult = point.eigenvalues
-        trivial_idx = jnp.argmin(jnp.abs(mult - 1.0))
-        keep = jnp.arange(mult.shape[0]) != trivial_idx
-        if prev_value is None:
-            keep = keep & (jnp.abs(jnp.imag(mult)) < self.tolerance)
-            keep = keep & (jnp.abs(jnp.log(jnp.abs(mult) + 1e-30)) < self.near_unit_circle)
-            metric = jnp.abs(jnp.real(mult) + 1.0)
-        else:
-            metric = jnp.abs(mult - prev_value)
-        if not bool(jnp.any(keep)):
-            return None
-        idx = jnp.nanargmin(jnp.where(keep, metric, jnp.nan))
-        return mult[idx]
+    @staticmethod
+    def _mode_mask(spectra, tol):
+        return np.abs(spectra.imag) <= tol
 
-    def test_value(self, value: Array) -> float:
-        return float(jnp.real(value) + 1.0)
+    @staticmethod
+    def _critical(tracked):
+        return -1.0
 
-    def test_function(self, point: BranchPoint) -> float:
-        value = self.select_candidate(point, None)
-        return float("nan") if value is None else self.test_value(value)
-
-    def refine(
-        self, left, right, index, rhs, *, tolerance, max_iterations, prev_value=None,
-    ) -> EventHit:
-        p_left, p_right = left.p, right.p
-        u_left, u_right = left.u, right.u
-        v_left = prev_value if prev_value is not None else self.select_candidate(left, None)
-        v_right = self.select_candidate(right, v_left)
-        t_left = self.test_value(v_left)
-        t_right = self.test_value(v_right)
-        corrected_all = True
-        root_tol = (
-            default_tol(jnp.asarray(u_left).dtype)
-            if self.corrector_tol is None else self.corrector_tol
-        )
-        if tolerance is None:
-            tolerance = default_tol(jnp.asarray(u_left).dtype)
-        for _ in range(max_iterations):
-            if abs(p_right - p_left) < tolerance:
-                break
-            p_mid = (p_left + p_right) / 2
-            alpha = (p_mid - p_left) / (p_right - p_left)
-            u_interp = u_left + alpha * (u_right - u_left)
-            # A linear interpolation between two collocation states does not
-            # itself satisfy the nonlinear collocation residual on a curved
-            # branch. Correct it back onto the residual manifold at the
-            # interpolated parameter before trusting its Floquet multipliers
-            # -- otherwise a narrow reported parameter bracket does not by
-            # itself imply an accurate multiplier crossing.
-            u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=root_tol)
-            if not bool(corrected):
-                corrected_all = False
-                break
-            mult_mid = floquet_multipliers(self.raw_f, self.mesh, u_mid, p_mid)
-            mid_point = BranchPoint(p=p_mid, u=u_mid, eigenvalues=mult_mid)
-            v_mid = self.select_candidate(mid_point, v_left)
-            t_mid = self.test_value(v_mid)
-            # Three-way branch, not "left-half or else" -- see this file's
-            # existing Global Constraints (Hopf has the same shape, for the
-            # same reason: a two-way version degenerates whenever t_mid
-            # lands on an exact zero).
-            if t_left * t_mid < 0:
-                p_right, u_right, t_right, v_right = p_mid, u_mid, t_mid, v_mid
-            elif t_mid * t_right < 0:
-                p_left, u_left, t_left, v_left = p_mid, u_mid, t_mid, v_mid
-            else:
-                break
-        p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
-        # u_bif/p_bif are the midpoint of the final bracket, not a fresh
-        # Newton correction at that exact midpoint -- the endpoints
-        # (u_left/u_right) were the ones actually corrected onto the
-        # residual manifold during the loop above. In practice this sits at
-        # the float32 residual floor (empirically ~4-5e-6) since the final
-        # bracket is narrow, but it's a linear average, not an independently
-        # re-corrected point.
-        if not corrected_all:
-            return failed_hit("period_doubling", index, "not_converged", method="bisection")
-        return EventHit(
-            kind="period_doubling", p=float(p_bif), u=u_bif, index=index,
-            info={"method": "bisection", "corrected": True},
-        )
+    @staticmethod
+    def _spectral_ok(multiplier, tol):
+        return abs(multiplier.imag) <= tol
 
 
 @dataclass(frozen=True)
-class NeimarkSacker(Event):
+class NeimarkSacker(_FloquetEvent, Event):
     """A Neimark-Sacker (torus) bifurcation of a periodic orbit.
 
-    Test function: a complex-conjugate pair of Floquet multipliers crosses
-    the unit circle away from the real axis. See ``PeriodDoubling``'s
-    docstring for the shared rationale (equilibrium-branch footgun,
-    ``raw_f``/``mesh`` fields, why ``detect_events``'s generic ``rhs`` isn't
-    used).
+    Detection (``scan``): on tracked Floquet multipliers (trivial multiplier
+    excluded), a complex ``mu_k`` (``Im mu_k > tolerance`` at both bracket
+    ends, the upper member of each conjugate pair) has ``|mu_k| - 1`` change
+    sign. The refined point is accepted only if the multiplier nearest the
+    tracked mode's projection onto the unit circle is complex. See
+    ``PeriodDoubling``'s docstring for the shared rationale
+    (equilibrium-branch footgun, ``raw_f``/``mesh`` fields, why
+    ``detect_events``'s generic ``rhs`` isn't used).
     """
 
     raw_f: Callable[[Array, Array, PyTree], Array]
     mesh: Any
     kind: str = "neimark_sacker"
     corrector_tol: Optional[float] = None  # collocation re-correction; None -> default_tol(dtype)
-    tolerance: float = 1e-6
-    # See PeriodDoubling.near_unit_circle/select_candidate for why this only
-    # bounds the FIRST point's candidate: every later point tracks continuity
-    # from the previous step's selected complex pair instead of re-filtering
-    # by this window, which is what let the same false negative resurface
-    # repeatedly under hardware-dependent float32 adaptive-step noise.
-    near_unit_circle: float = 2.0
+    # |Im| above this counts as complex; None -> see _classify_tol.
+    tolerance: Optional[float] = None
 
-    def select_candidate(self, point: BranchPoint, prev_value: Optional[Array]) -> Optional[Array]:
-        """Pick the complex Floquet multiplier tracked as the NS candidate.
+    @staticmethod
+    def _test_value(multipliers):
+        return np.abs(multipliers) - 1.0
 
-        See PeriodDoubling.select_candidate for the bootstrap-vs-continuity
-        shape and why the real/imaginary classification only applies at
-        bootstrap (dropped once `prev_value` anchors continuity tracking);
-        here the bootstrap pool is genuinely-complex multipliers (imaginary
-        part above `tolerance`) instead of real ones, and the bootstrap
-        target is the unit circle (``|mult|=1``) instead of -1.
-        """
-        mult = point.eigenvalues
-        trivial_idx = jnp.argmin(jnp.abs(mult - 1.0))
-        keep = jnp.arange(mult.shape[0]) != trivial_idx
-        if prev_value is None:
-            keep = keep & (jnp.abs(jnp.imag(mult)) > self.tolerance)
-            keep = keep & (jnp.abs(jnp.log(jnp.abs(mult) + 1e-30)) < self.near_unit_circle)
-            metric = jnp.abs(jnp.abs(mult) - 1.0)
-        else:
-            metric = jnp.abs(mult - prev_value)
-        if not bool(jnp.any(keep)):
-            return None
-        idx = jnp.nanargmin(jnp.where(keep, metric, jnp.nan))
-        return mult[idx]
+    @staticmethod
+    def _mode_mask(spectra, tol):
+        return spectra.imag > tol
 
-    def test_value(self, value: Array) -> float:
-        return float(jnp.abs(value) - 1.0)
+    @staticmethod
+    def _critical(tracked):
+        return tracked / abs(tracked)
 
-    def test_function(self, point: BranchPoint) -> float:
-        value = self.select_candidate(point, None)
-        return float("nan") if value is None else self.test_value(value)
-
-    def refine(
-        self, left, right, index, rhs, *, tolerance, max_iterations, prev_value=None,
-    ) -> EventHit:
-        p_left, p_right = left.p, right.p
-        u_left, u_right = left.u, right.u
-        v_left = prev_value if prev_value is not None else self.select_candidate(left, None)
-        v_right = self.select_candidate(right, v_left)
-        t_left = self.test_value(v_left)
-        t_right = self.test_value(v_right)
-        corrected_all = True
-        root_tol = (
-            default_tol(jnp.asarray(u_left).dtype)
-            if self.corrector_tol is None else self.corrector_tol
-        )
-        if tolerance is None:
-            tolerance = default_tol(jnp.asarray(u_left).dtype)
-        for _ in range(max_iterations):
-            if abs(p_right - p_left) < tolerance:
-                break
-            p_mid = (p_left + p_right) / 2
-            alpha = (p_mid - p_left) / (p_right - p_left)
-            u_interp = u_left + alpha * (u_right - u_left)
-            # See PeriodDoubling.refine for why the interpolated state must
-            # be Newton-corrected back onto the collocation residual
-            # manifold before its Floquet multipliers can be trusted.
-            u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=root_tol)
-            if not bool(corrected):
-                corrected_all = False
-                break
-            mult_mid = floquet_multipliers(self.raw_f, self.mesh, u_mid, p_mid)
-            mid_point = BranchPoint(p=p_mid, u=u_mid, eigenvalues=mult_mid)
-            v_mid = self.select_candidate(mid_point, v_left)
-            t_mid = self.test_value(v_mid)
-            if t_left * t_mid < 0:
-                p_right, u_right, t_right, v_right = p_mid, u_mid, t_mid, v_mid
-            elif t_mid * t_right < 0:
-                p_left, u_left, t_left, v_left = p_mid, u_mid, t_mid, v_mid
-            else:
-                break
-        p_bif, u_bif = (p_left + p_right) / 2, (u_left + u_right) / 2
-        # See PeriodDoubling.refine's identical comment above: u_bif/p_bif
-        # are the midpoint of the final (already Newton-corrected-endpoint)
-        # bracket, not a fresh correction at that exact midpoint.
-        if not corrected_all:
-            return failed_hit("neimark_sacker", index, "not_converged", method="bisection")
-        return EventHit(
-            kind="neimark_sacker", p=float(p_bif), u=u_bif, index=index,
-            info={"method": "bisection", "corrected": True},
-        )
+    @staticmethod
+    def _spectral_ok(multiplier, tol):
+        return abs(multiplier.imag) > tol

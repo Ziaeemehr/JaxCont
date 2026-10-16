@@ -9,6 +9,7 @@ docs/superpowers/specs/2026-07-23-event-protocol-rewrite-design.md).
 from dataclasses import dataclass
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from jax import jacfwd
 
@@ -76,27 +77,8 @@ def test_fold_test_function_is_tangent_dp_component():
     assert jnp.isclose(fold.test_function(point), 0.02, atol=1e-6)
 
 
-def test_hopf_test_function():
-    hopf = Hopf()
-    point = BranchPoint(
-        p=0.0, u=jnp.zeros(1),
-        eigenvalues=jnp.array([0.01 + 2.0j, 0.01 - 2.0j, -1.0]),
-    )
-    assert jnp.isclose(hopf.test_function(point), 0.01, atol=1e-6)
 
 
-def test_hopf_test_function_no_complex_returns_nan():
-    # nan, not inf: inf * (a finite real part far from zero) is negative,
-    # which would falsely read as a sign-change crossing in detect_events's
-    # scan whenever the eigenvalue structure flips from all-real to complex
-    # -- regardless of whether that complex pair is anywhere near the
-    # imaginary axis. nan avoids this for free (nan < 0 is always False).
-    hopf = Hopf()
-    point = BranchPoint(
-        p=0.0, u=jnp.zeros(1),
-        eigenvalues=jnp.array([-0.5, -1.0, -2.0]),
-    )
-    assert jnp.isnan(hopf.test_function(point))
 
 
 def test_detect_events_ignores_real_to_complex_transition_far_from_axis():
@@ -368,92 +350,18 @@ def test_dedup_merges_same_kind_but_not_cross_kind():
     assert [(h.kind, h.p) for h in hits] == [("fold", 0.10), ("hopf", 0.12), ("hopf", 0.50)]
 
 
-def test_period_doubling_test_function_finds_real_multiplier_near_minus_one():
-    pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
-    point = BranchPoint(
-        p=0.0, u=jnp.zeros(1),
-        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, -0.8 + 0j, -0.8 + 0j]),
-    )
-    assert jnp.isclose(pd.test_function(point), 0.2, atol=1e-6)
 
 
-def test_period_doubling_test_function_at_exact_bifurcation():
-    pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
-    point = BranchPoint(
-        p=0.0, u=jnp.zeros(1),
-        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, -1.0 + 0j, -1.0 + 0j]),
-    )
-    assert jnp.isclose(pd.test_function(point), 0.0, atol=1e-6)
 
 
-def test_period_doubling_near_unit_circle_filter_excludes_far_multipliers():
-    # Regression for the false-positive bug found during design: once a real
-    # multiplier moves far enough past -1 (here -20, ln(20)=3.0, outside the
-    # log-magnitude window near_unit_circle=2.0), an unrelated multiplier
-    # that merely sits near a roughly constant distance from -1 (the decaying
-    # xy multiplier ~3.4e-6, ln(3.4e-6)~=-12.6, also outside the window) must
-    # NOT be picked as "closer to -1" just because it's linearly nearer --
-    # both are excluded, so nothing should be selected and test_function
-    # must return nan, not a spurious finite value that could register a
-    # false sign-change. See PeriodDoubling.near_unit_circle's docstring for
-    # why the filter is log-magnitude, not linear-distance.
-    pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
-    point = BranchPoint(
-        p=0.0, u=jnp.zeros(1),
-        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, -20.0 + 0j, -20.0 + 0j]),
-    )
-    assert jnp.isnan(pd.test_function(point))
 
 
-def test_period_doubling_test_function_no_real_candidate_returns_nan():
-    pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
-    point = BranchPoint(
-        p=0.0, u=jnp.zeros(1),
-        eigenvalues=jnp.array([1.0 + 0j, 0.5 + 0.8j, 0.5 - 0.8j]),
-    )
-    assert jnp.isnan(pd.test_function(point))
 
 
-def test_neimark_sacker_test_function_finds_complex_pair_near_unit_circle():
-    ns = NeimarkSacker(raw_f=lambda u, p, args: u, mesh=None)
-    point = BranchPoint(
-        p=0.0, u=jnp.zeros(1),
-        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, 0.6 + 0.8j, 0.6 - 0.8j]),
-    )
-    assert jnp.isclose(ns.test_function(point), 0.0, atol=1e-6)
 
 
-def test_neimark_sacker_test_function_below_unit_circle():
-    # magnitude of 0.42+0.56j is exactly 0.7 (0.42^2+0.56^2=0.49=0.7^2), so
-    # |magnitude-1|=0.3 -- comfortably INSIDE near_unit_circle (a log-
-    # magnitude window since the filter's redesign; ln(0.7)~=-0.357, well
-    # inside the default 2.0), not exactly on the boundary.
-    # (An earlier version of this test used
-    # 0.3+0.4j, magnitude exactly 0.5, |magnitude-1|=0.5 -- exactly ON the
-    # boundary. This was the plan's own bug, found during Task 1 review:
-    # with the correct strict "<" filter, that value is excluded, since
-    # 0.5 < 0.5 is False, contradicting the test's own expected value.
-    # Verified numerically before fixing: with the boundary value and
-    # strict "<", test_function correctly returns nan (both real
-    # candidates filtered out) rather than -0.5. Fixed here by moving the
-    # test value comfortably off the boundary, not by weakening the filter
-    # to "<=" -- strict "<" is what was numerically verified end-to-end
-    # against the real bifurcation-detection sweeps in Task 2.)
-    ns = NeimarkSacker(raw_f=lambda u, p, args: u, mesh=None)
-    point = BranchPoint(
-        p=0.0, u=jnp.zeros(1),
-        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, 0.42 + 0.56j, 0.42 - 0.56j]),
-    )
-    assert jnp.isclose(ns.test_function(point), -0.3, atol=1e-6)
 
 
-def test_neimark_sacker_test_function_no_complex_candidate_returns_nan():
-    ns = NeimarkSacker(raw_f=lambda u, p, args: u, mesh=None)
-    point = BranchPoint(
-        p=0.0, u=jnp.zeros(1),
-        eigenvalues=jnp.array([1.0 + 0j, 3.4e-6 + 0j, -0.8 + 0j, -0.8 + 0j]),
-    )
-    assert jnp.isnan(ns.test_function(point))
 
 
 def test_fold_refine_reports_not_converged_when_no_fold_exists(monkeypatch):
@@ -576,3 +484,140 @@ def test_within_bracket_p_interval_fallback_and_zero_width():
     pt = BranchPoint(p=0.3, u=jnp.zeros(1))
     assert _within_bracket(EventHit(kind="x", p=0.3, u=jnp.zeros(1)), pt, pt)
     assert not _within_bracket(EventHit(kind="x", p=0.9, u=jnp.zeros(1)), pt, pt)
+
+
+def _two_pair_problem(re_a, re_b, p0):
+    """Linear 4-D system with two complex pairs, ``re_a(p) +- 1i`` and
+    ``re_b(p) +- 2i``; its equilibrium is ``u = 0`` for every ``p``."""
+    def rhs(u, p, args):
+        a, b = re_a(p), re_b(p)
+        return jnp.array([
+            a * u[0] - u[1], u[0] + a * u[1],
+            b * u[2] - 2.0 * u[3], 2.0 * u[2] + b * u[3],
+        ])
+    return jc.bif_problem(rhs, u0=jnp.zeros(4), p0=p0)
+
+
+def _hopf_sweep(prob, p_span):
+    return jc.continuation(
+        prob, jc.PseudoArclength(), p_span=p_span,
+        settings=jc.ContinuationPar(ds=0.02, ds_max=0.05, max_steps=200),
+        events=[Hopf()],
+    )
+
+
+def test_hopf_no_event_when_pairs_swap_order():
+    # Neither pair crosses the axis (Re in [0.1, 0.3] and [-0.3, -0.1]), but
+    # the pair nearest the axis changes at p = 0, where a nearest-to-axis
+    # selection jumps from -0.2 to +0.2.
+    prob = _two_pair_problem(lambda p: 0.2 + 0.1 * p, lambda p: -0.2 + 0.1 * p, -1.0)
+    result = _hopf_sweep(prob, (-1.0, 1.0))
+    assert result.events == []
+    assert result.rejected_events == []
+
+
+def test_hopf_spurious_case_from_review():
+    # Review H1: a fixed pair at Re = -0.1 and a moving pair at Re = p. The
+    # only Hopf point is p = 0; the selection swap at p = 0.1 must not
+    # produce a second (spurious) bracket.
+    prob = _two_pair_problem(lambda p: p, lambda p: -0.1 + 0.0 * p, -0.5)
+    result = _hopf_sweep(prob, (-0.5, 0.5))
+    hopf = [e for e in result.events if e.kind == "hopf"]
+    assert len(hopf) == 1
+    assert abs(hopf[0].p) < 1e-3
+    assert result.rejected_events == []
+
+
+@dataclass(frozen=True)
+class _StubPeriodDoubling(PeriodDoubling):
+    """PeriodDoubling whose refine reports the bracket midpoint unchecked, so
+    a test can see which brackets the detection stage hands to refine."""
+
+    def refine(self, left, right, index, rhs, **kwargs):
+        return EventHit(kind=self.kind, p=(left.p + right.p) / 2, u=left.u, index=index)
+
+
+def test_pd_not_reported_for_complex_pair_crossing_re_minus_one():
+    # Two real multipliers (-0.9, -0.7) collide at -0.8 and leave the real
+    # axis as a complex pair whose real part then passes -1. That is not a
+    # period doubling: no real multiplier reaches -1.
+    t = np.linspace(0.0, 1.0, 21)
+    rows = []
+    for ti in t:
+        if ti <= 0.3:
+            d = 0.1 * (1.0 - ti / 0.3)
+            pair = [-0.8 - d, -0.8 + d]
+        else:
+            re, im = -0.8 - 0.6 * (ti - 0.3), 0.5 * (ti - 0.3)
+            pair = [re + 1j * im, re - 1j * im]
+        rows.append([1.0, 1e-3, *pair])
+    multipliers = jnp.asarray(np.array(rows, dtype=complex))
+    hits = detect_events(
+        [_StubPeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)],
+        jnp.asarray(t), jnp.zeros((t.size, 1)), None, multipliers,
+        lambda u, p: u, ds=0.05,
+    )
+    assert hits == []
+
+
+def _points(spectra):
+    return [
+        BranchPoint(p=float(i), u=jnp.zeros(1), eigenvalues=jnp.asarray(row))
+        for i, row in enumerate(np.asarray(spectra, dtype=complex))
+    ]
+
+
+def test_hopf_scan_brackets_one_pair_crossing():
+    re = np.linspace(-0.1, 0.1, 6)
+    spectra = np.stack([re + 2j, re - 2j, -1.0 + 0 * re], axis=1)
+    brackets = Hopf().scan(_points(spectra))
+    assert [(i, j) for i, j, _ in brackets] == [(2, 3)]
+    mode = brackets[0][2]
+    assert mode.left[mode.column].imag > 0
+
+
+def test_hopf_scan_ignores_real_eigenvalue_crossing():
+    re = np.linspace(-0.1, 0.1, 6)
+    spectra = np.stack([-0.5 + 2j + 0 * re, -0.5 - 2j + 0 * re, re], axis=1)
+    assert Hopf().scan(_points(spectra)) == []
+    assert len(BP().scan(_points(spectra))) == 1
+
+
+def test_hopf_scan_without_eigenvalues_is_empty():
+    assert Hopf().scan([BranchPoint(p=0.0, u=jnp.zeros(1))]) == []
+
+
+def test_period_doubling_scan_follows_the_crossing_multiplier_far_past_minus_one():
+    # The moving real multiplier passes -1 once and keeps going to -20; the
+    # decaying multiplier and the trivial one never open a bracket.
+    moving = -np.geomspace(0.5, 20.0, 12)
+    spectra = np.stack([1.0 + 0 * moving, 3.4e-6 + 0 * moving, moving], axis=1)
+    pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
+    brackets = pd.scan(_points(spectra))
+    assert len(brackets) == 1
+    i, j, mode = brackets[0]
+    assert moving[i] > -1.0 > moving[j]
+
+
+def test_period_doubling_scan_excludes_trivial_multiplier():
+    # Only the trivial multiplier moves (and sits nearest 1 throughout).
+    spectra = np.stack([np.linspace(0.99, 1.01, 5), -0.5 + 0 * np.ones(5)], axis=1)
+    pd = PeriodDoubling(raw_f=lambda u, p, args: u, mesh=None)
+    assert pd.scan(_points(spectra)) == []
+
+
+def test_neimark_sacker_scan_brackets_complex_pair_leaving_unit_circle():
+    radius = np.linspace(0.7, 1.3, 6)
+    pair = radius * np.exp(0.6j)
+    spectra = np.stack([1.0 + 0 * radius, pair, np.conj(pair), -0.5 + 0 * radius], axis=1)
+    ns = NeimarkSacker(raw_f=lambda u, p, args: u, mesh=None)
+    brackets = ns.scan(_points(spectra))
+    assert [(i, j) for i, j, _ in brackets] == [(2, 3)]
+
+
+def test_neimark_sacker_scan_ignores_real_multiplier_crossing():
+    moving = np.linspace(-0.8, -1.2, 5)
+    spectra = np.stack([1.0 + 0 * moving, moving, 0.5 + 0.5j + 0 * moving,
+                        0.5 - 0.5j + 0 * moving], axis=1)
+    ns = NeimarkSacker(raw_f=lambda u, p, args: u, mesh=None)
+    assert ns.scan(_points(spectra)) == []

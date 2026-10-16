@@ -35,6 +35,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ValueError` in eager mode (under `jit`/`vmap` nothing is marked valid). `pseudo_arclength_scan`
   / `natural_scan` take a trailing `max_attempts` argument and `ScanResult.n_valid` is `0` on
   seed failure.
+- Spectral events detect on tracked modes. `Hopf`, `BP`, `PeriodDoubling`, `NeimarkSacker`,
+  `BogdanovTakens`, `ZeroHopf` and `DoubleHopf` reorder each point's spectrum into continuous
+  modes (`jaxcont.bifurcations.modes.track_modes`) and report a bracket only where one mode
+  meets its condition at both ends (Hopf: `Re` crosses 0 on a complex mode; BP: a real mode
+  crosses 0; PD: a real multiplier crosses -1; NS: a complex multiplier crosses the unit
+  circle). Previously Hopf/BP/BT/ZH/HH re-selected the candidate nearest critical at every
+  point, inventing crossings when two modes traded places, and PD/NS followed one multiplier
+  forever, missing crossings by any other. Each refined point is re-checked against the
+  spectrum (`reason="spectral_check_failed"` when the eigenvalue nearest the critical value
+  has the wrong real/complex type). These events now expose `scan(points)` instead of
+  `test_function`; `refine()` takes the bracket's `mode`. Removed: `select_candidate`,
+  `test_value`, `near_unit_circle` (PD/NS) and `near_critical` (BT/ZH/HH). Their `tolerance`
+  (the `|Im|` threshold between real and complex) defaults to `None`, resolved to
+  `sqrt(default_tol)` of the spectrum's dtype. PD/NS refinement re-corrects the final
+  bracket midpoint onto the collocation residual and stores the critical multiplier in
+  `info["multiplier"]`. A Hopf curve that ends with `|omega| < 10 * default_tol` and no
+  sign change records a `BogdanovTakens` entry with `reason="curve_terminated"` in
+  `rejected_events`.
 
 ### Added
 - `ContinuationResult.rejected_events` and `EventHit.status` (`"validated"` or `"failed"`),

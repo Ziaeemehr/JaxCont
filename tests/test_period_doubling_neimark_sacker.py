@@ -165,3 +165,42 @@ def test_neimark_sacker_refine_result_satisfies_collocation_residual():
     assert hit.info.get("corrected", False) is True
     residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), prob.args)
     assert float(jnp.abs(residual).max()) < 1e-4
+
+
+def test_pd_second_multiplier_crossing_detected():
+    # Two transverse rotation-by-pi blocks: a fixed one with multiplier
+    # -exp(alpha_f * T) = -0.8 and a moving one with -exp(alpha * T), which
+    # passes -0.5 -> -1.2 over the span. The multiplier nearest -1 at the
+    # start is the fixed one; the crossing belongs to the other.
+    alpha_fixed = float(np.log(0.8) / T_EXACT)
+
+    def rhs(u, p, args):
+        x, y, w1, w2, v1, v2 = u[0], u[1], u[2], u[3], u[4], u[5]
+        r2 = x * x + y * y
+        return jnp.array([
+            (RHO - r2) * x - y,
+            (RHO - r2) * y + x,
+            alpha_fixed * w1 - BETA_PD * w2,
+            BETA_PD * w1 + alpha_fixed * w2,
+            p * v1 - BETA_PD * v2,
+            BETA_PD * v1 + p * v2,
+        ])
+
+    span = (float(np.log(0.5) / T_EXACT), float(np.log(1.2) / T_EXACT))
+    t_traj = np.linspace(0, T_EXACT, 60, endpoint=False)
+    zeros = np.zeros_like(t_traj)
+    u_traj = np.stack(
+        [np.cos(t_traj), np.sin(t_traj), zeros, zeros, zeros, zeros], axis=1
+    )
+    mesh = Collocation(ntst=10, ncol=4)
+    prob = periodic_orbit_problem(
+        rhs, jnp.asarray(u_traj), jnp.asarray(t_traj), T_EXACT, span[0], mesh
+    )
+    sol = jc.continuation(
+        prob, p_span=span,
+        settings=jc.ContinuationPar(compute_stability=True, ds=0.02, max_steps=50),
+        events=[jc.PeriodDoubling(raw_f=rhs, mesh=mesh)],
+    )
+    pd = [e for e in sol.events if e.kind == "period_doubling"]
+    assert len(pd) == 1
+    assert abs(pd[0].p) < 1e-4

@@ -86,36 +86,29 @@ def test_bogdanov_takens_detected_on_the_fold_curve():
     assert jnp.allclose(hits[0].u, jnp.array([5.0, 2.0]), atol=5e-2)
 
 
-def test_bt_test_function_ignores_the_pinned_zero_eigenvalue():
+def test_bt_mode_values_ignore_the_pinned_zero_eigenvalue():
     """DISCRIMINATING POWER: one eigenvalue is identically zero along the
-    whole fold curve. If the exclusion in _drop_nearest were
-    removed, the test function would be identically ~0, never change sign,
-    and detect nothing. This asserts it instead tracks -(p1+1)/2."""
+    whole fold curve. If the pinned-zero exclusion were removed, that mode
+    would sit at ~0 everywhere and could open spurious brackets. This
+    asserts the only candidate mode tracks -(p1+1)/2 instead."""
     from jaxcont.bifurcations.events import BranchPoint
     sol = _bt_fold_curve_solution([])
     ev = BogdanovTakens(raw_f=_bt_shifted, free=1, curve="fold")
+    n = sol.branch.params.shape[0]
+    points = [
+        BranchPoint(p=float(sol.branch.params[i]), u=sol.branch.states[i])
+        for i in range(n)
+    ]
+    _spectra, values, where = ev.mode_values(points)
     saw_positive = saw_negative = False
-    for i in range(sol.branch.params.shape[0]):
-        p1 = float(sol.branch.params[i])
-        val = ev.test_function(
-            BranchPoint(p=p1, u=sol.branch.states[i])
-        )
-        assert abs(val - (-(p1 + 1.0) / 2.0)) < 5e-2
+    for i, point in enumerate(points):
+        assert int(where[i].sum()) == 1
+        val = float(values[i][where[i]][0])
+        assert abs(val - (-(point.p + 1.0) / 2.0)) < 5e-2
         saw_positive |= val > 0.05
         saw_negative |= val < -0.05
     assert saw_positive and saw_negative, "no sign change -> nothing to detect"
-
-
-def test_bt_near_critical_filter_is_not_too_aggressive():
-    """DISCRIMINATING POWER (the other direction): a pre-filter tight enough
-    to reject the genuine candidate would silently drop the detection. The
-    candidate reaches |-(p1+1)/2| = 0.5 at the ends of this span, so a
-    filter narrower than that would zero out the detection."""
-    sol = _bt_fold_curve_solution(
-        [BogdanovTakens(raw_f=_bt_shifted, free=1, curve="fold",
-                        near_critical=2.0)]
-    )
-    assert len([h for h in sol.events if h.kind == "bogdanov_takens"]) == 1
+    assert len(ev.scan(points)) == 1
 
 
 def test_bogdanov_takens_detected_on_the_hopf_curve():
@@ -216,12 +209,10 @@ def _zh_fold_system(u, p, args):
     rotation block (z1, z2) whose real part ``a = p1 + 0.4`` crosses zero
     at p1 = -0.4 with a FIXED imaginary part omega = 3.0.
 
-    REGRESSION for the near_critical pre-filter bug (review finding 1):
-    with near_critical=2.0 and omega=3.0, ``|a +- 3j| ~= 3`` for every
-    p1 in this span, so a pre-filter gated on the full complex magnitude
-    (the bug) rejects the candidate everywhere and detects nothing. Gating
-    on ``|Re(eigenvalue)| = |a|`` (the fix) sees ``|a| <= 1.6`` throughout,
-    well inside the window, and the crossing at p1 = -0.4 is detected.
+    REGRESSION for a magnitude pre-filter bug (review finding 1): with
+    omega=3.0, ``|a +- 3j| ~= 3`` for every p1 in this span, so a window
+    gated on the full complex magnitude rejected the candidate everywhere
+    and detected nothing. The crossing at p1 = -0.4 must be detected.
     """
     X, Y, z1, z2 = u[0], u[1], u[2], u[3]
     x, y = X - 5.0, Y - 2.0
@@ -369,3 +360,32 @@ def test_drop_nearest_pinned_pair_excludes_both_halves_near_bt():
     omega2 = 3.0
     expected = _drop_nearest(eigs2, 1j * omega2) & _drop_nearest(eigs2, -1j * omega2)
     assert jnp.array_equal(_drop_nearest_pinned_pair(eigs2, omega2), expected)
+
+
+def _hopf_curve_points(omegas):
+    """Hopf-curve BranchPoints (n = 2) whose only varying entry is omega."""
+    from jaxcont.bifurcations.events import BranchPoint
+    points = []
+    for i, omega in enumerate(omegas):
+        state = jnp.array([5.0, 2.0, 3.0, 1.0, 0.0, 0.0, 1.0, omega])
+        points.append(BranchPoint(p=-2.0 + 0.1 * i, u=state))
+    return points
+
+
+def test_bt_hopf_curve_stall_is_recorded_as_curve_terminated():
+    from jaxcont.bifurcations.events import detect_events
+
+    ev = BogdanovTakens(raw_f=_bt_shifted, free=1, curve="hopf")
+    points = _hopf_curve_points([0.5, 0.2, 0.05, 1e-12])
+    assert ev.scan(points) == [(2, 3, "curve_terminated")]
+    hits = detect_events(
+        [ev], jnp.array([pt.p for pt in points]), jnp.stack([pt.u for pt in points]),
+        None, None, lambda u, p: u, ds=0.1,
+    )
+    assert len(hits) == 1
+    assert hits[0].status == "failed"
+    assert hits[0].info["reason"] == "curve_terminated"
+    assert hits[0].index == (2, 3)
+
+    # A curve that ends with omega well away from zero has not stalled at BT.
+    assert ev.scan(_hopf_curve_points([0.5, 0.4, 0.3])) == []

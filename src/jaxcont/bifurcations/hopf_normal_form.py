@@ -59,8 +59,7 @@ def _unpack(x, n):
 
 def _seed(f, u, p, args, n):
     """Undifferentiated Newton seed: eigenvector of J(u,p) with smallest
-    |Re(eigenvalue)| AMONG THE GENUINELY COMPLEX EIGENVALUES, matching
-    bifurcations.events.Hopf.test_function's own selection rule (mask to
+    |Re(eigenvalue)| AMONG THE GENUINELY COMPLEX EIGENVALUES (mask to
     |Im| > tolerance first, then argmin |Re| within that mask) -- NOT a
     bare argmin over all eigenvalues, which could select a real eigenvalue
     (e.g. a slow real mode near the origin) and hand differentiable_root a
