@@ -278,12 +278,18 @@ class Branch:
     valid: Optional[Array] = None   # bool mask, only set when traced
 
     @property
-    def n_valid(self) -> int:
-        return int(self.params.shape[0])
+    def n_valid(self) -> int | Array:
+        if self.valid is None:
+            return int(self.params.shape[0])
+        count = self.valid.sum()
+        return count if isinstance(count, jax.core.Tracer) else int(count)
 
     def at_param(self, p: float) -> tuple[float, Array]:
         """Return the ``(param, state)`` on the branch closest to ``p``."""
-        idx = int(jnp.argmin(jnp.abs(self.params - p)))
+        distance = jnp.abs(self.params - p)
+        if self.valid is not None:
+            distance = jnp.where(self.valid, distance, jnp.inf)
+        idx = int(jnp.argmin(distance))
         return float(self.params[idx]), self.states[idx]
 
 
@@ -480,12 +486,15 @@ def _assemble_leg(
             )
             stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
 
+    converged = np.asarray(res.converged[:n])
+    iters = np.asarray(res.iters[:n])
+    ds = np.asarray(res.ds[:n])
     convergence_info = [
         {
             "step": i,
-            "converged": bool(res.converged[i]),
-            "newton_iters": int(res.iters[i]),
-            "ds": float(res.ds[i]),
+            "converged": bool(converged[i]),
+            "newton_iters": int(iters[i]),
+            "ds": float(ds[i]),
         }
         for i in range(n)
     ]
@@ -690,7 +699,7 @@ def _run_scan_bothside(
 
     states = _stitch(b_states, f_states)
     params = _stitch(b_params, f_params)
-    tangents = _stitch(b_tangents, f_tangents)
+    tangents = _stitch(-b_tangents, f_tangents)
     eigenvalues = _stitch(b_eig, f_eig)
     stability = _stitch(b_stab, f_stab)
 
@@ -705,7 +714,13 @@ def _run_scan_bothside(
     # docstring) -- both start at the same p0, so their hit lists never
     # need cross-leg deduping; a genuine bifurcation can only land in
     # whichever leg's disjoint parameter interval actually contains it.
-    hits = list(b_hits) + list(f_hits)
+    hits = [
+        replace(h, index=None if h.index is None else tuple(n_back - i for i in h.index))
+        for h in b_hits
+    ] + [
+        replace(h, index=None if h.index is None else tuple(n_back + i for i in h.index))
+        for h in f_hits
+    ]
 
     # Report the first leg that did not simply reach its end.
     status = next(

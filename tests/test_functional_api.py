@@ -627,3 +627,55 @@ def test_max_attempts_bounds_rejections():
     assert res.status == "max_attempts"
     assert res.stats["n_attempts"] == 5
     assert res.stats["status"] == "max_attempts"
+
+
+def test_traced_n_valid_counts_mask():
+    def run():
+        prob = jc.bif_problem(lambda u, p, args: u - p, jnp.array([0.0]), 0.0)
+        out = jc.continuation(
+            prob, p_span=(0.0, 1.0),
+            settings=jc.ContinuationPar(max_steps=400, compute_stability=False),
+        )
+        return out, out.branch.n_valid
+
+    out, traced_count = jax.jit(run)()
+    assert int(out.branch.valid.sum()) < out.branch.params.size
+    assert int(out.branch.n_valid) == int(out.branch.valid.sum())
+    assert int(traced_count) == int(out.branch.valid.sum())
+
+
+def test_at_param_ignores_padding():
+    branch = jc.Branch(
+        params=jnp.array([1.0, 2.0, 0.0]),
+        states=jnp.array([[10.0], [20.0], [0.0]]),
+        valid=jnp.array([True, True, False]),
+    )
+    p, u = branch.at_param(0.0)
+    assert p == 1.0
+    assert float(u[0]) == 10.0
+
+
+@pytest.mark.parametrize("crossing", [-0.5, 0.5])
+def test_bothside_event_index_points_at_event(crossing):
+    def f(u, p, args):
+        return hopf_normal_form(u, p - crossing, args)
+
+    prob = jc.bif_problem(f, jnp.zeros(2), 0.0)
+    out = jc.continuation(
+        prob, p_span=(-2.0, 1.0), events=[jc.Hopf()],
+        settings=jc.ContinuationPar(ds=0.05, max_steps=60, bothside=True),
+    )
+    assert len(out.events) == 1
+    for e in out.events:
+        params = out.branch.params
+        assert abs(params[e.index[0]] - e.p) <= abs(params[e.index[0]] - params[e.index[1]])
+
+
+def test_bothside_tangents_follow_stitched_direction():
+    prob = jc.bif_problem(lambda u, p, args: u - p, jnp.array([0.0]), 0.0)
+    out = jc.continuation(
+        prob, p_span=(-1.0, 1.0),
+        settings=jc.ContinuationPar(max_steps=60, bothside=True, compute_stability=False),
+    )
+    tangents = out.branch.tangents
+    assert bool(jnp.all(jnp.sum(tangents[:-1] * tangents[1:], axis=1) > 0))
