@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import (
     Any,
     Callable,
+    Literal,
     Optional,
     Protocol,
     runtime_checkable,
@@ -81,6 +82,19 @@ class EventHit:
     u: Array
     index: Optional[tuple[int, int]] = None
     info: dict = field(default_factory=dict)
+    # "validated": refined, converged and passed every check. "failed": the
+    # refinement did not produce a trustworthy event; ``info["reason"]`` is one
+    # of "not_converged", "outside_bracket", "spectral_check_failed" and ``p``
+    # is NaN (no location is claimed).
+    status: Literal["validated", "failed"] = "validated"
+
+
+def failed_hit(kind: str, index, reason: str, **info) -> EventHit:
+    """An EventHit recording a refinement that must not be reported as an event."""
+    return EventHit(
+        kind=kind, p=float("nan"), u=None, index=index,
+        info={"reason": reason, **info}, status="failed",
+    )
 
 
 @dataclass(frozen=True)
@@ -115,15 +129,10 @@ class Fold(Event):
             lambda u, p, _args: rhs(u, p),
             u_guess, p_guess, tol=tolerance, max_iter=max_iterations,
         )
-        # A bracket sign-change is not a convergence guarantee: the same
-        # "silent unchecked bifurcation location" risk Hopf.refine already
-        # guards against applies here (Codim-2's Cusp.refine established
-        # this fallback shape -- see bifurcations/codim2_events.py).
+        # A bracket sign-change is not a convergence guarantee: a failed
+        # solve is reported as a failed hit, never as a located fold.
         if not bool(converged):
-            return EventHit(
-                kind="fold", p=float(right.p), u=right.u, index=index,
-                info={"null_vector": None, "converged": False, "method": "extended_system"},
-            )
+            return failed_hit("fold", index, "not_converged", method="extended_system")
         return EventHit(
             kind="fold", p=float(p_bif), u=u_bif, index=index,
             info={"null_vector": null_vector, "converged": True, "method": "extended_system"},
@@ -186,13 +195,12 @@ class Hopf(Event):
         # a result that isn't a Hopf point at all. omega0 > 0 is checked too
         # since a genuine Hopf point always has a nonzero critical frequency.
         finite = jnp.isfinite(p) & jnp.isfinite(l1) & jnp.isfinite(omega0)
-        ok = bool(converged) and bool(finite) and (float(omega0) > 0.0)
-        if not ok:
-            return EventHit(
-                kind="hopf", p=float(right.p), u=right.u, index=index,
-                info={"omega0": float(omega0), "l1": float(l1),
-                      "criticality": "unknown", "converged": False,
-                      "method": "extended_system"},
+        if not bool(converged):
+            return failed_hit("hopf", index, "not_converged", method="extended_system")
+        if not (bool(finite) and float(omega0) > 0.0):
+            return failed_hit(
+                "hopf", index, "spectral_check_failed",
+                omega0=float(omega0), l1=float(l1), method="extended_system",
             )
         criticality = (
             "degenerate" if abs(l1) < self.l1_tolerance
@@ -247,7 +255,7 @@ class BP(Event):
             u_guess, p_guess, tol=tolerance, max_iter=max_iterations,
         )
         if not bool(converged):
-            return None
+            return failed_hit("branch_point", index, "not_converged", method="extended_system")
 
         n = u_bif.shape[0]
         f_u = jacfwd(lambda u: rhs(u, p_bif))(u_bif)
@@ -261,6 +269,29 @@ class BP(Event):
             kind="branch_point", p=float(p_bif), u=u_bif, index=index,
             info={"tangent": right.tangent, "converged": True, "method": "extended_system"},
         )
+
+
+def _within_bracket(hit: EventHit, left: BranchPoint, right: BranchPoint) -> bool:
+    """Whether ``hit`` lies within the bracket widened by one width per side.
+
+    The bracket is the segment from ``left`` to ``right``; its width is that
+    segment's length. Distances are taken in the joint ``(u, p)`` space, since
+    a fold's parameter does not lie between the bracket's parameters (the
+    branch turns back there). When ``hit.u`` has a different shape than the
+    branch state (codim-2 events on extended-system branches), only the
+    parameter interval is compared.
+    """
+    if hit.u is not None and jnp.shape(hit.u) == jnp.shape(left.u):
+        def vec(u, p):
+            u = jnp.ravel(jnp.asarray(u))
+            return jnp.concatenate([u, jnp.asarray([p], dtype=u.dtype)])
+        a, b, h = vec(left.u, left.p), vec(right.u, right.p), vec(hit.u, hit.p)
+        width = jnp.linalg.norm(b - a)
+        dist = jnp.linalg.norm(h - (a + b) / 2)
+        return bool(dist <= 1.5 * width)
+    width = abs(right.p - left.p)
+    lo, hi = min(left.p, right.p) - width, max(left.p, right.p) + width
+    return bool(lo <= hit.p <= hi)
 
 
 def detect_events(
@@ -286,6 +317,9 @@ def detect_events(
     even if close in parameter -- see Global Constraints for why a
     kind-agnostic merge is wrong (it drops real, distinct, independently-
     verified bifurcations that happen to sit close together).
+
+    The result holds the validated hits (sorted, deduped) followed by the
+    failed ones (``status == "failed"``), which are never deduped.
     """
     points = [
         BranchPoint(
@@ -324,9 +358,20 @@ def detect_events(
                     points[i], points[i + 1], (i, i + 1), rhs,
                     tolerance=tolerance, max_iterations=max_iterations, **kwargs,
                 )
-                if hit is not None:
-                    hits.append(hit)
+                if hit is None:
+                    continue
+                if hit.status == "validated":
+                    # Locality: a refined root must lie within the bracket
+                    # widened by one bracket width on each side; a solve that
+                    # wandered to a distant root is not this bracket's event.
+                    if not _within_bracket(hit, points[i], points[i + 1]):
+                        hit = failed_hit(
+                            hit.kind, hit.index, "outside_bracket", refined_p=hit.p,
+                        )
+                hits.append(hit)
 
+    rejected = [h for h in hits if h.status == "failed"]
+    hits = [h for h in hits if h.status == "validated"]
     hits.sort(key=lambda h: h.p)
     merge_window = 2.0 * abs(ds)
     deduped: list[EventHit] = []
@@ -337,7 +382,7 @@ def detect_events(
             continue
         last_p_by_kind[hit.kind] = hit.p
         deduped.append(hit)
-    return deduped
+    return deduped + rejected
 
 
 @dataclass(frozen=True)
@@ -492,9 +537,11 @@ class PeriodDoubling(Event):
         # the float32 residual floor (empirically ~4-5e-6) since the final
         # bracket is narrow, but it's a linear average, not an independently
         # re-corrected point.
+        if not corrected_all:
+            return failed_hit("period_doubling", index, "not_converged", method="bisection")
         return EventHit(
             kind="period_doubling", p=float(p_bif), u=u_bif, index=index,
-            info={"method": "bisection", "corrected": corrected_all},
+            info={"method": "bisection", "corrected": True},
         )
 
 
@@ -595,7 +642,9 @@ class NeimarkSacker(Event):
         # See PeriodDoubling.refine's identical comment above: u_bif/p_bif
         # are the midpoint of the final (already Newton-corrected-endpoint)
         # bracket, not a fresh correction at that exact midpoint.
+        if not corrected_all:
+            return failed_hit("neimark_sacker", index, "not_converged", method="bisection")
         return EventHit(
             kind="neimark_sacker", p=float(p_bif), u=u_bif, index=index,
-            info={"method": "bisection", "corrected": corrected_all},
+            info={"method": "bisection", "corrected": True},
         )

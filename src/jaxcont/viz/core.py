@@ -123,6 +123,8 @@ def plot_continuation(
         plotted_index = 0
 
         for bif in solution.bifurcations:
+            if bif.get("status", "validated") != "validated":
+                continue
             bif_type = bif.get("type", "unknown")
             param = bif.get("parameter")
             state = bif.get("state")

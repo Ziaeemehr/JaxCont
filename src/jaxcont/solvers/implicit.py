@@ -69,7 +69,11 @@ def differentiable_root(
             )
             return x_new, it + 1, done
 
-        x_star, _, _ = lax.while_loop(cond, body, (x_seed, 0, jnp.array(False)))
+        # A seed that already satisfies the residual tolerance is returned
+        # untouched: the Newton step would otherwise solve with a Jacobian
+        # that may be singular exactly at the root (e.g. G = x**2 at 0).
+        done0 = jnp.linalg.norm(G(x_seed, theta)) < tol_
+        x_star, _, _ = lax.while_loop(cond, body, (x_seed, 0, done0))
         return x_star
 
     @jax.custom_vjp

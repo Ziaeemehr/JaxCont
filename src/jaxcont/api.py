@@ -314,7 +314,10 @@ class ContinuationResult:
     """Return value of :func:`continuation`."""
 
     branch: Branch
+    # ``events`` holds only validated hits; refinements that failed (see
+    # ``EventHit.status``) are kept in ``rejected_events`` with ``info["reason"]``.
     events: list[EventHit] = field(default_factory=list)
+    rejected_events: list[EventHit] = field(default_factory=list)
     stats: dict = field(default_factory=dict)
     _solution: Optional[ContinuationSolution] = None
     # Lower-case ``Status`` name (e.g. "reached_end"); None under jit/vmap,
@@ -329,14 +332,15 @@ class ContinuationResult:
 
 
 def _continuation_result_flatten(r: ContinuationResult):
-    children = (r.branch, r.events, r.stats, r._solution)
+    children = (r.branch, r.events, r.rejected_events, r.stats, r._solution)
     return children, r.status
 
 
 def _continuation_result_unflatten(aux, children):
-    branch, events, stats, solution = children
+    branch, events, rejected_events, stats, solution = children
     return ContinuationResult(
-        branch=branch, events=events, stats=stats, _solution=solution, status=aux,
+        branch=branch, events=events, rejected_events=rejected_events,
+        stats=stats, _solution=solution, status=aux,
     )
 
 
@@ -538,9 +542,11 @@ def _finish_result(
     # sol.bifurcations stays dict-shaped: viz/core.py's plotting and
     # ContinuationSolution.get_bifurcations_by_type both read
     # bif.get("type")/bif.get("parameter")/bif.get("state") directly.
+    validated = [h for h in hits if h.status == "validated"]
+    rejected = [h for h in hits if h.status == "failed"]
     sol.bifurcations = [
         {"type": h.kind, "parameter": h.p, "state": h.u, "index": h.index, **h.info}
-        for h in hits
+        for h in validated
     ]
 
     if verbose:
@@ -558,6 +564,7 @@ def _finish_result(
         )
 
     result = _to_result(sol)
+    result.rejected_events = rejected
     result.status = status
     result.stats["n_attempts"] = n_attempts
     result.stats["status"] = status

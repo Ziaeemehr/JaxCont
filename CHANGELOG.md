@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0] - Unreleased
 
 ### Breaking
+- `ContinuationResult.events` now holds only validated hits. A refinement that did not
+  converge, landed outside its bracket (widened by one bracket width per side) or failed a
+  spectral check is no longer reported as a located event at the right bracket end; it is
+  `EventHit(status="failed")` with `info["reason"]` and `p = nan`, listed in
+  `rejected_events`. `Hopf`/`Fold`/`BP`/codim-2/`PeriodDoubling`/`NeimarkSacker` `refine()`
+  results lose the old `info["converged"]: False` / `criticality="unknown"` form. Plots show
+  validated hits only.
+- `differentiable_root` returns a seed that already meets the residual tolerance unchanged
+  (previously a singular Jacobian at the root, e.g. `G = x**2` at `0`, produced NaN).
 - `ContinuationPar.newton_tol` and the `tol` arguments of the solvers, fold/Hopf/codim-2
   point finders, curve factories, `branch_switch` and `dprc_curve` now default to `None`,
   resolved from the state dtype (`1e-9` for float64, `1e-5` for float32). Previous fixed
@@ -28,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seed failure.
 
 ### Added
+- `ContinuationResult.rejected_events` and `EventHit.status` (`"validated"` or `"failed"`),
+  with `info["reason"]` in `"not_converged"`, `"outside_bracket"`, `"spectral_check_failed"`.
 - `ContinuationResult.status` (`"reached_end"`, `"max_steps"`, `"stalled"`, `"nonfinite"`,
   `"seed_failed"`, `"max_attempts"`) and `stats["n_attempts"]` / `stats["status"]`; under
   `jit`/`vmap` `status` is `None` and `stats["status"]` is the integer

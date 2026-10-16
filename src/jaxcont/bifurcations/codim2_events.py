@@ -34,7 +34,7 @@ from jaxcont.bifurcations.curves import (
     unpack_fold_curve,
     unpack_hopf_curve,
 )
-from jaxcont.bifurcations.events import BranchPoint, Event, EventHit
+from jaxcont.bifurcations.events import BranchPoint, Event, EventHit, failed_hit
 from jaxcont.bifurcations.fold_normal_form import fold_coefficient
 from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
 from jaxcont.utils.precision import default_tol
@@ -162,9 +162,8 @@ class Cusp(_CurveEvent, Event):
         # the exact bug Hopf.refine() grew its own guard for.
         ok = bool(converged) and bool(jnp.all(jnp.isfinite(p_star)))
         if not ok:
-            return EventHit(
-                kind=self.kind, p=float(right.p), u=right.u, index=index,
-                info={"converged": False, "method": "extended_system"},
+            return failed_hit(
+                self.kind, index, "not_converged", method="extended_system",
             )
         return EventHit(
             kind=self.kind, p=float(p_star[self.free]), u=u_star, index=index,
@@ -235,9 +234,8 @@ class BogdanovTakens(_CurveEvent, Event):
         )
         ok = bool(converged) and bool(jnp.all(jnp.isfinite(p_star)))
         if not ok:
-            return EventHit(
-                kind=self.kind, p=float(right.p), u=right.u, index=index,
-                info={"converged": False, "method": "extended_system"},
+            return failed_hit(
+                self.kind, index, "not_converged", method="extended_system",
             )
         return EventHit(
             kind=self.kind, p=float(p_star[self.free]), u=u_star, index=index,
@@ -308,9 +306,8 @@ class ZeroHopf(_CurveEvent, Event):
         u_star, p_star, _v, _q1, _q2, omega_star, converged = result
         ok = bool(converged) and bool(jnp.all(jnp.isfinite(p_star)))
         if not ok:
-            return EventHit(
-                kind=self.kind, p=float(right.p), u=right.u, index=index,
-                info={"converged": False, "method": "extended_system"},
+            return failed_hit(
+                self.kind, index, "not_converged", method="extended_system",
             )
         return EventHit(
             kind=self.kind, p=float(p_star[self.free]), u=u_star, index=index,
@@ -355,9 +352,8 @@ class GeneralizedHopf(_CurveEvent, Event):
         u_star, p_star, _q1, _q2, omega_star, converged = result
         ok = bool(converged) and bool(jnp.all(jnp.isfinite(p_star)))
         if not ok:
-            return EventHit(
-                kind=self.kind, p=float(right.p), u=right.u, index=index,
-                info={"converged": False, "method": "extended_system"},
+            return failed_hit(
+                self.kind, index, "not_converged", method="extended_system",
             )
         return EventHit(
             kind=self.kind, p=float(p_star[self.free]), u=u_star, index=index,
@@ -451,9 +447,8 @@ class DoubleHopf(_CurveEvent, Event):
          _q1b, _q2b, omega_b, converged) = result
         ok = bool(converged) and bool(jnp.all(jnp.isfinite(p_star)))
         if not ok:
-            return EventHit(
-                kind=self.kind, p=float(right.p), u=right.u, index=index,
-                info={"converged": False, "method": "extended_system"},
+            return failed_hit(
+                self.kind, index, "not_converged", method="extended_system",
             )
         return EventHit(
             kind=self.kind, p=float(p_star[self.free]), u=u_star, index=index,

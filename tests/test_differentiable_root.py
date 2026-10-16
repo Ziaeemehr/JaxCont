@@ -76,3 +76,15 @@ def test_callable_seed_theta_dependent():
         g = jax.grad(root)(theta)
         expected = 1.0 / (2.0 * jnp.sqrt(theta))
         assert float(g) == pytest.approx(float(expected), abs=1e-5)
+
+
+def test_differentiable_root_keeps_exact_seed():
+    # The seed already solves G = x**2 = 0 exactly, where the Jacobian is
+    # singular: it must be returned untouched, not replaced by a NaN step.
+    from jaxcont.solvers.implicit import differentiable_root_checked
+
+    x_star, converged = differentiable_root_checked(
+        lambda x, theta: x**2, jnp.array([0.0]), jnp.array(0.0)
+    )
+    assert float(x_star[0]) == 0.0
+    assert bool(converged)

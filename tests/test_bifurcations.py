@@ -187,7 +187,8 @@ def test_hopf_refine_marks_non_finite_result_as_unknown(monkeypatch):
     left = BranchPoint(p=-0.05, u=jnp.zeros(2))
     right = BranchPoint(p=0.05, u=jnp.zeros(2))
     hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-8, max_iterations=50)
-    assert hit.info["criticality"] == "unknown"
+    assert hit.status == "failed"
+    assert hit.info["reason"] == "not_converged"
 
 
 def test_hopf_refine_zero_omega_marks_unknown(monkeypatch):
@@ -216,7 +217,8 @@ def test_hopf_refine_zero_omega_marks_unknown(monkeypatch):
     left = BranchPoint(p=-0.05, u=jnp.zeros(2))
     right = BranchPoint(p=0.05, u=jnp.zeros(2))
     hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-8, max_iterations=50)
-    assert hit.info["criticality"] == "unknown"
+    assert hit.status == "failed"
+    assert hit.info["reason"] == "spectral_check_failed"
 
 
 def test_hopf_refine_supercritical_label_end_to_end():
@@ -473,8 +475,9 @@ def test_fold_refine_reports_not_converged_when_no_fold_exists(monkeypatch):
     left = BranchPoint(p=-0.05, u=jnp.zeros(1))
     right = BranchPoint(p=0.05, u=jnp.zeros(1))
     hit = fold.refine(left, right, (0, 1), rhs, tolerance=1e-8, max_iterations=50)
-    assert hit.info["converged"] is False
-    assert hit.p == right.p
+    assert hit.status == "failed"
+    assert hit.info["reason"] == "not_converged"
+    assert jnp.isnan(hit.p)
 
 
 def test_hopf_refine_reports_converged_true_on_a_real_hopf_point():
@@ -496,3 +499,49 @@ def test_hopf_refine_reports_converged_true_on_a_real_hopf_point():
     # report converged=False, defeating the point of this test.
     hit = hopf.refine(left, right, (3, 4), rhs, tolerance=1e-6, max_iterations=50)
     assert hit.info["converged"] is True
+
+
+def test_failed_refine_not_in_events(monkeypatch):
+    import jaxcont.bifurcations.events as events_mod
+
+    def fake_fold_point(f, u, p, **kwargs):
+        return u, p, None, jnp.array(False)
+
+    monkeypatch.setattr(events_mod, "fold_point", fake_fold_point)
+    prob = jc.bif_problem(_saddle_node, u0=jnp.array([1.0]), p0=-1.0)
+    result = jc.continuation(
+        prob, jc.PseudoArclength(), p_span=(-1.0, 1.0),
+        settings=jc.ContinuationPar(ds=0.05, max_steps=60, newton_tol=1e-6),
+        events=[Fold()],
+    )
+    assert result.events == []
+    assert len(result.rejected_events) >= 1
+    rejected = result.rejected_events[0]
+    assert rejected.status == "failed"
+    assert rejected.info["reason"] == "not_converged"
+
+
+def test_refine_outside_bracket_rejected():
+    # Hopf points at p = +-2; the forced candidate bracket [-0.1, 0.1] is far
+    # from both, so whatever root the solve lands on is outside the locality
+    # window and must not be reported as a validated event.
+    def rhs(u, p):
+        a = p**2 - 4.0
+        return jnp.array([a * u[0] - u[1], u[0] + a * u[1]])
+
+    def pt(p, re):
+        return BranchPoint(
+            p=p, u=jnp.zeros(2),
+            eigenvalues=jnp.array([re + 1.0j, re - 1.0j]),
+        )
+
+    left, right = pt(-0.1, -0.1), pt(0.1, 0.1)  # forced sign change
+    params = jnp.array([-0.1, 0.1])
+    states = jnp.zeros((2, 2))
+    hits = detect_events(
+        [Hopf()], params, states, None,
+        jnp.stack([left.eigenvalues, right.eigenvalues]), rhs, ds=0.2,
+    )
+    assert [h for h in hits if h.status == "validated"] == []
+    assert all(h.info["reason"] in ("outside_bracket", "not_converged",
+                                    "spectral_check_failed") for h in hits)
