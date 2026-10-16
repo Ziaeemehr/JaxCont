@@ -384,25 +384,24 @@ def _test_values(event, points: Sequence[BranchPoint]) -> np.ndarray:
     return np.array([float(event.test_function(pt)) for pt in points])
 
 
-def _same_point(hit, kept, points, starts, ds_arr, modes) -> bool:
-    """Whether two validated hits are the same physical point."""
+def _refined_points_match(hit, kept) -> bool:
+    """Same-kind roots agree within dtype-derived refinement accuracy."""
     if hit.kind != kept.kind:
         return False
-    i, j = starts[id(hit)], starts[id(kept)]
-    distinct_modes = modes[id(hit)] != modes[id(kept)]
-    if abs(i - j) > 1:
+    if hit.u is None or kept.u is None or np.shape(hit.u) != np.shape(kept.u):
         return False
-    window = 2.0 * max(ds_arr[i], ds_arr[j])
-    if distinct_modes:
-        # Different modes may share one physical event (a real double
-        # multiplier); merge only at refinement accuracy, never step size.
-        window = 2 * default_tol(jnp.asarray(points[i].u).dtype)
-    if hit.u is not None and kept.u is not None and jnp.shape(hit.u) == jnp.shape(kept.u):
-        def vec(h):
-            u = jnp.ravel(jnp.asarray(h.u))
-            return jnp.concatenate([u, jnp.asarray([h.p], dtype=u.dtype)])
-        return bool(jnp.linalg.norm(vec(hit) - vec(kept)) <= window)
-    return abs(hit.p - kept.p) <= window
+    u = np.asarray(hit.u)
+    v = np.asarray(kept.u)
+    x = np.concatenate([u.ravel(), np.asarray([hit.p], dtype=u.dtype)])
+    y = np.concatenate([v.ravel(), np.asarray([kept.p], dtype=v.dtype)])
+    window = np.sqrt(default_tol(u.dtype)) * (1 + max(np.linalg.norm(x), np.linalg.norm(y)))
+    return bool(np.linalg.norm(x - y) <= window)
+
+
+def _same_point(hit, kept, starts) -> bool:
+    """Only adjacent brackets can own duplicate refined roots."""
+    return (abs(starts[id(hit)] - starts[id(kept)]) <= 1
+            and _refined_points_match(hit, kept))
 
 
 def detect_events(
@@ -426,12 +425,12 @@ def detect_events(
 
     `params`/`states`/`tangents`/`eigenvalues` are the branch's per-step
     arrays (already trimmed to real points, eager-only). `rhs(u, p)` is the
-    system's right-hand side. `ds_values` holds the per-point step size
-    (default: `ds` at every point). Two validated hits of the SAME kind are
+    system's right-hand side. `ds` and `ds_values` are accepted for call compatibility; deduplication
+    depends on refinement accuracy rather than step size. Two validated hits of the SAME kind are
     one physical point when their brackets are adjacent (start indices
     differ by at most one) and their joint (u, p) distance is at most
-    `2 * max(ds_i, ds_j)` of their brackets' step sizes; the earlier one is
-    kept. Hits on different sheets of a folded branch are far apart in u
+    `sqrt(default_tol(dtype)) * (1 + max(norm(root_i), norm(root_j)))`;
+    the earlier one is kept. Hits on different sheets of a folded branch are far apart in u
     and never merge; hits of different kinds are never merged. A test value
     that is exactly zero at a sample is reported once (see
     `modes.crossings`).
@@ -453,9 +452,14 @@ def detect_events(
     The result holds the validated hits (sorted, deduped) followed by the
     failed ones (``status == "failed"``), which are never deduped.
     """
+    params = np.asarray(params)
+    states = np.asarray(states)
+    tangents = None if tangents is None else np.asarray(tangents)
+    eigenvalues = None if eigenvalues is None else np.asarray(eigenvalues)
+    trivial_index = None if trivial_index is None else np.asarray(trivial_index)
     points = [
         BranchPoint(
-            p=float(params[i]), u=states[i],
+            p=params[i], u=states[i],
             tangent=tangents[i] if tangents is not None else None,
             eigenvalues=eigenvalues[i] if eigenvalues is not None else None,
             trivial_index=trivial_index[i] if trivial_index is not None else None,
@@ -463,10 +467,6 @@ def detect_events(
         for i in range(params.shape[0])
     ]
 
-    ds_arr = (
-        np.full(len(points), abs(float(ds))) if ds_values is None
-        else np.abs(np.asarray(ds_values, dtype=float))
-    )
     if step_update is not None and f is None:
         raise ValueError("detect_events: step_update requires the problem's f(u, p, args)")
 
@@ -479,7 +479,6 @@ def detect_events(
 
     hits: list[EventHit] = []
     starts: dict[int, int] = {}
-    modes: dict[int, Optional[int]] = {}
     for event in events:
         scan = getattr(event, "scan", None)
         if scan is not None:
@@ -510,7 +509,6 @@ def detect_events(
                         hit.kind, hit.index, "outside_bracket", refined_p=hit.p,
                     )
             starts[id(hit)] = i
-            modes[id(hit)] = getattr(mode, "column", None)
             hits.append(hit)
 
     rejected = [h for h in hits if h.status == "failed"]
@@ -518,7 +516,7 @@ def detect_events(
     hits.sort(key=lambda h: h.p)
     deduped: list[EventHit] = []
     for hit in hits:
-        if not any(_same_point(hit, kept, points, starts, ds_arr, modes) for kept in deduped):
+        if not any(_same_point(hit, kept, starts) for kept in deduped):
             deduped.append(hit)
     return deduped + rejected
 

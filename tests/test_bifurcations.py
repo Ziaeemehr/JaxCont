@@ -328,15 +328,10 @@ def test_dedup_merges_same_kind_but_not_cross_kind():
     p_grid = jnp.array([0.0, 0.15, 0.3, 0.6])
     states = jnp.zeros((4, 1))
 
-    # near_fold_a and near_fold_b are the SAME kind, both crossing between
-    # the same two branch points (p=0.0, p=0.15), 0.01 apart -- within the
-    # ds=0.05 merge window (2*abs(ds)=0.1) -- these must merge, keeping the
-    # earlier one. near_hopf is a DIFFERENT kind crossing at nearly the same
-    # location and must survive dedup (same-kind-only merging is the fix
-    # verified during design -- see Global Constraints). far_hopf crosses
-    # far away and is unaffected either way.
+    # Two independent detections refine to the same fold; a different kind
+    # nearby must survive even when the states also agree.
     near_fold_a = _ThresholdEvent(kind="fold", threshold=0.10, hit_p=0.10)
-    near_fold_b = _ThresholdEvent(kind="fold", threshold=0.11, hit_p=0.11)
+    near_fold_b = _ThresholdEvent(kind="fold", threshold=0.11, hit_p=0.10)
     near_hopf = _ThresholdEvent(kind="hopf", threshold=0.12, hit_p=0.12)
     far_hopf = _ThresholdEvent(kind="hopf", threshold=0.50, hit_p=0.50)
 
@@ -804,17 +799,17 @@ def test_dedup_keeps_hits_on_different_sheets():
     assert abs(float(hopfs[0].u[0]) - float(hopfs[1].u[0])) > 1.0
 
 
-def test_dedup_merges_adjacent_close_hits_using_per_point_ds():
+def test_dedup_preserves_distinct_roots_independent_of_step_size():
     ps, states = _grid_branch([0.0, 0.15, 0.3, 0.6])
     a = _ThresholdEvent(kind="fold", threshold=0.10, hit_p=0.10)
     b = _ThresholdEvent(kind="fold", threshold=0.11, hit_p=0.11)
-    ds_values = np.array([0.5, 0.5, 0.5, 0.5])  # window 1.0 >> 0.01
+    ds_values = np.array([0.5, 0.5, 0.5, 0.5])
     hits = detect_events(
         [a, b], ps, states, None, None, lambda u, p: u,
         ds=0.001, ds_values=ds_values,
     )
-    assert [h.p for h in hits] == [0.10]
-    # Without a per-point ds that large, the tiny global ds keeps both.
+    assert [h.p for h in hits] == [0.10, 0.11]
+    # Step sizes do not define refinement accuracy.
     hits = detect_events([a, b], ps, states, None, None, lambda u, p: u, ds=0.001)
     assert [h.p for h in hits] == [0.10, 0.11]
 

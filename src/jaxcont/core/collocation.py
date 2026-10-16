@@ -27,6 +27,10 @@ class Collocation(eqx.Module):
     ntst: int = eqx.field(static=True)
     ncol: int = eqx.field(static=True)
 
+    def __post_init__(self):
+        if self.ntst <= 0:
+            raise ValueError("ntst must be positive")
+
 
 def gauss_legendre_01(ncol: int):
     """Gauss-Legendre nodes/weights of degree ``ncol`` on ``[0, 1]`` (mapped

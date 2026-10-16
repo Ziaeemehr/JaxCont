@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
 
 ### Breaking
+- Zero-length continuation spans now raise `ValueError`; bothside runs skip
+  empty legs. Collocation meshes require positive `ntst` and raise `ValueError`
+  for zero intervals.
+- Event deduplication requires adjacent brackets and refined state/parameter
+  agreement within dtype-derived refinement accuracy. Bothside stitching drops
+  a seed-touching backward event only when a matching forward event exists.
 - PD/NS refinement rejects unfinished or unresolved event brackets with
   `reason="not_converged"`. The default event refinement budget is now 50
   iterations to resolve float64 brackets. Direct refinement requires `PeriodicArgs` and

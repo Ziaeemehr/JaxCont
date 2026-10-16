@@ -32,6 +32,7 @@ from jaxcont.bifurcations.events import (
     NeimarkSacker,
     PeriodDoubling,
     detect_events,
+    _refined_points_match,
 )
 from jaxcont.core.continuation import ContinuationSolution
 from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
@@ -645,6 +646,9 @@ def _run_scan(
     detection/plotting reuse existing code.
     """
     p_start, p_end = p_span
+    if not isinstance(p_start, jax.core.Tracer) and not isinstance(p_end, jax.core.Tracer):
+        if float(p_start) == float(p_end):
+            raise ValueError("p_span must have nonzero length")
     u0 = jnp.asarray(problem.u0)
     dtype = u0.dtype
 
@@ -745,6 +749,26 @@ def _run_scan_bothside(
             f"p_span's bounds [{p_lo}, {p_hi}]."
         )
 
+    if p0_f == p_lo or p0_f == p_hi:
+        bound = p_hi if p0_f == p_lo else p_lo
+        res = _call_scan(scan_fn, problem, u0, p0_f, bound, settings, solvers, dtype)
+        states, params, tangents, eig, stab, trivial, conv, hits = _assemble_leg(
+            res, problem, settings, events, solvers
+        )
+        if p0_f == p_hi:
+            n = len(conv) - 1
+            def reverse(array):
+                return None if array is None else jnp.flip(array, axis=0)
+            states, params, tangents = reverse(states), reverse(params), -reverse(tangents)
+            eig, stab, trivial = reverse(eig), reverse(stab), reverse(trivial)
+            conv = [{**c, "step": i} for i, c in enumerate(reversed(conv))]
+            hits = [replace(h, index=None if h.index is None else tuple(n - i for i in h.index))
+                    for h in hits]
+        return _finish_result(
+            problem, states, params, tangents, eig, stab, trivial, conv, hits,
+            verbose, _status_name(res.status), int(res.n_attempts),
+        )
+
     fwd_res = _call_scan(scan_fn, problem, u0, p0_f, p_hi, settings, solvers, dtype)
     bwd_res = _call_scan(scan_fn, problem, u0, p0_f, p_lo, settings, solvers, dtype)
 
@@ -778,7 +802,10 @@ def _run_scan_bothside(
     ]
 
     # The shared seed belongs to the forward leg.
-    b_hits = [h for h in b_hits if h.index is None or 0 not in h.index]
+    b_hits = [h for h in b_hits if not (
+        h.index is not None and 0 in h.index
+        and any(_refined_points_match(h, f) for f in f_hits)
+    )]
     hits = [
         replace(h, index=None if h.index is None else tuple(n_back - i for i in h.index))
         for h in b_hits
