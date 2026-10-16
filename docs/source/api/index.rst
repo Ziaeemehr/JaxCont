@@ -197,9 +197,6 @@ The core dataclasses ``bif_problem``/``continuation`` build on, and the
 pluggable linear-algebra/corrector protocols behind ``Solvers`` -- most users
 should not need these directly.
 
-.. autoclass:: jaxcont.EquilibriumProblem
-   :members:
-
 .. autoclass:: jaxcont.ContinuationProblem
    :members:
 
@@ -215,12 +212,3 @@ should not need these directly.
 .. autoclass:: jaxcont.EigenSolver
 
 .. autoclass:: jaxcont.DenseEigen
-
-.. autoclass:: jaxcont.Corrector
-   :members:
-
-.. autoclass:: jaxcont.NewtonSolver
-   :members:
-
-.. autoclass:: jaxcont.Config
-   :members:

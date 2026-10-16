@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
 
 ### Breaking
+- Remove `NewtonSolver`, `Corrector`, `EquilibriumProblem`, and
+  `BoundaryValueProblem`, their modules and exports, and `Config` with its
+  global configuration helpers. Use `bif_problem`, `continuation`,
+  `ContinuationPar`, and `Solvers` instead. Installation diagnostics remain
+  available in `jaxcont.utils.config`.
 - `analyze_stability` selects the dominant eigenvalue by maximum real part,
   including for unsorted input. Period-doubling switching scales seeds and
   verifies doubling using `u - mean(u)`, changing results for translated orbits.

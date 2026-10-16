@@ -368,7 +368,7 @@ jax.tree_util.register_pytree_node(
 
 
 # ---------------------------------------------------------------------------
-# Adapters (BifProblem <-> legacy ContinuationProblem/Solution)
+# Adapters (BifProblem <-> ContinuationSolution)
 # ---------------------------------------------------------------------------
 
 

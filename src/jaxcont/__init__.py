@@ -93,19 +93,13 @@ from jaxcont.core.continuation import (
     ContinuationSolution,
 )
 
-# Problem definitions
-from jaxcont.problems.equilibrium import EquilibriumProblem
-from jaxcont.solvers.corrector import Corrector
-
 # Solvers
-from jaxcont.solvers.newton import NewtonSolver
 from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
 
 # Stability analysis
 from jaxcont.stability.eigenvalue import analyze_stability, compute_eigenvalues
 
 # Utilities
-from jaxcont.utils.config import Config
 from jaxcont.viz import (
     plot_bifurcation_diagram,
     plot_continuation,
@@ -119,7 +113,6 @@ __all__ = [
     "BP",
     "Branch",
     # Utilities
-    "Config",
     "ContinuationAlgorithm",
     "ContinuationPar",
     # Core
@@ -127,14 +120,12 @@ __all__ = [
     "ContinuationResult",
     "ContinuationSolution",
     "Collocation",
-    "Corrector",
     "Cusp",
     "Dense",
     "DenseEigen",
     "DoubleHopf",
     "EigenSolver",
     # Problems
-    "EquilibriumProblem",
     "Event",
     "EventHit",
     "Fold",
@@ -144,7 +135,6 @@ __all__ = [
     "Natural",
     "NeimarkSacker",
     # Solvers
-    "NewtonSolver",
     "PeriodDoubling",
     "PseudoArclength",
     "Solvers",

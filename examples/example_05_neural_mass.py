@@ -32,7 +32,6 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 import jaxcont as jc
-from jaxcont.solvers.newton import NewtonSolver
 from jaxcont.viz import plot_all_states
 
 os.makedirs("images", exist_ok=True)
@@ -67,16 +66,8 @@ z0_guess = jnp.array([0.238616, 0.982747, 0.367876])
 residual_norm = jnp.linalg.norm(TMvf(z0_guess, E0_0, args))
 print(f"Residual at initial guess: {residual_norm:.2e}")
 
-if residual_norm > 1e-6:
-    # tol=1e-5: comfortably above the float32 precision floor for this
-    # (fairly stiff, tau=0.013) system -- tighter tolerances like 1e-6 sit
-    # close enough to the noise floor that convergence becomes unreliable.
-    solver = NewtonSolver(tol=1e-5, max_iter=100)
-    z0, converged, n_iter = solver.solve(lambda s: TMvf(s, E0_0, args), z0_guess)
-    print(f"Refined equilibrium in {n_iter} Newton iterations "
-          f"(converged={converged}): E={z0[0]:.6f}, x={z0[1]:.6f}, u={z0[2]:.6f}")
-else:
-    z0 = z0_guess
+# The continuation engine corrects this initial guess at E0_0.
+z0 = z0_guess
 
 # %%
 # Run the continuation

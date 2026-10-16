@@ -1,7 +1,6 @@
 """Utility functions and helpers."""
 
 from jaxcont.utils.config import (
-    Config,
     print_jax_cuda_info,
     print_package_import_test,
     run_installation_tests,
@@ -10,7 +9,6 @@ from jaxcont.utils.config import (
 )
 
 __all__ = [
-    "Config",
     "plot_bifurcation_diagram",
     "plot_continuation",
     "print_jax_cuda_info",
