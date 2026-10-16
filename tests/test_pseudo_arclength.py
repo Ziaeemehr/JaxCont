@@ -372,6 +372,24 @@ def _weighted_linear(u, p, args):
     return u - p
 
 
+def test_tangent_orientation_uses_weighted_alignment():
+    """Preserve weighted orientation when Euclidean alignment has the opposite sign."""
+    def residual(u, p, args):
+        return u + p
+
+    theta = 0.01
+    previous = jnp.array([10., 1.]) / jnp.sqrt(2.)
+    expected = jnp.array([-1., 1.]) / jnp.sqrt(1. + theta)
+    assert jnp.dot(expected, previous) < 0
+    assert theta * expected[0] * previous[0] + expected[1] * previous[1] > 0
+
+    tangent = _tangent(residual, jnp.zeros(1), jnp.array(0.), None,
+                       previous, theta=theta)
+
+    np.testing.assert_allclose(tangent, expected, rtol=1e-5)
+    assert theta * tangent[0] * previous[0] + tangent[1] * previous[1] > 0
+
+
 @pytest.mark.parametrize('loop', ['while', 'scan'])
 def test_theta_controls_arclength_and_reuses_compile_cache(loop):
     from jaxcont.core.scan_continuation import pseudo_arclength_scan, pseudo_arclength_lax_scan

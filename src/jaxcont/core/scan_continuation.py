@@ -137,8 +137,9 @@ def _tangent(f, u, p, args, prev_tangent, linear_solver: LinearSolver = Dense(),
     rhs = jnp.zeros(u.shape[0] + 1, dtype=u.dtype).at[-1].set(1.0)
     t = linear_solver(M, rhs)
     t = t / jnp.sqrt(theta * jnp.dot(t[:-1], t[:-1]) + t[-1] ** 2)
-    # keep continuous orientation
-    t = jnp.where(jnp.dot(t, prev_tangent) < 0.0, -t, t)
+    # Keep orientation continuous in the same metric as the bordered solve.
+    alignment = theta * jnp.dot(t[:-1], prev_tangent[:-1]) + t[-1] * prev_tangent[-1]
+    t = jnp.where(alignment < 0.0, -t, t)
     return t
 
 

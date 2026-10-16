@@ -55,9 +55,9 @@ def TMvf(state, E0, args):
 # %%
 # Find a starting equilibrium
 # -------------------------------
-# Continuation needs a point *on* the branch to start from. Rather than
-# guessing one, we refine an approximate initial guess with the plain Newton
-# solver until the residual is (near) zero.
+# Continuation needs a point *on* the branch to start from. The engine
+# corrects the approximate initial guess at the starting parameter before
+# taking continuation steps.
 
 E0_0 = -2.0
 args = (3.07, 1.5, 0.013, 0.200, 1.5, 0.3)  # J, alpha, tau, tauD, tauF, U0
