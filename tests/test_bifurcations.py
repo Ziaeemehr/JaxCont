@@ -7,7 +7,7 @@ along with BifurcationDetector -- see
 docs/superpowers/specs/2026-07-23-event-protocol-rewrite-design.md).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import jax.numpy as jnp
 import numpy as np
@@ -24,6 +24,7 @@ from jaxcont.bifurcations.events import (
     NeimarkSacker,
     PeriodDoubling,
     detect_events,
+    failed_hit,
 )
 
 
@@ -702,3 +703,133 @@ def test_floquet_refine_spectral_check_failed(monkeypatch, event_cls, row, final
     assert hit.status == "failed"
     assert hit.info["reason"] == "spectral_check_failed"
     assert "multiplier" in hit.info
+
+
+# --- exact zeros, sheet-aware dedup, batched test values -------------------
+
+
+@dataclass
+class _CountingEvent:
+    """Test-only Event with a test function ``p`` that records refine calls."""
+
+    kind: str = "marker"
+    calls: list = field(default_factory=list)
+    fail: bool = False
+
+    def test_function(self, point: BranchPoint):
+        return point.p
+
+    def refine(self, left, right, index, rhs, *, tolerance, max_iterations):
+        self.calls.append(index)
+        if self.fail:
+            return failed_hit(self.kind, index, "not_converged")
+        return EventHit(kind=self.kind, p=0.0, u=left.u, index=index)
+
+
+def _grid_branch(ps):
+    ps = jnp.asarray(ps)
+    return ps, jnp.zeros((ps.shape[0], 1))
+
+
+def test_exact_zero_reported_once():
+    ps, states = _grid_branch([-0.2, -0.1, 0.0, 0.1, 0.2])
+    event = _CountingEvent()
+    hits = detect_events([event], ps, states, None, None, lambda u, p: u, ds=0.01)
+    assert [h.kind for h in hits] == ["marker"]
+    assert len(event.calls) == 1
+
+
+def test_exact_zero_failed_refine_reported_once():
+    ps, states = _grid_branch([-0.2, -0.1, 0.0, 0.1, 0.2])
+    event = _CountingEvent(fail=True)
+    hits = detect_events([event], ps, states, None, None, lambda u, p: u, ds=0.01)
+    assert [h.status for h in hits] == ["failed"]
+    assert len(event.calls) == 1
+
+
+def test_exact_zero_at_branch_ends_reported_once():
+    for ps in ([0.0, 0.1, 0.2], [-0.2, -0.1, 0.0]):
+        event = _CountingEvent()
+        hits = detect_events(
+            [event], *_grid_branch(ps), None, None, lambda u, p: u, ds=0.01,
+        )
+        assert len(hits) == 1 and len(event.calls) == 1
+
+
+def test_exact_zero_in_spectral_scan_reported_once():
+    # A real pair whose real part is exactly zero at sample 2.
+    re = np.array([-0.2, -0.1, 0.0, 0.1, 0.2])
+    spectra = np.stack([re + 1j, re - 1j], axis=1)
+    events = Hopf().scan(
+        [BranchPoint(p=float(i), u=jnp.zeros(1), eigenvalues=jnp.asarray(s))
+         for i, s in enumerate(spectra)]
+    )
+    assert len(events) == 1
+
+
+def _s_curve_branch(u1, u2, p0):
+    """S-curve ``p = u^3/3 - u`` with an oscillatory block whose damping
+    ``(u - u1)(u - u2)`` vanishes on the lower (u1) and upper (u2) sheets."""
+    def damping(u):
+        return (u - u1) * (u - u2)
+
+    def rhs(z, p):
+        u, x, y = z
+        d = damping(u)
+        return jnp.array([p + u - u**3 / 3, d * x - y, x + d * y])
+
+    us = np.linspace(-2.2, 2.2, 177)
+    ps = us**3 / 3 - us
+    states = jnp.stack([jnp.asarray(us), jnp.zeros_like(jnp.asarray(us)),
+                        jnp.zeros_like(jnp.asarray(us))], axis=1)
+    eigs = jnp.stack([
+        jnp.linalg.eigvals(jacfwd(rhs)(states[i], ps[i])) for i in range(len(us))
+    ])
+    return jnp.asarray(ps), states, eigs, rhs
+
+
+def test_dedup_keeps_hits_on_different_sheets():
+    p0 = 0.3
+    roots = np.sort(np.roots([1 / 3, 0.0, -1.0, -p0]).real)
+    u_lower, u_upper = roots[0], roots[-1]
+    ps, states, eigs, rhs = _s_curve_branch(u_lower, u_upper, p0)
+    hits = detect_events(
+        [Hopf()], ps, states, None, eigs, rhs, ds=0.05,
+    )
+    hopfs = [h for h in hits if h.kind == "hopf" and h.status == "validated"]
+    assert len(hopfs) == 2
+    assert abs(hopfs[0].p - hopfs[1].p) < 1e-3
+    assert abs(float(hopfs[0].u[0]) - float(hopfs[1].u[0])) > 1.0
+
+
+def test_dedup_merges_adjacent_close_hits_using_per_point_ds():
+    ps, states = _grid_branch([0.0, 0.15, 0.3, 0.6])
+    a = _ThresholdEvent(kind="fold", threshold=0.10, hit_p=0.10)
+    b = _ThresholdEvent(kind="fold", threshold=0.11, hit_p=0.11)
+    ds_values = np.array([0.5, 0.5, 0.5, 0.5])  # window 1.0 >> 0.01
+    hits = detect_events(
+        [a, b], ps, states, None, None, lambda u, p: u,
+        ds=0.001, ds_values=ds_values,
+    )
+    assert [h.p for h in hits] == [0.10]
+    # Without a per-point ds that large, the tiny global ds keeps both.
+    hits = detect_events([a, b], ps, states, None, None, lambda u, p: u, ds=0.001)
+    assert [h.p for h in hits] == [0.10, 0.11]
+
+
+def test_batched_test_values_match_per_point_and_fallback_works():
+    ps, states = _grid_branch([-0.3, -0.1, 0.1, 0.3])
+
+    class HostSide:
+        kind = "host"
+
+        def test_function(self, point):
+            return float(np.asarray(point.p))  # raises under vmap
+
+        def refine(self, left, right, index, rhs, *, tolerance, max_iterations):
+            return EventHit(kind=self.kind, p=0.0, u=left.u, index=index)
+
+    batched = _CountingEvent()
+    for ev in (batched, HostSide()):
+        hits = detect_events([ev], ps, states, None, None, lambda u, p: u, ds=0.01)
+        assert [h.index for h in hits] == [(1, 2)]

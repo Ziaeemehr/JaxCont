@@ -60,9 +60,10 @@ def crossings(values: np.ndarray, where: np.ndarray) -> list[int]:
 
     A bracket ``(i, i+1)`` counts for column ``k`` when
     ``where[i, k] & where[i+1, k]`` and ``values[:, k]`` changes sign or is
-    exactly zero at exactly one end (an isolated exact zero at sample ``i``
-    therefore opens both brackets ``i-1`` and ``i``). ``values``/``where`` may be
-    ``(N,)`` for a single column. Returns sorted, unique starts.
+    exactly zero at exactly one end. An exact zero at sample ``i`` is owned by
+    bracket ``i-1`` (or bracket ``0`` when ``i == 0``): bracket ``i`` is then
+    not opened for that column. ``values``/``where`` may be ``(N,)`` for a
+    single column. Returns sorted, unique starts.
     """
     values = np.asarray(values)
     where = np.asarray(where, dtype=bool)
@@ -72,8 +73,10 @@ def crossings(values: np.ndarray, where: np.ndarray) -> list[int]:
     # An exact zero counts at one end only: a mode that is identically zero
     # (e.g. a center's real part) never opens a bracket.
     hit = (a * b < 0) | ((a == 0) ^ (b == 0))
-    ok = where[:-1] & where[1:]
-    return np.flatnonzero(np.any(hit & ok, axis=1)).tolist()
+    owned = hit & where[:-1] & where[1:]
+    # Bracket i starts on an exact zero that bracket i-1 already ends on.
+    owned[1:] &= ~((a[1:] == 0) & owned[:-1])
+    return np.flatnonzero(np.any(owned, axis=1)).tolist()
 
 
 def mode_brackets(

@@ -53,6 +53,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `info["multiplier"]`. A Hopf curve that ends with `|omega| < 10 * default_tol` and no
   sign change records a `BogdanovTakens` entry with `reason="curve_terminated"` in
   `rejected_events`.
+- Event deduplication no longer merges on parameter distance alone. Two validated hits of
+  one kind merge only when their brackets are adjacent and their joint `(u, p)` distance is
+  at most `2 * max(ds_i, ds_j)` (per-point `ds`), so hits on different sheets of a folded
+  branch at the same `p` are both kept, and a nearby but distinct event is no longer
+  swallowed. An exact zero of a test value at a sample is reported once (it owns the
+  preceding bracket), including on the `test_function` path, which previously ignored it.
+  `Event.test_function` values are evaluated in one `jax.vmap` call where the function is
+  array-pure, per point otherwise; `Fold.test_function` now returns an array.
+  `detect_events` takes an optional `ds_values`.
 
 ### Added
 - `ContinuationResult.rejected_events` and `EventHit.status` (`"validated"` or `"failed"`),

@@ -27,13 +27,14 @@ from typing import (
     runtime_checkable,
 )
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import Array, jacfwd
 
 from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.bifurcations.hopf_normal_form import hopf_point, lyapunov_coefficient
-from jaxcont.bifurcations.modes import mode_brackets, track_modes
+from jaxcont.bifurcations.modes import crossings, mode_brackets, track_modes
 from jaxcont.solvers.implicit import differentiable_root_checked
 from jaxcont.stability.floquet import floquet_multipliers
 from jaxcont.utils.precision import default_tol
@@ -126,8 +127,8 @@ class Fold(Event):
 
     kind: str = "fold"
 
-    def test_function(self, point: BranchPoint) -> float:
-        return float(point.tangent[-1])
+    def test_function(self, point: BranchPoint):
+        return point.tangent[-1]
 
     def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
         u_guess = (left.u + right.u) / 2
@@ -339,6 +340,49 @@ def _within_bracket(hit: EventHit, left: BranchPoint, right: BranchPoint) -> boo
     return bool(lo <= hit.p <= hi)
 
 
+def _test_values(event, points: Sequence[BranchPoint]) -> np.ndarray:
+    """``event.test_function`` at every point, in one ``vmap`` when it allows.
+
+    The batched call is used only when it returns one finite-shaped value per
+    point; a test function that is not array-pure (it raises under ``vmap``,
+    or the batched shape is wrong) is evaluated point by point instead.
+    """
+    def optional(name):
+        vals = [getattr(pt, name) for pt in points]
+        return None if vals[0] is None else jnp.stack([jnp.asarray(v) for v in vals])
+
+    try:
+        batched = jax.vmap(
+            lambda p, u, t, e: event.test_function(BranchPoint(p, u, t, e))
+        )(
+            jnp.asarray([pt.p for pt in points]),
+            jnp.stack([jnp.asarray(pt.u) for pt in points]),
+            optional("tangent"), optional("eigenvalues"),
+        )
+        vals = np.asarray(batched)
+        if vals.shape == (len(points),):
+            return vals
+    except Exception:  # not array-pure: fall back to the scalar loop
+        pass
+    return np.array([float(event.test_function(pt)) for pt in points])
+
+
+def _same_point(hit, kept, points, starts, ds_arr) -> bool:
+    """Whether two validated hits are the same physical point."""
+    if hit.kind != kept.kind:
+        return False
+    i, j = starts[id(hit)], starts[id(kept)]
+    if abs(i - j) > 1:
+        return False
+    window = 2.0 * max(ds_arr[i], ds_arr[j])
+    if hit.u is not None and kept.u is not None and jnp.shape(hit.u) == jnp.shape(kept.u):
+        def vec(h):
+            u = jnp.ravel(jnp.asarray(h.u))
+            return jnp.concatenate([u, jnp.asarray([h.p], dtype=u.dtype)])
+        return bool(jnp.linalg.norm(vec(hit) - vec(kept)) <= window)
+    return abs(hit.p - kept.p) <= window
+
+
 def detect_events(
     events: Sequence[Event],
     params: Array,
@@ -348,6 +392,7 @@ def detect_events(
     rhs: Callable[[Array, float], Array],
     *,
     ds: float,
+    ds_values: Optional[Array] = None,
     tolerance: float | None = None,
     max_iterations: int = 20,
 ) -> list[EventHit]:
@@ -355,13 +400,15 @@ def detect_events(
 
     `params`/`states`/`tangents`/`eigenvalues` are the branch's per-step
     arrays (already trimmed to real points, eager-only). `rhs(u, p)` is the
-    system's right-hand side. `ds` sizes the dedup merge window
-    (`2 * abs(ds)`): two hits of the SAME kind within that many parameter
-    units of each other are treated as the same physical point, keeping the
-    earlier one. Hits of different kinds are never merged with each other,
-    even if close in parameter -- see Global Constraints for why a
-    kind-agnostic merge is wrong (it drops real, distinct, independently-
-    verified bifurcations that happen to sit close together).
+    system's right-hand side. `ds_values` holds the per-point step size
+    (default: `ds` at every point). Two validated hits of the SAME kind are
+    one physical point when their brackets are adjacent (start indices
+    differ by at most one) and their joint (u, p) distance is at most
+    `2 * max(ds_i, ds_j)` of their brackets' step sizes; the earlier one is
+    kept. Hits on different sheets of a folded branch are far apart in u
+    and never merge; hits of different kinds are never merged. A test value
+    that is exactly zero at a sample is reported once (see
+    `modes.crossings`).
 
     The result holds the validated hits (sorted, deduped) followed by the
     failed ones (``status == "failed"``), which are never deduped.
@@ -375,16 +422,21 @@ def detect_events(
         for i in range(params.shape[0])
     ]
 
+    ds_arr = (
+        np.full(len(points), abs(float(ds))) if ds_values is None
+        else np.abs(np.asarray(ds_values, dtype=float))
+    )
     hits: list[EventHit] = []
+    starts: dict[int, int] = {}
     for event in events:
         scan = getattr(event, "scan", None)
         if scan is not None:
             brackets = scan(points)
         else:
-            test_vals = [event.test_function(pt) for pt in points]
+            test_vals = _test_values(event, points)
             brackets = [
-                (i, i + 1, None) for i in range(len(points) - 1)
-                if test_vals[i] * test_vals[i + 1] < 0
+                (i, i + 1, None)
+                for i in crossings(test_vals, np.ones(len(points), dtype=bool))
             ]
         for i, j, mode in brackets:
             kwargs = {} if scan is None else {"mode": mode}
@@ -402,20 +454,16 @@ def detect_events(
                     hit = failed_hit(
                         hit.kind, hit.index, "outside_bracket", refined_p=hit.p,
                     )
+            starts[id(hit)] = i
             hits.append(hit)
 
     rejected = [h for h in hits if h.status == "failed"]
     hits = [h for h in hits if h.status == "validated"]
     hits.sort(key=lambda h: h.p)
-    merge_window = 2.0 * abs(ds)
     deduped: list[EventHit] = []
-    last_p_by_kind: dict = {}
     for hit in hits:
-        prev_p = last_p_by_kind.get(hit.kind)
-        if prev_p is not None and abs(hit.p - prev_p) < merge_window:
-            continue
-        last_p_by_kind[hit.kind] = hit.p
-        deduped.append(hit)
+        if not any(_same_point(hit, kept, points, starts, ds_arr) for kept in deduped):
+            deduped.append(hit)
     return deduped + rejected
 
 

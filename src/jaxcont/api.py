@@ -510,7 +510,7 @@ def _assemble_leg(
     if len(events) > 0 and (eigenvalues is not None or is_curve_kind):
         hits = detect_events(
             events, params, states, tangents, eigenvalues, rhs2,
-            ds=float(settings.ds),
+            ds=float(settings.ds), ds_values=ds,
         )
 
     return states, params, tangents, eigenvalues, stability, convergence_info, hits

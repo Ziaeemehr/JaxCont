@@ -121,7 +121,7 @@ def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
     assert "Systematic comparison: FAIL (known limitation)" in summary
     assert "multiplier" in summary
     assert "critical-signature proxy parameter discrepancies" in summary
-    assert "missing correctly located event types LPC, PD" in summary
+    assert "missing correctly located event types PD" in summary
     assert "event errors" not in summary
     assert (tmp_path / "torbpc.png").is_file()
     assert len(figure.axes) == 3

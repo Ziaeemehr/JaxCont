@@ -41,13 +41,13 @@ def test_track_modes_handles_conjugate_pairs():
 def test_crossings_sign_change_exact_zero_and_mask():
     values = np.array([-2.0, -1.0, 1.0, 2.0, 0.0, 3.0, -1.0])
     where = np.ones_like(values, dtype=bool)
-    # Sign change in bracket 1; exact zero at sample 4 owns brackets 3 and 4.
-    assert crossings(values[:6], where[:6]) == [1, 3, 4]
+    # Sign change in bracket 1; exact zero at sample 4 is owned by bracket 3 alone.
+    assert crossings(values[:6], where[:6]) == [1, 3]
     # A masked endpoint removes every bracket that touches it.
     where[6] = False
-    assert crossings(values, where) == [1, 3, 4]
+    assert crossings(values, where) == [1, 3]
     where[2] = False
-    assert crossings(values, where) == [3, 4]
+    assert crossings(values, where) == [3]
 
 
 def test_crossings_per_column():
@@ -64,4 +64,4 @@ def test_crossings_ignore_identically_zero_column():
     values = np.array([[0.0, -1.0], [0.0, 0.0], [0.0, 1.0], [0.0, 2.0]])
     where = np.ones_like(values, dtype=bool)
     assert crossings(values[:, 0], where[:, 0]) == []
-    assert crossings(values, where) == [0, 1]
+    assert crossings(values, where) == [0]
