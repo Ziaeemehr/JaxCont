@@ -186,4 +186,6 @@ def test_continuation_default_solvers_matches_prior_behavior():
         0.5, 0.550000011920929, 0.625, 0.737500011920929,
         0.90625, 1.1062500476837158, 1.3062500953674316, 1.5062501430511475,
     ]
-    assert result.branch.params.tolist() == expected_params
+    # The reference values were captured in float32; float64 drifts at ~1e-8.
+    assert jnp.allclose(result.branch.params, jnp.array(expected_params), atol=1e-6)
+    assert len(result.branch.params) == len(expected_params)

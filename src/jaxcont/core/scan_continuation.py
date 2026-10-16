@@ -73,7 +73,7 @@ def _tangent(f, u, p, prev_tangent, linear_solver: LinearSolver = Dense()):
     jac_u = jacfwd(f, argnums=0)(u, p)          # (n, n)
     df_dp = jacfwd(f, argnums=1)(u, p)          # (n,)
     M = _bordered_matrix(jac_u, df_dp, prev_tangent)
-    rhs = jnp.zeros(u.shape[0] + 1).at[-1].set(1.0)
+    rhs = jnp.zeros(u.shape[0] + 1, dtype=u.dtype).at[-1].set(1.0)
     t = linear_solver(M, rhs)
     t = t / jnp.linalg.norm(t)
     # keep continuous orientation

@@ -19,6 +19,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
+        x64: [0, 1]
+    env:
+      JAXCONT_TEST_X64: ${{ matrix.x64 }}
 
     steps:
     - uses: actions/checkout@v4

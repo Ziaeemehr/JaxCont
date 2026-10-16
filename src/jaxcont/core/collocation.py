@@ -107,7 +107,7 @@ def interval_propagators(raw_f, D: jnp.ndarray, E: jnp.ndarray, h: float, mesh_s
     docs/superpowers/specs/2026-08-05-prc-dprc-design.md."""
     _ntst, n = mesh_states.shape
     ncol = coll_states.shape[1]
-    eye_n = jnp.eye(n)
+    eye_n = jnp.eye(n, dtype=mesh_states.dtype)
 
     def interval_map(mesh_state_i, coll_states_i):
         Jm = jax.vmap(jax.jacfwd(lambda u: raw_f(u, p, None)))(coll_states_i)  # (ncol, n, n)
@@ -137,5 +137,5 @@ def monodromy_matrix(raw_f, D: jnp.ndarray, E: jnp.ndarray, h: float, mesh_state
     docs/superpowers/specs/2026-08-05-prc-dprc-design.md."""
     n = mesh_states.shape[1]
     M_all = interval_propagators(raw_f, D, E, h, mesh_states, coll_states, T, p)
-    Phi, _ = jax.lax.scan(lambda carry, M: (M @ carry, None), jnp.eye(n), M_all)
+    Phi, _ = jax.lax.scan(lambda carry, M: (M @ carry, None), jnp.eye(n, dtype=M_all.dtype), M_all)
     return Phi

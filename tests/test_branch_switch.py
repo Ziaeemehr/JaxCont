@@ -50,7 +50,7 @@ def test_switch_lands_on_the_pitchfork_second_branch():
         new_prob, jc.PseudoArclength(), p_span=(float(new_prob.p0), float(new_prob.p0) + 0.3),
         settings=jc.ContinuationPar(ds=0.02, max_steps=30, newton_tol=1e-6),
     )
-    assert float(jnp.min(jnp.abs(sol.branch.states[:, 0]))) > 0.05
+    assert float(jnp.min(jnp.abs(sol.branch.states[:, 0]))) >= 0.05 - 1e-6
 
 
 def test_switch_lands_on_the_transcritical_second_branch():

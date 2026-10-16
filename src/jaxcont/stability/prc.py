@@ -53,16 +53,16 @@ def prc_curve(
     T = U[-1]
 
     M_all = interval_propagators(raw_f, D, E, h, mesh_states, coll_states, T, p)
-    Phi, _ = jax.lax.scan(lambda carry, M: (M @ carry, None), jnp.eye(n), M_all)
+    Phi, _ = jax.lax.scan(lambda carry, M: (M @ carry, None), jnp.eye(n, dtype=M_all.dtype), M_all)
 
     x0 = mesh_states[0]
     f0 = raw_f(x0, p, None)
     omega = 2 * jnp.pi / T
 
-    A_top = jnp.concatenate([Phi.T - jnp.eye(n), f0[:, None]], axis=1)
-    A_bot = jnp.concatenate([f0[None, :], jnp.zeros((1, 1))], axis=1)
+    A_top = jnp.concatenate([Phi.T - jnp.eye(n, dtype=Phi.dtype), f0[:, None]], axis=1)
+    A_bot = jnp.concatenate([f0[None, :], jnp.zeros((1, 1), dtype=f0.dtype)], axis=1)
     A_border = jnp.concatenate([A_top, A_bot], axis=0)
-    b_border = jnp.concatenate([jnp.zeros(n), omega[None]])
+    b_border = jnp.concatenate([jnp.zeros(n, dtype=omega.dtype), omega[None]])
     Z0 = linear_solver(A_border, b_border)[:n]
 
     def step(Z_next, M_i):
