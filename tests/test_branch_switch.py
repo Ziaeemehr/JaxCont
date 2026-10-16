@@ -165,7 +165,7 @@ def test_bp_rank_tolerance_controls_relative_rank(scale, rank_tolerance):
         left, right, (0, 1), rhs, tolerance=None, max_iterations=50,
     )
     if rank_tolerance is None:
-        accepted = left.u.dtype == jnp.float32
+        accepted = False
     else:
         accepted = rank_tolerance == 0.02
     assert (hit is not None) == accepted

@@ -360,7 +360,8 @@ def pseudo_arclength_scan(
             direction >= 0, p >= p_end, p <= p_end
         )
         stalled = jnp.logical_and(jnp.logical_not(converged), c.ds <= ds_min)
-        nonfinite = jnp.logical_not(jnp.all(jnp.isfinite(u)))
+        nonfinite = ~(jnp.all(jnp.isfinite(u_new)) & jnp.isfinite(p_new)
+                      & jnp.all(jnp.isfinite(f(u_new, p_new, c.args))))
         stop = jnp.logical_or(reached, jnp.logical_or(stalled, nonfinite))
         reason = jnp.where(
             reached, int(Status.REACHED_END),
@@ -535,7 +536,8 @@ def natural_scan(
 
         reached = jnp.where(direction >= 0, p >= p_end, p <= p_end)
         stalled = jnp.logical_and(jnp.logical_not(converged), c.ds <= ds_min)
-        nonfinite = jnp.logical_not(jnp.all(jnp.isfinite(u)))
+        nonfinite = ~(jnp.all(jnp.isfinite(u_new))
+                      & jnp.all(jnp.isfinite(f(u_new, p_pred, c.args))))
         stop = jnp.logical_or(reached, jnp.logical_or(stalled, nonfinite))
         reason = jnp.where(
             reached, int(Status.REACHED_END),

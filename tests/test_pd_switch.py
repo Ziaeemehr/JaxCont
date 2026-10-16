@@ -18,8 +18,8 @@ w -> exp(i*phi) w, which would otherwise make the doubled orbit a circle of
 solutions and its collocation Jacobian singular. In the frame rotating with w,
 the transverse linearization is diag(alpha, alpha - 2k), so the -1 multiplier
 is simple: a generic period-doubling at alpha = 0 (the second transverse
-multiplier reaches -1 only at alpha = 2k, outside every parameter range used
-here). For alpha > 0 the exact doubled orbit is w = sqrt(alpha/c) exp(i*beta*t)
+multiplier reaches -1 at alpha = 2k; the local switching tests stay near
+the first crossing). For alpha > 0 the exact doubled orbit is w = sqrt(alpha/c) exp(i*beta*t)
 with period 2T = 4*pi.
 """
 

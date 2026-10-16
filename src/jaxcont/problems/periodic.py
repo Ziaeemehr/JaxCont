@@ -129,10 +129,9 @@ def periodic_orbit_problem(
     Note: do not pass ``events=[jc.Hopf()]`` for the returned problem --
     ``Hopf`` eigendecomposes the full collocation Jacobian, which is not a
     meaningful dynamical quantity for a periodic orbit (the periodic-orbit
-    analogues, period-doubling and Neimark-Sacker detection, are future
-    features, not yet implemented). ``events=[jc.Fold()]`` is fine and
-    meaningful (fold-of-cycles) -- ``Fold``'s tangent-based test is
-    dimension-agnostic and needs no special-casing here.
+    analogues are ``jc.PeriodDoubling()`` and ``jc.NeimarkSacker()``).
+    ``events=[jc.Fold()]`` detects folds of cycles with a tangent-based scan
+    and extended-system refinement.
     """
     ntst, ncol = mesh.ntst, mesh.ncol
     n = u_trajectory.shape[-1]

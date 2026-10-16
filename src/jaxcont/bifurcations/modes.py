@@ -72,7 +72,8 @@ def crossings(values: np.ndarray, where: np.ndarray) -> list[int]:
     a, b = values[:-1], values[1:]
     # An exact zero counts at one end only: a mode that is identically zero
     # (e.g. a center's real part) never opens a bracket.
-    hit = (a * b < 0) | ((a == 0) ^ (b == 0))
+    hit = ((np.sign(a) != np.sign(b)) & ((a != 0) | (b != 0)))
+    hit &= np.isfinite(a) & np.isfinite(b)
     owned = hit & where[:-1] & where[1:]
     # Bracket i starts on an exact zero that bracket i-1 already ends on.
     owned[1:] &= ~((a[1:] == 0) & owned[:-1])
@@ -82,19 +83,14 @@ def crossings(values: np.ndarray, where: np.ndarray) -> list[int]:
 def mode_brackets(
     spectra: np.ndarray, values: np.ndarray, where: np.ndarray
 ) -> list[tuple[int, int, Any]]:
-    """Brackets for ``Event.scan``: one ``(i, i+1, TrackedMode)`` per bracket.
+    """Brackets for ``Event.scan``: one ``(i, i+1, TrackedMode)`` per crossing mode.
 
     ``spectra`` is the ``track_modes`` output; ``values``/``where`` are the
-    per-mode test values and validity masks on the same columns. When
-    several modes cross in one bracket, the first column is kept: they all
-    refine from the same bracket.
+    per-mode test values and validity masks on the same columns. Distinct modes in the same bracket retain their own identities.
     """
     brackets = []
-    seen: set[int] = set()
     for k in range(spectra.shape[1]):
         for i in crossings(values[:, k], where[:, k]):
-            if i not in seen:
-                seen.add(i)
-                brackets.append((i, i + 1, TrackedMode(k, spectra[i], spectra[i + 1])))
+            brackets.append((i, i + 1, TrackedMode(k, spectra[i], spectra[i + 1])))
     brackets.sort(key=lambda b: b[0])
     return brackets

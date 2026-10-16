@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] - Unreleased
 
+### Known limitations
+- Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
+
 ### Breaking
+- PD/NS refinement rejects unfinished or unresolved event brackets with
+  `reason="not_converged"`. The default event refinement budget is now 50
+  iterations to resolve float64 brackets. Direct refinement requires `PeriodicArgs` and
+  raises `ValueError` when it is missing.
+- Shared-seed events in `bothside` continuation belong to the forward leg.
+  Spectral scans preserve distinct crossing modes within a single bracket;
+  Hopf refinement follows each candidate's mode.
+- Both continuation engines report `nonfinite` for nonfinite corrector
+  trials while retaining only finite accepted branch points.
 - `floquet_multipliers(...)` now returns `(multipliers, trivial_index)`;
   `branch_floquet_multipliers(...)` returns the corresponding batched arrays.
   The trivial multiplier is selected by eigenvector alignment with the flow.
@@ -19,7 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Eager `periodic_orbit_problem` construction now raises `ValueError` when
   `period0` is nonpositive, the trajectory spans less than `0.95 * period0`,
   refinement fails to converge, the refined period is nonpositive, or the
-  refined orbit amplitude is at most `10 * tol * (1 + norm(mean(u)))`. These checks are skipped for traced values.
+  refined orbit amplitude is at most `10 * tol * (1 + norm(mean(u)))`. These checks are skipped for
+  traced values.
   Trajectory times are rebased to their first sample; only `[0, period0)` of the
   trajectory is resampled (later laps are not folded in), and a gap between the
   last sample and `period0` is closed linearly back to the first sample. The new
@@ -28,14 +41,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `eqx.Module`: dynamic `u_ref_coll`, `uref_prime_coll`, `user_args`; static `raw_f`, `mesh`)
   instead of the tuple `(u_ref_coll, uref_prime_coll, raw_f, mesh)`, and the problem's `f` is the
   module-level `periodic_residual`, so repeated continuations of the same `raw_f` and mesh share one
-  compiled kernel. `raw_f` is always called as `raw_f(u, p, user_args)`; the internal `None` is gone.
+  compiled kernel. `raw_f` is always called as `raw_f(u, p, user_args)`; the internal `None` is
+  gone.
 - `PeriodDoubling` and `NeimarkSacker` no longer take `raw_f`/`mesh`: write `jc.PeriodDoubling()`.
   `continuation()` hands them the problem's `PeriodicArgs` through `detect_events(..., args=...)`.
 - `BP.rank_tolerance` now thresholds a scale-invariant ratio: the smallest singular
   value of `[f_u | f_p]` at the refined point divided by the largest singular value of
   that matrix over the two bracket endpoints and the refined point, replacing the
   absolute smallest-singular-value criterion. Its default is now `None`, resolved to
-  `1e3 * finfo(dtype).eps ** 0.5`. Scaling the right-hand side no longer changes
+  `1e3 * default_tol(dtype)` (strict comparison). Scaling the right-hand side no longer changes
   classification, scalar systems work, and an all-zero reference scale counts as rank
   deficient.
 - `ContinuationResult.events` now holds only validated hits. A refinement that did not

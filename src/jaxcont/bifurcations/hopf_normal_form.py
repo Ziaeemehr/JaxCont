@@ -57,7 +57,7 @@ def _unpack(x, n):
     return x[:n], x[n], x[n + 1:2 * n + 1], x[2 * n + 1:3 * n + 1], x[3 * n + 1]
 
 
-def _seed(f, u, p, args, n):
+def _seed(f, u, p, args, n, eigenvalue=None):
     """Undifferentiated Newton seed: eigenvector of J(u,p) with smallest
     |Re(eigenvalue)| AMONG THE GENUINELY COMPLEX EIGENVALUES (mask to
     |Im| > tolerance first, then argmin |Re| within that mask) -- NOT a
@@ -103,6 +103,8 @@ def _seed(f, u, p, args, n):
     select_mask = jnp.where(has_pos_im, pos_im_mask, safe_mask)
 
     re_for_argmin = jnp.where(select_mask, jnp.abs(jnp.real(evals)), jnp.inf)
+    if eigenvalue is not None:
+        re_for_argmin = jnp.where(select_mask, jnp.abs(evals - eigenvalue), jnp.inf)
     idx = jnp.argmin(re_for_argmin)
 
     vec = evecs[:, idx]
@@ -113,14 +115,14 @@ def _seed(f, u, p, args, n):
     return q1, q2, omega
 
 
-def _extended_residual(x, f, args, n, u_guess, p_guess):
+def _extended_residual(x, f, args, n, u_guess, p_guess, eigenvalue=None):
     """G(x, args) for the Hopf extended system."""
     # Recomputing the seed (including jnp.linalg.eig) on every Newton
     # iteration is deliberate, not an oversight: differentiable_root's
     # documented contract requires theta-dependent seeds to be computed
     # inside the traced primal (here, under stop_gradient), not hoisted out
     # as a loop-invariant -- see differentiable_root's own docstring.
-    q1_seed, q2_seed, _ = _seed(f, u_guess, p_guess, lax.stop_gradient(args), n)
+    q1_seed, q2_seed, _ = _seed(f, u_guess, p_guess, lax.stop_gradient(args), n, eigenvalue)
     return _anchored_residual(x, f, args, n, q1_seed, q2_seed)
 
 
@@ -144,9 +146,13 @@ def hopf_point(
     *,
     tol: float | None = None,
     max_iter: int = 50,
+    eigenvalue: complex | None = None,
 ) -> tuple[Array, Array, Array, Array, Array, Array]:
     """
     Locate a Hopf point near ``(u_guess, p_guess)``, differentiable in ``args``.
+
+    ``eigenvalue`` optionally selects the critical mode nearest that value
+    when several complex pairs share a bracket.
 
     Returns ``(u*, p*, q1*, q2*, omega0*, converged)``: the equilibrium,
     parameter, real and imaginary parts of the (unit) critical eigenvector,
@@ -159,10 +165,10 @@ def hopf_point(
     p_guess = jnp.asarray(p_guess, u_guess.dtype)
 
     def G(x, theta):
-        return _extended_residual(x, f, theta, n, u_guess, p_guess)
+        return _extended_residual(x, f, theta, n, u_guess, p_guess, eigenvalue)
 
     def x0(theta):
-        q1_0, q2_0, omega_0 = _seed(f, u_guess, p_guess, theta, n)
+        q1_0, q2_0, omega_0 = _seed(f, u_guess, p_guess, theta, n, eigenvalue)
         return _pack(u_guess, p_guess, q1_0, q2_0, omega_0)
 
     x_star, converged = differentiable_root_checked(G, x0, args, tol=tol, max_iter=max_iter)

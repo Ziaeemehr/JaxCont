@@ -217,6 +217,7 @@ class Hopf(Event):
         u, p, q1, q2, omega0, converged = hopf_point(
             lambda u, p, _args: rhs(u, p), u_guess, p_guess,
             tol=tolerance, max_iter=max_iterations,
+            eigenvalue=None if mode is None else (mode.left[mode.column] + mode.right[mode.column]) / 2,
         )
         l1 = lyapunov_coefficient(lambda u, p, _args: rhs(u, p), u, p, q1, q2, omega0)
         # A converged extended-system solve can still be no Hopf point: a
@@ -271,7 +272,7 @@ class BP(Event):
     # |Im| at or below this counts as real; None -> see _classify_tol.
     tolerance: Optional[float] = None
     # Threshold on sigma_min([f_u|f_p]) at the refined point over the largest
-    # sigma_max across the bracket and that point; None -> 1e3 * sqrt(dtype eps).
+    # sigma_max across the bracket and that point; None -> 1e3 * default_tol(dtype).
     rank_tolerance: Optional[float] = None
 
     def scan(self, points: Sequence[BranchPoint]) -> list[tuple[int, int, Any]]:
@@ -321,7 +322,7 @@ class BP(Event):
         rank_ratio = jnp.where(scale == 0, 0, singular_values[-1] / jnp.where(scale == 0, 1, scale))
         rank_tolerance = self.rank_tolerance
         if rank_tolerance is None:
-            rank_tolerance = 1e3 * jnp.finfo(u_bif.dtype).eps ** 0.5
+            rank_tolerance = 1e3 * default_tol(u_bif.dtype)
         if not bool(rank_ratio < rank_tolerance):
             return None  # ordinary fold, not a branch point
 
@@ -383,14 +384,19 @@ def _test_values(event, points: Sequence[BranchPoint]) -> np.ndarray:
     return np.array([float(event.test_function(pt)) for pt in points])
 
 
-def _same_point(hit, kept, points, starts, ds_arr) -> bool:
+def _same_point(hit, kept, points, starts, ds_arr, modes) -> bool:
     """Whether two validated hits are the same physical point."""
     if hit.kind != kept.kind:
         return False
     i, j = starts[id(hit)], starts[id(kept)]
+    distinct_modes = modes[id(hit)] != modes[id(kept)]
     if abs(i - j) > 1:
         return False
     window = 2.0 * max(ds_arr[i], ds_arr[j])
+    if distinct_modes:
+        # Different modes may share one physical event (a real double
+        # multiplier); merge only at refinement accuracy, never step size.
+        window = 2 * default_tol(jnp.asarray(points[i].u).dtype)
     if hit.u is not None and kept.u is not None and jnp.shape(hit.u) == jnp.shape(kept.u):
         def vec(h):
             u = jnp.ravel(jnp.asarray(h.u))
@@ -411,7 +417,7 @@ def detect_events(
     ds_values: Optional[Array] = None,
     trivial_index: Optional[Array] = None,
     tolerance: float | None = None,
-    max_iterations: int = 20,
+    max_iterations: int = 50,
     args: PyTree = None,
     step_update: Optional[Callable[[PyTree, Array, Array], PyTree]] = None,
     f: Optional[Callable[[Array, Array, PyTree], Array]] = None,
@@ -473,6 +479,7 @@ def detect_events(
 
     hits: list[EventHit] = []
     starts: dict[int, int] = {}
+    modes: dict[int, Optional[int]] = {}
     for event in events:
         scan = getattr(event, "scan", None)
         if scan is not None:
@@ -503,6 +510,7 @@ def detect_events(
                         hit.kind, hit.index, "outside_bracket", refined_p=hit.p,
                     )
             starts[id(hit)] = i
+            modes[id(hit)] = getattr(mode, "column", None)
             hits.append(hit)
 
     rejected = [h for h in hits if h.status == "failed"]
@@ -510,7 +518,7 @@ def detect_events(
     hits.sort(key=lambda h: h.p)
     deduped: list[EventHit] = []
     for hit in hits:
-        if not any(_same_point(hit, kept, points, starts, ds_arr) for kept in deduped):
+        if not any(_same_point(hit, kept, points, starts, ds_arr, modes) for kept in deduped):
             deduped.append(hit)
     return deduped + rejected
 
@@ -555,6 +563,10 @@ class _FloquetEvent:
         self, left, right, index, rhs, *, tolerance, max_iterations, mode=None,
         args=None,
     ) -> Optional[EventHit]:
+        from jaxcont.problems.periodic_args import PeriodicArgs
+
+        if not isinstance(args, PeriodicArgs):
+            raise ValueError("Floquet refinement requires PeriodicArgs")
         if mode is None:
             brackets = self.scan([left, right])
             if not brackets:
@@ -573,6 +585,11 @@ class _FloquetEvent:
 
         def failed(reason, **info):
             return failed_hit(self.kind, index, reason, method="bisection", **info)
+
+        if not (np.isfinite(t_left) and np.isfinite(t_right)):
+            return failed("not_converged")
+        if t_left != 0 and t_right != 0 and np.sign(t_left) == np.sign(t_right):
+            return failed("not_converged")
 
         # An exact zero at a bracket end is the event itself.
         if t_left == 0.0:
@@ -593,9 +610,11 @@ class _FloquetEvent:
                 return failed("not_converged")
             row_mid = track_modes(np.stack([row_left, self._multipliers(u_mid, p_mid, args)[0]]))[1]
             t_mid = float(self._test_value(row_mid[k]))
-            if t_left * t_mid < 0:
+            if not np.isfinite(t_mid):
+                return failed("not_converged")
+            if np.sign(t_left) != np.sign(t_mid) and t_mid != 0:
                 p_right, u_right, t_right = p_mid, u_mid, t_mid
-            elif t_mid * t_right < 0:
+            elif np.sign(t_mid) != np.sign(t_right) and t_mid != 0:
                 p_left, u_left, t_left, row_left = p_mid, u_mid, t_mid, row_mid
             else:
                 if t_mid == 0.0:
@@ -603,6 +622,8 @@ class _FloquetEvent:
                     u_left = u_right = u_mid
                     row_left = row_mid
                 break
+        if abs(p_right - p_left) >= tolerance:
+            return failed("not_converged")
         p_bif = (p_left + p_right) / 2
         u_bif, corrected = differentiable_root_checked(
             rhs, (u_left + u_right) / 2, p_bif, tol=root_tol,

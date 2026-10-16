@@ -68,10 +68,9 @@ def rhs(u, p, args):
 # Continue the base cycle and detect the flip
 # ----------------------------------------------
 #
-# ``jc.PeriodDoubling`` needs the raw right-hand side and
-# mesh explicitly because it recomputes Floquet multipliers at bisection
-# midpoints -- unlike an equilibrium event, it cannot work from the generic
-# collocation residual alone.
+# ``jc.PeriodDoubling()`` reads the raw right-hand side, mesh, and user
+# arguments from the periodic problem's ``PeriodicArgs`` when it recomputes
+# Floquet multipliers at corrected bisection midpoints.
 
 t = np.linspace(0.0, T_EXACT, 120, endpoint=False)
 u_guess = np.stack(

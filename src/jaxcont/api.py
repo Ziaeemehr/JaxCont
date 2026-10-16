@@ -777,10 +777,8 @@ def _run_scan_bothside(
         {**c, "step": i + n_back} for i, c in enumerate(f_conv)
     ]
 
-    # Each leg is scanned for events in isolation (see _assemble_leg's
-    # docstring) -- both start at the same p0, so their hit lists never
-    # need cross-leg deduping; a genuine bifurcation can only land in
-    # whichever leg's disjoint parameter interval actually contains it.
+    # The shared seed belongs to the forward leg.
+    b_hits = [h for h in b_hits if h.index is None or 0 not in h.index]
     hits = [
         replace(h, index=None if h.index is None else tuple(n_back - i for i in h.index))
         for h in b_hits

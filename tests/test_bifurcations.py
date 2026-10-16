@@ -8,7 +8,6 @@ docs/superpowers/specs/2026-07-23-event-protocol-rewrite-design.md).
 """
 
 from dataclasses import dataclass, field, replace
-import types
 
 import jax.numpy as jnp
 import numpy as np
@@ -697,7 +696,8 @@ def test_floquet_refine_spectral_check_failed(monkeypatch, event_cls, row, final
     # A zero-width bracket skips bisection and goes straight to the re-check.
     point = BranchPoint(p=0.0, u=jnp.zeros(1))
     event = event_cls()
-    stub_args = types.SimpleNamespace(raw_f=None, mesh=None, user_args=None)
+    from jaxcont.problems.periodic_args import PeriodicArgs
+    stub_args = PeriodicArgs(jnp.zeros((1, 1, 1)), jnp.zeros((1, 1, 1)), None, None, None)
     hit = event.refine(
         point, point, (0, 1), lambda u, p: u,
         tolerance=None, max_iterations=20, mode=mode, args=stub_args,

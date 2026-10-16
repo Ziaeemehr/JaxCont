@@ -284,10 +284,18 @@ def test_short_trajectory_raises():
         periodic_orbit_problem(_rhs, u, t * 0.9, 5.5, 1.0, _AD_MESH)
 
 
-def test_nonpositive_refined_period_raises():
+@pytest.mark.parametrize("refined_period", [0.0, -5.5])
+def test_nonpositive_refined_period_raises(monkeypatch, refined_period):
+    import importlib
+    module = importlib.import_module("jaxcont.problems.periodic")
+
+    def refine(_residual, seed, theta, **kwargs):
+        return seed(theta).at[-1].set(refined_period), jnp.array(True)
+
+    monkeypatch.setattr(module, "differentiable_root_checked", refine)
     u, t = _coarse_wrong_trajectory()
-    with pytest.raises(ValueError, match="positive"):
-        periodic_orbit_problem(_rhs, u, t, -5.5, 1.0, _AD_MESH)
+    with pytest.raises(ValueError, match="refined period must be positive"):
+        periodic_orbit_problem(_rhs, u, t, 5.5, 1.0, _AD_MESH)
 
 
 def test_nonpositive_period0_raises_before_resampling():
