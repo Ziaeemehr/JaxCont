@@ -287,9 +287,16 @@ class BP(Event):
     ) -> Optional[EventHit]:
         u_guess = (left.u + right.u) / 2
         p_guess = (left.p + right.p) / 2
+        null_vector = None
+        if mode is not None:
+            target = (mode.left[mode.column] + mode.right[mode.column]) / 2
+            values, vectors = jnp.linalg.eig(jacfwd(lambda u: rhs(u, p_guess))(u_guess))
+            null_vector = vectors[:, jnp.argmin(jnp.abs(values - target))].real
+            null_vector = null_vector / jnp.linalg.norm(null_vector)
         u_bif, p_bif, _null_vector, converged = fold_point(
             lambda u, p, _args: rhs(u, p),
             u_guess, p_guess, tol=tolerance, max_iter=max_iterations,
+            null_vector=null_vector,
         )
         if not bool(converged):
             return failed_hit("branch_point", index, "not_converged", method="extended_system")
@@ -370,11 +377,11 @@ def _test_values(event, points: Sequence[BranchPoint]) -> np.ndarray:
 
     try:
         batched = jax.vmap(
-            lambda p, u, t, e: event.test_function(BranchPoint(p, u, t, e))
+            lambda p, u, t, e, i: event.test_function(BranchPoint(p, u, t, e, i))
         )(
             jnp.asarray([pt.p for pt in points]),
             jnp.stack([jnp.asarray(pt.u) for pt in points]),
-            optional("tangent"), optional("eigenvalues"),
+            optional("tangent"), optional("eigenvalues"), optional("trivial_index"),
         )
         vals = np.asarray(batched)
         if vals.shape == (len(points),):
@@ -394,6 +401,15 @@ def _refined_points_match(hit, kept) -> bool:
     v = np.asarray(kept.u)
     x = np.concatenate([u.ravel(), np.asarray([hit.p], dtype=u.dtype)])
     y = np.concatenate([v.ravel(), np.asarray([kept.p], dtype=v.dtype)])
+    for key in ("p", "p_fixed"):
+        if (key in hit.info) != (key in kept.info):
+            return False
+        if key in hit.info:
+            a, b = np.asarray(hit.info[key]), np.asarray(kept.info[key])
+            if a.shape != b.shape:
+                return False
+            x = np.concatenate([x, a.ravel()])
+            y = np.concatenate([y, b.ravel()])
     window = np.sqrt(default_tol(u.dtype)) * (1 + max(np.linalg.norm(x), np.linalg.norm(y)))
     return bool(np.linalg.norm(x - y) <= window)
 

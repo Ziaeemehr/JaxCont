@@ -13,6 +13,8 @@ def _json_safe(value):
     """Recursively convert JAX/NumPy arrays into plain Python lists so a
     value is safe to pass to ``json.dumps`` — used for the metadata blob
     :meth:`ContinuationSolution.save` embeds in its ``.npz`` archive."""
+    if isinstance(value, complex):
+        return [value.real, value.imag]
     if isinstance(value, dict):
         return {k: _json_safe(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
@@ -183,6 +185,9 @@ class ContinuationSolution:
         metadata (bifurcations, convergence_info, state_names, param_name)
         is JSON-encoded into a single ``metadata_json`` entry, which NumPy
         stores as a plain unicode array -- no pickling needed there either.
+        Complex metadata values (including event multipliers) are encoded as
+        ``[real, imaginary]`` pairs. Loading preserves these pairs; callers
+        can recover a complex scalar with ``complex(*pair)``.
 
         Args:
             filename: Path to save file

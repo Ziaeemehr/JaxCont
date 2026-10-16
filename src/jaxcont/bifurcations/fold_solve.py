@@ -65,9 +65,13 @@ def fold_point(
     *,
     tol: float | None = None,
     max_iter: int = 50,
+    null_vector: Array | None = None,
 ) -> tuple[Array, Array, Array, Array]:
     """
     Locate a fold near ``(u_guess, p_guess)``, differentiable in ``args``.
+
+    ``null_vector`` optionally seeds a particular Jacobian mode; otherwise
+    the smallest right singular vector supplies the seed.
 
     Returns ``(u*, p*, v*, converged)`` where ``v*`` is the (unit) null
     vector of ``f_u`` and ``converged`` is a JAX bool reporting whether the
@@ -83,7 +87,8 @@ def fold_point(
         return _extended_residual(x, f, theta, n)
 
     def x0(theta):
-        v0 = _initial_v(f, u_guess, p_guess, theta, n)
+        v0 = (_initial_v(f, u_guess, p_guess, theta, n) if null_vector is None
+              else jnp.asarray(null_vector, dtype=u_guess.dtype))
         return _pack(u_guess, p_guess, v0)
 
     x_star, converged = differentiable_root_checked(G, x0, args, tol=tol, max_iter=max_iter)

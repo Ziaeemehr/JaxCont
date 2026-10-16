@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
 
 ### Breaking
+- `hopf_point(..., eigenvalue=None)` can seed the tracked eigenvalue;
+  `fold_point(..., null_vector=None)` can seed a tracked mode's eigenvector.
+  BP refinement now follows each candidate mode.
+- `interval_propagators(..., args=None)` and `monodromy_matrix(..., args=None)`
+  pass user arguments through to the right-hand side.
+- Saved event metadata encodes complex values as `[real, imaginary]` pairs;
+  `ContinuationSolution.load` preserves those pairs (decode with `complex(*pair)`).
 - Zero-length continuation spans now raise `ValueError`; bothside runs skip
   empty legs. Collocation meshes require positive `ntst` and raise `ValueError`
   for zero intervals.
@@ -105,7 +112,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `rejected_events`.
 - Event deduplication no longer merges on parameter distance alone. Two validated hits of
   one kind merge only when their brackets are adjacent and their joint `(u, p)` distance is
-  at most `2 * max(ds_i, ds_j)` (per-point `ds`), so hits on different sheets of a folded
+  at most `sqrt(default_tol(dtype)) * (1 + max(norm(x_i), norm(x_j)))`,
+  including every parameter coordinate in `info['p']` / `p_fixed`, so hits on different sheets of a folded
   branch at the same `p` are both kept, and a nearby but distinct event is no longer
   swallowed. An exact zero of a test value at a sample is reported once (it owns the
   preceding bracket), including on the `test_function` path, which previously ignored it.
