@@ -15,7 +15,7 @@ from jax import Array
 from jaxcont.api import BifProblem
 from jaxcont.core.collocation import Collocation, collocation_matrices
 from jaxcont.problems.periodic_args import PeriodicArgs
-from jaxcont.solvers.implicit import differentiable_root
+from jaxcont.solvers.implicit import differentiable_root_checked
 from jaxcont.utils.precision import default_tol
 
 PyTree = Any
@@ -63,13 +63,17 @@ def periodic_orbit_problem(
     *,
     args: PyTree = None,
     tol: float | None = None,
+    max_iter: int = 50,
 ) -> BifProblem:
     """
     Build a periodic-orbit :class:`~jaxcont.api.BifProblem` via fixed-mesh
     orthogonal collocation.
 
     ``tol`` is the seed-refinement residual tolerance (default: ``default_tol`` of
-    the trajectory dtype).
+    the trajectory dtype). ``max_iter`` bounds Newton refinement. Eager
+    construction raises ``ValueError`` for insufficient trajectory coverage,
+    failed refinement, a nonpositive period, or a collapsed orbit; validation
+    is skipped for traced values under JAX transformations.
 
     ``f(u, p, args)`` is the same right-hand-side convention used for
     equilibrium problems; ``args`` (default ``None``) is passed to ``f``
@@ -82,7 +86,7 @@ def periodic_orbit_problem(
     guess (from the caller's own simulation -- JaxCont does not integrate
     ODEs itself); ``period0`` is the corresponding period guess. Both are
     resampled onto ``mesh`` and refined to convergence (via
-    :func:`~jaxcont.solvers.implicit.differentiable_root`) before being
+    :func:`~jaxcont.solvers.implicit.differentiable_root_checked`) before being
     returned as the ``BifProblem``'s ``u0``. This factory-level refinement
     is kept even though ``pseudo_arclength_scan``/``natural_scan`` now also
     Newton-correct their own seed (a later hardening fix, so a hand-built
@@ -107,6 +111,10 @@ def periodic_orbit_problem(
     """
     ntst, ncol = mesh.ntst, mesh.ncol
     n = u_trajectory.shape[-1]
+    t_trajectory = t_trajectory - t_trajectory[0]
+    covered = t_trajectory[-1] >= 0.95 * period0
+    if not isinstance(covered, jax.core.Tracer) and not bool(covered):
+        raise ValueError("trajectory must cover at least 0.95 * period0")
 
     _D, _E, gauss_np, _gw = collocation_matrices(ncol)
     gauss = jnp.asarray(gauss_np)
@@ -114,7 +122,7 @@ def periodic_orbit_problem(
     def resample(tau: Array) -> Array:
         t = tau * period0
         return jnp.stack(
-            [jnp.interp(t, t_trajectory, u_trajectory[:, c]) for c in range(n)]
+            [jnp.interp(t, t_trajectory, u_trajectory[:, c], period=period0) for c in range(n)]
         )
 
     mesh_tau = jnp.arange(ntst) / ntst
@@ -152,8 +160,19 @@ def periodic_orbit_problem(
         p, _seed_mesh, ref_coll, ref_prime, _seed_period, user = th
         return periodic_residual(U, p, PeriodicArgs(ref_coll, ref_prime, user, f, mesh))
 
-    U0 = differentiable_root(
-        _extended, _seed, theta, tol=default_tol(mesh_guess.dtype) if tol is None else tol
+    tol = default_tol(mesh_guess.dtype) if tol is None else tol
+    U0, converged = differentiable_root_checked(
+        _extended, _seed, theta, tol=tol, max_iter=max_iter
     )
+    if not isinstance(converged, jax.core.Tracer):
+        if not bool(converged):
+            raise ValueError("periodic seed refinement did not converge")
+        if not bool(U0[-1] > 0):
+            raise ValueError("refined period must be positive")
+        states = U0[:-1].reshape(-1, n)
+        mean = jnp.mean(states, axis=0)
+        amplitude = jnp.max(jnp.linalg.norm(states - mean, axis=1))
+        if not bool(amplitude > 10 * tol * (1 + jnp.linalg.norm(mean))):
+            raise ValueError("refined orbit amplitude is too small")
 
     return BifProblem(f=periodic_residual, u0=U0, p0=p0_arr, args=pargs, kind="periodic")

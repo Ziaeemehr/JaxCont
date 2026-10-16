@@ -250,3 +250,41 @@ def test_floquet_and_prc_receive_user_args():
     x0 = prob.u0[:2]
     f0 = _hopf_omega(x0, prob.p0, pargs.user_args)
     assert float(Z[0] @ f0) == pytest.approx(2 * np.pi / T, rel=1e-3)
+
+
+def test_trajectory_time_offset_is_rebased():
+    from jaxcont.utils.precision import default_tol
+
+    u, t = _coarse_wrong_trajectory()
+    mesh = Collocation(ntst=10, ncol=4)
+    original = periodic_orbit_problem(_rhs, u, t, 5.5, 1.0, mesh)
+    shifted = periodic_orbit_problem(_rhs, u, t + 100, 5.5, 1.0, mesh)
+    np.testing.assert_allclose(
+        shifted.u0, original.u0, atol=default_tol(u.dtype), rtol=0.0
+    )
+
+
+def test_collapsed_orbit_raises():
+    t = jnp.linspace(0.0, 2 * jnp.pi, 120)
+    with pytest.raises(ValueError, match="amplitude"):
+        periodic_orbit_problem(
+            _rhs, jnp.zeros((t.size, 2)), t, 2 * jnp.pi, 1.0, _AD_MESH
+        )
+
+
+def test_nonconverged_construction_raises():
+    u, t = _coarse_wrong_trajectory()
+    with pytest.raises(ValueError, match="converge"):
+        periodic_orbit_problem(_rhs, u, t, 5.5, 1.0, _AD_MESH, max_iter=1)
+
+
+def test_short_trajectory_raises():
+    u, t = _coarse_wrong_trajectory()
+    with pytest.raises(ValueError, match="0.95"):
+        periodic_orbit_problem(_rhs, u, t * 0.9, 5.5, 1.0, _AD_MESH)
+
+
+def test_nonpositive_refined_period_raises():
+    u, t = _coarse_wrong_trajectory()
+    with pytest.raises(ValueError, match="positive"):
+        periodic_orbit_problem(_rhs, u, t, -5.5, 1.0, _AD_MESH)

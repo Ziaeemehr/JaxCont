@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0] - Unreleased
 
 ### Breaking
+- Eager `periodic_orbit_problem` construction now raises `ValueError` when the
+  trajectory spans less than `0.95 * period0`, refinement fails to converge,
+  the refined period is nonpositive, or the refined orbit amplitude is at most
+  `10 * tol * (1 + norm(mean(u)))`. These checks are skipped for traced values.
+  Trajectory times are rebased to their first sample and interpolation wraps
+  periodically; the new `max_iter` keyword defaults to 50.
 - A periodic problem's `args` is now `jaxcont.problems.periodic_args.PeriodicArgs` (an
   `eqx.Module`: dynamic `u_ref_coll`, `uref_prime_coll`, `user_args`; static `raw_f`, `mesh`)
   instead of the tuple `(u_ref_coll, uref_prime_coll, raw_f, mesh)`, and the problem's `f` is the
