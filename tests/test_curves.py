@@ -330,3 +330,41 @@ def test_hopf_curve_survives_eigenvector_rotation():
         _, p0, _, _, omega = unpack_hopf_curve(sol.branch.states[i], n=3)
         assert abs(float(p0) - p1) < 1e-3
         assert abs(float(omega) - 1.0) < 1e-3
+
+
+def test_fold_curve_seed_grad_wrt_start_parameter():
+    with jax.enable_x64():
+        def f(u, p, args):
+            return jnp.array([(u[0] - p[1]) ** 2 + p[0] - p[1]])
+
+        def seed(q):
+            return fold_curve_problem(
+                f, jnp.array([0.6]), jnp.array([0.6, q]),
+            ).u0[0]
+
+        q = jnp.array(0.7)
+        derivative = jax.grad(seed)(q)
+        h = 1e-5
+        central = (seed(q + h) - seed(q - h)) / (2 * h)
+        assert jnp.isfinite(derivative)
+        assert jnp.allclose(derivative, central, rtol=1e-4, atol=1e-9)
+
+
+def test_hopf_curve_seed_grad_wrt_start_parameter():
+    with jax.enable_x64():
+        def f(u, p, args):
+            x, y = u - p[1]
+            mu = p[0] - p[1]
+            return jnp.array([mu * x - y, x + mu * y])
+
+        def seed(q):
+            return hopf_curve_problem(
+                f, jnp.array([0.6, 0.6]), jnp.array([0.6, q]),
+            ).u0[0]
+
+        q = jnp.array(0.7)
+        derivative = jax.grad(seed)(q)
+        h = 1e-5
+        central = (seed(q + h) - seed(q - h)) / (2 * h)
+        assert jnp.isfinite(derivative)
+        assert jnp.allclose(derivative, central, rtol=1e-4, atol=1e-9)

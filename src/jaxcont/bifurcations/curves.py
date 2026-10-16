@@ -132,10 +132,11 @@ def fold_curve_problem(
     def reduced(u, p_fixed, a, q):
         return f(u, _assemble_p(p_fixed, q, free), a)
 
-    # Refine the seed onto the curve at q = q0.
+    # The root depends on (args, q0); initial guesses only select its basin.
     u_star, p_star, v_star, seed_converged = fold_point(
-        lambda u, p_fixed, a: reduced(u, p_fixed, a, q0),
-        u_guess, fixed0, args, tol=tol, max_iter=max_iter,
+        lambda u, p_fixed, theta: reduced(u, p_fixed, theta[0], theta[1]),
+        lax.stop_gradient(u_guess), lax.stop_gradient(fixed0), (args, q0),
+        tol=tol, max_iter=max_iter,
     )
     try:
         # Check the seed's convergence only in eager mode: a traced call
@@ -240,9 +241,11 @@ def hopf_curve_problem(
     def reduced(u, p_fixed, a, q):
         return f(u, _assemble_p(p_fixed, q, free), a)
 
+    # The root depends on (args, q0); the moving phase anchor is stored below.
     u_star, p_star, q1_star, q2_star, omega_star, seed_converged = hopf_point(
-        lambda u, p_fixed, a: reduced(u, p_fixed, a, q0),
-        u_guess, fixed0, args, tol=tol, max_iter=max_iter,
+        lambda u, p_fixed, theta: reduced(u, p_fixed, theta[0], theta[1]),
+        lax.stop_gradient(u_guess), lax.stop_gradient(fixed0), (args, q0),
+        tol=tol, max_iter=max_iter,
     )
     try:
         # See fold_curve_problem's identical guard above for why this is

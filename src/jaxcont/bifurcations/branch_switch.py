@@ -8,8 +8,8 @@ At a confirmed BP (jaxcont.bifurcations.events.BP), the augmented Jacobian
 [f_u | f_p] (n x (n+1)) has a 2-D null space: one direction is the incoming
 branch's own known tangent (carried in EventHit.info["tangent"] -- EventHit
 itself has no tangent field), the other is the crossing branch's direction.
-Both are recovered via SVD; the crossing direction is whichever of the two
-smallest right-singular vectors survives projecting out the known tangent.
+The crossing direction solves a bordered null-space system orthogonal to
+the incoming tangent, pinned by the best-conditioned coordinate border.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 import jax.numpy as jnp
-from jax import Array, jacfwd
+from jax import Array, jacfwd, lax
 
 from jaxcont.api import BifProblem, bif_problem
 from jaxcont.bifurcations.events import EventHit
@@ -37,16 +37,22 @@ def _switching_tangent(f, u_star, p_star, incoming_tangent, args, n):
     f_u = jacfwd(lambda u: f(u, p_star, args))(u_star)
     f_p = jacfwd(lambda p: f(u_star, p, args))(p_star)
     augmented = jnp.concatenate([f_u, f_p.reshape(n, 1)], axis=1)
-    _, _, vh = jnp.linalg.svd(augmented)
-    v1, v2 = vh[-1], vh[-2]
-
     incoming_dir = incoming_tangent / jnp.linalg.norm(incoming_tangent)
-
-    def project_out(v):
-        return v - jnp.dot(v, incoming_dir) * incoming_dir
-
-    c1, c2 = project_out(v1), project_out(v2)
-    t_new_raw = jnp.where(jnp.linalg.norm(c1) > jnp.linalg.norm(c2), c1, c2)
+    null_system = jnp.vstack([augmented, incoming_dir])
+    borders = jnp.eye(n + 1, dtype=augmented.dtype)
+    candidates = jnp.concatenate([
+        jnp.broadcast_to(null_system, (n + 1,) + null_system.shape),
+        borders[:, None, :],
+    ], axis=1)
+    # The coordinate choice is discrete; only the selected solve is differentiated.
+    singular_values = jnp.linalg.svd(lax.stop_gradient(candidates), compute_uv=False)
+    k = jnp.argmax(singular_values[:, -1] / singular_values[:, 0])
+    bordered = jnp.vstack([null_system, borders[k]])
+    rhs = jnp.zeros(n + 2, dtype=augmented.dtype).at[-1].set(1)
+    # At a BP these equations are consistent and the coordinate border gives
+    # full column rank; reduced QR avoids squaring the condition number.
+    q, r = jnp.linalg.qr(bordered, mode="reduced")
+    t_new_raw = jnp.linalg.solve(r, q.T @ rhs)
     return t_new_raw / jnp.linalg.norm(t_new_raw)
 
 
@@ -87,7 +93,7 @@ def branch_switch(
     (``core/scan_continuation.py``), just applied once here instead of
     iterated.
 
-    The switching direction's sign is arbitrary (an SVD sign convention,
+    The switching direction's sign is arbitrary (a coordinate-border convention,
     not a physical choice) -- callers that care which of the two crossing
     directions they land on should inspect ``new_problem.u0``/``.p0`` and
     negate ``ds`` and retry if it's the wrong one.

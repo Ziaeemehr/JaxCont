@@ -180,3 +180,26 @@ def test_hopf_normal_form_functions_are_exported_at_top_level():
     assert jc.hopf_point is hopf_point
     assert jc.hopf_parameter is hopf_parameter
     assert jc.lyapunov_coefficient is lyapunov_coefficient
+
+
+def test_l1_grad_with_repeated_stable_modes():
+    def f(u, p, a):
+        return jnp.concatenate([_textbook_hopf(u[:2], p, None), -a * u[2:]])
+
+    with jax.enable_x64():
+        def l1(a):
+            scale = jnp.sqrt(0.5)
+            return lyapunov_coefficient(
+                f, jnp.zeros(4), jnp.array(0.0),
+                jnp.array([scale, 0.0, 0.0, 0.0]),
+                jnp.array([0.0, -scale, 0.0, 0.0]), jnp.array(1.0), a,
+            )
+
+        a = jnp.array(2.0)
+        derivative = jax.grad(l1)(a)
+        h = 1e-5
+        central = (l1(a + h) - l1(a - h)) / (2 * h)
+        assert jnp.isfinite(derivative)
+        assert jnp.allclose(derivative, central, rtol=1e-4, atol=1e-9)
+        assert jnp.abs(derivative) < 1e-9
+        assert jnp.allclose(l1(a), -1.0)

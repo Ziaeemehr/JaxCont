@@ -171,3 +171,32 @@ def test_bp_rank_tolerance_controls_relative_rank(scale, rank_tolerance):
     assert (hit is not None) == accepted
     if accepted:
         assert hit.status == "validated"
+
+
+def test_branch_switch_grad_when_augmented_jacobian_depends_on_args():
+    from jaxcont.bifurcations.branch_switch import _switching_tangent
+    from jaxcont.bifurcations.events import EventHit
+
+    def f(u, p, a):
+        return jnp.array([u[0] * (p - u[0]), u[1] - a * u[0]])
+
+    with jax.enable_x64():
+        u = jnp.zeros(2)
+        p = jnp.array(0.0)
+        incoming = jnp.array([0.0, 0.0, 1.0])
+        event = EventHit(kind="branch_point", u=u, p=p, index=(0, 1),
+                         info={"tangent": incoming})
+
+        def tangent(a):
+            return _switching_tangent(f, u, p, incoming, a, 2)[0]
+
+        def seed(a):
+            return branch_switch(f, event, args=a, ds=0.05).u0[0]
+
+        a = jnp.array(0.7)
+        for value in (tangent, seed):
+            derivative = jax.grad(value)(a)
+            h = 1e-5
+            central = (value(a + h) - value(a - h)) / (2 * h)
+            assert jnp.isfinite(derivative)
+            assert jnp.allclose(derivative, central, rtol=1e-4, atol=1e-9)

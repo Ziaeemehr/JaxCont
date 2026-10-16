@@ -135,6 +135,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its starting orbit (e.g. reverses its sense of rotation) no longer stalls.
 
 ### Added
+- Gradients through branch-switch tangents and fold/Hopf curve seed parameters
+  are supported.
 - `ContinuationPar(loop="scan")` selects masked, bounded scans for both
   continuation algorithms and their Newton correctors, enabling reverse-mode
   differentiation while preserving statuses and accepted-point updates.
