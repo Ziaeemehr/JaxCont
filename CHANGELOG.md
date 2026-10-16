@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
 
 ### Breaking
+
+- Curve event decoding and two-parameter plotting require explicit static
+  `CurveLayout` metadata. Curve factories and continuation results carry it;
+  manually constructed curve `BranchPoint`/`Branch` objects must supply it.
+  Packed state lengths are no longer used to infer curve dimensions.
+
 - Remove `NewtonSolver`, `Corrector`, `EquilibriumProblem`, and
   `BoundaryValueProblem`, their modules and exports, and `Config` with its
   global configuration helpers. Use `bif_problem`, `continuation`,
@@ -150,6 +156,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its starting orbit (e.g. reverses its sense of rotation) no longer stalls.
 
 ### Added
+- Static `CurveLayout` descriptors, normalized `CurveModes` diagnostic pytrees,
+  and `decode_curve_state`, with branchwise diagnostic sign/phase alignment.
+
 - Publishing requires default-suite tests against the built wheel in both precisions.
 - `ContinuationPar.theta` sets the state weight in the arclength metric; `None`
   uses `1 / n_state`. Both loop engines accept theta dynamically and reuse compilation.

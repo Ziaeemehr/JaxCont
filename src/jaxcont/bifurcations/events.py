@@ -51,6 +51,7 @@ class BranchPoint:
     tangent: Optional[Array] = None       # (n+1,); last entry is the dp/ds component
     eigenvalues: Optional[Array] = None   # (n,) complex, or None
     trivial_index: Optional[Array] = None  # index in eigenvalues, periodic only
+    curve_layout: object = None
 
 
 @runtime_checkable
@@ -392,7 +393,7 @@ def _test_values(event, points: Sequence[BranchPoint]) -> np.ndarray:
 
     try:
         batched = jax.vmap(
-            lambda p, u, t, e, i: event.test_function(BranchPoint(p, u, t, e, i))
+            lambda p, u, t, e, i: event.test_function(BranchPoint(p, u, t, e, i, points[0].curve_layout))
         )(
             jnp.asarray([pt.p for pt in points]),
             jnp.stack([jnp.asarray(pt.u) for pt in points]),
@@ -444,6 +445,7 @@ def detect_events(
     rhs: Callable[[Array, float], Array],
     *,
     ds: float,
+    curve_layout=None,
     ds_values: Optional[Array] = None,
     trivial_index: Optional[Array] = None,
     tolerance: float | None = None,
@@ -490,7 +492,7 @@ def detect_events(
     trivial_index = None if trivial_index is None else np.asarray(trivial_index)
     points = [
         BranchPoint(
-            p=params[i], u=states[i],
+            p=params[i], u=states[i], curve_layout=curve_layout,
             tangent=tangents[i] if tangents is not None else None,
             eigenvalues=eigenvalues[i] if eigenvalues is not None else None,
             trivial_index=trivial_index[i] if trivial_index is not None else None,

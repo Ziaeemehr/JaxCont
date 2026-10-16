@@ -126,3 +126,19 @@ Next steps
 ----------
 
 Browse the generated :doc:`auto_examples/index` and :doc:`api/index`.
+
+Explicit curve layouts
+----------------------
+
+Curve factories attach a static ``CurveLayout(kind, formulation, n, free)``
+to the problem and continuation branch. Curve events and two-parameter plots
+require this metadata; manually constructed curve ``BranchPoint`` and ``Branch``
+objects must set ``curve_layout`` explicitly. Ordinary equilibrium points may
+leave it as ``None``. This is a breaking change in 0.5.0: dimensions are never
+inferred from packed state lengths. Existing ``unpack_fold_curve`` and
+``unpack_hopf_curve`` helpers apply only to extended states.
+
+``decode_curve_state(X, q, layout, raw_f, user_args)`` returns the original
+state, full two-parameter vector and diagnostic ``CurveModes``. Diagnostic
+fold vectors and complex Hopf modes have unit norm; scans align their signs
+or phases along each branch without changing the Newton unknowns.

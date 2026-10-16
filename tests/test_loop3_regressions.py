@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import jaxcont as jc
+from jaxcont.bifurcations.curve_layout import CurveLayout
 from jaxcont.bifurcations.events import BranchPoint, EventHit, detect_events, _test_values, _refined_points_match
 from jaxcont.core.continuation import ContinuationSolution
 from tests.test_period_doubling_neimark_sacker import _sweep, BETA_PD, BETA_NS
@@ -21,7 +22,8 @@ def test_distinct_cusps_keep_all_parameter_coordinates():
                       (1+np.sqrt(1-8*us[2]**3))/2])
     states = jnp.asarray(np.column_stack([us, fixed, np.ones(3)]))
     hits = detect_events([jc.Cusp(f)], jnp.asarray(-3*us**2), states,
-                         None, None, lambda u, p: u, ds=1.)
+                         None, None, lambda u, p: u, ds=1.,
+                         curve_layout=CurveLayout("fold", "extended", 1, 1))
     assert len(hits) == 2
     np.testing.assert_allclose(sorted(float(h.info['p'][0]) for h in hits), [0., 1.], atol=1e-4)
 

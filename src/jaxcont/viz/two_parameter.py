@@ -12,7 +12,7 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 
-from jaxcont.bifurcations.curves import unpack_fold_curve, unpack_hopf_curve
+from jaxcont.bifurcations.curve_layout import decode_curve_state
 from jaxcont.viz.styles import style_for
 
 _CURVE_STYLE = {
@@ -25,20 +25,18 @@ def _curve_points(result, curve_kind: str, free: int):
     """Return ``(p_free, p_fixed)`` arrays for a traced curve."""
     states = result.branch.states
     params = result.branch.params
-    n_state = states.shape[1]
+    layout = result.branch.curve_layout
+    if layout is None:
+        raise ValueError("curve layout is required for curve plotting")
+    if layout.kind != curve_kind or layout.free != free:
+        raise ValueError("Plot arguments and curve layout disagree")
     fixed = []
     for i in range(states.shape[0]):
-        if curve_kind == "fold":
-            n = (n_state - 1) // 2
-            _u, p_fixed, _v = unpack_fold_curve(states[i], n)
-        elif curve_kind == "hopf":
-            n = (n_state - 2) // 3
-            _u, p_fixed, _q1, _q2, _w = unpack_hopf_curve(states[i], n)
-        else:
-            raise ValueError(
-                f"curve_kind must be 'fold' or 'hopf', got {curve_kind!r}"
-            )
-        fixed.append(float(p_fixed))
+        if result.branch.valid is not None and not bool(result.branch.valid[i]):
+            continue
+        _, p, _ = decode_curve_state(states[i], params[i], layout, None, None)
+        fixed.append(float(p[1-free]))
+    params = params if result.branch.valid is None else params[result.branch.valid]
     return [float(p) for p in params], fixed
 
 

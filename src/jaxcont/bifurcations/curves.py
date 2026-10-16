@@ -30,6 +30,7 @@ import jax.numpy as jnp
 from jax import Array, lax
 
 from jaxcont.api import BifProblem
+from jaxcont.bifurcations.curve_layout import CurveLayout
 from jaxcont.bifurcations.fold_solve import (
     _extended_residual as _fold_extended_residual,
 )
@@ -67,7 +68,7 @@ def _validate(u_guess: Array, p_guess: Array, free: int) -> None:
 
 
 def unpack_fold_curve(X: Array, n: int) -> tuple[Array, Array, Array]:
-    """Split a packed fold-curve state into ``(u, p_fixed, v)``."""
+    """Split an extended-only fold-curve state into ``(u, p_fixed, v)``."""
     return X[:n], X[n], X[n + 1:]
 
 
@@ -166,6 +167,7 @@ def fold_curve_problem(
         p0=jnp.asarray(q0, X0.dtype),
         args=args,
         kind="fold_curve",
+        curve_layout=CurveLayout("fold", "extended", n, free),
         param_name=f"p[{free}]",
     )
 
@@ -196,7 +198,7 @@ def hopf_curve_step_update(args: HopfCurveArgs, X: Array, q: Array) -> HopfCurve
 def unpack_hopf_curve(
     X: Array, n: int
 ) -> tuple[Array, Array, Array, Array, Array]:
-    """Split a packed Hopf-curve state into ``(u, p_fixed, q1, q2, omega)``."""
+    """Split an extended-only Hopf-curve state into ``(u, p_fixed, q1, q2, omega)``."""
     return (
         X[:n], X[n], X[n + 1:2 * n + 1], X[2 * n + 1:3 * n + 1], X[3 * n + 1]
     )
@@ -274,6 +276,7 @@ def hopf_curve_problem(
             lax.stop_gradient(q1_star), lax.stop_gradient(q2_star), args,
         ),
         kind="hopf_curve",
+        curve_layout=CurveLayout("hopf", "extended", n, free),
         param_name=f"p[{free}]",
         step_update=hopf_curve_step_update,
     )

@@ -1,5 +1,6 @@
 """Codim-2 events detected along two-parameter curves."""
 
+from jaxcont.bifurcations.curve_layout import CurveLayout
 import jax.numpy as jnp
 
 import jaxcont as jc
@@ -96,7 +97,7 @@ def test_bt_mode_values_ignore_the_pinned_zero_eigenvalue():
     ev = BogdanovTakens(raw_f=_bt_shifted, free=1, curve="fold")
     n = sol.branch.params.shape[0]
     points = [
-        BranchPoint(p=float(sol.branch.params[i]), u=sol.branch.states[i])
+        BranchPoint(p=float(sol.branch.params[i]), u=sol.branch.states[i], curve_layout=sol.branch.curve_layout)
         for i in range(n)
     ]
     _spectra, values, where = ev.mode_values(points)
@@ -368,7 +369,7 @@ def _hopf_curve_points(omegas):
     points = []
     for i, omega in enumerate(omegas):
         state = jnp.array([5.0, 2.0, 3.0, 1.0, 0.0, 0.0, 1.0, omega])
-        points.append(BranchPoint(p=-2.0 + 0.1 * i, u=state))
+        points.append(BranchPoint(p=-2.0 + 0.1 * i, u=state, curve_layout=CurveLayout("hopf", "extended", 2, 1)))
     return points
 
 
@@ -380,7 +381,7 @@ def test_bt_hopf_curve_stall_is_recorded_as_curve_terminated():
     assert ev.scan(points) == [(2, 3, "curve_terminated")]
     hits = detect_events(
         [ev], jnp.array([pt.p for pt in points]), jnp.stack([pt.u for pt in points]),
-        None, None, lambda u, p: u, ds=0.1,
+        None, None, lambda u, p: u, ds=0.1, curve_layout=points[0].curve_layout,
     )
     assert len(hits) == 1
     assert hits[0].status == "failed"

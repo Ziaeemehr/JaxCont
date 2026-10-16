@@ -96,7 +96,7 @@ class BifProblem:
     ``step_update(args, u_left, p_left)``.
 
     Registered as a JAX PyTree: ``u0``, ``p0``, ``args`` are dynamic leaves;
-    ``f``, ``kind``, ``state_names``, ``param_name`` and ``step_update`` are
+    ``f``, ``kind``, ``state_names``, ``param_name``, ``curve_layout`` and ``step_update`` are
     static. This makes ``jax.vmap(..., in_axes=...)`` over a batched problem
     structurally valid (full end-to-end vmap awaits the lax.scan loop
     rewrite; see ARCHITECTURE.md §3.1).
@@ -112,6 +112,8 @@ class BifProblem:
     state_names: Optional[tuple[str, ...]] = None
     param_name: Optional[str] = None
     step_update: Optional[Callable[[PyTree, Array, Array], PyTree]] = None
+
+    curve_layout: object = None
 
     def at(
         self,
@@ -142,16 +144,16 @@ class BifProblem:
 
 def _bifproblem_flatten(prob: BifProblem):
     children = (prob.u0, prob.p0, prob.args)
-    aux = (prob.f, prob.kind, prob.state_names, prob.param_name, prob.step_update)
+    aux = (prob.f, prob.kind, prob.state_names, prob.param_name, prob.step_update, prob.curve_layout)
     return children, aux
 
 
 def _bifproblem_unflatten(aux, children):
-    f, kind, state_names, param_name, step_update = aux
+    f, kind, state_names, param_name, step_update, curve_layout = aux
     u0, p0, args = children
     return BifProblem(
         f=f, u0=u0, p0=p0, args=args, kind=kind,
-        state_names=state_names, param_name=param_name, step_update=step_update,
+        state_names=state_names, param_name=param_name, step_update=step_update, curve_layout=curve_layout,
     )
 
 
@@ -295,6 +297,8 @@ class Branch:
     valid: Optional[Array] = None   # bool mask, only set when traced
     trivial_index: Optional[Array] = None  # periodic flow-direction indices
 
+    curve_layout: object = None
+
     @property
     def n_valid(self) -> int | Array:
         if self.valid is None:
@@ -313,14 +317,14 @@ class Branch:
 
 def _branch_flatten(b: Branch):
     children = (b.params, b.states, b.tangents, b.eigenvalues, b.stable, b.valid, b.trivial_index)
-    return children, None
+    return children, b.curve_layout
 
 
 def _branch_unflatten(aux, children):
     params, states, tangents, eigenvalues, stable, valid, trivial_index = children
     return Branch(
         params=params, states=states, tangents=tangents,
-        eigenvalues=eigenvalues, stable=stable, valid=valid, trivial_index=trivial_index,
+        eigenvalues=eigenvalues, stable=stable, valid=valid, trivial_index=trivial_index, curve_layout=aux,
     )
 
 
@@ -574,6 +578,7 @@ def _assemble_leg(
             events, params, states, tangents, eigenvalues, rhs2,
             ds=float(settings.ds), ds_values=ds, args=problem.args,
             trivial_index=trivial_index,
+            curve_layout=problem.curve_layout,
             step_update=problem.step_update,
             f=None if problem.step_update is None else problem.f,
         )
@@ -630,6 +635,7 @@ def _finish_result(
         )
 
     result = _to_result(sol)
+    result.branch.curve_layout = problem.curve_layout
     result.branch.trivial_index = trivial_index
     result.rejected_events = rejected
     result.status = status
@@ -890,6 +896,7 @@ def _run_scan_traced(
         stable=stability,
         trivial_index=trivial_index,
         valid=valid,
+        curve_layout=problem.curve_layout,
     )
     return ContinuationResult(
         branch=branch, events=[], stats={

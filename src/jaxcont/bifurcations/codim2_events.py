@@ -30,11 +30,7 @@ from jaxcont.bifurcations.codim2 import (
     generalized_hopf_point,
     zero_hopf_point,
 )
-from jaxcont.bifurcations.curves import (
-    _assemble_p,
-    unpack_fold_curve,
-    unpack_hopf_curve,
-)
+from jaxcont.bifurcations.curve_layout import decode_curve_state, CurveModes, orient_curve_modes
 from jaxcont.bifurcations.events import (
     BranchPoint,
     Event,
@@ -58,8 +54,7 @@ class _CurveEvent:
     ahead of each event's own field list for no benefit.
 
     Subclasses set ``curve`` to ``"fold"`` or ``"hopf"``. The curve type is
-    NOT inferred: an Event only ever receives a BranchPoint, which carries
-    no problem metadata, so it must be supplied at construction.
+    checked against the explicit layout carried by each BranchPoint.
     """
 
     def _decode(self, point: BranchPoint):
@@ -68,19 +63,13 @@ class _CurveEvent:
         ``extra`` is the null vector ``v`` for a fold curve, or
         ``(q1, q2, omega)`` for a Hopf curve.
         """
-        if self.curve == "fold":
-            n = (point.u.shape[0] - 1) // 2
-            u, p_fixed, v = unpack_fold_curve(point.u, n)
-            extra = v
-        elif self.curve == "hopf":
-            n = (point.u.shape[0] - 2) // 3
-            u, p_fixed, q1, q2, omega = unpack_hopf_curve(point.u, n)
-            extra = (q1, q2, omega)
-        else:
-            raise ValueError(
-                f"curve must be 'fold' or 'hopf', got {self.curve!r}"
-            )
-        p = _assemble_p(p_fixed, jnp.asarray(point.p), self.free)
+        layout = point.curve_layout
+        if layout is None:
+            raise ValueError("curve layout is required for curve decoding")
+        if layout.kind != self.curve or layout.free != self.free:
+            raise ValueError("Event and curve layout disagree")
+        u, p, modes = decode_curve_state(point.u, point.p, layout, self.raw_f, self.args)
+        extra = modes.v if self.curve == "fold" else (modes.q1, modes.q2, modes.omega)
         return u, p, extra
 
     def _eigenvalues(self, u: Array, p: Array) -> Array:
@@ -186,7 +175,19 @@ class Cusp(_CurveEvent, Event):
         u, p, v = self._decode(point)
         return float(fold_coefficient(self.raw_f, u, p, v, self.args))
 
-    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+    def scan(self, points):
+        if len(points) < 2:
+            return []
+        decoded = [self._decode(pt) for pt in points]
+        raw = jnp.stack([extra for _, _, extra in decoded])
+        valid = jnp.array([jnp.all(jnp.isfinite(pt.u)) for pt in points])
+        modes, eligible = orient_curve_modes(CurveModes(v=raw), valid)
+        values = np.array([float(fold_coefficient(self.raw_f, u, p, v, self.args))
+                           for (u, p, _), v in zip(decoded, modes.v)])
+        candidates = crossings(values, np.asarray(valid))
+        return [(i, i+1, None) for i in candidates if bool(eligible[i])]
+
+    def refine(self, left, right, index, rhs, *, tolerance, max_iterations, mode=None) -> EventHit:
         u_l, p_l, _ = self._decode(left)
         u_r, p_r, _ = self._decode(right)
         u_star, p_star, _v, converged = cusp_point(
@@ -371,7 +372,19 @@ class GeneralizedHopf(_CurveEvent, Event):
         u, p, (q1, q2, omega) = self._decode(point)
         return float(lyapunov_coefficient(self.raw_f, u, p, q1, q2, omega, self.args))
 
-    def refine(self, left, right, index, rhs, *, tolerance, max_iterations) -> EventHit:
+    def scan(self, points):
+        if len(points) < 2:
+            return []
+        decoded = [self._decode(pt) for pt in points]
+        q1 = jnp.stack([extra[0] for _, _, extra in decoded])
+        q2 = jnp.stack([extra[1] for _, _, extra in decoded])
+        valid = jnp.array([jnp.all(jnp.isfinite(pt.u)) for pt in points])
+        modes, eligible = orient_curve_modes(CurveModes(q1=q1, q2=q2), valid)
+        values = np.array([float(lyapunov_coefficient(self.raw_f, u, p, a, b, extra[2], self.args))
+                           for (u, p, extra), a, b in zip(decoded, modes.q1, modes.q2)])
+        return [(i, i+1, None) for i in crossings(values, np.asarray(valid)) if bool(eligible[i])]
+
+    def refine(self, left, right, index, rhs, *, tolerance, max_iterations, mode=None) -> EventHit:
         u_l, p_l, _ = self._decode(left)
         u_r, p_r, _ = self._decode(right)
         result = generalized_hopf_point(
