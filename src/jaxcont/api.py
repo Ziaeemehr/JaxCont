@@ -361,20 +361,20 @@ class _BoundF:
         return isinstance(other, _BoundF) and self._key() == other._key()
 
     def __hash__(self):
-        try:
-            return hash(self._key())
-        except TypeError:
-            return hash((id(self.f), self.treedef, self.mask))
+        return hash(self._key())
 
 
 def _engine_f_args(problem: BifProblem):
     """Return ``(f, args)`` for the scan engine.
 
-    Array leaves of ``problem.args`` are dynamic engine inputs; any other leaf
-    (e.g. the callable carried by periodic problems) is bound statically.
+    Only ``jax.Array`` / ``np.ndarray`` leaves of ``problem.args`` are dynamic
+    engine inputs (compile-cache reuse across changed values). Every other leaf
+    -- Python scalars, callables such as the one periodic problems carry -- is
+    bound statically and stays concrete inside ``f``, so it may be used as a
+    shape, loop bound or ``if`` flag; changing its value recompiles.
     """
     leaves, treedef = jax.tree_util.tree_flatten(problem.args)
-    mask = tuple(isinstance(x, (jax.Array, np.ndarray, int, float, complex)) for x in leaves)
+    mask = tuple(isinstance(x, (jax.Array, np.ndarray)) for x in leaves)
     if all(mask):
         return problem.f, problem.args
     dyn = [x for x, m in zip(leaves, mask) if m]

@@ -537,3 +537,39 @@ def test_grad_wrt_args_through_engine_forward():
     n = int(run(a).n_valid)
     assert n > 3
     assert float(jax.jacfwd(observable)(a)) == pytest.approx(float(n), rel=1e-3)
+
+
+def _mixed_f(u, p, args):
+    scale, fn = args
+    return fn(u) + p * scale
+
+
+def test_mixed_array_and_callable_args_cache_and_match_reference():
+    sq = lambda u: u ** 2
+    prob = jc.bif_problem(_mixed_f, u0=jnp.array([1.0]), p0=-1.0, args=(jnp.array(1.0), sq))
+    settings = jc.ContinuationPar(max_steps=10, compute_stability=False)
+
+    def run(pr):
+        return jc.continuation(pr, p_span=(-1.0, -0.5), settings=settings)
+
+    r1 = run(prob)
+    size = pseudo_arclength_scan._cache_size()
+    r2 = run(prob)
+    assert pseudo_arclength_scan._cache_size() == size
+    ref = jc.bif_problem(lambda u, p, a: u ** 2 + p * 1.0, u0=jnp.array([1.0]), p0=-1.0)
+    r3 = run(ref)
+    assert jnp.allclose(r1.branch.states, r2.branch.states)
+    assert jnp.allclose(r1.branch.states, r3.branch.states)
+    assert jnp.allclose(r1.branch.params, r3.branch.params)
+
+
+def test_python_int_arg_leaf_is_concrete_inside_engine():
+    def f(u, p, args):
+        return u ** 2 + p + jnp.zeros(args["n"])  # needs a concrete int
+
+    prob = jc.bif_problem(f, u0=jnp.array([1.0]), p0=-1.0, args={"n": 1})
+    sol = jc.continuation(
+        prob, p_span=(-1.0, -0.5),
+        settings=jc.ContinuationPar(max_steps=10, compute_stability=False),
+    )
+    assert sol.branch.n_valid > 1

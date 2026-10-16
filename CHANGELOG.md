@@ -16,7 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pseudo_arclength_scan` / `natural_scan` now take `args` as a dynamic input right after
   `p_end`, and `f` is called as `f(u, p, args)`; `branch_eigenvalues(f, states, params, args,
   eigen_solver)` likewise. `continuation()` reuses its compiled kernel across calls and
-  across changed `args` values (a fresh lambda `f` per call still recompiles).
+  across changed `args` values (a fresh lambda `f` per call still recompiles). Only array
+  leaves of `args` are dynamic: pass arrays to get compile-cache reuse. Python scalar and
+  callable leaves stay concrete (usable as shapes or flags) and recompile when changed.
 
 ## [Unreleased]
 
