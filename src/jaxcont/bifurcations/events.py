@@ -33,7 +33,7 @@ from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.bifurcations.hopf_normal_form import hopf_point, lyapunov_coefficient
 from jaxcont.solvers.implicit import differentiable_root_checked
 from jaxcont.stability.floquet import floquet_multipliers
-from jaxcont.utils.precision import collocation_tol, default_tol
+from jaxcont.utils.precision import default_tol
 
 PyTree = Any
 
@@ -366,6 +366,7 @@ class PeriodDoubling(Event):
     raw_f: Callable[[Array, Array, PyTree], Array]
     mesh: Any
     kind: str = "period_doubling"
+    corrector_tol: Optional[float] = None  # collocation re-correction; None -> default_tol(dtype)
     tolerance: float = 1e-6
     # Only used to pick the FIRST point's candidate (no prior selection to
     # track continuity from yet) -- see select_candidate. Every later point
@@ -447,7 +448,10 @@ class PeriodDoubling(Event):
         t_left = self.test_value(v_left)
         t_right = self.test_value(v_right)
         corrected_all = True
-        root_tol = collocation_tol(jnp.asarray(u_left).dtype)
+        root_tol = (
+            default_tol(jnp.asarray(u_left).dtype)
+            if self.corrector_tol is None else self.corrector_tol
+        )
         if tolerance is None:
             tolerance = default_tol(jnp.asarray(u_left).dtype)
         for _ in range(max_iterations):
@@ -508,6 +512,7 @@ class NeimarkSacker(Event):
     raw_f: Callable[[Array, Array, PyTree], Array]
     mesh: Any
     kind: str = "neimark_sacker"
+    corrector_tol: Optional[float] = None  # collocation re-correction; None -> default_tol(dtype)
     tolerance: float = 1e-6
     # See PeriodDoubling.near_unit_circle/select_candidate for why this only
     # bounds the FIRST point's candidate: every later point tracks continuity
@@ -557,7 +562,10 @@ class NeimarkSacker(Event):
         t_left = self.test_value(v_left)
         t_right = self.test_value(v_right)
         corrected_all = True
-        root_tol = collocation_tol(jnp.asarray(u_left).dtype)
+        root_tol = (
+            default_tol(jnp.asarray(u_left).dtype)
+            if self.corrector_tol is None else self.corrector_tol
+        )
         if tolerance is None:
             tolerance = default_tol(jnp.asarray(u_left).dtype)
         for _ in range(max_iterations):

@@ -15,7 +15,7 @@ from jax import Array
 from jaxcont.api import BifProblem
 from jaxcont.core.collocation import Collocation, collocation_matrices
 from jaxcont.solvers.implicit import differentiable_root
-from jaxcont.utils.precision import collocation_tol
+from jaxcont.utils.precision import default_tol
 
 PyTree = Any
 
@@ -27,10 +27,15 @@ def periodic_orbit_problem(
     period0: float,
     p0: float,
     mesh: Collocation,
+    *,
+    tol: float | None = None,
 ) -> BifProblem:
     """
     Build a periodic-orbit :class:`~jaxcont.api.BifProblem` via fixed-mesh
     orthogonal collocation.
+
+    ``tol`` is the seed-refinement residual tolerance (default: ``default_tol`` of
+    the trajectory dtype).
 
     ``f(u, p, args)`` is the same right-hand-side convention used for
     equilibrium problems (``args`` is passed through as ``None`` when this
@@ -142,7 +147,7 @@ def periodic_orbit_problem(
         return residual(U, p, (ref_coll, ref_prime, f, mesh))
 
     U0 = differentiable_root(
-        _extended, _seed, theta, tol=collocation_tol(mesh_guess.dtype)
+        _extended, _seed, theta, tol=default_tol(mesh_guess.dtype) if tol is None else tol
     )
 
     return BifProblem(f=residual, u0=U0, p0=p0_arr, args=args, kind="periodic")
