@@ -10,10 +10,13 @@ def default_tol(dtype) -> float:
 
 
 def collocation_tol(dtype) -> float:
-    """Return the residual tolerance for collocation systems.
+    """Return the Newton residual tolerance for collocation systems.
 
-    Collocation residuals of stiff orbits stay near ``1e-6`` even in float64,
-    so this never drops below the float32 default.
+    Not a float32 artifact: the float64 residual of a well-conditioned orbit
+    reaches ~1e-15. Collocation Jacobians of small orbits near a Hopf point
+    are ill-conditioned (cond ~1e8 measured on the torBPC seed), and there
+    Newton stalls near 1e-7 in float64, so the tolerance never drops below
+    the float32 default.
     """
     return max(default_tol(dtype), default_tol(jnp.float32))
 

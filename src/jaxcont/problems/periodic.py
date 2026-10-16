@@ -102,14 +102,7 @@ def periodic_orbit_problem(
         u_ref_coll, uref_prime_coll, _raw_f, _mesh = args
         mesh_states, coll_states, T = unpack(U)
         v = jnp.concatenate([mesh_states[:, None, :], coll_states], axis=1)  # (ntst, ncol+1, n)
-        # On GPU, jnp.einsum defaults to reduced (TensorFloat32-like)
-        # matmul precision (~1e-3 relative), which corrupts this
-        # collocation Jacobian's entries (D's rows can be O(10)) badly
-        # enough to stall Newton convergence entirely -- force genuine
-        # float32 precision for these two contractions. Verified during
-        # design: without this, residual plateaus at ~0.02 regardless of
-        # Newton tolerance/iteration count; with it, ~3.4e-6 (the real
-        # float32 floor for this system).
+        # Invariant: full-precision contractions; reduced GPU matmul precision corrupts D.
         with jax.default_matmul_precision("float32"):
             Dv = jnp.einsum("jk,ikc->ijc", D, v)
             extrap = jnp.einsum("k,ikc->ic", E, v)  # (ntst, n)

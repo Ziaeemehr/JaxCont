@@ -62,3 +62,16 @@ def test_solver_tol_none_resolves_by_dtype():
     x, ok = differentiable_root_checked(lambda x, th: x**2 - th, x0, jnp.asarray(2.0, x0.dtype))
     assert bool(ok)
     assert float(jnp.abs(x[0] ** 2 - 2.0)) < default_tol(x0.dtype)
+
+
+def test_pd_ns_refine_locates_event_tightly_in_float64():
+    import pytest
+    import jaxcont as jc
+    from tests.test_period_doubling_neimark_sacker import BETA_NS, BETA_PD, _sweep
+
+    if not is_x64():
+        pytest.skip("float64-only accuracy check")
+    for beta, cls in ((BETA_PD, jc.PeriodDoubling), (BETA_NS, jc.NeimarkSacker)):
+        sol = _sweep(beta, cls, span=(-0.05, 0.05))
+        assert len(sol.events) == 1
+        assert abs(sol.events[0].p) < 1e-6

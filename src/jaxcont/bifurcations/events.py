@@ -33,7 +33,7 @@ from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.bifurcations.hopf_normal_form import hopf_point, lyapunov_coefficient
 from jaxcont.solvers.implicit import differentiable_root_checked
 from jaxcont.stability.floquet import floquet_multipliers
-from jaxcont.utils.precision import collocation_tol
+from jaxcont.utils.precision import collocation_tol, default_tol
 
 PyTree = Any
 
@@ -449,7 +449,7 @@ class PeriodDoubling(Event):
         corrected_all = True
         root_tol = collocation_tol(jnp.asarray(u_left).dtype)
         if tolerance is None:
-            tolerance = root_tol
+            tolerance = default_tol(jnp.asarray(u_left).dtype)
         for _ in range(max_iterations):
             if abs(p_right - p_left) < tolerance:
                 break
@@ -559,7 +559,7 @@ class NeimarkSacker(Event):
         corrected_all = True
         root_tol = collocation_tol(jnp.asarray(u_left).dtype)
         if tolerance is None:
-            tolerance = root_tol
+            tolerance = default_tol(jnp.asarray(u_left).dtype)
         for _ in range(max_iterations):
             if abs(p_right - p_left) < tolerance:
                 break
