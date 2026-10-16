@@ -521,27 +521,58 @@ def test_failed_refine_not_in_events(monkeypatch):
     assert rejected.info["reason"] == "not_converged"
 
 
-def test_refine_outside_bracket_rejected():
-    # Hopf points at p = +-2; the forced candidate bracket [-0.1, 0.1] is far
-    # from both, so whatever root the solve lands on is outside the locality
-    # window and must not be reported as a validated event.
-    def rhs(u, p):
-        a = p**2 - 4.0
-        return jnp.array([a * u[0] - u[1], u[0] + a * u[1]])
+def _fold_scan_inputs(left_u, left_p, right_u, right_p):
+    params = jnp.array([left_p, right_p])
+    states = jnp.array([[left_u], [right_u]])
+    tangents = jnp.array([[0.0, 1.0], [0.0, -1.0]])  # dp component flips sign
+    return params, states, tangents
 
-    def pt(p, re):
-        return BranchPoint(
-            p=p, u=jnp.zeros(2),
-            eigenvalues=jnp.array([re + 1.0j, re - 1.0j]),
-        )
 
-    left, right = pt(-0.1, -0.1), pt(0.1, 0.1)  # forced sign change
-    params = jnp.array([-0.1, 0.1])
-    states = jnp.zeros((2, 2))
+def test_refine_outside_bracket_rejected(monkeypatch):
+    # A converged refinement far from the bracket must be rejected by the
+    # locality rule, not merely fail to converge.
+    import jaxcont.bifurcations.events as events_mod
+
+    def far_fold_point(f, u, p, **kwargs):
+        return jnp.array([5.0]), 5.0, jnp.ones(1), jnp.array(True)
+
+    monkeypatch.setattr(events_mod, "fold_point", far_fold_point)
+    params, states, tangents = _fold_scan_inputs(0.1, -0.1, -0.1, 0.1)
     hits = detect_events(
-        [Hopf()], params, states, None,
-        jnp.stack([left.eigenvalues, right.eigenvalues]), rhs, ds=0.2,
+        [Fold()], params, states, tangents, None,
+        lambda u, p: _saddle_node(u, p, None), ds=0.2,
     )
     assert [h for h in hits if h.status == "validated"] == []
-    assert all(h.info["reason"] in ("outside_bracket", "not_converged",
-                                    "spectral_check_failed") for h in hits)
+    rejected = [h for h in hits if h.status == "failed"]
+    assert len(rejected) == 1
+    assert rejected[0].info["reason"] == "outside_bracket"
+    assert rejected[0].info["refined_p"] == pytest.approx(5.0)
+
+
+def test_fold_outside_bracket_p_range_still_validates():
+    # f = u**2 + p turns at p = 0, which lies beyond both bracket parameters
+    # (both are < 0); the joint (u, p) rule must still accept it.
+    params, states, tangents = _fold_scan_inputs(0.01, -1e-4, -0.01, -1e-4)
+    hits = detect_events(
+        [Fold()], params, states, tangents, None,
+        lambda u, p: _saddle_node(u, p, None), ds=0.2,
+    )
+    validated = [h for h in hits if h.status == "validated"]
+    assert len(validated) == 1
+    assert validated[0].p == pytest.approx(0.0, abs=1e-3)
+
+
+def test_within_bracket_p_interval_fallback_and_zero_width():
+    from jaxcont.bifurcations.events import _within_bracket
+
+    # Extended-system branch state (dim 3) vs hit state (dim 1): p-interval rule.
+    left = BranchPoint(p=0.0, u=jnp.zeros(3))
+    right = BranchPoint(p=1.0, u=jnp.zeros(3))
+    hit = lambda p: EventHit(kind="x", p=p, u=jnp.zeros(1))
+    assert _within_bracket(hit(0.5), left, right)
+    assert _within_bracket(hit(1.9), left, right)
+    assert not _within_bracket(hit(2.5), left, right)
+    # Zero-width bracket accepts a hit sitting on it.
+    pt = BranchPoint(p=0.3, u=jnp.zeros(1))
+    assert _within_bracket(EventHit(kind="x", p=0.3, u=jnp.zeros(1)), pt, pt)
+    assert not _within_bracket(EventHit(kind="x", p=0.9, u=jnp.zeros(1)), pt, pt)

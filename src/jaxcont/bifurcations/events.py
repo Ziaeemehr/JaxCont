@@ -286,10 +286,12 @@ def _within_bracket(hit: EventHit, left: BranchPoint, right: BranchPoint) -> boo
             u = jnp.ravel(jnp.asarray(u))
             return jnp.concatenate([u, jnp.asarray([p], dtype=u.dtype)])
         a, b, h = vec(left.u, left.p), vec(right.u, right.p), vec(hit.u, hit.p)
-        width = jnp.linalg.norm(b - a)
+        # Floor the width so a degenerate (zero-length) bracket still accepts
+        # a hit that sits on it.
+        width = jnp.maximum(jnp.linalg.norm(b - a), default_tol(h.dtype))
         dist = jnp.linalg.norm(h - (a + b) / 2)
         return bool(dist <= 1.5 * width)
-    width = abs(right.p - left.p)
+    width = max(abs(right.p - left.p), default_tol(jnp.asarray(left.u).dtype))
     lo, hi = min(left.p, right.p) - width, max(left.p, right.p) + width
     return bool(lo <= hit.p <= hi)
 
