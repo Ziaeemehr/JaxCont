@@ -25,7 +25,7 @@ class TestPseudoArclengthBasic:
         Test with simple linear system: dx/dt = r - x
         Exact solution: x = r
         """
-        def f(u, p):
+        def f(u, p, args):
             return jnp.array([p - u[0]])
 
         u = jnp.array([0.0])
@@ -38,7 +38,7 @@ class TestPseudoArclengthBasic:
         max_steps = 15
         step = 0
 
-        tangent = _tangent(f, u, param, jnp.array([0.0, 1.0]))
+        tangent = _tangent(f, u, param, None, jnp.array([0.0, 1.0]))
 
         while param < param_end and step < max_steps:
             du0 = tangent[:-1]
@@ -46,7 +46,7 @@ class TestPseudoArclengthBasic:
             u_pred = u + ds * du0
             param_pred = param + ds * dp0
             u_new, param_new, converged, _n_iter = _newton_correct(
-                f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 100
+                f, u_pred, param_pred, None, u, param, du0, dp0, ds, 1e-6, 100
             )
 
             if not converged:
@@ -54,7 +54,7 @@ class TestPseudoArclengthBasic:
 
             u = u_new
             param = param_new
-            tangent = _tangent(f, u, param, tangent)
+            tangent = _tangent(f, u, param, None, tangent)
 
             param_values.append(float(param))
             state_values.append(float(u[0]))
@@ -71,7 +71,7 @@ class TestPseudoArclengthBasic:
         Test with quadratic system: dx/dt = r - x^2
         Has fold bifurcation at r = 0
         """
-        def f(u, p):
+        def f(u, p, args):
             return jnp.array([p - u[0] ** 2])
 
         r0 = 0.1
@@ -86,7 +86,7 @@ class TestPseudoArclengthBasic:
         max_steps = 20
         step = 0
 
-        tangent = _tangent(f, u, param, jnp.array([0.0, 1.0]))
+        tangent = _tangent(f, u, param, None, jnp.array([0.0, 1.0]))
 
         while step < max_steps and param < 1.0:
             du0 = tangent[:-1]
@@ -94,7 +94,7 @@ class TestPseudoArclengthBasic:
             u_pred = u + ds * du0
             param_pred = param + ds * dp0
             u_new, param_new, converged, _n_iter = _newton_correct(
-                f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 50
+                f, u_pred, param_pred, None, u, param, du0, dp0, ds, 1e-6, 50
             )
 
             if not converged:
@@ -102,7 +102,7 @@ class TestPseudoArclengthBasic:
 
             u = u_new
             param = param_new
-            tangent = _tangent(f, u, param, tangent)
+            tangent = _tangent(f, u, param, None, tangent)
 
             param_values.append(float(param))
             state_values.append(float(u[0]))
@@ -122,13 +122,13 @@ class TestPseudoArclengthBasic:
 
     def test_tangent_computation(self):
         """Test that tangent vectors are computed correctly."""
-        def f(u, p):
+        def f(u, p, args):
             return jnp.array([p - u[0]])
 
         u = jnp.array([0.5])
         param = jnp.array(0.5)
 
-        tangent = _tangent(f, u, param, jnp.array([0.0, 1.0]))
+        tangent = _tangent(f, u, param, None, jnp.array([0.0, 1.0]))
 
         norm = jnp.linalg.norm(tangent)
         assert jnp.isclose(norm, 1.0), f"Tangent not normalized: norm={norm}"
@@ -151,7 +151,7 @@ class TestPseudoArclengthFoldBifurcation:
         This has a fold at r=0. Pseudo-arclength should be able to
         pass through it while natural continuation cannot.
         """
-        def f(u, p):
+        def f(u, p, args):
             return jnp.array([p - u[0] ** 2])
 
         r0 = 1.0
@@ -167,7 +167,7 @@ class TestPseudoArclengthFoldBifurcation:
         step = 0
         min_r = -0.5
 
-        tangent = _tangent(f, u, param, jnp.array([0.0, 1.0]))
+        tangent = _tangent(f, u, param, None, jnp.array([0.0, 1.0]))
 
         while step < max_steps and param > min_r:
             du0 = tangent[:-1]
@@ -175,7 +175,7 @@ class TestPseudoArclengthFoldBifurcation:
             u_pred = u + ds * du0
             param_pred = param + ds * dp0
             u_new, param_new, converged, _n_iter = _newton_correct(
-                f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 100
+                f, u_pred, param_pred, None, u, param, du0, dp0, ds, 1e-6, 100
             )
 
             if not converged:
@@ -183,7 +183,7 @@ class TestPseudoArclengthFoldBifurcation:
 
             u = u_new
             param = param_new
-            tangent = _tangent(f, u, param, tangent)
+            tangent = _tangent(f, u, param, None, tangent)
 
             param_values.append(float(param))
             state_values.append(float(u[0]))
@@ -198,7 +198,7 @@ class TestPseudoArclengthFoldBifurcation:
 
         This has stable branches at x = ±sqrt(r) for r > 0.
         """
-        def f(u, p):
+        def f(u, p, args):
             return jnp.array([p * u[0] - u[0] ** 3])
 
         r0 = 1.0
@@ -214,7 +214,7 @@ class TestPseudoArclengthFoldBifurcation:
         step = 0
         param_end = 2.0
 
-        tangent = _tangent(f, u, param, jnp.array([0.0, 1.0]))
+        tangent = _tangent(f, u, param, None, jnp.array([0.0, 1.0]))
 
         while step < max_steps and param < param_end:
             du0 = tangent[:-1]
@@ -222,7 +222,7 @@ class TestPseudoArclengthFoldBifurcation:
             u_pred = u + ds * du0
             param_pred = param + ds * dp0
             u_new, param_new, converged, _n_iter = _newton_correct(
-                f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 50
+                f, u_pred, param_pred, None, u, param, du0, dp0, ds, 1e-6, 50
             )
 
             if not converged:
@@ -230,7 +230,7 @@ class TestPseudoArclengthFoldBifurcation:
 
             u = u_new
             param = param_new
-            tangent = _tangent(f, u, param, tangent)
+            tangent = _tangent(f, u, param, None, tangent)
 
             param_values.append(float(param))
             state_values.append(float(u[0]))
@@ -255,7 +255,7 @@ class TestPseudoArclengthStepControl:
 
     def test_different_step_sizes(self):
         """Test that different step sizes produce consistent results."""
-        def f(u, p):
+        def f(u, p, args):
             return jnp.array([p - u[0]])
 
         results = {}
@@ -264,7 +264,7 @@ class TestPseudoArclengthStepControl:
             ds = jnp.array(ds_val)
             u = jnp.array([0.0])
             param = jnp.array(0.0)
-            tangent = _tangent(f, u, param, jnp.array([0.0, 1.0]))
+            tangent = _tangent(f, u, param, None, jnp.array([0.0, 1.0]))
 
             for _ in range(5):
                 du0 = tangent[:-1]
@@ -272,7 +272,7 @@ class TestPseudoArclengthStepControl:
                 u_pred = u + ds * du0
                 param_pred = param + ds * dp0
                 u_new, param_new, converged, _n_iter = _newton_correct(
-                    f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 50
+                    f, u_pred, param_pred, None, u, param, du0, dp0, ds, 1e-6, 50
                 )
 
                 if not converged:
@@ -280,7 +280,7 @@ class TestPseudoArclengthStepControl:
 
                 u = u_new
                 param = param_new
-                tangent = _tangent(f, u, param, tangent)
+                tangent = _tangent(f, u, param, None, tangent)
 
             results[ds_val] = (float(u[0]), float(param))
 
@@ -297,13 +297,13 @@ class TestPseudoArclengthStepControl:
 
     def test_tangent_consistency(self):
         """Test that tangent vectors remain consistent along the branch."""
-        def f(u, p):
+        def f(u, p, args):
             return jnp.array([p - u[0]])
 
         u = jnp.array([0.0])
         param = jnp.array(0.0)
 
-        tangent1 = _tangent(f, u, param, jnp.array([0.0, 1.0]))
+        tangent1 = _tangent(f, u, param, None, jnp.array([0.0, 1.0]))
 
         ds = jnp.array(0.1)
         du0 = tangent1[:-1]
@@ -311,12 +311,12 @@ class TestPseudoArclengthStepControl:
         u_pred = u + ds * du0
         param_pred = param + ds * dp0
         u_new, param_new, converged, _n_iter = _newton_correct(
-            f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 50
+            f, u_pred, param_pred, None, u, param, du0, dp0, ds, 1e-6, 50
         )
 
         assert converged, "First step did not converge"
 
-        tangent2 = _tangent(f, u_new, param_new, tangent1)
+        tangent2 = _tangent(f, u_new, param_new, None, tangent1)
 
         dot_product = jnp.dot(tangent1, tangent2)
         assert dot_product > 0.5, f"Tangents not consistent: dot={dot_product}"
@@ -332,12 +332,12 @@ class TestPseudoArclengthVsNatural:
         """
         Both methods should work well on simple systems without folds.
         """
-        def f(u, p):
+        def f(u, p, args):
             return jnp.array([p - u[0]])
 
         u = jnp.array([0.0])
         param = jnp.array(0.0)
-        tangent = _tangent(f, u, param, jnp.array([0.0, 1.0]))
+        tangent = _tangent(f, u, param, None, jnp.array([0.0, 1.0]))
 
         ds = jnp.array(0.1)
         du0 = tangent[:-1]
@@ -345,7 +345,7 @@ class TestPseudoArclengthVsNatural:
         u_pred = u + ds * du0
         param_pred = param + ds * dp0
         u_pa, param_pa, converged_pa, _n_iter_pa = _newton_correct(
-            f, u_pred, param_pred, u, param, du0, dp0, ds, 1e-6, 50
+            f, u_pred, param_pred, None, u, param, du0, dp0, ds, 1e-6, 50
         )
 
         assert converged_pa, "Pseudo-arclength did not converge"

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolved from the state dtype (`1e-9` for float64, `1e-5` for float32). Previous fixed
   defaults (`1e-6`/`1e-8`) are gone; `detect_events(tolerance=...)` likewise. Periodic-orbit
   problems no longer need an explicit `newton_tol=1e-5`.
+- `pseudo_arclength_scan` / `natural_scan` now take `args` as a dynamic input right after
+  `p_end`, and `f` is called as `f(u, p, args)`; `branch_eigenvalues(f, states, params, args,
+  eigen_solver)` likewise. `continuation()` reuses its compiled kernel across calls and
+  across changed `args` values (a fresh lambda `f` per call still recompiles).
 
 ## [Unreleased]
 

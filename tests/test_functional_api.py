@@ -235,11 +235,11 @@ class TestVmapSafety:
 
 class TestScanEngine:
     def test_vmap_batch(self):
-        f = lambda u, p: pitchfork(u, p, None)
+        f = pitchfork
 
         def run(p0):
             return pseudo_arclength_scan(
-                f, jnp.array([0.1]), p0, p0 + 1.0,
+                f, jnp.array([0.1]), p0, p0 + 1.0, None,
                 jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
                 jnp.array(1e-6), 80, jnp.array(20),
             )
@@ -250,9 +250,9 @@ class TestScanEngine:
 
     def test_bounded_on_saturating_branch(self):
         # r - tanh(x): the branch that hung the interim corrector must terminate.
-        f = lambda u, p: jnp.array([p - jnp.tanh(u[0])])
+        f = lambda u, p, args: jnp.array([p - jnp.tanh(u[0])])
         res = pseudo_arclength_scan(
-            f, jnp.array([0.5]), jnp.array(0.5), jnp.array(1.5),
+            f, jnp.array([0.5]), jnp.array(0.5), jnp.array(1.5), None,
             jnp.array(0.005), jnp.array(0.001), jnp.array(0.2),
             jnp.array(1e-6), 200, jnp.array(20),
         )
@@ -260,10 +260,10 @@ class TestScanEngine:
         assert 0 < int(res.n_valid) <= 201
 
     def test_ds_buffer_records_stepsize_per_point(self):
-        f = lambda u, p: pitchfork(u, p, None)
+        f = pitchfork
 
         res = pseudo_arclength_scan(
-            f, jnp.array([0.1]), jnp.array(0.5), jnp.array(1.5),
+            f, jnp.array([0.1]), jnp.array(0.5), jnp.array(1.5), None,
             jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
             jnp.array(1e-6), 60, jnp.array(20),
         )
@@ -277,10 +277,10 @@ class TestScanEngine:
 class TestNaturalScanEngine:
     def test_tracks_linear_branch(self):
         # f(u, p) = p - u  ->  equilibrium u = p exactly, no fold anywhere.
-        f = lambda u, p: jnp.array([p - u[0]])
+        f = lambda u, p, args: jnp.array([p - u[0]])
 
         res = natural_scan(
-            f, jnp.array([0.0]), jnp.array(0.0), jnp.array(1.0),
+            f, jnp.array([0.0]), jnp.array(0.0), jnp.array(1.0), None,
             jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
             jnp.array(1e-6), 40, jnp.array(20),
         )
@@ -293,10 +293,10 @@ class TestNaturalScanEngine:
     def test_stalls_at_fold(self):
         # f(u, p) = p - u^2  ->  fold at p=0; natural continuation (fixed p,
         # solve for u) cannot pass it -- the branch must stop short of p=0.
-        f = lambda u, p: jnp.array([p - u[0] ** 2])
+        f = lambda u, p, args: jnp.array([p - u[0] ** 2])
 
         res = natural_scan(
-            f, jnp.array([1.0]), jnp.array(1.0), jnp.array(-1.0),
+            f, jnp.array([1.0]), jnp.array(1.0), jnp.array(-1.0), None,
             jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
             jnp.array(1e-6), 60, jnp.array(20),
         )
@@ -308,11 +308,11 @@ class TestNaturalScanEngine:
         )
 
     def test_vmap_batch(self):
-        f = lambda u, p: jnp.array([p - u[0]])
+        f = lambda u, p, args: jnp.array([p - u[0]])
 
         def run(p0):
             return natural_scan(
-                f, jnp.array([0.0]), p0, p0 + 1.0,
+                f, jnp.array([0.0]), p0, p0 + 1.0, None,
                 jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
                 jnp.array(1e-6), 40, jnp.array(20),
             )
@@ -360,13 +360,13 @@ def test_seed_correction_failure_falls_back_to_finite_u0(scan_fn):
     # so the uncorrected Newton step is a division by zero -- the raw
     # corrected output is -inf. states[0] must instead fall back to the
     # caller's original, finite u0, with seed_converged still False.
-    def f(u, p):
+    def f(u, p, args):
         return u ** 2 + p
 
     u0 = jnp.array([0.0])
     p0 = jnp.array(1.0)  # no real root exists for p > 0
     result = scan_fn(
-        f, u0, p0, jnp.array(2.0),
+        f, u0, p0, jnp.array(2.0), None,
         jnp.array(0.01), jnp.array(1e-6), jnp.array(0.1),
         jnp.array(1e-8), 5, jnp.array(50),
     )
@@ -490,3 +490,50 @@ class TestBothside:
 
         with pytest.raises(NotImplementedError, match="bothside"):
             jax.vmap(run)(jnp.array([0.0, 0.1]))
+
+
+def _quad_p(u, p, args):
+    return u ** 2 + p
+
+
+def test_repeated_calls_hit_compile_cache():
+    prob = jc.bif_problem(_quad_p, u0=jnp.array([1.0]), p0=-1.0, args={"a": jnp.array(1.0)})
+    settings = jc.ContinuationPar(max_steps=10, compute_stability=False)
+
+    def run(prob):
+        return jc.continuation(prob, p_span=(-1.0, -0.5), settings=settings)
+
+    run(prob)
+    size = pseudo_arclength_scan._cache_size()
+    run(prob)
+    run(prob)
+    assert pseudo_arclength_scan._cache_size() == size
+    run(prob.at(args={"a": jnp.array(2.0)}))
+    assert pseudo_arclength_scan._cache_size() == size
+
+
+def test_grad_wrt_args_through_engine_forward():
+    # The seed u0 is deliberately off-root: Newton must act on it for the
+    # derivative to reach slot 0.
+    # u - a*p = 0  ->  u(p) = a*p, so states/params == a at every valid point
+    # and d/da sum(valid * states/params) == n_valid.
+    def f(u, p, args):
+        return u - args * p
+
+    def run(a):
+        return pseudo_arclength_scan(
+            f, jnp.array([0.3]), jnp.array(0.5), jnp.array(1.5), a,
+            jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
+            jnp.array(1e-4), 30, jnp.array(20),
+        )
+
+    def observable(a):
+        res = run(a)
+        valid = jnp.arange(res.states.shape[0]) < res.n_valid
+        ratio = res.states[:, 0] / jnp.where(valid, res.params, 1.0)
+        return jnp.sum(ratio * valid)
+
+    a = jnp.array(2.0)
+    n = int(run(a).n_valid)
+    assert n > 3
+    assert float(jax.jacfwd(observable)(a)) == pytest.approx(float(n), rel=1e-3)

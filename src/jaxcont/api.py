@@ -20,6 +20,7 @@ from typing import Any, Callable, Literal, Optional
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 
 from jaxcont.bifurcations.events import (
@@ -337,12 +338,58 @@ jax.tree_util.register_pytree_node(
 # ---------------------------------------------------------------------------
 
 
-def _call_scan(scan_fn, rhs2, u0, p_from, p_to, settings: ContinuationPar, solvers: Solvers, dtype):
+class _BoundF:
+    """Static engine ``f`` that closes over the non-array leaves of ``args``.
+
+    Invariant: equal ``(f, treedef, mask, static)`` compare and hash equal, so
+    repeated ``continuation()`` calls on one problem reuse the compiled kernel.
+    The array leaves of ``args`` stay dynamic and are passed as a list.
+    """
+
+    def __init__(self, f, treedef, mask, static):
+        self.f, self.treedef, self.mask, self.static = f, treedef, mask, static
+
+    def __call__(self, u, p, dyn):
+        dyn_it, static_it = iter(dyn), iter(self.static)
+        leaves = [next(dyn_it) if m else next(static_it) for m in self.mask]
+        return self.f(u, p, jax.tree_util.tree_unflatten(self.treedef, leaves))
+
+    def _key(self):
+        return (self.f, self.treedef, self.mask, self.static)
+
+    def __eq__(self, other):
+        return isinstance(other, _BoundF) and self._key() == other._key()
+
+    def __hash__(self):
+        try:
+            return hash(self._key())
+        except TypeError:
+            return hash((id(self.f), self.treedef, self.mask))
+
+
+def _engine_f_args(problem: BifProblem):
+    """Return ``(f, args)`` for the scan engine.
+
+    Array leaves of ``problem.args`` are dynamic engine inputs; any other leaf
+    (e.g. the callable carried by periodic problems) is bound statically.
+    """
+    leaves, treedef = jax.tree_util.tree_flatten(problem.args)
+    mask = tuple(isinstance(x, (jax.Array, np.ndarray, int, float, complex)) for x in leaves)
+    if all(mask):
+        return problem.f, problem.args
+    dyn = [x for x, m in zip(leaves, mask) if m]
+    static = tuple(x for x, m in zip(leaves, mask) if not m)
+    return _BoundF(problem.f, treedef, mask, static), dyn
+
+
+def _call_scan(scan_fn, problem: BifProblem, u0, p_from, p_to, settings: ContinuationPar, solvers: Solvers, dtype):
+    f, args = _engine_f_args(problem)
     return scan_fn(
-        rhs2,
+        f,
         u0,
         jnp.asarray(p_from, dtype),
         jnp.asarray(p_to, dtype),
+        args,
         jnp.asarray(settings.ds, dtype),
         jnp.asarray(settings.ds_min, dtype),
         jnp.asarray(settings.ds_max, dtype),
@@ -359,7 +406,6 @@ def _call_scan(scan_fn, rhs2, u0, p_from, p_to, settings: ContinuationPar, solve
 def _assemble_leg(
     res,
     problem: BifProblem,
-    rhs2: Callable[[Array, Array], Array],
     settings: ContinuationPar,
     events: Sequence[Event],
     solvers: Solvers,
@@ -377,6 +423,7 @@ def _assemble_leg(
     from jaxcont.core.scan_continuation import branch_eigenvalues
     from jaxcont.stability.floquet import branch_floquet_multipliers, floquet_stable
 
+    rhs2 = lambda u, p: problem.f(u, p, problem.args)
     n = int(res.n_valid)
     states = res.states[:n]
     params = res.params[:n]
@@ -404,7 +451,9 @@ def _assemble_leg(
             )
             stability = floquet_stable(eigenvalues)
         else:
-            eigenvalues = branch_eigenvalues(rhs2, states, params, eigen_solver=solvers.eigen)
+            eigenvalues = branch_eigenvalues(
+                problem.f, states, params, problem.args, eigen_solver=solvers.eigen
+            )
             stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
 
     convergence_info = [
@@ -490,9 +539,6 @@ def _run_scan(
     reassemble a legacy-shaped :class:`ContinuationSolution` so
     detection/plotting reuse existing code.
     """
-    args = problem.args
-    rhs2 = lambda u, p: problem.f(u, p, args)
-
     p_start, p_end = p_span
     u0 = jnp.asarray(problem.u0)
     dtype = u0.dtype
@@ -511,7 +557,7 @@ def _run_scan(
 
     if settings.bothside:
         return _run_scan_bothside(
-            scan_fn, problem, rhs2, u0, p_span, settings, events, solvers, verbose, dtype,
+            scan_fn, problem, u0, p_span, settings, events, solvers, verbose, dtype,
         )
 
     try:
@@ -531,7 +577,7 @@ def _run_scan(
         # the check is deferred to eager execution. Skip it here.
         pass
 
-    res = _call_scan(scan_fn, rhs2, u0, p_start, p_end, settings, solvers, dtype)
+    res = _call_scan(scan_fn, problem, u0, p_start, p_end, settings, solvers, dtype)
 
     try:
         int(res.n_valid)
@@ -539,10 +585,10 @@ def _run_scan(
         # Traced call (jax.vmap/jax.jit over this problem/settings): n_valid
         # can't become a concrete Python int, so there is no single trim
         # length. Fall back to the fixed-size-buffer + mask representation.
-        return _run_scan_traced(res, problem, rhs2, settings, events, solvers)
+        return _run_scan_traced(res, problem, settings, events, solvers)
 
     states, params, tangents, eigenvalues, stability, convergence_info, hits = _assemble_leg(
-        res, problem, rhs2, settings, events, solvers
+        res, problem, settings, events, solvers
     )
     return _finish_result(
         problem, states, params, tangents, eigenvalues, stability,
@@ -553,7 +599,6 @@ def _run_scan(
 def _run_scan_bothside(
     scan_fn,
     problem: BifProblem,
-    rhs2: Callable[[Array, Array], Array],
     u0: Array,
     p_span: tuple[float, float],
     settings: ContinuationPar,
@@ -594,14 +639,14 @@ def _run_scan_bothside(
             f"p_span's bounds [{p_lo}, {p_hi}]."
         )
 
-    fwd_res = _call_scan(scan_fn, rhs2, u0, p0_f, p_hi, settings, solvers, dtype)
-    bwd_res = _call_scan(scan_fn, rhs2, u0, p0_f, p_lo, settings, solvers, dtype)
+    fwd_res = _call_scan(scan_fn, problem, u0, p0_f, p_hi, settings, solvers, dtype)
+    bwd_res = _call_scan(scan_fn, problem, u0, p0_f, p_lo, settings, solvers, dtype)
 
     f_states, f_params, f_tangents, f_eig, f_stab, f_conv, f_hits = _assemble_leg(
-        fwd_res, problem, rhs2, settings, events, solvers
+        fwd_res, problem, settings, events, solvers
     )
     b_states, b_params, b_tangents, b_eig, b_stab, b_conv, b_hits = _assemble_leg(
-        bwd_res, problem, rhs2, settings, events, solvers
+        bwd_res, problem, settings, events, solvers
     )
 
     # Reverse the backward leg (dropping its index-0 point -- the same seed
@@ -640,7 +685,6 @@ def _run_scan_bothside(
 def _run_scan_traced(
     res,
     problem: BifProblem,
-    rhs2: Callable[[Array, Array], Array],
     settings: ContinuationPar,
     events: Sequence[Event],
     solvers: Solvers,
@@ -678,7 +722,9 @@ def _run_scan_traced(
             )
             stability = floquet_stable(eigenvalues)
         else:
-            eigenvalues = branch_eigenvalues(rhs2, states, params, eigen_solver=solvers.eigen)
+            eigenvalues = branch_eigenvalues(
+                problem.f, states, params, problem.args, eigen_solver=solvers.eigen
+            )
             stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
 
     branch = Branch(
