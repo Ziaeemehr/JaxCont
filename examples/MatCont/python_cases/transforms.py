@@ -123,7 +123,7 @@ def run_transform_checks() -> CaseResult:
         [fold_gradient, coefficient_gradient, hopf_gradient, lyapunov_gradient]
     )
     finite_differences = jnp.array([fold_fd, coefficient_fd, hopf_fd, lyapunov_fd])
-    analytic = jnp.array([0.5, 1.0, 1.0, -1.0])
+    analytic = jnp.array([0.5, 1.0, 1.0, -2.0])
 
     imperfections = jnp.array([-0.15, 0.0, 0.15])
     batched = jax.vmap(_batched_branch)(imperfections)

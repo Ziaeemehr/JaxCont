@@ -24,12 +24,10 @@ br = continuation(prob, PALC(), opts; normC = norminf, bothside = true)
 hopfidx = [i for (i, bp) in enumerate(br.specialpoint) if bp.type == :hopf]
 for i in hopfidx
     hp = get_normal_form(prob, br, i)
-    # BifurcationKit.jl's `b` plays the role of the amplitude-equation cubic
-    # coefficient -- its own source (NormalForms.jl) calls it "the Lyapunov
-    # coefficient" in an internal warning message. It equals 2*l1 in
-    # Kuznetsov's normalization: verified against the exact-known textbook
-    # example first (l1=-1 there; BK independently gives b=-2.0 exactly)
-    # before trusting this relationship on this asymmetric example.
+    # At omega0=1 with unit-norm q, BifurcationKit.jl's cubic coefficient
+    # b agrees directly with JaxCont's MatCont/Kuznetsov l1 convention.
+    # The textbook example gives b=l1=-2; this asymmetric case gives
+    # b=l1=-1.7500010784482587 (BifurcationKit.jl v0.5.2).
     println("Hopf at p=", hp.p, " omega0=", hp.ω, "  BK b=", real(hp.nf.b),
-            "  l1 = b/2 = ", real(hp.nf.b) / 2)
+            "  l1 = b = ", real(hp.nf.b))
 end

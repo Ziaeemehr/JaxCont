@@ -186,6 +186,10 @@ class Hopf(Event):
     of each conjugate pair, so a pair opens one bracket). A refined point is
     accepted only if the eigenvalue nearest ``i*omega0`` is complex.
 
+    ``l1_tolerance`` is an absolute threshold in the MatCont/Kuznetsov
+    convention (unit-norm q, denominator 2*omega0). Double thresholds tuned
+    for the former 4*omega0 convention; the default remains 1e-6.
+
     Abbreviation **H**, see ``jaxcont.bifurcations.taxonomy.describe("H")``.
     """
 
@@ -199,7 +203,8 @@ class Hopf(Event):
     # non-degenerate point in another (differently scaled) system may sit
     # well below it. The default is a reasonable starting point, not a
     # universal constant -- tune per-system if "degenerate" is triggering
-    # too eagerly or too rarely.
+    # too eagerly or too rarely. This threshold uses the MatCont/Kuznetsov
+    # coefficient with unit-norm q and denominator 2*omega0.
     l1_tolerance: float = 1e-6
 
     def scan(self, points: Sequence[BranchPoint]) -> list[tuple[int, int, Any]]:

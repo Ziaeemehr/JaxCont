@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
 
 ### Breaking
+- `lyapunov_coefficient` and Hopf event `l1` now use the MatCont/Kuznetsov
+  convention with unit-norm `q` and denominator `2 * omega0`. Values double
+  (the standard cubic Hopf gives `-2` instead of `-1`); multiply previously
+  tuned `Hopf.l1_tolerance` values by two. The default remains unchanged.
+  MatCont comparisons now use `l1` directly without a factor-of-two adapter.
 - Reverse-mode differentiation of the while continuation engine raises a clear
   `ValueError` directing callers to `ContinuationPar(loop="scan")`.
 - `hopf_point(..., eigenvalue=None)` can seed the tracked eigenvalue;

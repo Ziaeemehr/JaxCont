@@ -26,3 +26,7 @@ JAX_PLATFORMS=cpu MPLCONFIGDIR=/tmp/mpl-jaxcont-validation python3 -m examples.M
 ```
 
 Exit status `1` is expected while `MC-LC-002` remains failing. See the [complete MatCont validation-suite README](https://github.com/Ziaeemehr/JaxCont/blob/main/examples/MatCont/README.md) for case definitions, artifacts, the full comparison policy, and the unsupported-capabilities matrix.
+
+Hopf coefficients use the MatCont/Kuznetsov convention with unit-norm `q`
+and denominator `2 * omega0`. The standard cubic Hopf has `l1 = -2`;
+MC-EQ-003 compares `l1 = -0.3` directly, without a scaling adapter.

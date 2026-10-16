@@ -203,7 +203,7 @@ def test_hopf_refine_zero_omega_marks_unknown(monkeypatch):
 
 def test_hopf_refine_supercritical_label_end_to_end():
     # The feature's headline output, end-to-end: the textbook example
-    # (l1=-1 exactly, see test_hopf_normal_form.py's
+    # (l1=-2 exactly, see test_hopf_normal_form.py's
     # test_lyapunov_coefficient_matches_exact_textbook_value) must produce
     # criticality == "supercritical" through Hopf().refine(), not just a
     # correctly-signed l1 float that nothing asserts the label of.
@@ -224,13 +224,13 @@ def test_hopf_refine_supercritical_label_end_to_end():
     # extended system is ~6e-8, and Task 2 made Hopf.refine gate on actually
     # reaching `tolerance`, not just finiteness.
     hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-6, max_iterations=50)
-    assert jnp.isclose(hit.info["l1"], -1.0, atol=1e-4)
+    assert jnp.isclose(hit.info["l1"], -2.0, atol=1e-4)
     assert hit.info["criticality"] == "supercritical"
 
 
 def test_hopf_refine_subcritical_label_end_to_end():
     # Same family with the cubic term negated (k=-1 in the existing scaling
-    # test's parametrization in test_hopf_normal_form.py) has l1=+1 exactly,
+    # test's parametrization in test_hopf_normal_form.py) has l1=+2 exactly,
     # so refine() must label it "subcritical".
     def rhs(u, p):
         x, y = u[0], u[1]
@@ -247,7 +247,7 @@ def test_hopf_refine_subcritical_label_end_to_end():
     # tolerance=1e-6 -- see test_hopf_refine_converges_via_extended_system's
     # comment (float32 residual floor).
     hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-6, max_iterations=50)
-    assert jnp.isclose(hit.info["l1"], 1.0, atol=1e-4)
+    assert jnp.isclose(hit.info["l1"], 2.0, atol=1e-4)
     assert hit.info["criticality"] == "subcritical"
 
 

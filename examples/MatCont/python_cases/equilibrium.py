@@ -276,10 +276,6 @@ def run_adaptive_control_hopf() -> CaseResult:
         parameter = omega = lyapunov = jnp.array(jnp.nan)
         hopf_error = frequency_error = float("inf")
     branch = result.branch
-    # MatCont reports its cubic Hopf coefficient ``b = 2*l1`` for this
-    # system.  Record both conventions and compare the MatCont value against
-    # the analytic -0.3 reference.
-    matcont_lyapunov = 2.0 * float(lyapunov)
     return CaseResult(
         case_id="MC-EQ-003",
         checks={
@@ -292,14 +288,14 @@ def run_adaptive_control_hopf() -> CaseResult:
                 branch.params,
                 beta,
             ),
-            "lyapunov_error": abs(matcont_lyapunov - (-0.3)),
+            "lyapunov_error": abs(float(lyapunov) - (-0.3)),
         },
         observations={
             "hopf_state": state,
             "hopf_parameter": parameter,
             "frequency": omega,
             "first_lyapunov": lyapunov,
-            "matcont_hopf_coefficient": matcont_lyapunov,
+            "matcont_hopf_coefficient": float(lyapunov),
             "n_points": branch.n_valid,
         },
         artifacts={
@@ -313,7 +309,7 @@ def run_adaptive_control_hopf() -> CaseResult:
                     "parameter": float(parameter),
                     "state": state,
                     "frequency": abs(float(omega)),
-                    "first_lyapunov": matcont_lyapunov,
+                    "first_lyapunov": float(lyapunov),
                 }
             ] if hopf_events else [],
             "event_spectra": [

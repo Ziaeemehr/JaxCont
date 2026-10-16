@@ -206,8 +206,8 @@ def lyapunov_coefficient(
 ) -> Array:
     """
     First Lyapunov coefficient l1 at a Hopf point (u, p) with critical
-    eigenvector q1 + i*q2 and frequency omega0 -- Kuznetsov's formula
-    (Elements of Applied Bifurcation Theory, 3rd ed., eq. 3.19/10.16).
+    unit-norm eigenvector q1 + i*q2 and frequency omega0 -- Kuznetsov's formula
+    (Elements of Applied Bifurcation Theory, 3rd ed., eq. 3.20).
     l1 < 0 is supercritical (stable branching limit cycle), l1 > 0 is
     subcritical. Pure algebra (directional derivatives via jax.jvp plus two
     linear solves) -- no Newton iteration, differentiable wherever its
@@ -232,7 +232,7 @@ def lyapunov_coefficient(
     whose derivatives can be undefined when stable modes repeat.
 
     Verified: the standard supercritical textbook example (f = (-y + x(mu -
-    x^2 - y^2), x + y(mu - x^2 - y^2)), exact l1 = -1 at the origin) and an
+    x^2 - y^2), x + y(mu - x^2 - y^2)), exact l1 = -2 at the origin) and an
     independent BifurcationKit.jl v0.5.2 cross-check on a less-symmetric
     example -- see examples/BifurcationKit/04_hopf_normal_form.jl.
     """
@@ -279,4 +279,4 @@ def lyapunov_coefficient(
     m2_inv_b = jnp.linalg.solve(m2, B(q, q))
     term3 = jnp.vdot(p_left, B(qbar, m2_inv_b))
 
-    return jnp.real(term1 - term2 + term3) / (4.0 * omega0)
+    return jnp.real(term1 - term2 + term3) / (2.0 * omega0)
