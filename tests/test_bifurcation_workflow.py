@@ -57,5 +57,6 @@ def test_with_and_without_refinement():
     )
 
     assert sol.branch.n_valid > 0
-    if sol.events:
-        assert sol.events[0].info.get("method") in ("extended_system", "bisection", None)
+    assert len(sol.events) == 1
+    assert sol.events[0].kind == "fold"
+    assert abs(sol.events[0].p) < 1e-4

@@ -35,8 +35,9 @@ solvers, two-parameter continuation (fold/Hopf curves with their own
 codimension-two events), and infinitesimal phase response curves (iPRC,
 `prc_curve`, cross-validated against MatCont) plus their parameter-derivative
 sensitivity (dPRC, `dprc_curve`, validated independently -- MatCont does not
-compute this quantity). Branch switching and general connecting-orbit/BVP
-workflows remain future work.
+compute this quantity). Equilibrium branch switching (`BP`, `branch_switch`)
+and period-doubling switching (`branch_switch_pd`) are shipped. General
+connecting-orbit/BVP workflows remain future work.
 
 <p align="center">
   <img src="docs/images/matcont_cubic_overlay.png" width="500" alt="Cubic S-curve: JaxCont vs MatCont 7.6, folds overlaid">

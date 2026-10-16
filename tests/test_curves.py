@@ -105,16 +105,21 @@ def test_fold_curve_continuation_under_jit():
             p_span=(p_span_start, p_span_end),
             settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
         )
-        return sol.branch.n_valid
+        valid = sol.branch.valid
+        residuals = jax.vmap(lambda u, p: jnp.linalg.norm(prob.f(u, p, prob.args)))(
+            sol.branch.states, sol.branch.params,
+        )
+        return valid, jnp.max(jnp.where(valid, residuals, 0.0))
 
     # Call with concrete values to ensure p_span is traced
-    n_valid = run_continuation(
+    valid, max_residual = run_continuation(
         jnp.array([1.7]),
         jnp.array([-1.7, 4.2]),
         4.2,
         5.2,
     )
-    assert n_valid > 0  # Continuation should produce at least one point
+    assert valid.sum() > 10
+    assert max_residual < 1e-4
 
 
 def test_hopf_curve_continuation_under_jit():
@@ -133,16 +138,21 @@ def test_hopf_curve_continuation_under_jit():
             p_span=(p_span_start, p_span_end),
             settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),
         )
-        return sol.branch.n_valid
+        valid = sol.branch.valid
+        residuals = jax.vmap(lambda u, p: jnp.linalg.norm(prob.f(u, p, prob.args)))(
+            sol.branch.states, sol.branch.params,
+        )
+        return valid, jnp.max(jnp.where(valid, residuals, 0.0))
 
     # Call with concrete values to ensure p_span is traced
-    n_valid = run_continuation(
+    valid, max_residual = run_continuation(
         jnp.array([0.5, -0.3]),
         jnp.array([2.0, 0.0]),
         0.0,
         0.5,
     )
-    assert n_valid > 0  # Continuation should produce at least one point
+    assert valid.sum() > 10
+    assert max_residual < 1e-4
 
 
 def test_two_parameter_surface_is_exported_top_level():

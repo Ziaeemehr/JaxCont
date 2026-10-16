@@ -150,6 +150,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its starting orbit (e.g. reverses its sense of rotation) no longer stalls.
 
 ### Added
+- Publishing requires default-suite tests against the built wheel in both precisions.
 - `ContinuationPar.theta` sets the state weight in the arclength metric; `None`
   uses `1 / n_state`. Both loop engines accept theta dynamically and reuse compilation.
 - Hopf normal forms use real directional derivatives, supporting locally smooth
