@@ -76,22 +76,25 @@ def test_monodromy_matrix_matches_interval_propagators_scan():
 
 
 def test_floquet_multipliers_matches_closed_form_at_rho_1():
-    # Verified during design: JAX result [3.4570694e-06, 1.0000001] vs
-    # exact {1, exp(-4*pi)} = {1, 3.4873423562089973e-06}.
     prob, mesh = _circle_problem(rho=1.0)
-    multipliers = floquet_multipliers(_rhs, mesh, prob.u0, prob.p0)
+    multipliers, trivial_idx = floquet_multipliers(_rhs, mesh, prob.u0, prob.p0)
     got = jnp.sort(jnp.abs(multipliers))
     expected = jnp.sort(jnp.array([np.exp(-4 * np.pi), 1.0]))
-    assert float(jnp.max(jnp.abs(got - expected))) < 1e-5
+    if got.dtype == jnp.float64:
+        assert float(jnp.max(jnp.abs(jnp.log(got) - jnp.log(expected)))) < 1e-3
+    else:
+        # A multiplier of size ~3.5e-6 carries ~eps*||Phi||/|mu| relative error in float32.
+        assert jnp.max(jnp.abs(got - expected)) < (
+            1e3 * jnp.finfo(jnp.float32).eps * jnp.max(jnp.abs(expected))
+        )
 
 
 def test_floquet_stable_true_at_rho_1_with_correct_trivial_multiplier():
     prob, mesh = _circle_problem(rho=1.0)
-    multipliers = floquet_multipliers(_rhs, mesh, prob.u0, prob.p0)
-    stable = floquet_stable(multipliers[None, :])
+    multipliers, trivial_idx = floquet_multipliers(_rhs, mesh, prob.u0, prob.p0)
+    stable = floquet_stable(multipliers[None, :], trivial_idx[None])
     assert bool(stable[0]) is True
 
-    trivial_idx = int(jnp.argmin(jnp.abs(multipliers - 1.0)))
     assert abs(float(multipliers[trivial_idx].real) - 1.0) < 1e-4
 
 
@@ -101,12 +104,58 @@ def test_branch_floquet_multipliers_matches_per_point_calls():
     states = jnp.stack([prob1.u0, prob2.u0])
     params = jnp.stack([prob1.p0, prob2.p0])
 
-    batched = branch_floquet_multipliers(_rhs, mesh, states, params)
+    batched, indices = branch_floquet_multipliers(_rhs, mesh, states, params)
     individual = jnp.stack(
         [
-            floquet_multipliers(_rhs, mesh, prob1.u0, prob1.p0),
-            floquet_multipliers(_rhs, mesh, prob2.u0, prob2.p0),
+            floquet_multipliers(_rhs, mesh, prob1.u0, prob1.p0)[0],
+            floquet_multipliers(_rhs, mesh, prob2.u0, prob2.p0)[0],
         ]
     )
     assert batched.shape == (2, 2)
+    assert jnp.array_equal(indices, jnp.stack([
+        floquet_multipliers(_rhs, mesh, prob1.u0, prob1.p0)[1],
+        floquet_multipliers(_rhs, mesh, prob2.u0, prob2.p0)[1],
+    ]))
     assert jnp.allclose(jnp.sort(jnp.abs(batched), axis=1), jnp.sort(jnp.abs(individual), axis=1), atol=1e-4)
+
+
+def test_trivial_multiplier_by_eigenvector(monkeypatch):
+    import importlib
+    module = importlib.import_module('jaxcont.stability.floquet')
+    monkeypatch.setattr(module, 'monodromy_matrix',
+                        lambda *a: jnp.diag(jnp.array([0.9999, 1.00001])))
+    mesh = Collocation(ntst=1, ncol=1)
+    U = jnp.array([1., 0., 1., 0., 1.])
+    multipliers, trivial_index = floquet_multipliers(
+        lambda u, p, args: jnp.array([1., 0.]), mesh, U, jnp.array(0.))
+    assert int(trivial_index) == 0
+    assert not bool(floquet_stable(multipliers[None, :], trivial_index[None])[0])
+
+
+def test_flow_index_respects_custom_solver_order_under_jit(monkeypatch):
+    import importlib
+    module = importlib.import_module('jaxcont.stability.floquet')
+    monkeypatch.setattr(module, 'monodromy_matrix',
+                        lambda *a: jnp.diag(jnp.array([0.9999, 1.00001])))
+    mesh = Collocation(ntst=1, ncol=1)
+    def at(U):
+        return floquet_multipliers(
+            lambda u, p, args: jnp.array([1., 0.]), mesh, U, jnp.array(0.),
+            eigen_solver=lambda phi: jnp.linalg.eigvals(phi)[::-1])
+    values, index = jax.jit(at)(jnp.array([1., 0., 1., 0., 1.]))
+    assert int(index) == 1
+    assert not bool(floquet_stable(values[None, :], index[None])[0])
+
+
+def test_floquet_multiplier_derivatives_keep_eigensolver_path(monkeypatch):
+    import importlib
+    module = importlib.import_module('jaxcont.stability.floquet')
+    monkeypatch.setattr(module, 'monodromy_matrix',
+                        lambda *a: jnp.diag(jnp.array([0.9999, a[-2]])))
+    mesh = Collocation(ntst=1, ncol=1)
+    def transverse(p):
+        values, index = floquet_multipliers(
+            lambda u, p, args: jnp.array([1., 0.]), mesh,
+            jnp.array([1., 0., 1., 0., 1.]), p)
+        return jnp.real(values[1 - index])
+    assert jnp.allclose(jax.grad(transverse)(jnp.array(1.00001)), 1.)

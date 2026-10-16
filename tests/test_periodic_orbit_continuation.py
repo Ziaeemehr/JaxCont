@@ -5,6 +5,7 @@ false-positive check for events=[Fold()] on a system with no fold-of-cycles.
 See docs/superpowers/specs/2026-07-24-periodic-orbit-collocation-design.md.
 """
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -51,6 +52,10 @@ def test_compute_stability_true_computes_floquet_multipliers_for_periodic_proble
     assert sol.branch.n_valid > 1
     assert sol.branch.eigenvalues is not None
     assert sol.branch.eigenvalues.shape == (sol.branch.n_valid, 2)
+    assert sol.branch.trivial_index.shape == (sol.branch.n_valid,)
+    leaves, tree = jax.tree_util.tree_flatten(sol.branch)
+    restored = jax.tree_util.tree_unflatten(tree, leaves)
+    assert jnp.array_equal(restored.trivial_index, sol.branch.trivial_index)
     assert sol.branch.stable is not None
     assert bool(jnp.all(sol.branch.stable))
 

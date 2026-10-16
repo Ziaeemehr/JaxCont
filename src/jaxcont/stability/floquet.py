@@ -26,7 +26,7 @@ def floquet_multipliers(
     eigen_solver: EigenSolver = DenseEigen(),
     *,
     args: PyTree = None,
-) -> Array:
+) -> tuple[Array, Array]:
     """Floquet multipliers (eigenvalues of the monodromy matrix ``Phi(T)``)
     at one converged periodic-orbit branch point. ``U`` is the flat
     collocation unknown vector (same layout as a periodic ``BifProblem``'s
@@ -36,7 +36,8 @@ def floquet_multipliers(
     ``PeriodicArgs.user_args`` of the problem), not the assembled collocation
     residual.
     ``mesh`` has no ``n`` (state dimension) field, so it is derived
-    algebraically from ``U``'s length."""
+    algebraically from ``U``'s length. Returns ``(multipliers, trivial_index)``;
+    the index selects the eigenvector most aligned with ``raw_f(x0, p, args)``."""
     ntst, ncol = mesh.ntst, mesh.ncol
     n = (U.shape[-1] - 1) // (ntst * (1 + ncol))
     h = 1.0 / ntst
@@ -49,7 +50,14 @@ def floquet_multipliers(
     T = U[-1]
 
     Phi = monodromy_matrix(raw_f, D, E, h, mesh_states, coll_states, T, p, args)
-    return eigen_solver(Phi)
+    # Mode identity is discrete; multiplier derivatives use the supplied solver.
+    values, vectors = jnp.linalg.eig(jax.lax.stop_gradient(Phi))
+    flow = raw_f(mesh_states[0], p, args)
+    # Eigenvector columns are normalized independently; complex phase cancels.
+    alignment = jnp.abs(jnp.conj(vectors).T @ flow) / jnp.linalg.norm(vectors, axis=0)
+    trivial = jnp.argmax(alignment)
+    multipliers = eigen_solver(Phi)
+    return multipliers, jnp.argmin(jnp.abs(multipliers - values[trivial]))
 
 
 def branch_floquet_multipliers(
@@ -60,8 +68,9 @@ def branch_floquet_multipliers(
     eigen_solver: EigenSolver = DenseEigen(),
     *,
     args: PyTree = None,
-) -> Array:
+) -> tuple[Array, Array]:
     """Vectorized (vmap) Floquet multipliers along a stored periodic branch
+    returning ``(multipliers, trivial_index)`` with shapes ``(N, n)``, ``(N,)``
     -- the periodic-orbit analogue of
     ``core.scan_continuation.branch_eigenvalues``."""
     def at(U, p):
@@ -70,16 +79,11 @@ def branch_floquet_multipliers(
     return jax.vmap(at)(states, params)
 
 
-def floquet_stable(multipliers: Array) -> Array:
-    """``(n_valid,)`` stability booleans from ``(n_valid, n)`` Floquet
-    multipliers. A periodic orbit always has exactly one trivial multiplier
-    equal to ``1`` (tangent to the flow) -- identified per-point as the one
-    closest to ``1`` (``argmin(|multiplier - 1|)``) and excluded. Stability
-    is a magnitude condition on the remaining multipliers (inside the unit
-    circle), unlike equilibria's real-part condition."""
-    def stable_at(row: Array) -> Array:
-        trivial_idx = jnp.argmin(jnp.abs(row - 1.0))
-        is_trivial = jnp.arange(row.shape[0]) == trivial_idx
-        return jnp.all(jnp.where(is_trivial, True, jnp.abs(row) < 1.0))
+def floquet_stable(multipliers: Array, trivial_index: Array) -> Array:
+    """Stability per point, excluding the supplied flow-direction multiplier.
 
-    return jax.vmap(stable_at)(multipliers)
+    ``multipliers`` has shape ``(N, n)`` and ``trivial_index`` shape ``(N,)``.
+    All remaining multipliers must lie strictly inside the unit circle.
+    """
+    is_trivial = jnp.arange(multipliers.shape[-1]) == trivial_index[..., None]
+    return jnp.all(is_trivial | (jnp.abs(multipliers) < 1.0), axis=-1)

@@ -289,6 +289,7 @@ class Branch:
     eigenvalues: Optional[Array] = None
     stable: Optional[Array] = None
     valid: Optional[Array] = None   # bool mask, only set when traced
+    trivial_index: Optional[Array] = None  # periodic flow-direction indices
 
     @property
     def n_valid(self) -> int | Array:
@@ -307,15 +308,15 @@ class Branch:
 
 
 def _branch_flatten(b: Branch):
-    children = (b.params, b.states, b.tangents, b.eigenvalues, b.stable, b.valid)
+    children = (b.params, b.states, b.tangents, b.eigenvalues, b.stable, b.valid, b.trivial_index)
     return children, None
 
 
 def _branch_unflatten(aux, children):
-    params, states, tangents, eigenvalues, stable, valid = children
+    params, states, tangents, eigenvalues, stable, valid, trivial_index = children
     return Branch(
         params=params, states=states, tangents=tangents,
-        eigenvalues=eigenvalues, stable=stable, valid=valid,
+        eigenvalues=eigenvalues, stable=stable, valid=valid, trivial_index=trivial_index,
     )
 
 
@@ -527,15 +528,16 @@ def _assemble_leg(
     is_curve_kind = problem.kind in ("fold_curve", "hopf_curve")
     eigenvalues = None
     stability = None
+    trivial_index = None
     want_eigs = not is_curve_kind and (settings.compute_stability or len(events) > 0)
     if want_eigs and states.shape[0] > 0:
         if problem.kind == "periodic":
             pargs = problem.args
-            eigenvalues = branch_floquet_multipliers(
+            eigenvalues, trivial_index = branch_floquet_multipliers(
                 pargs.raw_f, pargs.mesh, states, params,
                 eigen_solver=solvers.eigen, args=pargs.user_args,
             )
-            stability = floquet_stable(eigenvalues)
+            stability = floquet_stable(eigenvalues, trivial_index)
         else:
             eigenvalues = branch_eigenvalues(
                 problem.f, states, params, problem.args, eigen_solver=solvers.eigen
@@ -563,11 +565,12 @@ def _assemble_leg(
         hits = detect_events(
             events, params, states, tangents, eigenvalues, rhs2,
             ds=float(settings.ds), ds_values=ds, args=problem.args,
+            trivial_index=trivial_index,
             step_update=problem.step_update,
             f=None if problem.step_update is None else problem.f,
         )
 
-    return states, params, tangents, eigenvalues, stability, convergence_info, hits
+    return states, params, tangents, eigenvalues, stability, trivial_index, convergence_info, hits
 
 
 def _finish_result(
@@ -577,6 +580,7 @@ def _finish_result(
     tangents,
     eigenvalues,
     stability,
+    trivial_index,
     convergence_info,
     hits: list[EventHit],
     verbose: bool,
@@ -618,6 +622,7 @@ def _finish_result(
         )
 
     result = _to_result(sol)
+    result.branch.trivial_index = trivial_index
     result.rejected_events = rejected
     result.status = status
     result.stats["n_attempts"] = n_attempts
@@ -687,11 +692,11 @@ def _run_scan(
         # length. Fall back to the fixed-size-buffer + mask representation.
         return _run_scan_traced(res, problem, settings, events, solvers)
 
-    states, params, tangents, eigenvalues, stability, convergence_info, hits = _assemble_leg(
+    states, params, tangents, eigenvalues, stability, trivial_index, convergence_info, hits = _assemble_leg(
         res, problem, settings, events, solvers
     )
     return _finish_result(
-        problem, states, params, tangents, eigenvalues, stability,
+        problem, states, params, tangents, eigenvalues, stability, trivial_index,
         convergence_info, hits, verbose,
         _status_name(res.status), int(res.n_attempts),
     )
@@ -743,10 +748,10 @@ def _run_scan_bothside(
     fwd_res = _call_scan(scan_fn, problem, u0, p0_f, p_hi, settings, solvers, dtype)
     bwd_res = _call_scan(scan_fn, problem, u0, p0_f, p_lo, settings, solvers, dtype)
 
-    f_states, f_params, f_tangents, f_eig, f_stab, f_conv, f_hits = _assemble_leg(
+    f_states, f_params, f_tangents, f_eig, f_stab, f_trivial, f_conv, f_hits = _assemble_leg(
         fwd_res, problem, settings, events, solvers
     )
-    b_states, b_params, b_tangents, b_eig, b_stab, b_conv, b_hits = _assemble_leg(
+    b_states, b_params, b_tangents, b_eig, b_stab, b_trivial, b_conv, b_hits = _assemble_leg(
         bwd_res, problem, settings, events, solvers
     )
 
@@ -763,6 +768,7 @@ def _run_scan_bothside(
     tangents = _stitch(-b_tangents, f_tangents)
     eigenvalues = _stitch(b_eig, f_eig)
     stability = _stitch(b_stab, f_stab)
+    trivial_index = _stitch(b_trivial, f_trivial)
 
     n_back = len(b_conv) - 1  # excludes the shared seed point
     convergence_info = [
@@ -791,7 +797,7 @@ def _run_scan_bothside(
     )
 
     return _finish_result(
-        problem, states, params, tangents, eigenvalues, stability,
+        problem, states, params, tangents, eigenvalues, stability, trivial_index,
         convergence_info, hits, verbose,
         status, int(fwd_res.n_attempts) + int(bwd_res.n_attempts),
     )
@@ -829,14 +835,15 @@ def _run_scan_traced(
 
     eigenvalues = None
     stability = None
+    trivial_index = None
     if settings.compute_stability:
         if problem.kind == "periodic":
             pargs = problem.args
-            eigenvalues = branch_floquet_multipliers(
+            eigenvalues, trivial_index = branch_floquet_multipliers(
                 pargs.raw_f, pargs.mesh, states, params,
                 eigen_solver=solvers.eigen, args=pargs.user_args,
             )
-            stability = floquet_stable(eigenvalues)
+            stability = floquet_stable(eigenvalues, trivial_index)
         else:
             eigenvalues = branch_eigenvalues(
                 problem.f, states, params, problem.args, eigen_solver=solvers.eigen
@@ -849,6 +856,7 @@ def _run_scan_traced(
         tangents=tangents,
         eigenvalues=eigenvalues,
         stable=stability,
+        trivial_index=trivial_index,
         valid=valid,
     )
     return ContinuationResult(

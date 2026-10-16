@@ -50,6 +50,7 @@ class BranchPoint:
     u: Array
     tangent: Optional[Array] = None       # (n+1,); last entry is the dp/ds component
     eigenvalues: Optional[Array] = None   # (n,) complex, or None
+    trivial_index: Optional[Array] = None  # index in eigenvalues, periodic only
 
 
 @runtime_checkable
@@ -408,6 +409,7 @@ def detect_events(
     *,
     ds: float,
     ds_values: Optional[Array] = None,
+    trivial_index: Optional[Array] = None,
     tolerance: float | None = None,
     max_iterations: int = 20,
     args: PyTree = None,
@@ -428,6 +430,9 @@ def detect_events(
     that is exactly zero at a sample is reported once (see
     `modes.crossings`).
 
+    ``trivial_index`` supplies each periodic point's flow-direction index in
+    ``eigenvalues``; PD/NS scans require it.
+
     `args` is the problem's ``args``; it is handed to events that declare
     ``needs_args`` (the Floquet events read the periodic problem's right-hand
     side, mesh and user ``args`` from it).
@@ -447,6 +452,7 @@ def detect_events(
             p=float(params[i]), u=states[i],
             tangent=tangents[i] if tangents is not None else None,
             eigenvalues=eigenvalues[i] if eigenvalues is not None else None,
+            trivial_index=trivial_index[i] if trivial_index is not None else None,
         )
         for i in range(params.shape[0])
     ]
@@ -509,16 +515,13 @@ def detect_events(
     return deduped + rejected
 
 
-def _trivial_index(multipliers) -> int:
-    """Index of the trivial Floquet multiplier: the one nearest 1."""
-    return int(np.argmin(np.abs(np.asarray(multipliers) - 1.0)))
-
-
-def _nontrivial_mask(spectra: np.ndarray) -> np.ndarray:
-    """``(N, n)`` mask that is False at each row's trivial multiplier."""
-    mask = np.ones(spectra.shape, dtype=bool)
-    mask[np.arange(spectra.shape[0]), [_trivial_index(row) for row in spectra]] = False
-    return mask
+def _nontrivial_mask(spectra: np.ndarray, points) -> np.ndarray:
+    """Exclude each flow-direction multiplier after mode tracking reorders it."""
+    if any(pt.trivial_index is None for pt in points):
+        raise ValueError("Floquet events require flow-direction trivial_index at every point")
+    trivial = np.array([np.asarray(pt.eigenvalues)[int(pt.trivial_index)] for pt in points])
+    indices = np.argmin(np.abs(spectra - trivial[:, None]), axis=1)
+    return np.arange(spectra.shape[1])[None, :] != indices[:, None]
 
 
 class _FloquetEvent:
@@ -536,16 +539,17 @@ class _FloquetEvent:
         if spectra is None:
             return []
         tol = _classify_tol(self.tolerance, spectra)
-        where = self._mode_mask(spectra, tol) & _nontrivial_mask(spectra)
+        where = self._mode_mask(spectra, tol) & _nontrivial_mask(spectra, points)
         return mode_brackets(spectra, self._test_value(spectra), where)
 
     needs_args = True
 
     @staticmethod
-    def _multipliers(u, p, args) -> np.ndarray:
-        return np.asarray(
-            floquet_multipliers(args.raw_f, args.mesh, u, p, args=args.user_args)
+    def _multipliers(u, p, args) -> tuple[np.ndarray, int]:
+        values, trivial_index = floquet_multipliers(
+            args.raw_f, args.mesh, u, p, args=args.user_args,
         )
+        return np.asarray(values), int(trivial_index)
 
     def refine(
         self, left, right, index, rhs, *, tolerance, max_iterations, mode=None,
@@ -587,7 +591,7 @@ class _FloquetEvent:
             u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=root_tol)
             if not bool(corrected):
                 return failed("not_converged")
-            row_mid = track_modes(np.stack([row_left, self._multipliers(u_mid, p_mid, args)]))[1]
+            row_mid = track_modes(np.stack([row_left, self._multipliers(u_mid, p_mid, args)[0]]))[1]
             t_mid = float(self._test_value(row_mid[k]))
             if t_left * t_mid < 0:
                 p_right, u_right, t_right = p_mid, u_mid, t_mid
@@ -606,9 +610,9 @@ class _FloquetEvent:
         if not bool(corrected):
             return failed("not_converged")
 
-        multipliers = self._multipliers(u_bif, p_bif, args)
+        multipliers, trivial_index = self._multipliers(u_bif, p_bif, args)
         tracked = track_modes(np.stack([row_left, multipliers]))[1][k]
-        keep = np.arange(multipliers.shape[0]) != _trivial_index(multipliers)
+        keep = np.arange(multipliers.shape[0]) != trivial_index
         distance = np.where(keep, np.abs(multipliers - self._critical(tracked)), np.inf)
         nearest = multipliers[np.argmin(distance)]
         if not self._spectral_ok(nearest, _classify_tol(self.tolerance, multipliers)):

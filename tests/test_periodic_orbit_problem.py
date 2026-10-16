@@ -241,10 +241,10 @@ def test_floquet_and_prc_receive_user_args():
     pargs = prob.args
     assert float(pargs.user_args) == 1.5
     T = float(prob.u0[-1])
-    mult = floquet_multipliers(
+    mult, trivial_index = floquet_multipliers(
         _hopf_omega, _OMEGA_MESH, prob.u0, prob.p0, args=pargs.user_args
     )
-    nontrivial = mult[jnp.argmax(jnp.abs(mult - 1.0))]
+    nontrivial = mult[1 - trivial_index]
     assert float(jnp.abs(nontrivial)) == pytest.approx(float(np.exp(-2.0 * T)), rel=1e-2)
     Z = prc_curve(_hopf_omega, _OMEGA_MESH, prob.u0, prob.p0, args=pargs.user_args)
     x0 = prob.u0[:2]

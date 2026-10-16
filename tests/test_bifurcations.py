@@ -7,7 +7,7 @@ along with BifurcationDetector -- see
 docs/superpowers/specs/2026-07-23-event-protocol-rewrite-design.md).
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import types
 
 import jax.numpy as jnp
@@ -540,7 +540,7 @@ def test_pd_not_reported_for_complex_pair_crossing_re_minus_one():
     hits = detect_events(
         [_StubPeriodDoubling()],
         jnp.asarray(t), jnp.zeros((t.size, 1)), None, multipliers,
-        lambda u, p: u, ds=0.05,
+        lambda u, p: u, ds=0.05, trivial_index=jnp.zeros(t.size, dtype=int),
     )
     assert hits == []
 
@@ -578,7 +578,7 @@ def test_period_doubling_scan_follows_the_crossing_multiplier_far_past_minus_one
     moving = -np.geomspace(0.5, 20.0, 12)
     spectra = np.stack([1.0 + 0 * moving, 3.4e-6 + 0 * moving, moving], axis=1)
     pd = PeriodDoubling()
-    brackets = pd.scan(_points(spectra))
+    brackets = pd.scan([replace(pt, trivial_index=0) for pt in _points(spectra)])
     assert len(brackets) == 1
     i, j, mode = brackets[0]
     assert moving[i] > -1.0 > moving[j]
@@ -588,7 +588,7 @@ def test_period_doubling_scan_excludes_trivial_multiplier():
     # Only the trivial multiplier moves (and sits nearest 1 throughout).
     spectra = np.stack([np.linspace(0.99, 1.01, 5), -0.5 + 0 * np.ones(5)], axis=1)
     pd = PeriodDoubling()
-    assert pd.scan(_points(spectra)) == []
+    assert pd.scan([replace(pt, trivial_index=0) for pt in _points(spectra)]) == []
 
 
 def test_neimark_sacker_scan_brackets_complex_pair_leaving_unit_circle():
@@ -596,7 +596,7 @@ def test_neimark_sacker_scan_brackets_complex_pair_leaving_unit_circle():
     pair = radius * np.exp(0.6j)
     spectra = np.stack([1.0 + 0 * radius, pair, np.conj(pair), -0.5 + 0 * radius], axis=1)
     ns = NeimarkSacker()
-    brackets = ns.scan(_points(spectra))
+    brackets = ns.scan([replace(pt, trivial_index=0) for pt in _points(spectra)])
     assert [(i, j) for i, j, _ in brackets] == [(2, 3)]
 
 
@@ -605,7 +605,7 @@ def test_neimark_sacker_scan_ignores_real_multiplier_crossing():
     spectra = np.stack([1.0 + 0 * moving, moving, 0.5 + 0.5j + 0 * moving,
                         0.5 - 0.5j + 0 * moving], axis=1)
     ns = NeimarkSacker()
-    assert ns.scan(_points(spectra)) == []
+    assert ns.scan([replace(pt, trivial_index=0) for pt in _points(spectra)]) == []
 
 
 def test_hopf_no_event_on_a_center_family():
@@ -690,7 +690,7 @@ def test_floquet_refine_spectral_check_failed(monkeypatch, event_cls, row, final
     )
     monkeypatch.setattr(
         events_mod, "floquet_multipliers",
-        lambda raw_f, mesh, u, p, args=None: jnp.asarray(np.array(final, dtype=complex)),
+        lambda raw_f, mesh, u, p, args=None: (jnp.asarray(np.array(final, dtype=complex)), jnp.array(0)),
     )
     row = np.array(row, dtype=complex)
     mode = TrackedMode(1, row, row)
@@ -879,3 +879,22 @@ def test_detect_events_step_update_requires_f():
             [Fold()], jnp.zeros(2), jnp.zeros((2, 1)), None, None, lambda u, p: u,
             ds=0.1, step_update=lambda a, u, p: a,
         )
+
+
+@pytest.mark.parametrize('event, spectra', [
+    (PeriodDoubling(), np.array([[-0.9, 1.00001], [1.00001, -1.1]], complex)),
+    (NeimarkSacker(tolerance=0.0), np.array([
+        [0.9999 * np.exp(0.01j), 1.00001],
+        [1.00001, 1.0001 * np.exp(0.01j)],
+    ])),
+])
+def test_floquet_scan_excludes_flow_mode_after_reordering(event, spectra):
+    points = [BranchPoint(p=float(i), u=jnp.zeros(2), eigenvalues=row,
+                          trivial_index=i) for i, row in enumerate(spectra)]
+    assert event.scan(points) == []
+
+
+def test_floquet_scan_requires_flow_identity():
+    points = [BranchPoint(p=0., u=jnp.zeros(2), eigenvalues=jnp.array([1., -.9]))]
+    with pytest.raises(ValueError, match='trivial_index'):
+        PeriodDoubling().scan(points)

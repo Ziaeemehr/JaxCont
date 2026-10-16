@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0] - Unreleased
 
 ### Breaking
+- `floquet_multipliers(...)` now returns `(multipliers, trivial_index)`;
+  `branch_floquet_multipliers(...)` returns the corresponding batched arrays.
+  The trivial multiplier is selected by eigenvector alignment with the flow.
+  `floquet_stable(multipliers, trivial_index)` now requires those indices.
+  Periodic `Branch` objects expose `trivial_index` when spectra are computed.
+  Direct PD/NS scans require `BranchPoint.trivial_index`; `detect_events`
+  accepts the per-point `trivial_index` array and continuation supplies it.
+  PD/NS detection and refinement exclude this flow mode.
 - Eager `periodic_orbit_problem` construction now raises `ValueError` when
   `period0` is nonpositive, the trajectory spans less than `0.95 * period0`,
   refinement fails to converge, the refined period is nonpositive, or the
