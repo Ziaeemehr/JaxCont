@@ -122,6 +122,8 @@ def run_adaptx_pd_switch() -> CaseResult:
         jc.PseudoArclength(),
         p_span=(0.9, 0.55),
         settings=jc.ContinuationPar(
+            # PD seeding selects a raw crossing endpoint at this Euclidean spacing.
+            theta=1.0,
             compute_stability=True,
             ds=0.01,
             ds_max=0.02,

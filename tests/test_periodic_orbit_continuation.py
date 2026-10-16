@@ -194,7 +194,8 @@ def test_periodic_branch_survives_reversal_of_the_cycle():
     sol = jc.continuation(
         prob, p_span=(0.0, 2.0),
         settings=jc.ContinuationPar(
-            ds=0.05, max_steps=200, newton_tol=1e-5, compute_stability=False
+            # The jump bound below measures Euclidean distance.
+            theta=1.0, ds=0.05, max_steps=200, newton_tol=1e-5, compute_stability=False
         ),
     )
     assert sol.status == "reached_end"

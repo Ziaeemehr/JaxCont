@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
 
 ### Breaking
+- Pseudo-arclength continuation now weights the state by `1 / n_state` by default,
+  changing step counts and the meaning of `ds` for multi-state problems.
 - `lyapunov_coefficient` and Hopf event `l1` now use the MatCont/Kuznetsov
   convention with unit-norm `q` and denominator `2 * omega0`. Values double
   (the standard cubic Hopf gives `-2` instead of `-1`); multiply previously
@@ -140,6 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its starting orbit (e.g. reverses its sense of rotation) no longer stalls.
 
 ### Added
+- `ContinuationPar.theta` sets the state weight in the arclength metric; `None`
+  uses `1 / n_state`. Both loop engines accept theta dynamically and reuse compilation.
 - Hopf normal forms use real directional derivatives, supporting locally smooth
   RHS functions with inactive comparisons or clipping while preserving `l1` values.
 - `Hopf(classify=False)` skips `l1` computation, omits it from event info, and

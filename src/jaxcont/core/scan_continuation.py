@@ -123,20 +123,20 @@ def _bordered_matrix(jac_u: Array, df_dp: Array, last_row: Array) -> Array:
     return jnp.concatenate([top, bottom], axis=0)
 
 
-def _tangent(f, u, p, args, prev_tangent, linear_solver: LinearSolver = Dense()):
+def _tangent(f, u, p, args, prev_tangent, linear_solver: LinearSolver = Dense(), theta=1.0):
     """
     Keller tangent: the null vector of ``[df/du | df/dp]`` aligned with the
-    previous tangent, normalized. Solving the bordered system with ``prev`` as
+    previous tangent, normalized in theta * ||du||² + dp². Solving the bordered system with ``prev`` as
     the last row (rhs picking the last unit) both selects the null direction and
     orients it continuously — and stays well-posed at folds (where df/du alone
     is singular).
     """
     jac_u = jacfwd(f, argnums=0)(u, p, args)    # (n, n)
     df_dp = jacfwd(f, argnums=1)(u, p, args)    # (n,)
-    M = _bordered_matrix(jac_u, df_dp, prev_tangent)
+    M = _bordered_matrix(jac_u, df_dp, prev_tangent.at[:-1].multiply(theta))
     rhs = jnp.zeros(u.shape[0] + 1, dtype=u.dtype).at[-1].set(1.0)
     t = linear_solver(M, rhs)
-    t = t / jnp.linalg.norm(t)
+    t = t / jnp.sqrt(theta * jnp.dot(t[:-1], t[:-1]) + t[-1] ** 2)
     # keep continuous orientation
     t = jnp.where(jnp.dot(t, prev_tangent) < 0.0, -t, t)
     return t
@@ -144,13 +144,13 @@ def _tangent(f, u, p, args, prev_tangent, linear_solver: LinearSolver = Dense())
 
 def _newton_correct(
     f, u_pred, p_pred, args, u_prev, p_prev, du0, dp0, ds, tol, max_iter,
-    linear_solver: LinearSolver = Dense(), loop="while",
+    linear_solver: LinearSolver = Dense(), loop="while", theta=1.0,
 ):
     """
     Bordered Newton corrector for the pseudo-arclength system
 
         f(u, p, args) = 0
-        g(u, p) = (u - u_prev)·du0 + (p - p_prev)·dp0 - ds = 0
+        g(u, p) = theta * (u - u_prev)·du0 + (p - p_prev)·dp0 - ds = 0
 
     Solves the full (n+1, n+1) bordered system each iteration (well-posed through
     folds), inside a bounded ``while_loop`` with a finiteness guard. Returns
@@ -159,7 +159,7 @@ def _newton_correct(
 
     def residual(u, p):
         f_val = f(u, p, args)
-        g_val = jnp.dot(u - u_prev, du0) + (p - p_prev) * dp0 - ds
+        g_val = theta * jnp.dot(u - u_prev, du0) + (p - p_prev) * dp0 - ds
         return f_val, g_val
 
     def res_norm(f_val, g_val):
@@ -174,7 +174,7 @@ def _newton_correct(
         f_val, g_val = residual(u, p)
         jac_u = jacfwd(f, argnums=0)(u, p, args)
         df_dp = jacfwd(f, argnums=1)(u, p, args)
-        M = _bordered_matrix(jac_u, df_dp, jnp.concatenate([du0, dp0.reshape(1)]))
+        M = _bordered_matrix(jac_u, df_dp, jnp.concatenate([theta * du0, dp0.reshape(1)]))
         rhs = -jnp.concatenate([f_val, g_val.reshape(1)])
         delta = linear_solver(M, rhs)
         u_new = u + delta[:-1]
@@ -285,9 +285,13 @@ def pseudo_arclength_scan(
     adaptive: Array = jnp.array(True),
     max_attempts: Optional[Array] = None,
     loop: str = "while",
+    theta: Optional[Array] = None,
 ) -> ScanResult:
     """
     Continue ``f(u, p, args) = 0`` in ``p`` from ``(u0, p0)`` toward ``p_end``.
+
+    ``theta`` weights the state inner product; ``None`` uses ``1 / n_state``.
+    Numeric theta values are dynamic inputs and share a compiled kernel.
 
     ``f``, ``step_update`` (``None`` or see the module docstring) and
     ``max_steps`` are static (they set the compiled program & buffer
@@ -300,6 +304,7 @@ def pseudo_arclength_scan(
     u0 = jnp.asarray(u0)
     n = u0.shape[0]
     dtype = u0.dtype
+    theta = jnp.asarray(1 / n if theta is None else theta, dtype)
     p0 = jnp.asarray(p0, dtype)
     p_end = jnp.asarray(p_end, dtype)
     direction = jnp.sign(p_end - p0)
@@ -325,7 +330,7 @@ def pseudo_arclength_scan(
     # Initial tangent: seed prev with the parameter axis pointing in `direction`,
     # so the branch is traversed toward p_end.
     seed = jnp.zeros(n + 1, dtype).at[-1].set(direction)
-    tan0 = _tangent(f, u0_seed, p0, args, seed, linear_solver)
+    tan0 = _tangent(f, u0_seed, p0, args, seed, linear_solver, theta)
 
     # Fixed-size output buffers; slot 0 is the initial point.
     P = jnp.zeros((max_steps + 1, n), dtype).at[0].set(u0_seed)
@@ -369,11 +374,11 @@ def pseudo_arclength_scan(
         u_pred = c.u + c.ds * du0
         p_pred = c.p + c.ds * dp0
         u_new, p_new, converged, iters = _newton_correct(
-            f, u_pred, p_pred, c.args, c.u, c.p, du0, dp0, c.ds, tol, max_iter, linear_solver, loop
+            f, u_pred, p_pred, c.args, c.u, c.p, du0, dp0, c.ds, tol, max_iter, linear_solver, loop, theta
         )
 
         # New tangent only meaningful if we accept; compute anyway (branch-free).
-        tan_new = _tangent(f, u_new, p_new, c.args, c.tan, linear_solver)
+        tan_new = _tangent(f, u_new, p_new, c.args, c.tan, linear_solver, theta)
         args = _apply_step_update(step_update, c.args, u_new, p_new, converged)
 
         write = c.idx + 1  # slot for the next accepted point

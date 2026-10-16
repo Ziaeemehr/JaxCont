@@ -137,7 +137,8 @@ def run_two_parameter_fold_curve() -> CaseResult:
     )
     result = jc.continuation(
         problem, p_span=(_K0, 0.36),
-        settings=jc.ContinuationPar(ds=0.002, ds_max=0.005, max_steps=100, newton_tol=1e-6, compute_stability=False),
+        # The reference comparison uses nearest samples at Euclidean spacing.
+        settings=jc.ContinuationPar(theta=1.0, ds=0.002, ds_max=0.005, max_steps=100, newton_tol=1e-6, compute_stability=False),
     )
     branch = result.branch
     q2_points = jnp.array([unpack_fold_curve(state, 3)[1] for state in branch.states])

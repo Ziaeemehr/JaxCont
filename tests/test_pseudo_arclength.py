@@ -13,6 +13,10 @@ docs/superpowers/plans/2026-07-21-engine-consolidation.md Task 5).
 """
 
 import jax.numpy as jnp
+import numpy as np
+import pytest
+
+import jaxcont as jc
 
 from jaxcont.core.scan_continuation import _newton_correct, _tangent
 
@@ -362,3 +366,69 @@ def test_module_imports():
     assert callable(jc.continuation)
     assert callable(pseudo_arclength_scan)
     assert jc.PseudoArclength() is not None
+
+
+def _weighted_linear(u, p, args):
+    return u - p
+
+
+@pytest.mark.parametrize('loop', ['while', 'scan'])
+def test_theta_controls_arclength_and_reuses_compile_cache(loop):
+    from jaxcont.core.scan_continuation import pseudo_arclength_scan, pseudo_arclength_lax_scan
+    engine = pseudo_arclength_scan if loop == 'while' else pseudo_arclength_lax_scan
+    problem = jc.bif_problem(_weighted_linear, u0=jnp.zeros(3), p0=0.)
+    sizes = []
+    for theta in [0.25, 1.0, None]:
+        sol = jc.continuation(problem, p_span=(0., 2.), settings=jc.ContinuationPar(
+            theta=theta, loop=loop, ds=0.1, ds_max=0.1, max_steps=2,
+            adaptive=False, compute_stability=False))
+        weight = 1 / 3 if theta is None else theta
+        np.testing.assert_allclose(sol.branch.params[1], 0.1 / np.sqrt(1 + 3 * weight), rtol=1e-5)
+        sizes.append(engine._cache_size())
+    assert sizes[0] == sizes[1] == sizes[2]
+
+
+@pytest.mark.parametrize('loop', ['while', 'scan'])
+def test_periodic_step_count_independent_of_mesh(loop):
+    from jaxcont.core.collocation import Collocation
+    from jaxcont.problems.periodic import periodic_orbit_problem
+    def _rhs(u, p, args):
+        x, y = u
+        r2 = x*x + y*y
+        return jnp.array([(p-r2)*x-y, (p-r2)*y+x])
+
+    t = jnp.linspace(0., 2 * jnp.pi, 161)
+    trajectory = jnp.stack([jnp.cos(t), jnp.sin(t)], axis=1)
+    counts = []
+    for ntst in [10, 40]:
+        problem = periodic_orbit_problem(_rhs, trajectory, t, 2 * jnp.pi, 1.,
+                                         Collocation(ntst=ntst, ncol=4))
+        sol = jc.continuation(problem, p_span=(1., 2.), settings=jc.ContinuationPar(
+            loop=loop, ds=0.05, ds_max=0.05, adaptive=False,
+            max_steps=200, compute_stability=False))
+        assert sol.status == 'reached_end'
+        counts.append(sol.branch.n_valid - 1)
+    assert abs(counts[0] - counts[1]) <= 0.2 * min(counts), counts
+
+
+@pytest.mark.parametrize("loop", ["while", "scan"])
+def test_weighted_corrector_constraint(loop):
+    def parabola(u, p, args):
+        return u**2 - p
+
+    from jaxcont.utils.precision import default_tol
+
+    theta = 0.25
+    u = jnp.array([1.])
+    p = jnp.array(1.)
+    tangent = _tangent(parabola, u, p, None, jnp.array([0., 1.]), theta=theta)
+    ds = 0.2
+    tol = default_tol(u.dtype)
+    u_new, p_new, converged, iters = _newton_correct(
+        parabola, u + ds*tangent[:-1], p + ds*tangent[-1], None,
+        u, p, tangent[:-1], tangent[-1], ds, tol, 20, loop=loop, theta=theta)
+    assert converged
+    assert iters > 0
+    np.testing.assert_allclose(u_new**2, p_new, atol=tol)
+    np.testing.assert_allclose(theta*jnp.dot(u_new-u, tangent[:-1])
+                               + (p_new-p)*tangent[-1], ds, atol=tol)

@@ -318,7 +318,8 @@ def test_hopf_curve_survives_eigenvector_rotation():
     sol = jc.continuation(
         prob,
         p_span=(0.0, 2.0),
-        settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5, max_steps=200),
+        # The jump bound below measures Euclidean distance, so use that metric.
+        settings=jc.ContinuationPar(theta=1.0, compute_stability=False, newton_tol=1e-5, max_steps=200),
     )
     assert sol.status == "reached_end"
     # Consecutive points stay within two ds_max (= 0.1) of each other: no

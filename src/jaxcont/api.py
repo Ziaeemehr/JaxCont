@@ -244,6 +244,7 @@ class ContinuationPar:
     max_attempts: Optional[int] = None   # total corrector attempts; None -> 4 * max_steps
     compute_stability: bool = True
     bothside: bool = False
+    theta: Optional[float] = None  # state weight; None -> 1 / n_state
 
 
 @dataclass(frozen=True)
@@ -454,6 +455,10 @@ def _engine_f_args(problem: BifProblem):
 
 def _call_scan(scan_fn, problem: BifProblem, u0, p_from, p_to, settings: ContinuationPar, solvers: Solvers, dtype):
     f, step_update, args = _engine_f_args(problem)
+    from jaxcont.core.scan_continuation import natural_scan, natural_lax_scan
+    weighting = {} if scan_fn in (natural_scan, natural_lax_scan) else {
+        "theta": jnp.asarray(1 / u0.shape[0] if settings.theta is None else settings.theta, dtype)
+    }
     return scan_fn(
         f,
         step_update,
@@ -475,6 +480,7 @@ def _call_scan(scan_fn, problem: BifProblem, u0, p_from, p_to, settings: Continu
          else int(settings.max_attempts)) if settings.loop == "scan" else jnp.asarray(
             4 * int(settings.max_steps) if settings.max_attempts is None
             else settings.max_attempts, jnp.int32),
+        **weighting,
     )
 
 

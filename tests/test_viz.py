@@ -592,7 +592,8 @@ def _fold_result():
     return jc.continuation(
         _fold_problem(),
         p_span=(-1.0, 0.1),
-        settings=jc.ContinuationPar(ds=0.02, max_steps=400),
+        # Keep the Euclidean sampling density used by the rounded interpolation checks.
+        settings=jc.ContinuationPar(theta=1.0, ds=0.02, max_steps=400),
     )
 
 
