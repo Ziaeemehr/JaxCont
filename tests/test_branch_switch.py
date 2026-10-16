@@ -126,3 +126,48 @@ def test_branch_switch_vmap_batches_over_a_second_parameter():
         serial_u, serial_p = switch_for_b(float(b))
         assert float(batched[0][i]) == pytest.approx(float(serial_u), abs=1e-4)
         assert float(batched[1][i]) == pytest.approx(float(serial_p), abs=1e-4)
+
+
+@pytest.mark.parametrize("scale", [1.0, 1e-6, 1e6])
+@pytest.mark.parametrize("branch_point", [False, True], ids=["fold", "transcritical"])
+def test_bp_invariant_under_rhs_scaling(scale, branch_point):
+    from jaxcont.bifurcations.events import BranchPoint
+
+    def rhs(u, p):
+        value = u[0] * (p - u[0]) if branch_point else u[0] ** 2 + p
+        return jnp.array([scale * value])
+
+    # The midpoint is the exact singular equilibrium for both normal forms.
+    left = BranchPoint(p=-0.1, u=jnp.zeros(1))
+    right = BranchPoint(p=0.1, u=jnp.zeros(1), tangent=jnp.array([0.0, 1.0]))
+    hit = BP().refine(
+        left, right, (0, 1), rhs, tolerance=None, max_iterations=50,
+    )
+    hits = [] if hit is None else [hit]
+    assert len(hits) == int(branch_point)
+    if branch_point:
+        assert hit.status == "validated"
+        assert hit.kind == "branch_point"
+
+
+@pytest.mark.parametrize("scale", [1e-6, 1.0, 1e6])
+@pytest.mark.parametrize("rank_tolerance", [None, 0.005, 0.02])
+def test_bp_rank_tolerance_controls_relative_rank(scale, rank_tolerance):
+    from jaxcont.bifurcations.events import BranchPoint
+
+    def rhs(u, p):
+        return scale * jnp.array([u[0] ** 2 + 0.01 * p, u[1]])
+
+    # At the exact fold the augmented singular values are scale * [1, 0.01].
+    left = BranchPoint(p=-0.1, u=jnp.zeros(2))
+    right = BranchPoint(p=0.1, u=jnp.zeros(2))
+    hit = BP(rank_tolerance=rank_tolerance).refine(
+        left, right, (0, 1), rhs, tolerance=None, max_iterations=50,
+    )
+    if rank_tolerance is None:
+        accepted = left.u.dtype == jnp.float32
+    else:
+        accepted = rank_tolerance == 0.02
+    assert (hit is not None) == accepted
+    if accepted:
+        assert hit.status == "validated"

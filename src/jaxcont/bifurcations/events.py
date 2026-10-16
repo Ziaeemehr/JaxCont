@@ -269,10 +269,9 @@ class BP(Event):
     kind: str = "branch_point"
     # |Im| at or below this counts as real; None -> see _classify_tol.
     tolerance: Optional[float] = None
-    rank_tolerance: float = 1e-4  # smallest singular value of [f_u|f_p] below
-                                   # this counts as "rank-deficient" (a true BP);
-                                   # calibrated in Step 5 below against the
-                                   # pitchfork/transcritical/saddle-node fixtures
+    # Threshold on sigma_min([f_u|f_p]) at the refined point over the largest
+    # sigma_max across the bracket and that point; None -> 1e3 * sqrt(dtype eps).
+    rank_tolerance: Optional[float] = None
 
     def scan(self, points: Sequence[BranchPoint]) -> list[tuple[int, int, Any]]:
         spectra = _branch_spectra(points)
@@ -302,11 +301,27 @@ class BP(Event):
             )
 
         n = u_bif.shape[0]
-        f_u = jacfwd(lambda u: rhs(u, p_bif))(u_bif)
-        f_p = jacfwd(lambda p: rhs(u_bif, p))(p_bif)
-        augmented = jnp.concatenate([f_u, f_p.reshape(n, 1)], axis=1)
-        smallest_singular_value = jnp.linalg.svd(augmented, compute_uv=False)[-1]
-        if not bool(smallest_singular_value < self.rank_tolerance):
+
+        def augmented_svals(u, p):
+            f_u = jacfwd(lambda x: rhs(x, p))(u)
+            f_p = jacfwd(lambda q: rhs(u, q))(p)
+            augmented = jnp.concatenate([f_u, f_p.reshape(n, 1)], axis=1)
+            return jnp.linalg.svd(augmented, compute_uv=False)
+
+        singular_values = augmented_svals(u_bif, p_bif)
+        # Reference scale: the largest sigma_max of [f_u | f_p] over the bracket
+        # endpoints and the refined point. Scaling the RHS cancels in the ratio,
+        # and for n = 1 (one singular value, so sigma_min / sigma_max == 1 at
+        # any single point) the neighbouring points supply a non-degenerate scale.
+        scale = singular_values[0]
+        for end in (left, right):
+            scale = jnp.maximum(scale, augmented_svals(end.u, end.p)[0])
+        # A zero scale means the zero matrix, which is rank deficient.
+        rank_ratio = jnp.where(scale == 0, 0, singular_values[-1] / jnp.where(scale == 0, 1, scale))
+        rank_tolerance = self.rank_tolerance
+        if rank_tolerance is None:
+            rank_tolerance = 1e3 * jnp.finfo(u_bif.dtype).eps ** 0.5
+        if not bool(rank_ratio < rank_tolerance):
             return None  # ordinary fold, not a branch point
 
         return EventHit(

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0] - Unreleased
 
 ### Breaking
+- `BP.rank_tolerance` now thresholds a scale-invariant ratio: the smallest singular
+  value of `[f_u | f_p]` at the refined point divided by the largest singular value of
+  that matrix over the two bracket endpoints and the refined point, replacing the
+  absolute smallest-singular-value criterion. Its default is now `None`, resolved to
+  `1e3 * finfo(dtype).eps ** 0.5`. Scaling the right-hand side no longer changes
+  classification, scalar systems work, and an all-zero reference scale counts as rank
+  deficient.
 - `ContinuationResult.events` now holds only validated hits. A refinement that did not
   converge, landed outside its bracket (widened by one bracket width per side) or failed a
   spectral check is no longer reported as a located event at the right bracket end; it is
