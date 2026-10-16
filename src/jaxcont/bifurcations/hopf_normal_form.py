@@ -227,10 +227,9 @@ def lyapunov_coefficient(
 
     The left eigenvector p_left (Aᵀ p_left = -i*omega0*p_left, normalized
     so conj(p_left)@q == 1) is solved directly in complex arithmetic on the
-    n x n matrix (Aᵀ + i*omega0*I) -- NOT via a real 2n x 2n block
-    representation, which structurally always has repeated singular-value
-    pairs and makes jnp.linalg.svd's gradient nan (found during design,
-    see docs/superpowers/specs/2026-08-04-hopf-normal-form-design.md).
+    bordered system [[Aᵀ + i*omega0*I, q], [conj(q)ᵀ, 0]], with
+    right-hand side [0, 1]. This avoids differentiating singular vectors,
+    whose derivatives can be undefined when stable modes repeat.
 
     Verified: the standard supercritical textbook example (f = (-y + x(mu -
     x^2 - y^2), x + y(mu - x^2 - y^2)), exact l1 = -1 at the origin) and an
@@ -248,8 +247,14 @@ def lyapunov_coefficient(
     eye_n = jnp.eye(n, dtype=complex_dtype)
 
     m_complex = Ac.T + 1j * omega0 * eye_n
-    _, _, vh = jnp.linalg.svd(m_complex)
-    p_left = jnp.conj(vh[-1, :])
+    bordered = jnp.block([
+        [m_complex, q[:, None]],
+        [qbar[None, :], jnp.zeros((1, 1), dtype=complex_dtype)],
+    ])
+    rhs = jnp.concatenate([
+        jnp.zeros(n, dtype=complex_dtype), jnp.ones(1, dtype=complex_dtype),
+    ])
+    p_left = jnp.linalg.solve(bordered, rhs)[:n]
     p_left = p_left / jnp.conj(jnp.vdot(p_left, q))
 
     def f_c(uu):
