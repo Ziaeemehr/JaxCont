@@ -3,13 +3,13 @@ Fully JIT-compiled pseudo-arclength continuation (whole-loop).
 
 Unlike the class-based predictor-corrector (`pseudo_arclength.py`), which runs a
 Python outer loop dispatching many small JAX ops per step, this expresses the
-*entire* continuation sweep as a single ``lax.while_loop`` over fixed-size
-buffers. Consequences:
+*entire* continuation sweep over fixed-size buffers using ``lax.while_loop``
+by default or a masked ``lax.scan`` for reverse-mode differentiation. Consequences:
 
 - **One dispatched program per run** — no per-step Python/host-sync overhead.
 - **`vmap`-able** — a batch of continuations (parameter sweeps, multistart,
   ensembles) compiles to one kernel; ideal for GPU.
-- **Bounded and hang-proof** — the loop runs at most ``max_steps`` iterations,
+- **Bounded and hang-proof** — the loop makes at most ``max_attempts`` attempts,
   each with at most ``max_iter`` Newton iterations, with an explicit finiteness
   guard, so a degenerate/saturating branch terminates cleanly instead of
   stalling.
@@ -17,8 +17,12 @@ buffers. Consequences:
 Everything operates on a pure ``f(u, p, args) -> residual``. The continuation
 parameter is the explicit scalar ``p``; ``args`` is a *dynamic* PyTree input
 (traced, not closed over), so changing ``args`` values reuses the compiled
-kernel and the result is differentiable with respect to ``args``. Only ``f``
-(and ``step_update``) are static: a fresh lambda per call still recompiles, so
+kernel. Forward derivatives work with either loop; reverse derivatives require
+``ContinuationPar(loop="scan")``. The scan executes exactly ``max_attempts``
+iterations (default ``4 * max_steps``), masking every inactive iteration,
+including in the bounded Newton correctors. Derivatives follow the locally
+selected acceptance/stopping decisions; those discrete decisions are not smooth.
+``f`` and ``step_update`` are static, as are buffer sizes and solver strategies: a fresh lambda per call still recompiles, so
 pass a module-level function (or a reused callable) to benefit from the cache.
 
 ``step_update(args, u, p) -> args`` (static, optional) refreshes auxiliary
@@ -45,6 +49,8 @@ from typing import Any, Callable, NamedTuple, Optional
 import jax
 import jax.numpy as jnp
 from jax import Array, jacfwd, lax
+from jax.extend import core as jax_core
+from jax.interpreters import ad, batching, mlir
 
 from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
 
@@ -80,6 +86,35 @@ class ScanResult(NamedTuple):
 # Building blocks (pure; operate on f(u, p, args))
 # ---------------------------------------------------------------------------
 
+def _bounded_loop(cond, body, init, length=None):
+    """Inactive scan iterations preserve every carry leaf unchanged."""
+    if length is None:
+        return lax.while_loop(cond, body, init)
+    def step(carry, _):
+        return lax.cond(cond(carry), body, lambda c: c, carry), None
+    return lax.scan(step, init, xs=None, length=length)[0]
+
+
+# The identity keeps forward derivatives intact and supplies an actionable
+# reverse-mode error before JAX transposes the dynamic while loop.
+_while_guard_p = jax_core.Primitive("continuation_while_guard")
+_while_guard_p.def_impl(lambda x: x)
+_while_guard_p.def_abstract_eval(lambda x: x)
+mlir.register_lowering(_while_guard_p, lambda ctx, x: [x])
+batching.primitive_batchers[_while_guard_p] = lambda args, dims: (_while_guard_p.bind(args[0]), dims[0])
+ad.primitive_jvps[_while_guard_p] = lambda primals, tangents: (
+    _while_guard_p.bind(primals[0]), _while_guard_p.bind(tangents[0])
+)
+
+
+def _while_guard_transpose(cotangent, x):
+    raise ValueError("Reverse-mode continuation requires ContinuationPar(loop='scan')")
+
+
+ad.primitive_transposes[_while_guard_p] = _while_guard_transpose
+_while_guard = _while_guard_p.bind
+
+
 def _bordered_matrix(jac_u: Array, df_dp: Array, last_row: Array) -> Array:
     """Assemble the (n+1, n+1) bordered matrix with ``last_row`` at the bottom."""
     n = jac_u.shape[0]
@@ -109,7 +144,7 @@ def _tangent(f, u, p, args, prev_tangent, linear_solver: LinearSolver = Dense())
 
 def _newton_correct(
     f, u_pred, p_pred, args, u_prev, p_prev, du0, dp0, ds, tol, max_iter,
-    linear_solver: LinearSolver = Dense(),
+    linear_solver: LinearSolver = Dense(), loop="while",
 ):
     """
     Bordered Newton corrector for the pseudo-arclength system
@@ -155,7 +190,7 @@ def _newton_correct(
     f0, g0 = residual(u_pred, p_pred)
     r0 = res_norm(f0, g0)
     init = (u_pred, p_pred, 0, r0 < tol, r0)
-    u_f, p_f, it_f, _, r_f = lax.while_loop(cond_fun, body, init)
+    u_f, p_f, it_f, _, r_f = _bounded_loop(cond_fun, body, init, max_iter if loop == "scan" else None)
     converged = jnp.logical_and(
         r_f < tol,
         jnp.logical_and(jnp.all(jnp.isfinite(u_f)), jnp.isfinite(p_f)),
@@ -232,7 +267,7 @@ def _final_status(final, seed_converged, max_steps):
 # Whole-loop continuation
 # ---------------------------------------------------------------------------
 
-@partial(jax.jit, static_argnums=(0, 1, 10, 12))
+@partial(jax.jit, static_argnums=(0, 1, 10, 12, 15))
 def pseudo_arclength_scan(
     f: Callable[[Array, Array, PyTree], Array],
     step_update: Optional[Callable[[PyTree, Array, Array], PyTree]],
@@ -249,6 +284,7 @@ def pseudo_arclength_scan(
     linear_solver: LinearSolver = Dense(),
     adaptive: Array = jnp.array(True),
     max_attempts: Optional[Array] = None,
+    loop: str = "while",
 ) -> ScanResult:
     """
     Continue ``f(u, p, args) = 0`` in ``p`` from ``(u0, p0)`` toward ``p_end``.
@@ -256,7 +292,9 @@ def pseudo_arclength_scan(
     ``f``, ``step_update`` (``None`` or see the module docstring) and
     ``max_steps`` are static (they set the compiled program & buffer
     sizes); everything else, including the ``args`` PyTree, may be traced, so this whole function is
-    ``jit``/``vmap``/``grad``-friendly. ``linear_solver`` is also static (a
+    ``jit``/``vmap``/``jacfwd``-friendly. Use the
+    ``pseudo_arclength_lax_scan`` entry point for ``grad`` (static iteration
+    and attempt bounds). ``linear_solver`` is also static (a
     strategy object, not a traced value) -- see ``solvers/protocols.py``.
     """
     u0 = jnp.asarray(u0)
@@ -273,7 +311,7 @@ def pseudo_arclength_scan(
     # the branch -- via _natural_correct, plain Newton with p held fixed at
     # p0 -- instead of writing the raw guess into slot 0 and marking it
     # converged unconditionally.
-    u0_corrected, seed_converged, seed_iters = _natural_correct(f, u0, p0, args, tol, max_iter, linear_solver)
+    u0_corrected, seed_converged, seed_iters = _natural_correct(f, u0, p0, args, tol, max_iter, linear_solver, loop)
     # If correction fails to converge, its raw output can be +-inf (a
     # divergent Newton iterate) -- fall back to the caller's original,
     # known-finite u0 rather than publishing that into the branch. This
@@ -331,7 +369,7 @@ def pseudo_arclength_scan(
         u_pred = c.u + c.ds * du0
         p_pred = c.p + c.ds * dp0
         u_new, p_new, converged, iters = _newton_correct(
-            f, u_pred, p_pred, c.args, c.u, c.p, du0, dp0, c.ds, tol, max_iter, linear_solver
+            f, u_pred, p_pred, c.args, c.u, c.p, du0, dp0, c.ds, tol, max_iter, linear_solver, loop
         )
 
         # New tangent only meaningful if we accept; compute anyway (branch-free).
@@ -377,14 +415,16 @@ def pseudo_arclength_scan(
         attempts=jnp.array(0, jnp.int32), args=args,
         P=P, Q=Q, T=T, C=C, D=D, I=I,
     )
-    final = lax.while_loop(cond_fun, body, init)
+    final = _bounded_loop(cond_fun, body, init,
+                          (4 * max_steps if max_attempts is None else max_attempts)
+                          if loop == "scan" else None)
 
     return ScanResult(
-        params=final.Q,
-        states=final.P,
-        tangents=final.T,
+        params=_while_guard(final.Q) if loop == "while" else final.Q,
+        states=_while_guard(final.P) if loop == "while" else final.P,
+        tangents=_while_guard(final.T) if loop == "while" else final.T,
         converged=final.C,
-        ds=final.D,
+        ds=_while_guard(final.D) if loop == "while" else final.D,
         iters=final.I,
         n_valid=jnp.where(seed_converged, final.idx + 1, 0),   # +1 for the initial point in slot 0
         status=_final_status(final, seed_converged, max_steps),
@@ -402,7 +442,7 @@ def branch_eigenvalues(f, states, params, args, eigen_solver: EigenSolver = Dens
     return jax.vmap(eig_at)(states, params)
 
 
-def _natural_correct(f, u_pred, p_fixed, args, tol, max_iter, linear_solver: LinearSolver = Dense()):
+def _natural_correct(f, u_pred, p_fixed, args, tol, max_iter, linear_solver: LinearSolver = Dense(), loop="while"):
     """
     Plain Newton on ``f(u, p_fixed, args) = 0`` with ``p_fixed`` held constant --
     no bordered system, no arclength constraint. This is natural
@@ -432,12 +472,12 @@ def _natural_correct(f, u_pred, p_fixed, args, tol, max_iter, linear_solver: Lin
     f0 = f(u_pred, p_fixed, args)
     r0 = jnp.sqrt(jnp.sum(f0 ** 2))
     init = (u_pred, 0, r0 < tol, r0)
-    u_f, it_f, _, r_f = lax.while_loop(cond_fun, body, init)
+    u_f, it_f, _, r_f = _bounded_loop(cond_fun, body, init, max_iter if loop == "scan" else None)
     converged = jnp.logical_and(r_f < tol, jnp.all(jnp.isfinite(u_f)))
     return u_f, converged, it_f
 
 
-@partial(jax.jit, static_argnums=(0, 1, 10, 12))
+@partial(jax.jit, static_argnums=(0, 1, 10, 12, 15))
 def natural_scan(
     f: Callable[[Array, Array, PyTree], Array],
     step_update: Optional[Callable[[PyTree, Array, Array], PyTree]],
@@ -454,6 +494,7 @@ def natural_scan(
     linear_solver: LinearSolver = Dense(),
     adaptive: Array = jnp.array(True),
     max_attempts: Optional[Array] = None,
+    loop: str = "while",
 ) -> ScanResult:
     """
     Continue ``f(u, p, args) = 0`` in ``p`` from ``(u0, p0)`` toward ``p_end``
@@ -478,7 +519,7 @@ def natural_scan(
     p_end = jnp.asarray(p_end, dtype)
     direction = jnp.sign(p_end - p0)
 
-    u0_corrected, seed_converged, seed_iters = _natural_correct(f, u0, p0, args, tol, max_iter, linear_solver)
+    u0_corrected, seed_converged, seed_iters = _natural_correct(f, u0, p0, args, tol, max_iter, linear_solver, loop)
     # See pseudo_arclength_scan's identical guard: fall back to the caller's
     # original (finite) u0 rather than publishing a possibly-inf failed
     # correction into the branch. `seed_converged` itself is unchanged.
@@ -518,7 +559,7 @@ def natural_scan(
 
     def body(c: Carry):
         p_pred = c.p + direction * c.ds
-        u_new, converged, iters = _natural_correct(f, c.u, p_pred, c.args, tol, max_iter, linear_solver)
+        u_new, converged, iters = _natural_correct(f, c.u, p_pred, c.args, tol, max_iter, linear_solver, loop)
         args = _apply_step_update(step_update, c.args, u_new, p_pred, converged)
 
         write = c.idx + 1
@@ -553,16 +594,29 @@ def natural_scan(
         attempts=jnp.array(0, jnp.int32), args=args,
         P=P, Q=Q, T=T, C=C, D=D, I=I,
     )
-    final = lax.while_loop(cond_fun, body, init)
+    final = _bounded_loop(cond_fun, body, init,
+                          (4 * max_steps if max_attempts is None else max_attempts)
+                          if loop == "scan" else None)
 
     return ScanResult(
-        params=final.Q,
-        states=final.P,
-        tangents=final.T,
+        params=_while_guard(final.Q) if loop == "while" else final.Q,
+        states=_while_guard(final.P) if loop == "while" else final.P,
+        tangents=_while_guard(final.T) if loop == "while" else final.T,
         converged=final.C,
-        ds=final.D,
+        ds=_while_guard(final.D) if loop == "while" else final.D,
         iters=final.I,
         n_valid=jnp.where(seed_converged, final.idx + 1, 0),
         status=_final_status(final, seed_converged, max_steps),
         n_attempts=final.attempts,
     )
+
+
+# Scan lengths are compile-time constants; the while entry points retain dynamic bounds.
+pseudo_arclength_lax_scan = jax.jit(
+    partial(pseudo_arclength_scan.__wrapped__, loop="scan"),
+    static_argnums=(0, 1, 10, 11, 12, 14),
+)
+natural_lax_scan = jax.jit(
+    partial(natural_scan.__wrapped__, loop="scan"),
+    static_argnums=(0, 1, 10, 11, 12, 14),
+)

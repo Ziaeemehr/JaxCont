@@ -88,3 +88,23 @@ def test_differentiable_root_keeps_exact_seed():
     )
     assert float(x_star[0]) == 0.0
     assert bool(converged)
+
+
+def test_scan_natural_corrector_reverse_mode_matches_forward():
+    import jaxcont as jc
+
+    def total(a, loop):
+        problem = jc.bif_problem(lambda u, p, a: u**2 - a * p,
+                                 jnp.array([0.9]), 1.0, args=a)
+        branch = jc.continuation(
+            problem, jc.Natural(), p_span=(1.0, 1.2),
+            settings=jc.ContinuationPar(loop=loop, max_steps=3,
+                                       newton_max_iter=8, compute_stability=False),
+        ).branch
+        return jnp.sum(branch.states * branch.valid[:, None])
+
+    forward = jax.jit(lambda a: total(a, 'while'))
+    reverse = jax.jit(lambda a: total(a, 'scan'))
+    a = jnp.array(1.4)
+    np_expected = jax.jacfwd(forward)(a)
+    assert jnp.allclose(jax.grad(reverse)(a), np_expected, rtol=1e-5)

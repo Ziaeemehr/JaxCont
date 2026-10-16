@@ -5,6 +5,8 @@ Tests for the functional API (`jaxcont.api`) and the JIT scan engine
 Kept fast: small `max_steps`, `tol=1e-6` (float32-reachable), tiny systems.
 """
 
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -732,3 +734,87 @@ def test_step_update_may_not_change_static_args():
             prob, p_span=(0.0, 1.0),
             settings=jc.ContinuationPar(max_steps=3, compute_stability=False),
         )
+
+
+@partial(jax.jit, static_argnums=(1, 2))
+def _loop_objective(a, loop, alg=jc.PseudoArclength()):
+    problem = jc.bif_problem(lambda u, p, a: u - a * p,
+                             jnp.array([0.0]), 0.0, args=a)
+    result = jc.continuation(
+        problem, alg, p_span=(0.0, 0.3),
+        settings=jc.ContinuationPar(loop=loop, max_steps=8, max_attempts=12,
+                                   compute_stability=False, adaptive=False),
+    )
+    b = result.branch
+    return jnp.sum(b.states * b.valid[:, None])
+
+
+@pytest.mark.parametrize('alg', [jc.PseudoArclength(), jc.Natural()])
+def test_grad_through_scan_loop(alg):
+    a = jnp.array(1.3)
+    expected = jax.jacfwd(lambda a: _loop_objective(a, 'while', alg))(a)
+    actual = jax.grad(lambda a: _loop_objective(a, 'scan', alg))(a)
+    np.testing.assert_allclose(actual, expected, rtol=1e-5)
+
+
+def test_grad_through_while_loop_raises_clear_error():
+    with pytest.raises(ValueError, match="loop='scan'"):
+        jax.grad(lambda a: _loop_objective(a, 'while'))(jnp.array(1.3))
+
+
+@pytest.mark.parametrize('alg', [jc.PseudoArclength(), jc.Natural()])
+@pytest.mark.parametrize('loop', ['while', 'scan'])
+def test_continuation_loop_jit_vmap(alg, loop):
+    values = jnp.array([0.8, 1.3])
+    actual = jax.jit(jax.vmap(lambda a: _loop_objective(a, loop, alg)))(values)
+    expected = jnp.stack([_loop_objective(a, loop, alg) for a in values])
+    np.testing.assert_allclose(actual, expected, rtol=1e-5)
+
+
+@pytest.mark.parametrize('engine', [pseudo_arclength_scan, natural_scan])
+@pytest.mark.parametrize('case', ['end', 'steps', 'attempts', 'seed', 'nonfinite', 'stalled'])
+def test_scan_loop_preserves_status_and_step_update(engine, case):
+    from jaxcont.core.scan_continuation import pseudo_arclength_lax_scan, natural_lax_scan
+    scan = pseudo_arclength_lax_scan if engine is pseudo_arclength_scan else natural_lax_scan
+    def f(u, p, args):
+        if case == 'seed':
+            return jnp.ones_like(u)
+        if case == 'nonfinite':
+            return jnp.where(p > 0, jnp.nan, u - p)
+        if case in ('attempts', 'stalled'):
+            return u**2 - (1 - p)
+        return u - p
+    def update(args, u, p):
+        return args + 1
+    kwargs = dict(f=f, step_update=update, u0=jnp.array([1.0 if case in ('attempts', 'stalled') else 0.0]),
+                  p0=0.0, p_end=0.01 if case == 'end' else 10.0,
+                  args=jnp.array(0.0), ds0=0.1, ds_min=0.1 if case == 'stalled' else 0.001,
+                  ds_max=0.1, tol=1e-5, max_steps=3,
+                  max_iter=0 if case in ('attempts', 'stalled') else 5,
+                  max_attempts=2 if case == 'attempts' else 12)
+    before, after = engine(**kwargs), scan(**kwargs)
+    for x, y in zip(before, after):
+        np.testing.assert_allclose(x, y, rtol=1e-5, equal_nan=True)
+
+
+def test_scan_forward_derivative_matches_while():
+    a = jnp.array(1.3)
+    np.testing.assert_allclose(
+        jax.jacfwd(lambda a: _loop_objective(a, 'scan'))(a),
+        jax.jacfwd(lambda a: _loop_objective(a, 'while'))(a), rtol=1e-5,
+    )
+
+
+def test_scan_step_update_changes_next_corrector_only_after_acceptance():
+    from jaxcont.core.scan_continuation import natural_lax_scan
+    def f(u, p, args):
+        return u - p - args
+    def update(args, u, p):
+        return args + 1
+    result = natural_lax_scan(
+        f, update, jnp.array([0.0]), 0.0, 10.0, jnp.array(0.0),
+        0.1, 0.001, 0.1, 1e-5, 2, 4, Dense(), False, 8,
+    )
+    # The seed refreshes args to 1; the first accept refreshes it to 2.
+    np.testing.assert_allclose(result.states[:, 0], [0, 1.1, 2.2], rtol=1e-5)
+    assert int(result.n_attempts) == 2

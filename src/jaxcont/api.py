@@ -8,8 +8,9 @@ This is the blessed surface going forward:
 
 Both algorithms (`PseudoArclength()`, the default, and `Natural()`) run on
 the fully JIT-compiled whole-loop engines in `core/scan_continuation.py`,
-which is what makes `vmap`-batched continuation and `jax.grad`/`jax.jacfwd`
-through the analysis possible.
+which support `jit`, `vmap` and `jax.jacfwd`. Reverse-mode `jax.grad`
+requires `ContinuationPar(loop="scan")`; the default `loop="while"`
+uses dynamic termination. See docs/source/transformations.rst for tested coverage.
 """
 
 from __future__ import annotations
@@ -239,6 +240,7 @@ class ContinuationPar:
     adaptive: bool = True
     newton_tol: Optional[float] = None
     newton_max_iter: int = 20
+    loop: Literal["while", "scan"] = "while"
     max_attempts: Optional[int] = None   # total corrector attempts; None -> 4 * max_steps
     compute_stability: bool = True
     bothside: bool = False
@@ -466,14 +468,13 @@ def _call_scan(scan_fn, problem: BifProblem, u0, p_from, p_to, settings: Continu
             default_tol(dtype) if settings.newton_tol is None else settings.newton_tol, dtype
         ),
         int(settings.max_steps),
-        jnp.asarray(settings.newton_max_iter),
+        int(settings.newton_max_iter) if settings.loop == "scan" else jnp.asarray(settings.newton_max_iter),
         solvers.linear,
         jnp.asarray(settings.adaptive),
-        jnp.asarray(
+        (4 * int(settings.max_steps) if settings.max_attempts is None
+         else int(settings.max_attempts)) if settings.loop == "scan" else jnp.asarray(
             4 * int(settings.max_steps) if settings.max_attempts is None
-            else settings.max_attempts,
-            jnp.int32,
-        ),
+            else settings.max_attempts, jnp.int32),
     )
 
 
@@ -955,6 +956,11 @@ def continuation(
     """
     from jaxcont.core.scan_continuation import natural_scan, pseudo_arclength_scan
 
+    if settings.loop not in ("while", "scan"):
+        raise ValueError("loop must be 'while' or 'scan'")
+    if settings.loop == "scan":
+        from jaxcont.core.scan_continuation import natural_lax_scan, pseudo_arclength_lax_scan
+        natural_scan, pseudo_arclength_scan = natural_lax_scan, pseudo_arclength_lax_scan
     if isinstance(alg, Natural):
         return _run_scan(natural_scan, problem, p_span, settings, events, solvers, verbose)
     elif isinstance(alg, PseudoArclength):

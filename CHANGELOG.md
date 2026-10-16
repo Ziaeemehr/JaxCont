@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
 
 ### Breaking
+- Reverse-mode differentiation of the while continuation engine raises a clear
+  `ValueError` directing callers to `ContinuationPar(loop="scan")`.
 - `hopf_point(..., eigenvalue=None)` can seed the tracked eigenvalue;
   `fold_point(..., null_vector=None)` can seed a tracked mode's eigenvector.
   BP refinement now follows each candidate mode.
@@ -133,6 +135,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its starting orbit (e.g. reverses its sense of rotation) no longer stalls.
 
 ### Added
+- `ContinuationPar(loop="scan")` selects masked, bounded scans for both
+  continuation algorithms and their Newton correctors, enabling reverse-mode
+  differentiation while preserving statuses and accepted-point updates.
+- A tested transformation matrix documents coverage and untested combinations.
 - `BifProblem.step_update(args, u, p) -> args` (and `bif_problem(..., step_update=...)`):
   per-step refresh of auxiliary `args` data such as a phase-condition reference. The scan
   engines carry `args` and apply it to the corrected seed and after every accepted step;

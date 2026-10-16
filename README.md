@@ -147,3 +147,9 @@ GitHub renders a "Cite this repository" button from it automatically.
 ```
 
 JaxCont is distributed under the [MIT License](LICENSE).
+
+Continuation supports `jit`, `vmap` and forward-mode `jacfwd`. For reverse-mode
+`jax.grad`, pass `ContinuationPar(loop="scan")` (the default is `"while"`).
+The scan uses a fixed attempt budget and masks inactive iterations. Derivatives
+follow the locally selected branch and acceptance decisions. See the
+[transformation matrix](docs/source/transformations.rst) for tested coverage.
