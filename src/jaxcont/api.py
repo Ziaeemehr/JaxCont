@@ -225,6 +225,7 @@ class ContinuationPar:
     adaptive: bool = True
     newton_tol: Optional[float] = None
     newton_max_iter: int = 20
+    max_attempts: Optional[int] = None   # total corrector attempts; None -> 4 * max_steps
     compute_stability: bool = True
     bothside: bool = False
 
@@ -310,6 +311,9 @@ class ContinuationResult:
     events: list[EventHit] = field(default_factory=list)
     stats: dict = field(default_factory=dict)
     _solution: Optional[ContinuationSolution] = None
+    # Lower-case ``Status`` name (e.g. "reached_end"); None under jit/vmap,
+    # where ``stats["status"]`` holds the integer ``Status`` code instead.
+    status: Optional[str] = None
 
     def plot(self, **kwargs):
         """Plot the bifurcation diagram (delegates to the legacy solution)."""
@@ -320,12 +324,14 @@ class ContinuationResult:
 
 def _continuation_result_flatten(r: ContinuationResult):
     children = (r.branch, r.events, r.stats, r._solution)
-    return children, None
+    return children, r.status
 
 
 def _continuation_result_unflatten(aux, children):
     branch, events, stats, solution = children
-    return ContinuationResult(branch=branch, events=events, stats=stats, _solution=solution)
+    return ContinuationResult(
+        branch=branch, events=events, stats=stats, _solution=solution, status=aux,
+    )
 
 
 jax.tree_util.register_pytree_node(
@@ -400,7 +406,18 @@ def _call_scan(scan_fn, problem: BifProblem, u0, p_from, p_to, settings: Continu
         jnp.asarray(settings.newton_max_iter),
         solvers.linear,
         jnp.asarray(settings.adaptive),
+        jnp.asarray(
+            4 * int(settings.max_steps) if settings.max_attempts is None
+            else settings.max_attempts,
+            jnp.int32,
+        ),
     )
+
+
+def _status_name(code) -> str:
+    from jaxcont.core.scan_continuation import Status
+
+    return Status(int(code)).name.lower()
 
 
 def _assemble_leg(
@@ -420,11 +437,18 @@ def _assemble_leg(
     fold/Hopf test function see the artificial tangent-direction reversal at
     the stitch seam.
     """
-    from jaxcont.core.scan_continuation import branch_eigenvalues
+    from jaxcont.core.scan_continuation import Status, branch_eigenvalues
     from jaxcont.stability.floquet import branch_floquet_multipliers, floquet_stable
 
     rhs2 = lambda u, p: problem.f(u, p, problem.args)
     n = int(res.n_valid)
+    if int(res.status) == int(Status.SEED_FAILED):
+        raise ValueError(
+            "continuation() seed failed: Newton did not converge at the "
+            "starting point (u0, p0) -- the initial guess is not on a "
+            "solution branch (singular Jacobian or too far away). Refine u0 "
+            "first or pass a better initial guess."
+        )
     states = res.states[:n]
     params = res.params[:n]
     tangents = res.tangents[:n]
@@ -489,6 +513,8 @@ def _finish_result(
     convergence_info,
     hits: list[EventHit],
     verbose: bool,
+    status: str,
+    n_attempts: int,
 ) -> ContinuationResult:
     sol = ContinuationSolution(
         states=states,
@@ -522,7 +548,11 @@ def _finish_result(
             f"bifurcations: {bif_summary}"
         )
 
-    return _to_result(sol)
+    result = _to_result(sol)
+    result.status = status
+    result.stats["n_attempts"] = n_attempts
+    result.stats["status"] = status
+    return result
 
 
 def _run_scan(
@@ -593,6 +623,7 @@ def _run_scan(
     return _finish_result(
         problem, states, params, tangents, eigenvalues, stability,
         convergence_info, hits, verbose,
+        _status_name(res.status), int(res.n_attempts),
     )
 
 
@@ -676,9 +707,17 @@ def _run_scan_bothside(
     # whichever leg's disjoint parameter interval actually contains it.
     hits = list(b_hits) + list(f_hits)
 
+    # Report the first leg that did not simply reach its end.
+    status = next(
+        (n for n in (_status_name(fwd_res.status), _status_name(bwd_res.status))
+         if n != "reached_end"),
+        "reached_end",
+    )
+
     return _finish_result(
         problem, states, params, tangents, eigenvalues, stability,
         convergence_info, hits, verbose,
+        status, int(fwd_res.n_attempts) + int(bwd_res.n_attempts),
     )
 
 
@@ -736,7 +775,12 @@ def _run_scan_traced(
         valid=valid,
     )
     return ContinuationResult(
-        branch=branch, events=[], stats={"n_valid": res.n_valid}, _solution=None,
+        branch=branch, events=[], stats={
+            "n_valid": res.n_valid,
+            "n_attempts": res.n_attempts,
+            "status": res.status,
+        },
+        _solution=None,
     )
 
 

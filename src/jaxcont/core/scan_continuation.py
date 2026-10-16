@@ -21,17 +21,19 @@ kernel and the result is differentiable with respect to ``args``. Only ``f``
 itself is static: a fresh lambda ``f`` per call still recompiles, so pass a
 module-level function (or a reused callable) to benefit from the cache.
 
-Design note (adaptivity): a jittable fixed-iteration loop cannot "retry without
-consuming a step". Here a rejected step shrinks ``ds`` and re-enters the loop
-without advancing the write index, so a rejection *does* consume one of the
-``max_steps`` iterations. This is a deliberate trade of unbounded retries for
-determinism/jittability; make ``max_steps`` generous.
+Design note (adaptivity): a rejected step shrinks ``ds`` and re-enters the loop
+without advancing the write index, so rejections do not consume ``max_steps``;
+they are bounded separately by ``max_attempts`` (default ``4 * max_steps``)
+total corrector attempts. A run stalls only when a step already attempted at
+``ds <= ds_min`` fails. The reason a run stopped is reported in
+``ScanResult.status`` (see :class:`Status`).
 """
 
 from __future__ import annotations
 
+import enum
 from functools import partial
-from typing import Any, Callable, NamedTuple
+from typing import Any, Callable, NamedTuple, Optional
 
 import jax
 import jax.numpy as jnp
@@ -40,6 +42,17 @@ from jax import Array, jacfwd, lax
 from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
 
 PyTree = Any
+
+
+class Status(enum.IntEnum):
+    """Why a scan stopped (stored as int32 in ``ScanResult.status``)."""
+
+    REACHED_END = 0
+    MAX_STEPS = 1
+    STALLED = 2
+    NONFINITE = 3
+    SEED_FAILED = 4
+    MAX_ATTEMPTS = 5
 
 
 class ScanResult(NamedTuple):
@@ -51,7 +64,9 @@ class ScanResult(NamedTuple):
     converged: Array     # (max_steps + 1,) bool  (step accepted)
     ds: Array            # (max_steps + 1,) step size used to reach each point
     iters: Array         # (max_steps + 1,) Newton iterations used to reach each point
-    n_valid: Array       # scalar int; entries [:n_valid] are real points
+    n_valid: Array       # scalar int; entries [:n_valid] are real points (0 if the seed failed)
+    status: Array        # scalar int32; a :class:`Status` value
+    n_attempts: Array    # scalar int32; corrector attempts, accepted or rejected
 
 
 # ---------------------------------------------------------------------------
@@ -152,9 +167,9 @@ def _adapt_ds(ds_mag, iters, converged, ds_min, ds_max, adaptive=True):
     size, since that would reintroduce adaptation. A rejected step still
     backs off by the same ``shrink_fail`` factor as the adaptive path either
     way, so a fixed-step run that cannot converge at the requested size
-    still terminates via the existing ``stalled`` (``ds <= ds_min``)
-    condition below instead of retrying the same failing step until
-    ``max_steps`` runs out.
+    still terminates via the ``stalled`` condition (a failure at an
+    attempted ``ds <= ds_min``) instead of retrying the same failing step
+    until the attempt budget runs out.
 
     The returned value is always clipped to ``[ds_min, ds_max]`` regardless
     of ``adaptive``, so a caller-requested ``ds`` outside that range is
@@ -173,6 +188,23 @@ def _adapt_ds(ds_mag, iters, converged, ds_min, ds_max, adaptive=True):
     fixed_choice = jnp.where(converged, ds_mag, shrink_fail)
     new = jnp.where(jnp.asarray(adaptive), adaptive_choice, fixed_choice)
     return jnp.clip(new, ds_min, ds_max)
+
+
+def _attempt_budget(max_attempts, max_steps):
+    """Total corrector attempts allowed; ``None`` means ``4 * max_steps``."""
+    if max_attempts is None:
+        return jnp.asarray(4 * max_steps, jnp.int32)
+    return jnp.asarray(max_attempts, jnp.int32)
+
+
+def _final_status(final, seed_converged, max_steps):
+    """Status of a finished loop: seed failure, the recorded stop reason, else the exhausted budget."""
+    status = jnp.where(
+        final.stop,
+        final.reason,
+        jnp.where(final.idx >= max_steps, int(Status.MAX_STEPS), int(Status.MAX_ATTEMPTS)),
+    )
+    return jnp.where(seed_converged, status, int(Status.SEED_FAILED)).astype(jnp.int32)
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +226,7 @@ def pseudo_arclength_scan(
     max_iter: Array,
     linear_solver: LinearSolver = Dense(),
     adaptive: Array = jnp.array(True),
+    max_attempts: Optional[Array] = None,
 ) -> ScanResult:
     """
     Continue ``f(u, p, args) = 0`` in ``p`` from ``(u0, p0)`` toward ``p_end``.
@@ -238,7 +271,8 @@ def pseudo_arclength_scan(
     T = jnp.zeros((max_steps + 1, n + 1), dtype).at[0].set(tan0)
     C = jnp.zeros((max_steps + 1,), dtype=bool).at[0].set(seed_converged)
 
-    ds_mag0 = jnp.asarray(ds0, dtype)
+    ds_mag0 = jnp.clip(jnp.asarray(ds0, dtype), ds_min, ds_max)
+    budget = _attempt_budget(max_attempts, max_steps)
     D = jnp.zeros((max_steps + 1,), dtype).at[0].set(ds_mag0)
     I = jnp.zeros((max_steps + 1,), jnp.int32).at[0].set(seed_iters.astype(jnp.int32))
 
@@ -249,6 +283,8 @@ def pseudo_arclength_scan(
         ds: Array         # positive magnitude; direction lives in the tangent
         idx: Array        # int; number of accepted points so far (write pointer)
         stop: Array       # bool
+        reason: Array     # int32 Status recorded when ``stop`` is set
+        attempts: Array   # int32 corrector attempts so far
         P: Array
         Q: Array
         T: Array
@@ -257,7 +293,10 @@ def pseudo_arclength_scan(
         I: Array          # Newton iterations used to reach each accepted point
 
     def cond_fun(c: Carry):
-        return jnp.logical_and(c.idx < max_steps, jnp.logical_not(c.stop))
+        return jnp.logical_and(
+            jnp.logical_and(c.idx < max_steps, c.attempts < budget),
+            jnp.logical_and(jnp.logical_not(c.stop), seed_converged),
+        )
 
     def body(c: Carry):
         du0 = c.tan[:-1]
@@ -294,15 +333,21 @@ def pseudo_arclength_scan(
         reached = jnp.where(
             direction >= 0, p >= p_end, p <= p_end
         )
-        stalled = jnp.logical_and(jnp.logical_not(converged), ds <= ds_min)
+        stalled = jnp.logical_and(jnp.logical_not(converged), c.ds <= ds_min)
         nonfinite = jnp.logical_not(jnp.all(jnp.isfinite(u)))
         stop = jnp.logical_or(reached, jnp.logical_or(stalled, nonfinite))
+        reason = jnp.where(
+            reached, int(Status.REACHED_END),
+            jnp.where(nonfinite, int(Status.NONFINITE), int(Status.STALLED)),
+        ).astype(jnp.int32)
 
-        return Carry(u, p, tan, ds, idx, stop, P, Q, T, C, D, I)
+        return Carry(u, p, tan, ds, idx, stop, reason, c.attempts + 1, P, Q, T, C, D, I)
 
     init = Carry(
         u=u0_seed, p=p0, tan=tan0, ds=ds_mag0,
         idx=jnp.array(0, jnp.int32), stop=jnp.array(False),
+        reason=jnp.array(int(Status.REACHED_END), jnp.int32),
+        attempts=jnp.array(0, jnp.int32),
         P=P, Q=Q, T=T, C=C, D=D, I=I,
     )
     final = lax.while_loop(cond_fun, body, init)
@@ -314,7 +359,9 @@ def pseudo_arclength_scan(
         converged=final.C,
         ds=final.D,
         iters=final.I,
-        n_valid=final.idx + 1,   # +1 for the initial point in slot 0
+        n_valid=jnp.where(seed_converged, final.idx + 1, 0),   # +1 for the initial point in slot 0
+        status=_final_status(final, seed_converged, max_steps),
+        n_attempts=final.attempts,
     )
 
 
@@ -378,6 +425,7 @@ def natural_scan(
     max_iter: Array,
     linear_solver: LinearSolver = Dense(),
     adaptive: Array = jnp.array(True),
+    max_attempts: Optional[Array] = None,
 ) -> ScanResult:
     """
     Continue ``f(u, p, args) = 0`` in ``p`` from ``(u0, p0)`` toward ``p_end``
@@ -411,7 +459,8 @@ def natural_scan(
     Q = jnp.zeros((max_steps + 1,), dtype).at[0].set(p0)
     T = jnp.zeros((max_steps + 1, n + 1), dtype)
     C = jnp.zeros((max_steps + 1,), dtype=bool).at[0].set(seed_converged)
-    ds_mag0 = jnp.asarray(ds0, dtype)
+    ds_mag0 = jnp.clip(jnp.asarray(ds0, dtype), ds_min, ds_max)
+    budget = _attempt_budget(max_attempts, max_steps)
     D = jnp.zeros((max_steps + 1,), dtype).at[0].set(ds_mag0)
     I = jnp.zeros((max_steps + 1,), jnp.int32).at[0].set(seed_iters.astype(jnp.int32))
 
@@ -421,6 +470,8 @@ def natural_scan(
         ds: Array
         idx: Array
         stop: Array
+        reason: Array
+        attempts: Array
         P: Array
         Q: Array
         T: Array
@@ -429,7 +480,10 @@ def natural_scan(
         I: Array
 
     def cond_fun(c: Carry):
-        return jnp.logical_and(c.idx < max_steps, jnp.logical_not(c.stop))
+        return jnp.logical_and(
+            jnp.logical_and(c.idx < max_steps, c.attempts < budget),
+            jnp.logical_and(jnp.logical_not(c.stop), seed_converged),
+        )
 
     def body(c: Carry):
         p_pred = c.p + direction * c.ds
@@ -449,15 +503,21 @@ def natural_scan(
         ds = _adapt_ds(c.ds, iters, converged, ds_min, ds_max, adaptive)
 
         reached = jnp.where(direction >= 0, p >= p_end, p <= p_end)
-        stalled = jnp.logical_and(jnp.logical_not(converged), ds <= ds_min)
+        stalled = jnp.logical_and(jnp.logical_not(converged), c.ds <= ds_min)
         nonfinite = jnp.logical_not(jnp.all(jnp.isfinite(u)))
         stop = jnp.logical_or(reached, jnp.logical_or(stalled, nonfinite))
+        reason = jnp.where(
+            reached, int(Status.REACHED_END),
+            jnp.where(nonfinite, int(Status.NONFINITE), int(Status.STALLED)),
+        ).astype(jnp.int32)
 
-        return Carry(u, p, ds, idx, stop, P, Q, c.T, C, D, I)
+        return Carry(u, p, ds, idx, stop, reason, c.attempts + 1, P, Q, c.T, C, D, I)
 
     init = Carry(
         u=u0_seed, p=p0, ds=ds_mag0,
         idx=jnp.array(0, jnp.int32), stop=jnp.array(False),
+        reason=jnp.array(int(Status.REACHED_END), jnp.int32),
+        attempts=jnp.array(0, jnp.int32),
         P=P, Q=Q, T=T, C=C, D=D, I=I,
     )
     final = lax.while_loop(cond_fun, body, init)
@@ -469,5 +529,7 @@ def natural_scan(
         converged=final.C,
         ds=final.D,
         iters=final.I,
-        n_valid=final.idx + 1,
+        n_valid=jnp.where(seed_converged, final.idx + 1, 0),
+        status=_final_status(final, seed_converged, max_steps),
+        n_attempts=final.attempts,
     )

@@ -19,6 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   across changed `args` values (a fresh lambda `f` per call still recompiles). Only array
   leaves of `args` are dynamic: pass arrays to get compile-cache reuse. Python scalar and
   callable leaves stay concrete (usable as shapes or flags) and recompile when changed.
+- `continuation()` no longer lets rejected steps consume `max_steps`: total corrector
+  attempts are bounded by the new `ContinuationPar.max_attempts` (default `4 * max_steps`),
+  the initial `ds` is clipped to `[ds_min, ds_max]`, and a run stalls only when a step already
+  attempted at `ds <= ds_min` fails. A seed point that fails to converge now raises
+  `ValueError` in eager mode (under `jit`/`vmap` nothing is marked valid). `pseudo_arclength_scan`
+  / `natural_scan` take a trailing `max_attempts` argument and `ScanResult.n_valid` is `0` on
+  seed failure.
+
+### Added
+- `ContinuationResult.status` (`"reached_end"`, `"max_steps"`, `"stalled"`, `"nonfinite"`,
+  `"seed_failed"`, `"max_attempts"`) and `stats["n_attempts"]` / `stats["status"]`; under
+  `jit`/`vmap` `status` is `None` and `stats["status"]` is the integer
+  `jaxcont.core.scan_continuation.Status` code. `ScanResult` gains `status` and `n_attempts`.
 
 ## [Unreleased]
 

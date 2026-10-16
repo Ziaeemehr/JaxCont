@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import pytest
 
 import jaxcont as jc
-from jaxcont.core.scan_continuation import natural_scan, pseudo_arclength_scan
+from jaxcont.core.scan_continuation import Status, natural_scan, pseudo_arclength_scan
 
 
 def test_bp_and_branch_switch_are_exported_at_top_level():
@@ -573,3 +573,57 @@ def test_python_int_arg_leaf_is_concrete_inside_engine():
         settings=jc.ContinuationPar(max_steps=10, compute_stability=False),
     )
     assert sol.branch.n_valid > 1
+
+
+def _seed_failing_problem():
+    # u0 = 0 is a zero-derivative start for u**2 + p, and no real root exists at p0 = 1.
+    return jc.bif_problem(lambda u, p, args: u ** 2 + p, u0=jnp.array([0.0]), p0=1.0)
+
+
+def test_seed_failure_raises_eagerly():
+    with pytest.raises(ValueError, match="seed"):
+        jc.continuation(_seed_failing_problem(), p_span=(1.0, 2.0))
+
+
+def test_seed_failure_traced_marks_nothing_valid():
+    res = jax.jit(
+        lambda: jc.continuation(
+            _seed_failing_problem(), p_span=(1.0, 2.0),
+            settings=jc.ContinuationPar(max_steps=5, compute_stability=False),
+        )
+    )()
+    assert int(res.branch.valid.sum()) == 0
+    assert int(res.stats["status"]) == Status.SEED_FAILED
+
+
+def _curved_run(**kw):
+    # u = 17.5 p**2 with a single Newton iteration: the corrector fails above ds ~ 0.012.
+    f = lambda u, p, args: jnp.array([u[0] - 17.5 * p ** 2])
+    prob = jc.bif_problem(f, u0=jnp.array([0.0]), p0=0.0)
+    base = dict(ds=0.015, ds_min=0.01, ds_max=0.015, max_steps=30, newton_max_iter=1,
+                newton_tol=1e-5, compute_stability=False)
+    base.update(kw)
+    return jc.continuation(prob, p_span=(0.0, 0.15), settings=jc.ContinuationPar(**base))
+
+
+def test_stall_only_after_failure_at_ds_min():
+    res = _curved_run()
+    steps = [c["ds"] for c in res._solution.convergence_info[1:] if c["converged"]]
+    assert any(d == pytest.approx(0.01) for d in steps)
+    assert res.status == "reached_end"
+
+
+def test_initial_ds_is_clipped():
+    prob = jc.bif_problem(lambda u, p, args: u - p, u0=jnp.array([0.0]), p0=0.0)
+    res = jc.continuation(
+        prob, p_span=(0.0, 1.0),
+        settings=jc.ContinuationPar(ds=0.5, ds_max=0.1, max_steps=5, compute_stability=False),
+    )
+    assert res._solution.convergence_info[1]["ds"] <= 0.1 * (1 + 1e-6)
+
+
+def test_max_attempts_bounds_rejections():
+    res = _curved_run(max_attempts=5)
+    assert res.status == "max_attempts"
+    assert res.stats["n_attempts"] == 5
+    assert res.stats["status"] == "max_attempts"
