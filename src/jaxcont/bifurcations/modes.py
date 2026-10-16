@@ -60,8 +60,8 @@ def crossings(values: np.ndarray, where: np.ndarray) -> list[int]:
 
     A bracket ``(i, i+1)`` counts for column ``k`` when
     ``where[i, k] & where[i+1, k]`` and ``values[:, k]`` changes sign or is
-    exactly zero at either end (an exact zero at sample ``i`` therefore
-    opens both brackets ``i-1`` and ``i``). ``values``/``where`` may be
+    exactly zero at exactly one end (an isolated exact zero at sample ``i``
+    therefore opens both brackets ``i-1`` and ``i``). ``values``/``where`` may be
     ``(N,)`` for a single column. Returns sorted, unique starts.
     """
     values = np.asarray(values)
@@ -69,7 +69,9 @@ def crossings(values: np.ndarray, where: np.ndarray) -> list[int]:
     if values.ndim == 1:
         values, where = values[:, None], where[:, None]
     a, b = values[:-1], values[1:]
-    hit = (a * b < 0) | (a == 0) | (b == 0)
+    # An exact zero counts at one end only: a mode that is identically zero
+    # (e.g. a center's real part) never opens a bracket.
+    hit = (a * b < 0) | ((a == 0) ^ (b == 0))
     ok = where[:-1] & where[1:]
     return np.flatnonzero(np.any(hit & ok, axis=1)).tolist()
 

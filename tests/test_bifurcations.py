@@ -1,6 +1,7 @@
 """
-Tests for the Event protocol (jaxcont.bifurcations.events): Fold/Hopf test
-functions, refinement, and the detect_events orchestrator's dedup logic.
+Tests for the Event protocol (jaxcont.bifurcations.events): Fold's test
+function, the tracked-mode scans of Hopf/BP/PD/NS, refinement and its
+spectral re-checks, and the detect_events orchestrator's dedup logic.
 Replaces the old direct tests of FoldBifurcation/HopfBifurcation (deleted
 along with BifurcationDetector -- see
 docs/superpowers/specs/2026-07-23-event-protocol-rewrite-design.md).
@@ -75,10 +76,6 @@ def test_fold_test_function_is_tangent_dp_component():
     fold = Fold()
     point = BranchPoint(p=0.0, u=jnp.zeros(1), tangent=jnp.array([0.5, 0.02]))
     assert jnp.isclose(fold.test_function(point), 0.02, atol=1e-6)
-
-
-
-
 
 
 def test_detect_events_ignores_real_to_complex_transition_far_from_axis():
@@ -350,20 +347,6 @@ def test_dedup_merges_same_kind_but_not_cross_kind():
     assert [(h.kind, h.p) for h in hits] == [("fold", 0.10), ("hopf", 0.12), ("hopf", 0.50)]
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_fold_refine_reports_not_converged_when_no_fold_exists(monkeypatch):
     # Regression for finding #2: a bracket sign-change is not a convergence
     # guarantee. Drive refine() with a fake fold_point that reports
@@ -621,3 +604,101 @@ def test_neimark_sacker_scan_ignores_real_multiplier_crossing():
                         0.5 - 0.5j + 0 * moving], axis=1)
     ns = NeimarkSacker(raw_f=lambda u, p, args: u, mesh=None)
     assert ns.scan(_points(spectra)) == []
+
+
+def test_hopf_no_event_on_a_center_family():
+    # Re(lambda) is exactly 0 along the whole branch (a center, +-i*sqrt(1+p^2)):
+    # no mode crosses the axis, so neither Hopf nor BP may open a bracket.
+    def rhs(u, p, args):
+        return jnp.array([-(1.0 + p**2) * u[1], u[0], -u[2] + p])
+
+    prob = jc.bif_problem(rhs, u0=jnp.array([0.0, 0.0, -0.5]), p0=-0.5)
+    result = jc.continuation(
+        prob, jc.PseudoArclength(), p_span=(-0.5, 0.5),
+        settings=jc.ContinuationPar(ds=0.02, ds_max=0.05, max_steps=100),
+        events=[Hopf(), BP()],
+    )
+    assert result.events == []
+    assert result.rejected_events == []
+
+
+def test_hopf_refine_spectral_check_rejects_real_spectrum(monkeypatch):
+    # A converged extended-system solve with omega0 > 0, but the spectrum at
+    # the refined point is real: the eigenvalue nearest i*omega0 is real.
+    import jaxcont.bifurcations.events as events_mod
+
+    def fake_hopf_point(f, u_guess, p_guess, args=None, **kwargs):
+        return (
+            jnp.zeros(2), jnp.array(0.0),
+            jnp.array([1.0, 0.0]), jnp.array([0.0, 1.0]), jnp.array(1.0),
+            jnp.array(True),
+        )
+
+    monkeypatch.setattr(events_mod, "hopf_point", fake_hopf_point)
+    monkeypatch.setattr(
+        events_mod, "lyapunov_coefficient", lambda *a, **k: jnp.array(-1.0)
+    )
+
+    def rhs(u, p):
+        return jnp.array([0.5 * u[0], -0.5 * u[1]])
+
+    left = BranchPoint(p=-0.05, u=jnp.zeros(2))
+    right = BranchPoint(p=0.05, u=jnp.zeros(2))
+    hit = Hopf().refine(left, right, (0, 1), rhs, tolerance=None, max_iterations=20)
+    assert hit.status == "failed"
+    assert hit.info["reason"] == "spectral_check_failed"
+    assert "eigenvalue" in hit.info
+
+
+def test_bp_refine_spectral_check_rejects_complex_spectrum(monkeypatch):
+    # A converged fold solve whose spectrum nearest 0 is a complex pair.
+    import jaxcont.bifurcations.events as events_mod
+
+    def fake_fold_point(f, u, p, **kwargs):
+        return jnp.zeros(2), jnp.array(0.0), jnp.ones(2), jnp.array(True)
+
+    monkeypatch.setattr(events_mod, "fold_point", fake_fold_point)
+
+    def rhs(u, p):
+        return jnp.array([-u[1], u[0]])
+
+    left = BranchPoint(p=-0.05, u=jnp.zeros(2))
+    right = BranchPoint(p=0.05, u=jnp.zeros(2))
+    hit = BP().refine(left, right, (0, 1), rhs, tolerance=None, max_iterations=20)
+    assert hit.status == "failed"
+    assert hit.info["reason"] == "spectral_check_failed"
+
+
+@pytest.mark.parametrize(
+    "event_cls, row, final",
+    [
+        # PD: the multiplier nearest -1 at the refined point is complex.
+        (PeriodDoubling, [1.0, -1.0, 0.3], [1.0, -1.0 + 0.5j, -1.0 - 0.5j]),
+        # NS: the multiplier nearest the tracked mode's circle point is real.
+        (NeimarkSacker, [1.0, np.exp(0.6j), np.exp(-0.6j)], [1.0, 0.95, 0.3]),
+    ],
+)
+def test_floquet_refine_spectral_check_failed(monkeypatch, event_cls, row, final):
+    import jaxcont.bifurcations.events as events_mod
+    from jaxcont.bifurcations.modes import TrackedMode
+
+    monkeypatch.setattr(
+        events_mod, "differentiable_root_checked",
+        lambda rhs, u, p, tol=None: (u, jnp.array(True)),
+    )
+    monkeypatch.setattr(
+        events_mod, "floquet_multipliers",
+        lambda raw_f, mesh, u, p: jnp.asarray(np.array(final, dtype=complex)),
+    )
+    row = np.array(row, dtype=complex)
+    mode = TrackedMode(1, row, row)
+    # A zero-width bracket skips bisection and goes straight to the re-check.
+    point = BranchPoint(p=0.0, u=jnp.zeros(1))
+    event = event_cls(raw_f=lambda u, p, args: u, mesh=None)
+    hit = event.refine(
+        point, point, (0, 1), lambda u, p: u,
+        tolerance=None, max_iterations=20, mode=mode,
+    )
+    assert hit.status == "failed"
+    assert hit.info["reason"] == "spectral_check_failed"
+    assert "multiplier" in hit.info

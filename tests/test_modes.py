@@ -56,3 +56,12 @@ def test_crossings_per_column():
     assert crossings(values, where) == [0, 1]
     where[:, 1] = False
     assert crossings(values, where) == [0]
+
+
+def test_crossings_ignore_identically_zero_column():
+    # A mode whose test value is exactly zero everywhere (a center's real
+    # part) never crosses; an isolated zero in another column still does.
+    values = np.array([[0.0, -1.0], [0.0, 0.0], [0.0, 1.0], [0.0, 2.0]])
+    where = np.ones_like(values, dtype=bool)
+    assert crossings(values[:, 0], where[:, 0]) == []
+    assert crossings(values, where) == [0, 1]

@@ -161,7 +161,7 @@ def _classify_tol(tolerance: Optional[float], values) -> float:
     """
     if tolerance is not None:
         return tolerance
-    return default_tol(jnp.finfo(jnp.asarray(values).dtype).dtype) ** 0.5
+    return default_tol(np.finfo(np.asarray(values).real.dtype).dtype) ** 0.5
 
 
 def _branch_spectra(points: Sequence[BranchPoint]) -> Optional[np.ndarray]:

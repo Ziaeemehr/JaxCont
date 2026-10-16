@@ -95,37 +95,12 @@ def test_neimark_sacker_zero_false_positives_on_period_doubling_system():
     assert sol.events == []
 
 
-def test_period_doubling_near_unit_circle_filter_prevents_double_detection():
-    # Regression for the false-positive bug found during design: a wider
-    # sweep (-0.1..0.3) that pushes the transverse multiplier well past -1
-    # must still report exactly ONE detection (at alpha=0), not two --
-    # without the near_unit_circle filter this produced a spurious second
-    # hit at p~0.110, where the "closest to -1" argmin silently switched to
-    # tracking the unrelated, always-decaying xy multiplier (~3.4e-6)
-    # instead of the true transverse candidate.
-    #
-    # This span also found a second, false-*negative* bug (v0.3.0): with the
-    # old near_unit_circle=0.5, the adaptive stepper can sample the true
-    # candidate at magnitude ~1.48 (distance 0.48 from 1, a 0.02 margin
-    # inside the 0.5 window) -- thin enough that ordinary collocation/FP
-    # differences across hardware push it outside the window, turning that
-    # bracket point's test_function to nan and silently dropping the real
-    # crossing (0 events instead of 1; reproduced on CI, not locally).
-    # near_unit_circle=0.9 gives a ~20x wider margin at that same point while
-    # still safely excluding the ~3.4e-6 decaying candidate (distance ~1.0,
-    # comfortably outside 0.9) -- see events.py's near_unit_circle comment.
-    #
-    # The same false negative resurfaced (v0.3.1) even at near_unit_circle=
-    # 0.9: a *linear* distance-from-1 window is capped below 1.0 by
-    # construction (the decaying candidate sits at exactly distance 1.0), so
-    # 0.9's magnitude ceiling of 1.9 left only ~1.4% margin over the
-    # worst-case single-step jump this test's default ds_max=0.1 allows
-    # (exp(ds_max * T) =~ 1.87x here) -- thin enough that hardware-dependent
-    # float32 rounding (different Newton iteration counts feed the adaptive
-    # step controller) tipped the post-crossing sample outside the window on
-    # some CI runners but not others. Fixed by switching the filter to a
-    # log-magnitude window (|ln|mult|| < near_unit_circle, default 2.0),
-    # which has no such ceiling -- see events.py's near_unit_circle comment.
+def test_period_doubling_wide_sweep_reports_one_detection():
+    # A wider sweep (-0.1..0.3) pushes the transverse multiplier far past -1
+    # (to ~-6.6) with large adaptive steps. Exactly one detection, at
+    # alpha = 0, must survive: the always-decaying xy multiplier (~3.4e-6)
+    # must not open a second bracket, and a large step across the crossing
+    # must not lose the real one.
     sol = _sweep(BETA_PD, jc.PeriodDoubling, span=(-0.1, 0.3))
     assert len(sol.events) == 1
     assert abs(sol.events[0].p) < 1e-4
