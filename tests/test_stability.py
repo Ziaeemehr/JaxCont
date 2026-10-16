@@ -141,5 +141,10 @@ def test_compute_stability_along_branch():
     assert bool(stability[1]) is False  # p = +1 -> unstable
 
 
+
+def test_dominant_eigenvalue_is_max_real_part():
+    analysis = analyze_stability(jnp.array([-5, 1]))
+    assert analysis['dominant_eigenvalue'] == 1
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

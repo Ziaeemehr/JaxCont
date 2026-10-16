@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
 
 ### Breaking
+- `analyze_stability` selects the dominant eigenvalue by maximum real part,
+  including for unsorted input. Period-doubling switching scales seeds and
+  verifies doubling using `u - mean(u)`, changing results for translated orbits.
 - Pseudo-arclength continuation now weights the state by `1 / n_state` by default,
   changing step counts and the meaning of `ds` for multi-state problems.
 - `lyapunov_coefficient` and Hopf event `l1` now use the MatCont/Kuznetsov

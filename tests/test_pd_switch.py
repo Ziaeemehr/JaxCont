@@ -23,6 +23,7 @@ the first crossing). For alpha > 0 the exact doubled orbit is w = sqrt(alpha/c) 
 with period 2T = 4*pi.
 """
 
+from jax import enable_x64
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -230,3 +231,40 @@ def test_detect_then_switch_end_to_end():
     expected = np.sqrt(max(float(switched.p0) - event.p, 0.0) / C_SAT)
     assert amp == pytest.approx(expected, abs=2e-2)
     assert float(switched.u0[-1]) == pytest.approx(2 * T_EXACT, abs=1e-2)
+
+
+@enable_x64()
+def test_pd_switch_invariant_under_translation():
+    event, mesh, _ = pd_event_at_origin()
+    offset = jnp.full((N_STATE,), 1e4)
+
+    def translated_rhs(u, p, args):
+        return rhs(u - offset, p, args)
+
+    shifted_u = jnp.concatenate([
+        (event.u[:-1].reshape(-1, N_STATE) + offset).flatten(), event.u[-1:]
+    ])
+    shifted_event = EventHit(kind=event.kind, p=event.p, u=shifted_u, index=None)
+    # Float32 quantization at 1e4 exceeds the default Newton tolerance.
+    switched = branch_switch_pd(translated_rhs, shifted_event, mesh, dp=0.05)
+    doubled_mesh = Collocation(ntst=2 * mesh.ntst, ncol=mesh.ncol)
+    states = np.asarray(switched.u0[:-1]).reshape(-1, N_STATE) - np.asarray(offset)
+    amplitude = np.max(np.linalg.norm(states[:doubled_mesh.ntst, 2:], axis=1))
+    assert amplitude == pytest.approx(np.sqrt(0.05 / C_SAT), abs=2e-2)
+    assert float(switched.u0[-1]) == pytest.approx(2 * T_EXACT, abs=2e-2)
+    assert _doubling_measure(switched.u0, doubled_mesh, N_STATE) > 0.4
+
+
+@pytest.mark.parametrize("offset", [0.0, 1e4])
+def test_doubling_measure_uses_orbit_amplitude(offset):
+    mesh = Collocation(ntst=20, ncol=4)
+    t = np.linspace(0, 2 * T_EXACT, mesh.ntst, endpoint=False)
+    amp = np.sqrt(0.05)
+    states = np.stack([
+        np.cos(t), np.sin(t),
+        amp * np.cos(BETA * t), amp * np.sin(BETA * t),
+    ], axis=1)
+    measure = _doubling_measure(
+        _pack_mesh_only(states + offset, mesh, N_STATE), mesh, N_STATE
+    )
+    assert measure == pytest.approx(2 * amp / np.sqrt(1 + amp**2), abs=2e-3)

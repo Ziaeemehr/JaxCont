@@ -91,7 +91,7 @@ def _pd_eigenvector(
 
 def _doubling_measure(U: Array, mesh: Collocation, n: int) -> float:
     """How much the orbit differs from its own half-period shift, relative to
-    its scale.
+    its amplitude about the mean.
 
     On a uniform mesh of ``ntst`` points over the doubled period ``2T``, the
     shift ``t -> t + T`` is an index roll of ``ntst // 2`` (``ntst`` is even by
@@ -101,6 +101,7 @@ def _doubling_measure(U: Array, mesh: Collocation, n: int) -> float:
     converges onto the retraced original with a perfectly healthy residual.
     """
     mesh_states = U[: mesh.ntst * n].reshape(mesh.ntst, n)
+    mesh_states = mesh_states - jnp.mean(mesh_states, axis=0)
     shifted = jnp.roll(mesh_states, mesh.ntst // 2, axis=0)
     spread = float(jnp.max(jnp.linalg.norm(mesh_states - shifted, axis=1)))
     scale = float(jnp.max(jnp.linalg.norm(mesh_states, axis=1)))
@@ -198,7 +199,8 @@ def branch_switch_pd(
     v0 = np.asarray(
         _pd_eigenvector(raw_f, U_star, jnp.asarray(p_star), mesh, args=args, pd_tol=pd_tol)
     )
-    orbit_scale = float(jnp.max(jnp.linalg.norm(mesh_states, axis=1)))
+    centered_states = mesh_states - jnp.mean(mesh_states, axis=0)
+    orbit_scale = float(jnp.max(jnp.linalg.norm(centered_states, axis=1)))
 
     if n_samples is None:
         n_samples = max(240, 12 * mesh.ntst)
