@@ -9,11 +9,18 @@ genuine doubled branch with closed-form ground truth:
 
     x' = (1 - r^2) x - y            r^2 = x^2 + y^2
     y' = (1 - r^2) y + x            -> circle, period T = 2*pi
-    w' = (alpha + i*beta) w - c |w|^2 w    w = w1 + i*w2, beta = pi/T, c = 1
+    w' = (alpha - k + i*beta) w + k (x + i*y) conj(w) - c |w|^2 w
+                                    w = w1 + i*w2, beta = pi/T, c = 1, k = 0.1
 
-The linear part rotates w by exactly pi per period, so w(T) = -w(0):
-anti-periodic, i.e. a period-doubling at alpha = 0. For alpha > 0 the exact
-doubled orbit is |w| = sqrt(alpha/c) with period 2T = 4*pi.
+The rotation part turns w by exactly pi per period, so w(T) = -w(0):
+anti-periodic. The coupling k (x + i*y) conj(w) breaks the S^1 symmetry
+w -> exp(i*phi) w, which would otherwise make the doubled orbit a circle of
+solutions and its collocation Jacobian singular. In the frame rotating with w,
+the transverse linearization is diag(alpha, alpha - 2k), so the -1 multiplier
+is simple: a generic period-doubling at alpha = 0 (the second transverse
+multiplier reaches -1 only at alpha = 2k, outside every parameter range used
+here). For alpha > 0 the exact doubled orbit is w = sqrt(alpha/c) exp(i*beta*t)
+with period 2T = 4*pi.
 """
 
 import jax.numpy as jnp
@@ -30,6 +37,7 @@ from jaxcont.problems.periodic import periodic_orbit_problem
 T_EXACT = 2 * np.pi
 BETA = np.pi / T_EXACT
 C_SAT = 1.0
+KAPPA = 0.1
 N_STATE = 4
 
 
@@ -40,8 +48,8 @@ def rhs(u, p, args):
     return jnp.array([
         (1.0 - r2) * x - y,
         (1.0 - r2) * y + x,
-        p * w1 - BETA * w2 - C_SAT * w1 * m2,
-        BETA * w1 + p * w2 - C_SAT * w2 * m2,
+        (p - KAPPA) * w1 - BETA * w2 - C_SAT * w1 * m2 + KAPPA * (x * w1 + y * w2),
+        BETA * w1 + (p - KAPPA) * w2 - C_SAT * w2 * m2 + KAPPA * (y * w1 - x * w2),
     ])
 
 

@@ -71,9 +71,10 @@ def periodic_orbit_problem(
 
     ``tol`` is the seed-refinement residual tolerance (default: ``default_tol`` of
     the trajectory dtype). ``max_iter`` bounds Newton refinement. Eager
-    construction raises ``ValueError`` for insufficient trajectory coverage,
-    failed refinement, a nonpositive period, or a collapsed orbit; validation
-    is skipped for traced values under JAX transformations.
+    construction raises ``ValueError`` for a nonpositive ``period0``,
+    insufficient trajectory coverage, failed refinement, a nonpositive refined
+    period, or a collapsed orbit; validation is skipped for traced values
+    under JAX transformations.
 
     ``f(u, p, args)`` is the same right-hand-side convention used for
     equilibrium problems; ``args`` (default ``None``) is passed to ``f``
@@ -84,8 +85,11 @@ def periodic_orbit_problem(
 
     ``u_trajectory``/``t_trajectory`` is a caller-supplied coarse trajectory
     guess (from the caller's own simulation -- JaxCont does not integrate
-    ODEs itself); ``period0`` is the corresponding period guess. Both are
-    resampled onto ``mesh`` and refined to convergence (via
+    ODEs itself); ``period0`` is the corresponding period guess. Times are
+    rebased to the first sample; only ``[0, period0)`` of the trajectory is
+    read, and a gap between its last sample and ``period0`` is closed linearly
+    back to the first sample. Both are resampled onto ``mesh`` and refined to
+    convergence (via
     :func:`~jaxcont.solvers.implicit.differentiable_root_checked`) before being
     returned as the ``BifProblem``'s ``u0``. This factory-level refinement
     is kept even though ``pseudo_arclength_scan``/``natural_scan`` now also
@@ -111,6 +115,9 @@ def periodic_orbit_problem(
     """
     ntst, ncol = mesh.ntst, mesh.ncol
     n = u_trajectory.shape[-1]
+    period_ok = period0 > 0
+    if not isinstance(period_ok, jax.core.Tracer) and not bool(period_ok):
+        raise ValueError("period0 must be positive")
     t_trajectory = t_trajectory - t_trajectory[0]
     covered = t_trajectory[-1] >= 0.95 * period0
     if not isinstance(covered, jax.core.Tracer) and not bool(covered):
@@ -119,11 +126,17 @@ def periodic_orbit_problem(
     _D, _E, gauss_np, _gw = collocation_matrices(ncol)
     gauss = jnp.asarray(gauss_np)
 
+    t_last = t_trajectory[-1]
+    gap = period0 - t_last
+
     def resample(tau: Array) -> Array:
+        # Samples past period0 are never read. A gap between the last sample
+        # and period0 is closed linearly from u[-1] back to u[0].
         t = tau * period0
-        return jnp.stack(
-            [jnp.interp(t, t_trajectory, u_trajectory[:, c], period=period0) for c in range(n)]
-        )
+        inside = jnp.stack([jnp.interp(t, t_trajectory, u_trajectory[:, c]) for c in range(n)])
+        s = jnp.where(gap > 0, (t - t_last) / jnp.where(gap > 0, gap, 1.0), 0.0)
+        closing = u_trajectory[-1] + s * (u_trajectory[0] - u_trajectory[-1])
+        return jnp.where(t > t_last, closing, inside)
 
     mesh_tau = jnp.arange(ntst) / ntst
     coll_tau = (jnp.arange(ntst)[:, None] + gauss[None, :]) / ntst

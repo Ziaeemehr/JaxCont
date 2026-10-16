@@ -8,12 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0] - Unreleased
 
 ### Breaking
-- Eager `periodic_orbit_problem` construction now raises `ValueError` when the
-  trajectory spans less than `0.95 * period0`, refinement fails to converge,
-  the refined period is nonpositive, or the refined orbit amplitude is at most
-  `10 * tol * (1 + norm(mean(u)))`. These checks are skipped for traced values.
-  Trajectory times are rebased to their first sample and interpolation wraps
-  periodically; the new `max_iter` keyword defaults to 50.
+- Eager `periodic_orbit_problem` construction now raises `ValueError` when
+  `period0` is nonpositive, the trajectory spans less than `0.95 * period0`,
+  refinement fails to converge, the refined period is nonpositive, or the
+  refined orbit amplitude is at most `10 * tol * (1 + norm(mean(u)))`. These checks are skipped for traced values.
+  Trajectory times are rebased to their first sample; only `[0, period0)` of the
+  trajectory is resampled (later laps are not folded in), and a gap between the
+  last sample and `period0` is closed linearly back to the first sample. The new
+  `max_iter` keyword defaults to 50.
 - A periodic problem's `args` is now `jaxcont.problems.periodic_args.PeriodicArgs` (an
   `eqx.Module`: dynamic `u_ref_coll`, `uref_prime_coll`, `user_args`; static `raw_f`, `mesh`)
   instead of the tuple `(u_ref_coll, uref_prime_coll, raw_f, mesh)`, and the problem's `f` is the
@@ -95,6 +97,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `floquet_multipliers`, `branch_floquet_multipliers`, `prc_curve`, `branch_prc` and
   `branch_switch_pd` take a keyword `args=` for the same purpose; `detect_events` takes
   `args=` (the problem's `args`).
+- `branch_switch_pd(..., refine_tol=...)`: the Newton tolerance for each candidate's
+  correction (default `None`, the `default_tol` that `periodic_orbit_problem` uses).
+  Systems with a continuous symmetry that leaves the doubled orbit unpinned need a
+  looser explicit value.
 - Top-level exports `periodic_orbit_problem`, `Collocation`, `prc_curve`, `branch_prc`,
   `dprc_curve`, and `PeriodicArgs` in `jaxcont.problems.periodic_args`.
 

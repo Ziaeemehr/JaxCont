@@ -17,6 +17,7 @@ from jaxcont.problems.periodic import periodic_orbit_problem
 
 T_EXACT = 2 * np.pi
 BETA = np.pi / T_EXACT
+KAPPA = 0.2
 
 
 # %%
@@ -29,7 +30,8 @@ BETA = np.pi / T_EXACT
 #
 #     \dot{x} &= (1-x^2-y^2)x - y, &
 #     \dot{y} &= (1-x^2-y^2)y + x, \\
-#     \dot{w} &= (\alpha+i\beta)w - |w|^2 w, \qquad \beta = \pi/T.
+#     \dot{w} &= (\alpha-\kappa+i\beta)w + \kappa(x+iy)\bar{w} - |w|^2 w,
+#     \qquad \beta = \pi/T, \quad \kappa = 0.2.
 #
 # The linear part alone (``example_08_period_doubling.py``'s system)
 # already rotates :math:`w` by exactly :math:`\pi` per period, giving
@@ -40,6 +42,14 @@ BETA = np.pi / T_EXACT
 # cycle exists in closed form, :math:`|w|=\sqrt{\alpha}` with period
 # :math:`2T`, which is what makes this system useful for testing
 # ``branch_switch_pd`` rather than just ``PeriodDoubling``.
+#
+# The :math:`\kappa` coupling breaks the rotation symmetry
+# :math:`w\mapsto e^{i\phi}w`. Without it every rotated copy of the doubled
+# cycle is also a solution, so the cycle is not isolated and Newton cannot
+# converge to it tightly. With it the :math:`-1` multiplier at
+# :math:`\alpha=0` is simple (the other transverse multiplier reaches
+# :math:`-1` only at :math:`\alpha=2\kappa`), and the doubled cycle is still
+# :math:`w=\sqrt{\alpha}\,e^{i\beta t}`.
 
 
 def rhs(u, p, args):
@@ -49,8 +59,8 @@ def rhs(u, p, args):
     return jnp.array([
         (1.0 - r2) * x - y,
         (1.0 - r2) * y + x,
-        p * w1 - BETA * w2 - w1 * m2,
-        BETA * w1 + p * w2 - w2 * m2,
+        (p - KAPPA) * w1 - BETA * w2 - w1 * m2 + KAPPA * (x * w1 + y * w2),
+        BETA * w1 + (p - KAPPA) * w2 - w2 * m2 + KAPPA * (y * w1 - x * w2),
     ])
 
 

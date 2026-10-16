@@ -288,3 +288,33 @@ def test_nonpositive_refined_period_raises():
     u, t = _coarse_wrong_trajectory()
     with pytest.raises(ValueError, match="positive"):
         periodic_orbit_problem(_rhs, u, t, -5.5, 1.0, _AD_MESH)
+
+
+def test_nonpositive_period0_raises_before_resampling():
+    u, t = _coarse_wrong_trajectory()
+    for bad in (0.0, -5.5):
+        with pytest.raises(ValueError, match="period0 must be positive"):
+            periodic_orbit_problem(_rhs, u, t, bad, 1.0, _AD_MESH)
+
+
+def test_trajectory_longer_than_period0_is_not_folded():
+    # 1.5 laps of the exact circle with a 3% wrong period guess. Resampling
+    # must read the first lap only: folding the later samples back modulo
+    # period0 interleaves points from a phase-shifted second lap.
+    t = np.linspace(0.0, 3 * np.pi, 2000)
+    u = np.stack([np.cos(t), np.sin(t)], axis=1)
+    period0 = 1.03 * 2 * np.pi
+    mesh = Collocation(ntst=10, ncol=4)
+    prob = periodic_orbit_problem(
+        _rhs, jnp.asarray(u), jnp.asarray(t), period0, 1.0, mesh
+    )
+
+    seed = np.asarray(prob.args.u_ref_coll)  # resampled (unrefined) seed
+    _, _, gauss, _ = jc.core.collocation.collocation_matrices(mesh.ncol)
+    tau = (np.arange(mesh.ntst)[:, None] + np.asarray(gauss)[None, :]) / mesh.ntst
+    reference = np.stack([np.cos(tau * period0), np.sin(tau * period0)], axis=-1)
+    np.testing.assert_allclose(seed, reference, atol=1e-4)
+
+    assert float(prob.u0[-1]) == pytest.approx(2 * np.pi, rel=1e-3)
+    radius = np.linalg.norm(np.asarray(prob.u0[: 2 * mesh.ntst]).reshape(-1, 2), axis=1)
+    np.testing.assert_allclose(radius, 1.0, atol=1e-3)
