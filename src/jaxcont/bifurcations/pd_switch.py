@@ -24,6 +24,7 @@ from jaxcont.core.collocation import (
     monodromy_matrix,
 )
 from jaxcont.problems.periodic import periodic_orbit_problem
+from jaxcont.utils.precision import default_tol
 
 PyTree = Any
 
@@ -138,6 +139,7 @@ def branch_switch_pd(
     eps_ladder: Sequence[float] = (0.05, 0.1, 0.2, 0.4, 0.8),
     doubling_tol: float = 1e-3,
     residual_tol: float = 1e-4,
+    refine_tol: Optional[float] = None,
     n_samples: Optional[int] = None,
     pd_tol: float = 1e-2,
 ) -> BifProblem:
@@ -163,6 +165,14 @@ def branch_switch_pd(
     ``(sign, eps)`` combinations, verifies each against
     :func:`_doubling_measure`, and returns the first that passes. If none does it
     raises, rather than returning a plausible but wrong branch.
+
+    ``refine_tol`` is the Newton residual tolerance for each candidate's
+    correction. It is looser than the library default on purpose: the doubled
+    problem is generically (near-)singular at its solution -- a symmetry of the
+    system, such as a rotation of the transverse block, leaves a family of
+    solutions that the single phase condition does not pin down -- so Newton
+    stalls at a residual floor around 1e-8 in float64 and cannot reach
+    ``default_tol``. The default is ``max(default_tol, 1e-6)``. ``residual_tol`` remains the acceptance test on the result.
 
     This factory is eager-only because its ``(sign, eps)`` search loop converts
     residuals to concrete Python values, branches on the doubling measure, and
@@ -200,6 +210,7 @@ def branch_switch_pd(
     modulation = np.cos(np.pi * t_samples / T)[:, None] * v0[None, :]
 
     doubled_mesh = Collocation(ntst=2 * mesh.ntst, ncol=mesh.ncol)
+    tol = max(default_tol(mesh_states.dtype), 1e-6) if refine_tol is None else refine_tol
     signs = (1, -1) if dp_sign is None else (int(np.sign(dp_sign)),)
 
     attempts: list[str] = []
@@ -217,6 +228,7 @@ def branch_switch_pd(
                     p_star + sign * dp,
                     doubled_mesh,
                     args=args,
+                    tol=tol,
                 )
             except Exception as exc:  # noqa: BLE001 - reported, not swallowed
                 attempts.append(f"{label}: correction raised {type(exc).__name__}")
