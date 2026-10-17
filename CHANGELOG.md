@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Minimal fold curves use bordered residual solves, accepted-step adjoint border
+  refresh, and reconstructed unit diagnostic modes.
+
 - Trace-safe event candidates on continuation results, with fixed-shape built-in
   detection under `jit`/`vmap` and eager `refine_event_candidates` validation.
   Bothside branches are assembled before scanning for shared-zero ownership.
@@ -24,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
 
 ### Breaking
+
+- `fold_curve_problem` defaults to `formulation="minimal"`, packing only
+  `(u, p_fixed)` (width `n+1`). Select `formulation="extended"` for the
+  previous `(u, p_fixed, v)` representation. Use `unpack_minimal_fold_curve`
+  for minimal states; fold problem args now wrap user data in `FoldCurveArgs`.
 
 - Curve event decoding and two-parameter plotting require explicit static
   `CurveLayout` metadata. Curve factories and continuation results carry it;

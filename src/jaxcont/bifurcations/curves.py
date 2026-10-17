@@ -1,23 +1,10 @@
 """
 Two-parameter continuation of codim-1 curves (fold curve, Hopf curve).
 
-A fold of ``f(u, p) = 0`` is the root of the extended system in
-``fold_solve.py``. A fold *curve* is that same system continued in a second
-parameter. With ``X = (u, p_fixed, v)`` and continuation parameter
-``q = p[free]``, ``F(X, q) = 0`` is an ordinary residual in a scalar
-parameter -- exactly what ``core/scan_continuation.py`` already solves.
-
-The reduction that makes this free: define
-``f_reduced(u, p_fixed, args) = f(u, assemble(p_fixed, q), args)``. From
-``f_reduced``'s point of view ``p_fixed`` is an ordinary scalar parameter,
-so ``fold_solve._extended_residual`` applies UNCHANGED. Same trick that let
-periodic-orbit collocation reuse the equilibrium engine.
-
-GPU numerics: Both fold-curve and Hopf-curve residuals are computed via
-``jacfwd`` plus matvecs, with no large einsum contractions, so TF32 precision
-is not a concern. CPU and GPU numerics match at newton_tol=1e-5 (verified).
-
-See docs/superpowers/specs/2026-08-17-two-parameter-continuation-design.md.
+Minimal fold curves continue ``X=(u,p_fixed)`` using a bordered scalar
+constraint. The explicit extended chart retains ``X=(u,p_fixed,v)``.
+Hopf curves use their extended eigenvector chart. Both feed the ordinary
+continuation engines, with accepted-step hooks maintaining chart data.
 """
 
 from __future__ import annotations
@@ -72,6 +59,45 @@ def unpack_fold_curve(X: Array, n: int) -> tuple[Array, Array, Array]:
     return X[:n], X[n], X[n + 1:]
 
 
+def unpack_minimal_fold_curve(X: Array, n: int) -> tuple[Array, Array]:
+    """Split a minimal fold state into ``(u, p_fixed)``."""
+    return X[:n], X[n]
+
+
+class FoldCurveArgs(eqx.Module):
+    """Frozen corrector borders and original-system data."""
+
+    b: Array
+    c: Array
+    user_args: PyTree
+    formulation: str = eqx.field(static=True)
+    n: int = eqx.field(static=True)
+    raw_f: Callable = eqx.field(static=True)
+    free: int = eqx.field(static=True)
+
+
+def _fold_border_matrix(A, b, c):
+    return jnp.block([[A, b[:, None]], [c[None, :], jnp.zeros((1, 1), dtype=A.dtype)]])
+
+
+def fold_curve_step_update(args: FoldCurveArgs, X: Array, q: Array) -> FoldCurveArgs:
+    """Refresh normalized right/adjoint borders at an accepted point."""
+    if args.formulation == "extended":
+        return args
+    u, fixed = unpack_minimal_fold_curve(X, args.n)
+    p = _assemble_p(fixed, q, args.free)
+    A = jax.jacfwd(args.raw_f)(u, p, args.user_args)
+    M = _fold_border_matrix(A, args.b, args.c)
+    rhs = jnp.zeros(args.n + 1, dtype=X.dtype).at[-1].set(1)
+    right = jnp.linalg.solve(M, rhs)[:-1]
+    left = jnp.linalg.solve(M.T, rhs)[:-1]
+    def aligned(v, old):
+        v = v / jnp.linalg.norm(v)
+        return lax.stop_gradient(jnp.where(jnp.dot(v, old) < 0, -v, v))
+    return eqx.tree_at(lambda a: (a.b, a.c), args,
+                       (aligned(left, args.b), aligned(right, args.c)))
+
+
 def fold_curve_problem(
     f: Callable[[Array, Array, PyTree], Array],
     u_guess: Array,
@@ -81,6 +107,7 @@ def fold_curve_problem(
     args: PyTree = None,
     tol: float | None = None,
     max_iter: int = 50,
+    formulation: str = "minimal",
 ) -> BifProblem:
     """
     Build a ``BifProblem`` whose solution branch is a curve of folds in the
@@ -103,9 +130,9 @@ def fold_curve_problem(
     factory use a tolerance matched to the extended-system residual, ahead
     of the scan engine's generic corrector.
 
-    ``tol``/``max_iter`` govern that initial refinement only; the
-    continuation-time tolerance is ``ContinuationPar.newton_tol`` (use
-    ``1e-5``, see the module notes and this feature's design spec).
+    ``tol``/``max_iter`` govern initial refinement only; continuation uses
+    ``ContinuationPar.newton_tol``. Minimal states pack ``(u,p_fixed)``;
+    select ``formulation="extended"`` to retain the null-vector unknowns.
 
     Pass ``p_span=(p_guess[free], ...)`` to ``continuation()``: its
     ``p_span[0]`` is the literal starting parameter value, and a mismatch is
@@ -122,6 +149,8 @@ def fold_curve_problem(
 
     Measured residual floor at refined seed: 2.4e-7 (float32).
     """
+    if formulation not in ("minimal", "extended"):
+        raise ValueError("formulation must be minimal or extended")
     u_guess = jnp.asarray(u_guess)
     p_guess = jnp.asarray(p_guess)
     _validate(u_guess, p_guess, free)
@@ -156,19 +185,29 @@ def fold_curve_problem(
         pass
 
     def F(X, q, a):
-        return _fold_extended_residual(
-            X, lambda u, p_fixed, aa: reduced(u, p_fixed, aa, q), a, n
-        )
+        if formulation == "extended":
+            return _fold_extended_residual(
+                X, lambda u, p_fixed, aa: reduced(u, p_fixed, aa, q), a.user_args, n
+            )
+        u, fixed = unpack_minimal_fold_curve(X, n)
+        p = _assemble_p(fixed, q, free)
+        A = jax.jacfwd(f)(u, p, a.user_args)
+        M = _fold_border_matrix(A, lax.stop_gradient(a.b), lax.stop_gradient(a.c))
+        rhs = jnp.zeros(n + 1, dtype=X.dtype).at[-1].set(1)
+        g = jnp.linalg.solve(M, rhs)[-1]
+        return jnp.concatenate([f(u, p, a.user_args), g[None]])
 
-    X0 = _fold_pack(u_star, p_star, v_star)
+    A = jax.jacfwd(f)(u_star, _assemble_p(p_star, q0, free), args)
+    left, _, _ = jnp.linalg.svd(A, full_matrices=False)
+    b = lax.stop_gradient(left[:, -1])
+    c = lax.stop_gradient(v_star / jnp.linalg.norm(v_star))
+    X0 = (_fold_pack(u_star, p_star, v_star) if formulation == "extended"
+          else jnp.concatenate([u_star, p_star[None]]))
     return BifProblem(
-        f=F,
-        u0=X0,
-        p0=jnp.asarray(q0, X0.dtype),
-        args=args,
-        kind="fold_curve",
-        curve_layout=CurveLayout("fold", "extended", n, free),
-        param_name=f"p[{free}]",
+        f=F, u0=X0, p0=jnp.asarray(q0, X0.dtype),
+        args=FoldCurveArgs(b, c, args, formulation, n, f, free),
+        kind="fold_curve", curve_layout=CurveLayout("fold", formulation, n, free),
+        param_name=f"p[{free}]", step_update=fold_curve_step_update,
     )
 
 

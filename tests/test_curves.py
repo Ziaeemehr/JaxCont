@@ -34,7 +34,7 @@ def test_fold_curve_traces_the_exact_cusp_discriminant():
     prob = fold_curve_problem(
         _cusp_shifted,
         jnp.array([1.7]),
-        jnp.array([-1.7, 4.2]),
+        jnp.array([-1.7, 4.2]), formulation="extended",
         free=1,
     )
     sol = jc.continuation(
@@ -51,7 +51,7 @@ def test_fold_curve_traces_the_exact_cusp_discriminant():
 
 def test_fold_curve_problem_rejects_wrong_p_shape():
     with pytest.raises(ValueError, match="shape"):
-        fold_curve_problem(_cusp_shifted, jnp.array([1.7]), jnp.array([-1.7]))
+        fold_curve_problem(_cusp_shifted, jnp.array([1.7]), jnp.array([-1.7]), formulation="extended")
 
 
 from jaxcont.bifurcations.curves import hopf_curve_problem, unpack_hopf_curve
@@ -97,7 +97,7 @@ def test_fold_curve_continuation_under_jit():
         prob = fold_curve_problem(
             _cusp_shifted,
             u_guess,
-            p_guess,
+            p_guess, formulation="extended",
             free=1,
         )
         sol = jc.continuation(
@@ -227,7 +227,7 @@ def test_lorenz84_bt_matches_bifurcationkit():
     # Seed the fold curve at a fold point away from the BT, then continue
     # toward it. Exact seed values come from 05_codim2.jl's printed output.
     prob = jc.fold_curve_problem(
-        _bk_model, U_SEED, P_SEED, free=1,
+        _bk_model, U_SEED, P_SEED, formulation="extended", free=1,
     )
     sol = jc.continuation(
         prob, p_span=(P_SEED_FREE, P_TARGET_FREE),
@@ -255,7 +255,7 @@ def test_fold_curve_events_do_not_eigendecompose_the_extended_jacobian():
     extended-system Jacobian here was pure waste. Detection must still
     work with eigenvalues left None."""
     prob = fold_curve_problem(
-        _cusp_shifted, jnp.array([1.7]), jnp.array([-1.7, 4.2]), free=1,
+        _cusp_shifted, jnp.array([1.7]), jnp.array([-1.7, 4.2]), formulation="extended", free=1,
     )
     sol = jc.continuation(
         prob,
@@ -350,7 +350,7 @@ def test_fold_curve_seed_grad_wrt_start_parameter():
 
         def seed(q):
             return fold_curve_problem(
-                f, jnp.array([0.6]), jnp.array([0.6, q]),
+                f, jnp.array([0.6]), jnp.array([0.6, q]), formulation="extended",
             ).u0[0]
 
         q = jnp.array(0.7)

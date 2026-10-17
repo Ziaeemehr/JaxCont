@@ -22,7 +22,7 @@ def test_cusp_detected_on_the_fold_curve():
     # Trace the fold curve DOWN toward the cusp at p1 = 1.2. Start at
     # b = p1-1.2 = 3 (x = 1, a = -2), continue p1 from 4.2 down past 1.2.
     prob = fold_curve_problem(
-        _cusp_shifted, jnp.array([1.7]), jnp.array([-1.7, 4.2]), free=1,
+        _cusp_shifted, jnp.array([1.7]), jnp.array([-1.7, 4.2]), formulation="extended", free=1,
     )
     sol = jc.continuation(
         prob,
@@ -58,7 +58,7 @@ def _bt_fold_curve_seed():
 
 def _bt_fold_curve_solution(events):
     u_guess, p_guess = _bt_fold_curve_seed()
-    prob = fold_curve_problem(_bt_shifted, u_guess, p_guess, free=1)
+    prob = fold_curve_problem(_bt_shifted, u_guess, p_guess, formulation="extended", free=1)
     return jc.continuation(
         prob,
         p_span=(-2.0, 0.0),
@@ -232,7 +232,7 @@ def _zh_fold_system(u, p, args):
 def test_zero_hopf_detected_on_the_fold_curve_with_large_omega():
     # Seed on the fold curve at p1 = -2 (b2 = -1 -> x = 0.5 -> X = 5.5).
     prob = fold_curve_problem(
-        _zh_fold_system, jnp.array([5.5, 2.0, 0.0, 0.0]), jnp.array([3.25, -2.0]),
+        _zh_fold_system, jnp.array([5.5, 2.0, 0.0, 0.0]), jnp.array([3.25, -2.0]), formulation="extended",
         free=1,
     )
     sol = jc.continuation(

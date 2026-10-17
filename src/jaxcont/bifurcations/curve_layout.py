@@ -17,7 +17,7 @@ class CurveLayout:
     free: int
 
     def __post_init__(self):
-        if self.kind not in ("fold", "hopf") or self.formulation != "extended":
+        if self.kind not in ("fold", "hopf") or self.formulation != "extended" and not (self.kind == "fold" and self.formulation == "minimal"):
             raise ValueError("Unsupported curve layout")
         if self.n < 1 or self.free not in (0, 1):
             raise ValueError("Invalid curve layout dimensions or free parameter")
@@ -39,19 +39,30 @@ def _unit(v):
 
 
 def decode_curve_state(X, q, layout, raw_f, user_args):
-    """Decode an explicitly described extended state in original coordinates.
+    """Decode an explicitly described curve state in original coordinates.
 
     Modes are diagnostic unit vectors; packed Newton unknowns are unchanged.
+    With no RHS, minimal states decode coordinates only (for plotting).
     """
     if layout is None:
         raise ValueError("curve layout is required for curve decoding")
     n = layout.n
-    width = 2 * n + 1 if layout.kind == "fold" else 3 * n + 2
+    width = (n + 1 if layout.formulation == "minimal" else 2 * n + 1) if layout.kind == "fold" else 3 * n + 2
     if X.shape[-1] != width:
         raise ValueError("State width does not match curve layout")
     p = jnp.stack((jnp.asarray(q), X[n])) if layout.free == 0 else jnp.stack((X[n], jnp.asarray(q)))
     if layout.kind == "fold":
-        v = _unit(X[n + 1 :])
+        if layout.formulation == "minimal":
+            if raw_f is None:
+                return X[:n], p, CurveModes()
+            A = jax.jacfwd(raw_f)(X[:n], p, user_args)
+            left, _, vh = jnp.linalg.svd(A, full_matrices=False)
+            b, c = left[:, -1], vh[-1]
+            M = jnp.block([[A, b[:, None]], [c[None, :], jnp.zeros((1, 1), dtype=A.dtype)]])
+            rhs = jnp.zeros(n + 1, dtype=X.dtype).at[-1].set(1)
+            v = _unit(jnp.linalg.solve(M, rhs)[:-1])
+        else:
+            v = _unit(X[n + 1 :])
         pivot = v[jnp.argmax(jnp.abs(v))]
         v = jnp.where(pivot < 0, -v, v)
         modes = CurveModes(v=v)

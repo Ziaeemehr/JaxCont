@@ -379,8 +379,8 @@ def pseudo_arclength_scan(
         )
 
         # New tangent only meaningful if we accept; compute anyway (branch-free).
-        tan_new = _tangent(f, u_new, p_new, c.args, c.tan, linear_solver, theta)
         args = _apply_step_update(step_update, c.args, u_new, p_new, converged)
+        tan_new = _tangent(f, u_new, p_new, args, c.tan, linear_solver, theta)
 
         write = c.idx + 1  # slot for the next accepted point
         P = c.P.at[write].set(jnp.where(converged, u_new, c.P[write]))

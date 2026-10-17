@@ -172,3 +172,16 @@ at a crossing or spectral degeneracy are not promised. Smooth branch outputs
 retain forward-mode support with ``loop="while"``. Reverse-mode differentiation
 requires ``ContinuationPar(loop="scan")``; eager refinement has no reverse-mode
 contract.
+
+Minimal fold curves
+-------------------
+
+In 0.5.0, ``fold_curve_problem`` defaults to ``formulation="minimal"``.
+Its state is ``(u, p_fixed)``, of width ``n+1``; import
+``unpack_minimal_fold_curve`` from ``jaxcont.bifurcations.curves`` to split it.
+The bordered residual freezes its borders during correction and refreshes them
+at accepted points. Problem args are ``FoldCurveArgs``; the original RHS
+receives only ``user_args``. Diagnostic null vectors are reconstructed by the
+layout decoder for events and plotting. To retain the previous packed
+``(u, p_fixed, v)`` state and ``unpack_fold_curve`` helper, pass
+``formulation="extended"`` explicitly.
