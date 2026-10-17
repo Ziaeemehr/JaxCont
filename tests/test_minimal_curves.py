@@ -371,3 +371,30 @@ def test_minimal_hopf_array_gh_crossing():
     candidates = jax.jit(event.scan_arrays)(data, None)
     np.testing.assert_array_equal(candidates.bracket_mask[:, 0], [True, False, False])
     assert jnp.all(jnp.isfinite(candidates.values))
+
+
+def test_minimal_hopf_diagnostic_derivative_with_repeated_stable_modes():
+    from jaxcont.bifurcations.curve_layout import CurveLayout, decode_curve_state
+
+    def f(u, p, angle):
+        cosine, sine = jnp.cos(angle), jnp.sin(angle)
+        rotation = jnp.eye(4).at[0, 0].set(cosine).at[0, 2].set(-sine)
+        rotation = rotation.at[2, 0].set(sine).at[2, 2].set(cosine)
+        matrix = jnp.array([[0., -1., 0., 0.], [1., 0., 0., 0.],
+                            [0., 0., -2., 0.], [0., 0., 0., -2.]])
+        return rotation @ matrix @ rotation.T @ u
+
+    layout = CurveLayout("hopf", "minimal", 4, 1)
+    state = jnp.array([0., 0., 0., 0., 0., 1.])
+
+    def objective(angle):
+        _, _, modes = decode_curve_state(state, 0., layout, f, angle)
+        # A projector entry is independent of the SVD mode's arbitrary phase.
+        return modes.q1[0] ** 2 + modes.q2[0] ** 2
+
+    angles = jnp.array([0., .2, .4])
+    values, derivatives = jax.jit(jax.vmap(jax.value_and_grad(objective)))(angles)
+    tol = 100 * default_tol(state.dtype)
+    assert jnp.all(jnp.isfinite(derivatives))
+    np.testing.assert_allclose(values, .5 * jnp.cos(angles) ** 2, atol=tol)
+    np.testing.assert_allclose(derivatives, -jnp.sin(angles) * jnp.cos(angles), atol=tol)

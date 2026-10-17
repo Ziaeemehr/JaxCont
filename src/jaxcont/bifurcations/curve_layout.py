@@ -74,7 +74,10 @@ def decode_curve_state(X, q, layout, raw_f, user_args):
             A = jax.jacfwd(raw_f)(X[:n], p, user_args)
             C = A - 1j * X[-1] * jnp.eye(n, dtype=A.dtype)
             left, _, vh = jnp.linalg.svd(C, full_matrices=False)
-            M = _hopf_border_matrix(A, X[-1], left[:, -1], vh[-1].conj())
+            # Borders define a fixed local chart; mode derivatives use the solve.
+            b = jax.lax.stop_gradient(left[:, -1])
+            c = jax.lax.stop_gradient(vh[-1].conj())
+            M = _hopf_border_matrix(A, X[-1], b, c)
             rhs = jnp.zeros(n + 1, dtype=M.dtype).at[-1].set(1)
             z = _unit(jnp.linalg.solve(M, rhs)[:-1])
         else:
