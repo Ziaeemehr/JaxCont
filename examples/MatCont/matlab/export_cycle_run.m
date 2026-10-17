@@ -2,6 +2,11 @@ function export_cycle_run(case_id, x, s, processor_data, output_dir, metadata)
 %EXPORT_CYCLE_RUN Write normalized periodic branch/event/multiplier artifacts.
 
 global lds
+if isempty(x)
+    error('JaxContValidation:EmptyCycleRun', ...
+        'MatCont returned no cycle points for %s. Check the continuation log and native cycle MEX installation.', ...
+        case_id);
+end
 if ~isfolder(output_dir)
     mkdir(output_dir);
 end

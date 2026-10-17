@@ -245,6 +245,8 @@ def _run_torbpc_jaxcont():
         jc.PseudoArclength(),
         p_span=(start_parameter, -0.75),
         settings=jc.ContinuationPar(
+            # Preserve dense Euclidean sampling for nearest-sample comparisons.
+            theta=1.0,
             compute_stability=True,
             ds=0.005,
             ds_min=1e-5,
