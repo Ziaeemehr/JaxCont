@@ -246,3 +246,156 @@ def test_bt_terminal_frequency_matches_eager_with_padding(frequencies, valid):
         (expected_terminal if mode == 'curve_terminated' else expected_crossings)[i, 0] = True
     np.testing.assert_array_equal(result.bracket_mask, expected_crossings)
     np.testing.assert_array_equal(result.terminal_mask, expected_terminal)
+
+
+def _shifted_hopf(a, *, bothside=False):
+    import jaxcont as jc
+    def f(u, p, a):
+        return jnp.array([[p-a, -2.], [2., p-a]]) @ (u-jnp.array([.5, -.3]))
+    return jc.continuation(jc.bif_problem(f, jnp.array([.5, -.3]), 0. if bothside else -.5, args=a),
+        jc.Natural(), p_span=(-.5, .5), events=(jc.Hopf(),),
+        settings=jc.ContinuationPar(ds=.125, ds_max=.125, adaptive=False, max_steps=10,
+                                   compute_stability=False, bothside=bothside))
+
+
+def test_jit_vmap_detects_shifted_hopf():
+    import jaxcont as jc
+    from jaxcont.utils.precision import default_tol
+    shifts = jnp.array([-.25, .25])
+    result = jax.jit(jax.vmap(_shifted_hopf))(shifts)
+    assert result.events == result.rejected_events == []
+    np.testing.assert_array_equal(result.event_candidates[0].bracket_mask.sum(axis=(1, 2)), [1, 1])
+    np.testing.assert_allclose(result.branch.params[:, :9],
+                               np.tile(np.arange(-.5, .501, .125), (2, 1)))
+    np.testing.assert_array_equal(np.where(result.event_candidates[0].bracket_mask)[1], [1, 5])
+    for k, a in enumerate(shifts):
+        single = jax.tree_util.tree_map(lambda x: x[k], result)
+        problem = jc.bif_problem(lambda u, p, a: jnp.array([[p-a, -2.], [2., p-a]]) @
+                                 (u-jnp.array([.5, -.3])), jnp.array([.5, -.3]), -.5, args=a)
+        refined = jc.refine_event_candidates(single, problem, (jc.Hopf(),))
+        assert len(refined.events) == 1
+        assert abs(refined.events[0].p-a) < 20*default_tol(shifts.dtype)
+        assert not np.asarray(single.event_candidates[0].bracket_mask)[8:].any()
+
+
+def test_custom_python_scan_rejected_under_jit():
+    import jaxcont as jc
+    class PythonScanner:
+        def scan(self, points):
+            return []
+    with pytest.raises(TypeError, match='PythonScanner.*scan_arrays'):
+        jax.jit(lambda a: jc.continuation(jc.bif_problem(lambda u,p,a: u-a*p,
+            jnp.zeros(1), 0., args=a), jc.Natural(), p_span=(0., 1.),
+            settings=jc.ContinuationPar(max_steps=4), events=(PythonScanner(),)))(jnp.array(1.))
+
+
+def test_loop_scan_event_detection_keeps_smooth_branch_grad():
+    import jaxcont as jc
+    class Scalar:
+        def test_function(self, point):
+            return point.p-.5
+    def run(a):
+        result = jc.continuation(jc.bif_problem(lambda u,p,a: u-a*p, jnp.zeros(1), 0., args=a),
+            jc.Natural(), p_span=(0., 1.), events=(Scalar(),),
+            settings=jc.ContinuationPar(ds=.25, ds_max=.25, adaptive=False, max_steps=4, loop='scan',
+                                       compute_stability=False))
+        return result.branch.states.sum()
+    np.testing.assert_allclose(jax.jit(jax.grad(run))(jnp.array(2.)), 2.5)
+
+
+def test_candidates_refine_with_left_anchor():
+    import jaxcont as jc
+    from jaxcont.bifurcations.events import EventHit
+    seen = []
+    class Scalar:
+        needs_args = True
+        def test_function(self, point):
+            return point.p-.5
+        def refine(self, left, right, index, rhs, *, args, **kwargs):
+            seen.append((float(left.p), float(args)))
+            np.testing.assert_allclose(rhs(jnp.array([args]), left.p), 0.)
+            return EventHit('custom', .5, jnp.array([.5]), index)
+    problem = jc.bif_problem(lambda u,p,a: u-a, jnp.zeros(1), 0., args=jnp.array(0.),
+                             step_update=lambda a,u,p: p)
+    result = jax.jit(lambda: jc.continuation(problem, jc.Natural(), p_span=(0., 1.),
+        events=(Scalar(),), settings=jc.ContinuationPar(ds=.25, ds_max=.25, adaptive=False, max_steps=4,
+                                                       compute_stability=False)))()
+    refined = jc.refine_event_candidates(result, problem, (Scalar(),))
+    assert seen == [(.25, .25)]
+    assert len(refined.events) == 1
+
+
+def test_bothside_candidate_assembly():
+    import jaxcont as jc
+    from jaxcont.bifurcations.event_scan import EventScanInput, scan_event_candidates
+    def f(u, p, args):
+        blocks = [jnp.array([[p-a, -w], [w, p-a]])
+                  for a, w in zip((-.25, 0., .25), (1., 2., 3.))]
+        return jax.scipy.linalg.block_diag(*blocks) @ (u-.5)
+    class PermutedEigen:
+        def __call__(self, matrix):
+            values = jnp.linalg.eigvals(matrix)
+            return jnp.roll(values, jnp.where(matrix[0, 0] < .25, 1, 3))
+    problem = jc.bif_problem(f, jnp.full(6, .5), 0.)
+    result = jc.continuation(problem, jc.Natural(), p_span=(-.5, .375), events=(jc.Hopf(),),
+        solvers=jc.Solvers(eigen=PermutedEigen()),
+        settings=jc.ContinuationPar(ds=.125, ds_max=.125, adaptive=False, max_steps=6, bothside=True,
+                                   compute_stability=False))
+    branch = result.branch
+    assert int((branch.params == 0).sum()) == 1
+    candidate, = result.event_candidates
+    direct, = scan_event_candidates((jc.Hopf(),), EventScanInput(branch.params, branch.states,
+        branch.tangents, branch.eigenvalues, None, jnp.ones(branch.params.shape, bool)), None)
+    np.testing.assert_array_equal(candidate.bracket_mask, direct.bracket_mask)
+    np.testing.assert_array_equal(candidate.permutation, direct.permutation)
+    assert np.any(np.asarray(candidate.permutation) != np.arange(6))
+    rows, modes = np.where(candidate.bracket_mask)
+    np.testing.assert_array_equal(rows, [1, 3, 5])
+    assert len(set(modes)) == 3
+    np.testing.assert_allclose([hit.p for hit in result.events], [-.25, 0., .25], atol=1e-7)
+    # Extra buffer slots in a traced single arm never open brackets.
+    padded = jax.jit(lambda: _shifted_hopf(jnp.array(.25)))()
+    mask = np.asarray(padded.branch.valid)
+    assert not np.asarray(padded.event_candidates[0].bracket_mask)[~(mask[:-1]&mask[1:])].any()
+
+
+@pytest.mark.parametrize('name', ['Cusp', 'BogdanovTakens'])
+def test_scalar_candidate_refinement_dispatch(name, monkeypatch):
+    import jaxcont as jc
+    from jaxcont.bifurcations.curve_layout import CurveLayout
+    from jaxcont.bifurcations.event_scan import EventCandidates
+    from jaxcont.bifurcations.events import EventHit
+    event = getattr(jc, name)(lambda u,p,a: u, **({'curve': 'hopf'} if name == 'BogdanovTakens' else {}))
+    calls = []
+    def refine(self, left, right, index, rhs, *, tolerance, max_iterations, args=None):
+        calls.append(index)
+        return EventHit(name, 0., jnp.zeros(1), index)
+    monkeypatch.setattr(type(event), 'refine', refine)
+    layout = CurveLayout('hopf' if name == 'BogdanovTakens' else 'fold', 'extended', 1, 1)
+    branch = jc.Branch(jnp.array([-.25, .25]), jnp.zeros((2, 5)), curve_layout=layout)
+    candidate = EventCandidates(jnp.array([[-1.], [1.]]), jnp.ones((2,1), bool),
+                                jnp.ones((1,1), bool), None, None)
+    result = jc.ContinuationResult(branch, event_candidates=(candidate,))
+    refined = jc.refine_event_candidates(result, jc.bif_problem(lambda u,p,a: u, jnp.zeros(5), -.25), (event,))
+    assert calls == [(0, 1)]
+    assert len(refined.events) == 1
+
+
+def test_eager_custom_scanner_receives_assembled_branch():
+    import jaxcont as jc
+    from jaxcont.bifurcations.events import EventHit
+    seen = []
+    class PythonScanner:
+        def scan(self, points):
+            seen.extend(float(point.p) for point in points)
+            return [(1, 2, None)]
+        def refine(self, left, right, index, rhs, *, mode, tolerance, max_iterations):
+            assert mode is None
+            return EventHit('custom', -.0625, jnp.array([-.0625]), index)
+    result = jc.continuation(jc.bif_problem(lambda u,p,a: u-p, jnp.zeros(1), 0.),
+        jc.Natural(), p_span=(-.25, .5), events=(PythonScanner(),),
+        settings=jc.ContinuationPar(ds=.125, ds_max=.125, adaptive=False, max_steps=6,
+                                   bothside=True, compute_stability=False))
+    np.testing.assert_allclose(seen, np.arange(-.25, .501, .125))
+    assert result.event_candidates == (None,)
+    assert len(result.events) == 1

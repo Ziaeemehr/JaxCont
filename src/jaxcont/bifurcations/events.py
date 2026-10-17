@@ -459,6 +459,7 @@ def detect_events(
     rhs: Callable[[Array, float], Array],
     *,
     ds: float,
+    candidates=None,
     curve_layout=None,
     ds_values: Optional[Array] = None,
     trivial_index: Optional[Array] = None,
@@ -526,9 +527,20 @@ def detect_events(
 
     hits: list[EventHit] = []
     starts: dict[int, int] = {}
-    for event in events:
+    for event_index, event in enumerate(events):
+        candidate = None if candidates is None else candidates[event_index]
         scan = getattr(event, "scan", None)
-        if scan is not None:
+        if candidate is not None:
+            from jaxcont.bifurcations.modes import TrackedMode
+            brackets = []
+            for i, column in np.argwhere(np.asarray(candidate.bracket_mask)):
+                mode = None if candidate.spectra is None else TrackedMode(
+                    int(column), np.asarray(candidate.spectra[i]), np.asarray(candidate.spectra[i+1]))
+                brackets.append((int(i), int(i+1), mode))
+            if candidate.terminal_mask is not None:
+                brackets.extend((int(i), int(i+1), "curve_terminated")
+                                for i, _ in np.argwhere(np.asarray(candidate.terminal_mask)))
+        elif scan is not None:
             brackets = scan(points)
         else:
             test_vals = _test_values(event, points)
@@ -537,7 +549,8 @@ def detect_events(
                 for i in crossings(test_vals, np.ones(len(points), dtype=bool))
             ]
         for i, j, mode in brackets:
-            kwargs = {} if scan is None else {"mode": mode}
+            kwargs = ({"mode": mode} if mode is not None
+                      or (candidate is None and scan is not None) else {})
             b_rhs, b_args = bracket_inputs(points[i])
             if getattr(event, "needs_args", False):
                 kwargs["args"] = b_args

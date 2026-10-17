@@ -30,6 +30,7 @@ from jaxcont.api import (
     Solvers,
     bif_problem,
     continuation,
+    refine_event_candidates,
 )
 from jaxcont.bifurcations.codim2 import (
     bogdanov_takens_parameters,
@@ -148,6 +149,7 @@ __all__ = [
     # Stability
     "compute_eigenvalues",
     "continuation",
+    "refine_event_candidates",
     "cusp_parameters",
     "cusp_point",
     "double_hopf_parameters",

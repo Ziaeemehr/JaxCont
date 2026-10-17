@@ -142,3 +142,31 @@ inferred from packed state lengths. Existing ``unpack_fold_curve`` and
 state, full two-parameter vector and diagnostic ``CurveModes``. Diagnostic
 fold vectors and complex Hopf modes have unit norm; scans align their signs
 or phases along each branch without changing the Newton unknowns.
+
+Event candidates under JAX transformations
+------------------------------------------
+
+With events enabled, ``jit`` and ``vmap`` return unvalidated detections in
+``result.event_candidates``: one fixed-shape buffer per event, with a
+``bracket_mask`` indexed by bracket start and mode. Only valid consecutive
+points can open a bracket. Traced ``events`` and ``rejected_events`` stay empty.
+Eager calls use these same scanners and validate roots automatically.
+Custom Python ``scan(points)`` hooks remain eager only; implement
+``scan_arrays(data, args)`` or an array-pure scalar ``test_function`` for tracing.
+Eager Python-only scanners have ``None`` in their candidate tuple slot.
+
+Slice a batched result pytree before refining outside the trace::
+
+   single = jax.tree_util.tree_map(lambda leaf: leaf[batch_index], batched_result)
+   refined = jc.refine_event_candidates(single, problem, events, solvers=solvers)
+
+Use the corresponding unbatched problem and the same solver bundle as detection.
+Refinement applies the problem's ``step_update`` at each bracket's left point,
+then validates locality and deduplicates adjacent roots. Candidates alone do
+not certify a bifurcation. Bothside continuation remains eager only.
+
+Detection masks and assignment permutations have stopped gradients; derivatives
+at a crossing or spectral degeneracy are not promised. Smooth branch outputs
+retain forward-mode support with ``loop="while"``. Reverse-mode differentiation
+requires ``ContinuationPar(loop="scan")``; eager refinement has no reverse-mode
+contract.

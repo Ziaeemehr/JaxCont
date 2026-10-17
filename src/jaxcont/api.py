@@ -33,8 +33,8 @@ from jaxcont.bifurcations.events import (
     NeimarkSacker,
     PeriodDoubling,
     detect_events,
-    _refined_points_match,
 )
+from jaxcont.bifurcations.event_scan import EventCandidates
 from jaxcont.core.continuation import ContinuationSolution
 from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
 from jaxcont.utils.precision import default_tol
@@ -57,6 +57,7 @@ __all__ = [
     "Solvers",
     "bif_problem",
     "continuation",
+    "refine_event_candidates",
 ]
 
 PyTree = Any
@@ -345,6 +346,7 @@ class ContinuationResult:
     # Lower-case ``Status`` name (e.g. "reached_end"); None under jit/vmap,
     # where ``stats["status"]`` holds the integer ``Status`` code instead.
     status: Optional[str] = None
+    event_candidates: tuple[EventCandidates | None, ...] = ()
 
     def plot(self, **kwargs):
         """Plot the bifurcation diagram (delegates to the legacy solution)."""
@@ -354,15 +356,15 @@ class ContinuationResult:
 
 
 def _continuation_result_flatten(r: ContinuationResult):
-    children = (r.branch, r.events, r.rejected_events, r.stats, r._solution)
+    children = (r.branch, r.events, r.rejected_events, r.stats, r._solution, r.event_candidates)
     return children, r.status
 
 
 def _continuation_result_unflatten(aux, children):
-    branch, events, rejected_events, stats, solution = children
+    branch, events, rejected_events, stats, solution, candidates = children
     return ContinuationResult(
         branch=branch, events=events, rejected_events=rejected_events,
-        stats=stats, _solution=solution, status=aux,
+        stats=stats, _solution=solution, status=aux, event_candidates=candidates,
     )
 
 
@@ -501,20 +503,10 @@ def _assemble_leg(
     events: Sequence[Event],
     solvers: Solvers,
 ):
-    """
-    Trim one ``scan_fn`` result to its ``n_valid`` real points, compute
-    eigenvalues/stability, and detect events on it in isolation.
-
-    Isolation matters for :func:`_run_scan_bothside`: each leg starts at the
-    problem's own seed point, so scanning it for events independently (as
-    opposed to scanning a single array stitched from both legs) never lets a
-    fold/Hopf test function see the artificial tangent-direction reversal at
-    the stitch seam.
-    """
+    """Trim one engine leg and compute its branch spectra."""
     from jaxcont.core.scan_continuation import Status, branch_eigenvalues
     from jaxcont.stability.floquet import branch_floquet_multipliers, floquet_stable
 
-    rhs2 = lambda u, p: problem.f(u, p, problem.args)
     n = int(res.n_valid)
     if int(res.status) == int(Status.SEED_FAILED):
         raise ValueError(
@@ -569,19 +561,7 @@ def _assemble_leg(
         for i in range(n)
     ]
 
-    # Curve-kind problems intentionally have eigenvalues=None (see above)
-    # but their codim-2 events are self-contained and never read
-    # BranchPoint.eigenvalues, so detection must still run for them.
     hits: list[EventHit] = []
-    if len(events) > 0 and (eigenvalues is not None or is_curve_kind):
-        hits = detect_events(
-            events, params, states, tangents, eigenvalues, rhs2,
-            ds=float(settings.ds), ds_values=ds, args=problem.args,
-            trivial_index=trivial_index,
-            curve_layout=problem.curve_layout,
-            step_update=problem.step_update,
-            f=None if problem.step_update is None else problem.f,
-        )
 
     return states, params, tangents, eigenvalues, stability, trivial_index, convergence_info, hits
 
@@ -737,9 +717,8 @@ def _run_scan_bothside(
     one branch. No changes to core/scan_continuation.py: direction there is
     already just ``sign(p_end - p0)``.
 
-    Eager-only, like ``events=[...]``: needs two full Python-level
-    ``scan_fn`` calls plus list-based stitching (and, with events, of their
-    independently-detected hit lists), none of which is traceable.
+    Eager-only: assemble states before scanning so candidate indices, mode
+    orientation and sampled-zero ownership follow the assembled branch.
     """
     p_a, p_b = p_span
     try:
@@ -814,18 +793,7 @@ def _run_scan_bothside(
         {**c, "step": i + n_back} for i, c in enumerate(f_conv)
     ]
 
-    # The shared seed belongs to the forward leg.
-    b_hits = [h for h in b_hits if not (
-        h.index is not None and 0 in h.index
-        and any(_refined_points_match(h, f) for f in f_hits)
-    )]
-    hits = [
-        replace(h, index=None if h.index is None else tuple(n_back - i for i in h.index))
-        for h in b_hits
-    ] + [
-        replace(h, index=None if h.index is None else tuple(n_back + i for i in h.index))
-        for h in f_hits
-    ]
+    hits = []
 
     # Report the first leg that did not simply reach its end.
     status = next(
@@ -855,16 +823,6 @@ def _run_scan_traced(
     the legacy ``ContinuationSolution``/``detect_events`` machinery,
     neither of which is traceable (Python loops, ``float()``, ``list.sort()``).
     """
-    if len(events) > 0:
-        raise NotImplementedError(
-            "events=[...] is not supported when continuation() runs inside "
-            "jax.vmap/jax.jit: detect_events uses Python-level control "
-            "flow (loops, list.sort(), float()) that isn't traceable. Call "
-            "continuation() without events inside the trace -- e.g. inspect "
-            "branch.states/branch.params/branch.valid -- or run it eagerly "
-            "per point of interest outside the trace to get events."
-        )
-
     from jaxcont.core.scan_continuation import branch_eigenvalues
     from jaxcont.stability.floquet import branch_floquet_multipliers, floquet_stable
 
@@ -874,19 +832,26 @@ def _run_scan_traced(
     eigenvalues = None
     stability = None
     trivial_index = None
-    if settings.compute_stability:
+    if problem.kind not in ("fold_curve", "hopf_curve") and (settings.compute_stability or events):
+        safe_states = jnp.where(valid[:, None], states, states[0])
+        safe_params = jnp.where(valid, params, params[0])
         if problem.kind == "periodic":
             pargs = problem.args
             eigenvalues, trivial_index = branch_floquet_multipliers(
-                pargs.raw_f, pargs.mesh, states, params,
+                pargs.raw_f, pargs.mesh, safe_states, safe_params,
                 eigen_solver=solvers.eigen, args=pargs.user_args,
             )
             stability = floquet_stable(eigenvalues, trivial_index)
         else:
             eigenvalues = branch_eigenvalues(
-                problem.f, states, params, problem.args, eigen_solver=solvers.eigen
+                problem.f, safe_states, safe_params, problem.args, eigen_solver=solvers.eigen
             )
             stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
+
+    if stability is not None:
+        stability = stability & valid
+    if eigenvalues is not None:
+        eigenvalues = jnp.where(valid[:, None], eigenvalues, 0)
 
     branch = Branch(
         params=params,
@@ -975,8 +940,63 @@ def continuation(
         from jaxcont.core.scan_continuation import natural_lax_scan, pseudo_arclength_lax_scan
         natural_scan, pseudo_arclength_scan = natural_lax_scan, pseudo_arclength_lax_scan
     if isinstance(alg, Natural):
-        return _run_scan(natural_scan, problem, p_span, settings, events, solvers, verbose)
+        result = _run_scan(natural_scan, problem, p_span, settings, events, solvers, False)
     elif isinstance(alg, PseudoArclength):
-        return _run_scan(pseudo_arclength_scan, problem, p_span, settings, events, solvers, verbose)
+        result = _run_scan(pseudo_arclength_scan, problem, p_span, settings, events, solvers, False)
     else:
         raise TypeError(f"Unknown continuation algorithm: {alg!r}")
+
+    from jaxcont.bifurcations.event_scan import EventScanInput, scan_event_candidates
+    branch = result.branch
+    traced = isinstance(branch.states, jax.core.Tracer)
+    # Python-only custom scanners participate only in eager refinement.
+    use_arrays = tuple(traced or getattr(e, "scan_arrays", None) is not None
+                       or getattr(e, "scan", None) is None for e in events)
+    array_events = tuple(e for e, use in zip(events, use_arrays) if use)
+    data = EventScanInput(branch.params, branch.states, branch.tangents,
+                          branch.eigenvalues, branch.trivial_index,
+                          jnp.ones(branch.params.shape, bool) if branch.valid is None else branch.valid,
+                          branch.curve_layout)
+    scanned = iter(scan_event_candidates(array_events, data, problem.args))
+    result.event_candidates = tuple(next(scanned) if use else None for use in use_arrays)
+    if not traced and events:
+        result = refine_event_candidates(result, problem, events, solvers=solvers)
+    if verbose and not traced:
+        counts: dict[str, int] = {}
+        for hit in result.events:
+            counts[hit.kind] = counts.get(hit.kind, 0) + 1
+        summary = ", ".join(f"{count} {kind}" for kind, count in sorted(counts.items())) or "none"
+        print(f"continuation(): {branch.n_valid} points "
+              f"({result.stats['converged_steps']} converged), bifurcations: {summary}")
+    return result
+
+
+def refine_event_candidates(result: ContinuationResult, problem: BifProblem,
+                            events: Sequence[Event], *, tolerance=None,
+                            max_iterations=50, solvers=Solvers()) -> ContinuationResult:
+    """Refine unvalidated candidates on one unbatched, eager result.
+
+    Slice batched result pytrees before calling. Use the detection solver bundle.
+    Bracket args are reconstructed from the left endpoint's step hook.
+    """
+    branch = result.branch
+    if isinstance(branch.states, jax.core.Tracer) or branch.states.ndim != 2:
+        raise TypeError("refine_event_candidates requires one unbatched eager result")
+    if len(events) != len(result.event_candidates):
+        raise ValueError("events must match the candidate tuple used for detection")
+    hits = detect_events(events, branch.params, branch.states, branch.tangents,
+        branch.eigenvalues, lambda u,p: problem.f(u,p,problem.args), ds=0.,
+        trivial_index=branch.trivial_index, curve_layout=branch.curve_layout,
+        args=problem.args, step_update=problem.step_update,
+        f=problem.f, tolerance=tolerance, max_iterations=max_iterations,
+        candidates=result.event_candidates)
+    refined = replace(result, events=[h for h in hits if h.status == "validated"],
+                      rejected_events=[h for h in hits if h.status == "failed"])
+    if result._solution is not None:
+        import copy
+        solution = copy.copy(result._solution)
+        solution.bifurcations = [
+            {"type": h.kind, "parameter": h.p, "state": h.u, "index": h.index, **h.info}
+            for h in refined.events]
+        refined._solution = solution
+    return refined

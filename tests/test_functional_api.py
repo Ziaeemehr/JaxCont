@@ -225,10 +225,11 @@ class TestVmapSafety:
         assert res.stats["n_valid"].shape == (5,)
         assert jnp.all(res.stats["n_valid"] > 0)
 
-    def test_vmap_with_events_raises_clearly(self):
+    def test_vmap_with_events_returns_candidates(self):
         bs = jnp.linspace(-0.2, 0.2, 3)
-        with pytest.raises(NotImplementedError, match="events"):
-            jax.vmap(lambda b: self._run(b, events=[jc.Fold()]))(bs)
+        result = jax.vmap(lambda b: self._run(b, events=[jc.Fold()]))(bs)
+        assert result.events == []
+        assert result.event_candidates[0].bracket_mask.shape == (3, 40, 1)
 
     def test_eager_call_unaffected(self):
         sol = self._run(0.1)

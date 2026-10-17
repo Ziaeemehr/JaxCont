@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] - Unreleased
 
+### Added
+
+- Trace-safe event candidates on continuation results, with fixed-shape built-in
+  detection under `jit`/`vmap` and eager `refine_event_candidates` validation.
+  Bothside branches are assembled before scanning for shared-zero ownership.
+
 ### Fixed
 
 - Hopf-curve BT array scans preserve near-zero terminal-frequency diagnostics
