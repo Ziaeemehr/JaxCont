@@ -220,6 +220,7 @@ class HopfCurveArgs(eqx.Module):
     ``q1_anchor . q2 - q2_anchor . q1 = 0`` is anchored to;
     :func:`hopf_curve_step_update` moves it to each accepted point.
     ``b,c`` are the frozen complex left/right borders for the minimal chart.
+    ``v_anchor`` fixes the real BT gauge at the seed and is never refreshed.
     ``user_args`` is the pytree handed to the user's right-hand side.
     """
 
@@ -232,11 +233,31 @@ class HopfCurveArgs(eqx.Module):
     n: int = eqx.field(static=True)
     raw_f: Callable = eqx.field(static=True)
     free: int = eqx.field(static=True)
+    v_anchor: Array | None = None
 
 
 def _hopf_border_matrix(A, omega, b, c):
     C = A - 1j * omega * jnp.eye(A.shape[0], dtype=A.dtype)
     return jnp.block([[C, b[:, None]], [c.conj()[None, :], jnp.zeros((1, 1), dtype=C.dtype)]])
+
+
+def unpack_bt_hopf_curve(X: Array, n: int) -> tuple[Array, Array, Array, Array, Array]:
+    """Split a real BT chart into ``(u,p_fixed,v,w,kappa)``."""
+    return X[:n], X[n], X[n + 1:2 * n + 1], X[2 * n + 1:3 * n + 1], X[-1]
+
+
+def hopf_curve_frequency(kappa: Array) -> tuple[Array, Array]:
+    """Report frequency and oscillatory eligibility; never used in residuals."""
+    return jnp.sqrt(jnp.maximum(kappa, 0)), kappa > 0
+
+
+def _bt_hopf_residual(X, p, f, args, n):
+    u, _, v, w, kappa = unpack_bt_hopf_curve(X, n)
+    A = jax.jacfwd(f)(u, p, args.user_args)
+    return jnp.concatenate([
+        f(u, p, args.user_args), A @ v + kappa * w, A @ w - v,
+        jnp.stack([jnp.dot(v, v) - 1, jnp.dot(lax.stop_gradient(args.v_anchor), w)]),
+    ])
 
 
 def unpack_minimal_hopf_curve(X: Array, n: int) -> tuple[Array, Array, Array]:
@@ -245,7 +266,9 @@ def unpack_minimal_hopf_curve(X: Array, n: int) -> tuple[Array, Array, Array]:
 
 
 def hopf_curve_step_update(args: HopfCurveArgs, X: Array, q: Array) -> HopfCurveArgs:
-    """Refresh complex borders or the extended phase anchor at an accepted point."""
+    """Refresh ordinary charts; the BT gauge remains fixed at its seed."""
+    if args.formulation == "bt":
+        return args
     if args.formulation == "extended":
         _, _, q1, q2, _ = unpack_hopf_curve(X, args.n)
         return eqx.tree_at(lambda a: (a.q1_anchor, a.q2_anchor), args,
@@ -302,11 +325,14 @@ def hopf_curve_problem(
     instead. It requires ``omega > 10*default_tol(dtype)``; select
     ``formulation="extended"`` for the eigenvector chart.
 
+    ``formulation="bt"`` packs ``(u,p_fixed,v,w,kappa)`` with a seed-fixed
+    real Jordan-chain gauge, permitting continuation through zero frequency.
+
     Measured residual floor at refined seed: 5.96e-8 (float32).
     GPU: No precision fix (TF32) needed; CPU and GPU numerics match at newton_tol=1e-5.
     """
-    if formulation not in ("minimal", "extended"):
-        raise ValueError("formulation must be minimal or extended")
+    if formulation not in ("minimal", "extended", "bt"):
+        raise ValueError("formulation must be minimal, extended or bt")
     u_guess = jnp.asarray(u_guess)
     p_guess = jnp.asarray(p_guess)
     _validate(u_guess, p_guess, free)
@@ -337,6 +363,8 @@ def hopf_curve_problem(
         pass
 
     def F(X, q, a):
+        if formulation == "bt":
+            return _bt_hopf_residual(X, _assemble_p(X[n], q, free), f, a, n)
         if formulation == "extended":
             return _hopf_anchored_residual(
                 X, lambda u, p_fixed, aa: reduced(u, p_fixed, aa, q), a.user_args, n,
@@ -358,18 +386,29 @@ def hopf_curve_problem(
     b = lax.stop_gradient(left[:, -1])
     z = q1_star + 1j * q2_star
     c = lax.stop_gradient(z / jnp.linalg.norm(z))
-    if formulation == "minimal":
+    if formulation in ("minimal", "bt"):
         try:
             if not bool(omega_star > 10 * default_tol(u_star.dtype)):
-                raise ValueError("minimal Hopf chart requires positive frequency above 10*default_tol")
+                raise ValueError("Hopf seed requires positive frequency above 10*default_tol")
         except jax.errors.ConcretizationTypeError:
             pass
     X0 = (_hopf_pack(u_star, p_star, q1_star, q2_star, omega_star)
           if formulation == "extended" else jnp.concatenate([u_star, p_star[None], omega_star[None]]))
+    v_anchor = lax.stop_gradient(q1_star)
+    if formulation == "bt":
+        # A phase rotation diagonalizes the real/imaginary Gram matrix.
+        angle = .5 * jnp.arctan2(2 * jnp.dot(q1_star, q2_star),
+                                  jnp.dot(q1_star, q1_star) - jnp.dot(q2_star, q2_star))
+        real = jnp.cos(angle) * q1_star + jnp.sin(angle) * q2_star
+        imag = -jnp.sin(angle) * q1_star + jnp.cos(angle) * q2_star
+        scale = jnp.linalg.norm(real)
+        v, w = real / scale, imag / (scale * omega_star)
+        v_anchor = lax.stop_gradient(v)
+        X0 = jnp.concatenate([u_star, p_star[None], v, w, (omega_star**2)[None]])
     return BifProblem(
         f=F, u0=X0, p0=jnp.asarray(q0, X0.dtype),
         args=HopfCurveArgs(lax.stop_gradient(q1_star), lax.stop_gradient(q2_star), args,
-                           b, c, formulation, n, f, free),
+                           b, c, formulation, n, f, free, v_anchor=v_anchor),
         kind="hopf_curve", curve_layout=CurveLayout("hopf", formulation, n, free),
         param_name=f"p[{free}]", step_update=hopf_curve_step_update,
     )

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Opt-in real Hopf BT chart with polynomial kappa residuals, a seed-fixed
+  Jordan-chain gauge, stored real modes, and reporting-only frequency decoding.
+
 - Minimal Hopf curves with complex bordered residuals, normalized adjoint/right
   border refresh, and unit complex diagnostic modes for events.
 

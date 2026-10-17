@@ -17,7 +17,9 @@ class CurveLayout:
     free: int
 
     def __post_init__(self):
-        if self.kind not in ("fold", "hopf") or self.formulation not in ("minimal", "extended"):
+        if (self.kind not in ("fold", "hopf")
+                or self.formulation not in ("minimal", "extended", "bt")
+                or (self.kind == "fold" and self.formulation == "bt")):
             raise ValueError("Unsupported curve layout")
         if self.n < 1 or self.free not in (0, 1):
             raise ValueError("Invalid curve layout dimensions or free parameter")
@@ -41,7 +43,8 @@ def _unit(v):
 def decode_curve_state(X, q, layout, raw_f, user_args):
     """Decode an explicitly described curve state in original coordinates.
 
-    Modes are diagnostic unit vectors; packed Newton unknowns are unchanged.
+    Ordinary modes are diagnostic unit vectors; BT returns stored real v,w.
+    Packed Newton unknowns are unchanged.
     With no RHS, minimal states decode coordinates only (for plotting).
     """
     if layout is None:
@@ -51,6 +54,12 @@ def decode_curve_state(X, q, layout, raw_f, user_args):
     if X.shape[-1] != width:
         raise ValueError("State width does not match curve layout")
     p = jnp.stack((jnp.asarray(q), X[n])) if layout.free == 0 else jnp.stack((X[n], jnp.asarray(q)))
+    if layout.formulation == "bt":
+        from jaxcont.bifurcations.curves import unpack_bt_hopf_curve, hopf_curve_frequency
+        u, _, v, w, kappa = unpack_bt_hopf_curve(X, n)
+        omega, oscillatory = hopf_curve_frequency(kappa)
+        return u, p, CurveModes(v=v, w=w, q1=v, q2=omega*w,
+                                omega=omega, kappa=kappa, oscillatory=oscillatory)
     if layout.kind == "fold":
         if layout.formulation == "minimal":
             if raw_f is None:
