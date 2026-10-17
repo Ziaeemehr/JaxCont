@@ -18,7 +18,7 @@ import jax.numpy as jnp
 from jax import Array, lax
 
 from jaxcont.api import BifProblem
-from jaxcont.bifurcations.curve_layout import CurveLayout
+from jaxcont.bifurcations.curve_layout import CurveLayout, minimal_hopf_floor
 from jaxcont.bifurcations.fold_solve import (
     _extended_residual as _fold_extended_residual,
 )
@@ -322,7 +322,12 @@ def hopf_curve_problem(
     to. Its ``step_update`` (:func:`hopf_curve_step_update`) re-anchors that
     condition on every accepted point in the extended chart. The default
     minimal chart packs ``(u,p_fixed,omega)`` and refreshes complex borders
-    instead. It requires ``omega > 10*default_tol(dtype)``; select
+    instead. It requires ``omega > sqrt(default_tol(dtype))``
+    (:func:`~jaxcont.bifurcations.curve_layout.minimal_hopf_floor`): a step
+    whose corrector leaves the chart is rejected, so a curve running into a
+    Bogdanov-Takens point stalls just above the floor and
+    ``BogdanovTakens(curve="hopf")`` records it as ``"curve_terminated"``.
+    Select ``formulation="bt"`` to locate BT and continue through it, or
     ``formulation="extended"`` for the eigenvector chart.
 
     ``formulation="bt"`` packs ``(u,p_fixed,v,w,kappa)`` with a seed-fixed
@@ -372,13 +377,20 @@ def hopf_curve_problem(
             )
         u, fixed, omega = unpack_minimal_hopf_curve(X, n)
         p = _assemble_p(fixed, q, free)
+        # The complex chart is valid only above minimal_hopf_floor. Below it
+        # the border solve uses the floor and the last equation is replaced
+        # by 2*floor - omega >= floor: finite, never a root, and Newton steps
+        # it back above the floor, so leaving the chart is a corrector
+        # failure (the step is rejected and ds shrinks).
+        floor = minimal_hopf_floor(X.dtype)
+        in_chart = omega > floor
+        omega_chart = jnp.where(in_chart, omega, floor)
         A = jax.jacfwd(f)(u, p, a.user_args)
-        M = _hopf_border_matrix(A, omega, lax.stop_gradient(a.b), lax.stop_gradient(a.c))
+        M = _hopf_border_matrix(A, omega_chart, lax.stop_gradient(a.b), lax.stop_gradient(a.c))
         rhs = jnp.zeros(n + 1, dtype=M.dtype).at[-1].set(1)
         g = jnp.linalg.solve(M, rhs)[-1]
-        residual = jnp.concatenate([f(u, p, a.user_args), jnp.stack([g.real, g.imag])])
-        # The complex chart is valid only above the dtype's frequency floor.
-        return jnp.where(omega > 10 * default_tol(X.dtype), residual, jnp.full_like(residual, jnp.nan))
+        last = jnp.where(in_chart, g.imag, 2 * floor - omega)
+        return jnp.concatenate([f(u, p, a.user_args), jnp.stack([g.real, last])])
 
     A = jax.jacfwd(f)(u_star, _assemble_p(p_star, q0, free), args)
     C = A - 1j * omega_star * jnp.eye(n, dtype=A.dtype)
@@ -388,8 +400,12 @@ def hopf_curve_problem(
     c = lax.stop_gradient(z / jnp.linalg.norm(z))
     if formulation in ("minimal", "bt"):
         try:
-            if not bool(omega_star > 10 * default_tol(u_star.dtype)):
-                raise ValueError("Hopf seed requires positive frequency above 10*default_tol")
+            floor = (minimal_hopf_floor(u_star.dtype) if formulation == "minimal"
+                     else 10 * default_tol(u_star.dtype))
+            if not bool(omega_star > floor):
+                raise ValueError(
+                    "Hopf seed requires positive frequency above "
+                    + ("sqrt(default_tol)" if formulation == "minimal" else "10*default_tol"))
         except jax.errors.ConcretizationTypeError:
             pass
     X0 = (_hopf_pack(u_star, p_star, q1_star, q2_star, omega_star)

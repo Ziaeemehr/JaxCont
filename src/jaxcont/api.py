@@ -254,6 +254,16 @@ class ContinuationPar:
     bothside: bool = False
     theta: Optional[float] = None  # state weight; None -> 1 / n_state
 
+    def __post_init__(self):
+        if self.theta is None:
+            return
+        try:
+            theta = float(self.theta)
+        except (TypeError, jax.errors.ConcretizationTypeError):
+            return  # traced theta: validated by the caller
+        if not (np.isfinite(theta) and theta > 0):
+            raise ValueError(f"ContinuationPar.theta must be finite and positive, got {self.theta!r}")
+
 
 @dataclass(frozen=True)
 class Solvers:
@@ -376,6 +386,18 @@ class ContinuationResult:
         if self._solution is None:
             raise RuntimeError("No underlying solution to plot.")
         return self._solution.plot(**kwargs)
+
+    def save(self, filename: str):
+        """Save an eager result with :meth:`ContinuationSolution.save`."""
+        if self._solution is None:
+            raise RuntimeError("Only eager results can be saved; slice and refine traced results first.")
+        self._solution.save(filename)
+
+    @classmethod
+    def load(cls, filename: str) -> "ContinuationResult":
+        """Load a result saved by :meth:`save` (branch, events, rejected
+        events, status and curve layout; event candidates are not stored)."""
+        return _to_result(ContinuationSolution.load(filename))
 
 
 def _continuation_result_flatten(r: ContinuationResult):
@@ -647,10 +669,13 @@ def _finish_result(
     # bif.get("type")/bif.get("parameter")/bif.get("state") directly.
     validated = [h for h in hits if h.status == "validated"]
     rejected = [h for h in hits if h.status == "failed"]
-    sol.bifurcations = [
-        {"type": h.kind, "parameter": h.p, "state": h.u, "index": h.index, **h.info}
-        for h in validated
-    ]
+    sol.bifurcations = _hit_records(validated)
+    sol.rejected_events = _hit_records(rejected)
+    sol.trivial_index = trivial_index
+    if floquet is not None:
+        sol.floquet_logabs, sol.floquet_converged = floquet
+    sol.curve_layout = problem.curve_layout
+    sol.status = status
 
     if verbose:
         n_converged = sum(1 for c in convergence_info if c["converged"])
@@ -667,15 +692,30 @@ def _finish_result(
         )
 
     result = _to_result(sol)
-    result.branch.curve_layout = problem.curve_layout
-    result.branch.trivial_index = trivial_index
-    if floquet is not None:
-        result.branch.floquet_logabs, result.branch.floquet_converged = floquet
     result.rejected_events = rejected
-    result.status = status
     result.stats["n_attempts"] = n_attempts
-    result.stats["status"] = status
     return result
+
+
+def _hit_records(hits) -> list[dict]:
+    """``EventHit`` objects as ``ContinuationSolution`` event records."""
+    return [{"type": h.kind, "parameter": h.p, "state": h.u, "index": h.index, **h.info}
+            for h in hits]
+
+
+def _record_hits(records, status: str) -> list[EventHit]:
+    return [
+        EventHit(
+            kind=b.get("type", "unknown"),
+            p=float(b.get("parameter", 0.0)),
+            u=b.get("state"),
+            index=None if b.get("index") is None else tuple(b["index"]),
+            info={k: v for k, v in b.items()
+                  if k not in ("type", "parameter", "state", "index")},
+            status=status,
+        )
+        for b in (records or [])
+    ]
 
 
 def _run_scan(
@@ -914,25 +954,21 @@ def _to_result(sol: ContinuationSolution) -> ContinuationResult:
         tangents=sol.tangent_vectors,
         eigenvalues=sol.eigenvalues,
         stable=sol.stability,
+        trivial_index=sol.trivial_index,
+        floquet_logabs=sol.floquet_logabs,
+        floquet_converged=sol.floquet_converged,
+        curve_layout=sol.curve_layout,
     )
-    events = [
-        EventHit(
-            kind=b.get("type", "unknown"),
-            p=float(b.get("parameter", 0.0)),
-            u=b.get("state"),
-            index=b.get("index"),
-            info={k: v for k, v in b.items()
-                  if k not in ("type", "parameter", "state", "index")},
-        )
-        for b in (sol.bifurcations or [])
-    ]
     stats = {
         "n_points": sol.n_points,
         "converged_steps": sum(
             1 for c in (sol.convergence_info or []) if c.get("converged")
         ),
+        "status": sol.status,
     }
-    return ContinuationResult(branch=branch, events=events, stats=stats, _solution=sol)
+    return ContinuationResult(branch=branch, events=_record_hits(sol.bifurcations, "validated"),
+                              rejected_events=_record_hits(sol.rejected_events, "failed"),
+                              stats=stats, _solution=sol, status=sol.status)
 
 
 # ---------------------------------------------------------------------------
@@ -989,10 +1025,13 @@ def continuation(
                        for e in events)
     array_events = tuple(e for e, use in zip(events, use_arrays) if use)
     strategies, spectra = _event_floquet_spectra(problem, branch, array_events, solvers)
+    from jaxcont.core.scan_continuation import Status
+    status = (result.stats["status"] if result.status is None
+              else jnp.asarray(int(Status[result.status.upper()]), jnp.int32))
     data = EventScanInput(branch.params, branch.states, branch.tangents,
                           branch.eigenvalues, branch.trivial_index,
                           jnp.ones(branch.params.shape, bool) if branch.valid is None else branch.valid,
-                          branch.curve_layout, strategies, spectra)
+                          branch.curve_layout, strategies, spectra, status)
     scanned = iter(scan_event_candidates(array_events, data, problem.args))
     result.event_candidates = tuple(next(scanned) if use else None for use in use_arrays)
     if not traced and events:
@@ -1062,8 +1101,7 @@ def refine_event_candidates(result: ContinuationResult, problem: BifProblem,
     if result._solution is not None:
         import copy
         solution = copy.copy(result._solution)
-        solution.bifurcations = [
-            {"type": h.kind, "parameter": h.p, "state": h.u, "index": h.index, **h.info}
-            for h in refined.events]
+        solution.bifurcations = _hit_records(refined.events)
+        solution.rejected_events = _hit_records(refined.rejected_events)
         refined._solution = solution
     return refined

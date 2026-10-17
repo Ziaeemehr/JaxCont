@@ -351,8 +351,13 @@ def test_minimal_hopf_border_refresh_and_frequency_limit():
         np.testing.assert_array_equal(before, after)
     u, fixed, omega = unpack_minimal_hopf_curve(problem.u0, 2)
     assert u.shape == (2,) and abs(fixed-1.75) < 100*tol and abs(omega-1) < 100*tol
-    for frequency in [0., -1., 10*tol]:
-        assert jnp.all(jnp.isnan(problem.f(problem.u0.at[-1].set(frequency), problem.p0, a)))
+    # Below the chart's floor the residual is finite and bounded away from a root.
+    from jaxcont.bifurcations.curve_layout import minimal_hopf_floor
+    floor = minimal_hopf_floor(problem.u0.dtype)
+    for frequency in [0., -1., 10*tol, floor]:
+        residual = problem.f(problem.u0.at[-1].set(frequency), problem.p0, a)
+        assert jnp.all(jnp.isfinite(residual))
+        assert jnp.max(jnp.abs(residual)) >= 0.5 * floor
 
 
 def test_minimal_hopf_array_gh_crossing():

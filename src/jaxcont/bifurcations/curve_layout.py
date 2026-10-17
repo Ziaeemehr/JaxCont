@@ -9,6 +9,16 @@ import jax.numpy as jnp
 from jaxcont.utils.precision import default_tol
 
 
+def minimal_hopf_floor(dtype) -> float:
+    """Lowest frequency of the minimal Hopf chart, ``sqrt(default_tol(dtype))``.
+
+    The chart's border residual is O(omega) near a Bogdanov-Takens point, so
+    below this floor it no longer separates Hopf points from their
+    neighbourhood at the corrector tolerance.
+    """
+    return default_tol(dtype) ** 0.5
+
+
 @dataclass(frozen=True)
 class CurveLayout:
     kind: str

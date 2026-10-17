@@ -7,7 +7,9 @@ import jax
 import jax.numpy as jnp
 
 from jaxcont.bifurcations.array_modes import crossing_mask, track_modes_array
-from jaxcont.bifurcations.curve_layout import decode_curve_state, orient_curve_modes
+from jaxcont.bifurcations.curve_layout import (
+    decode_curve_state, minimal_hopf_floor, orient_curve_modes,
+)
 from jaxcont.utils.precision import default_tol
 
 
@@ -21,6 +23,10 @@ class EventScanInput:
     ``floquet_solver`` is set scans its matching entry (values, trivial index
     and convergence); with no strategies supplied, Floquet events scan
     ``eigenvalues`` and ``trivial_index``.
+
+    ``status`` is the run's integer ``Status`` code, or ``None`` when unknown;
+    a minimal-chart ``BogdanovTakens(curve="hopf")`` scan uses it to tell a
+    curve that stopped short of its span from one that completed it.
     """
 
     params: object
@@ -32,18 +38,30 @@ class EventScanInput:
     curve_layout: object = None
     floquet_strategies: tuple = ()
     floquet_spectra: tuple = ()
+    status: object = None
 
     def tree_flatten(self):
         return ((self.params, self.states, self.tangents, self.eigenvalues,
-                 self.trivial_index, self.valid, self.floquet_spectra),
+                 self.trivial_index, self.valid, self.floquet_spectra, self.status),
                 (self.curve_layout, self.floquet_strategies))
 
     @classmethod
     def tree_unflatten(cls, metadata, children):
         layout, strategies = metadata
-        params, states, tangents, eigenvalues, trivial, valid, spectra = children
+        params, states, tangents, eigenvalues, trivial, valid, spectra, status = children
         return cls(params, states, tangents, eigenvalues, trivial, valid,
-                   layout, strategies, spectra)
+                   layout, strategies, spectra, status)
+
+
+def terminated_status(status):
+    """Whether a run's ``Status`` code means it stopped before its span ended
+    (stalled, nonfinite or out of attempts); ``None`` counts as terminated."""
+    from jaxcont.core.scan_continuation import Status
+
+    if status is None:
+        return jnp.asarray(True)
+    stopped = (int(Status.STALLED), int(Status.NONFINITE), int(Status.MAX_ATTEMPTS))
+    return jnp.isin(jnp.asarray(status), jnp.asarray(stopped))
 
 
 class EventCandidates(NamedTuple):
@@ -180,8 +198,14 @@ def scan_builtin(event, data, args):
             last = jnp.max(jnp.where(data.valid, indices, -1))
             terminal = ((indices[:-1] == last - 1) & data.valid[:-1]
                         & data.valid[1:])[:, None]
-            near_zero = jnp.abs(modes.omega[jnp.maximum(last, 0)]) < (
-                10 * default_tol(data.states.dtype))
+            last_omega = jnp.abs(modes.omega[jnp.maximum(last, 0)])
+            if layout.formulation == 'minimal':
+                # The chart cannot reach omega = 0: a run that stopped just
+                # above its frequency floor ran into the BT point.
+                near_zero = ((last_omega < 10 * minimal_hopf_floor(data.states.dtype))
+                             & terminated_status(data.status))
+            else:
+                near_zero = last_omega < 10 * default_tol(data.states.dtype)
             terminal = terminal & near_zero & ~jnp.any(result.bracket_mask)
             return result._replace(terminal_mask=jax.lax.stop_gradient(terminal))
         raw = jax.vmap(event._eigenvalues)(u, p)

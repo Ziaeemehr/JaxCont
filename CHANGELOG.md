@@ -7,66 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] - Unreleased
 
-### Added
-
-- Floquet strategies `PeriodicSchur(max_sweeps=None)` and
-  `ProductFloquet(eigen_solver=DenseEigen())`, selected by `Solvers.floquet`
-  or per PD/NS event with `floquet_solver`. `floquet_spectrum` returns
-  `FloquetSpectrum(values, phase, logabs, trivial_index, converged)`; periodic
-  branches report `Branch.floquet_logabs` and `Branch.floquet_converged`.
-  `jaxcont.stability` exports the periodic Schur routines.
-
-- BT-chart event detection uses validated kappa crossings; Hopf-only events
-  require positive kappa with safe batched coefficient evaluation. Two-parameter
-  plots label and dash the neutral-saddle extension.
-
-- Opt-in real Hopf BT chart with polynomial kappa residuals, a seed-fixed
-  Jordan-chain gauge, stored real modes, and reporting-only frequency decoding.
-
-- Minimal Hopf curves with complex bordered residuals, normalized adjoint/right
-  border refresh, and unit complex diagnostic modes for events.
-
-- Minimal fold curves use bordered residual solves, accepted-step adjoint border
-  refresh, and reconstructed unit diagnostic modes.
-
-- Trace-safe event candidates on continuation results, with fixed-shape built-in
-  detection under `jit`/`vmap` and eager `refine_event_candidates` validation.
-  Bothside branches are assembled before scanning for shared-zero ownership.
-
-### Fixed
-
-- Periodic Schur no longer deflates a subdiagonal that is small in its own
-  factor but meets a reciprocally large coupling in another factor (loop-5
-  audit): deflation also requires a negligible eigenvalue shift of the cyclic
-  `2x2` product block, so such factors now give the true spectrum instead of
-  wrong multipliers with `converged=True`. Spectrum sensitivities are published
-  only for modes whose local multipliers through the true factors reproduce
-  their multiplier; other modes get a NaN tangent.
-- Converged correctors with a nonsingular Jacobian carry the implicit-function
-  derivative of their root, for `loop='scan'` and `loop='while'`, so an exact
-  initial guess (zero Newton steps) no longer drops the solution's sensitivity
-  to args, closed-over values or the arclength constraint. Exact singular seeds
-  keep their acceptance and pass their own tangent through.
-- Periodic Schur mode reconstruction uses signed log-magnitude cyclic solves
-  for cancelling local growth; finite simple multipliers retain forward and
-  reverse sensitivities without overflowing local diagonal ratios.
-- BT Hopf initialization stops its phase gauge and uses a deterministic
-  isotropic-Gram fallback; minimal fold diagnostics stop SVD border selection
-  and differentiate modes through their bordered solves.
-- Limit-cycle examples 10 and 11 use refined meshes to resolve the Floquet
-  flow direction; example 11 also corrects to the dtype's solve tolerance.
-  Example 15 preserves structured fold args while batching user args.
-- The transformation matrix documents transformed event candidate detection
-  separately from eager refinement, with current regression references.
-
-- Eager custom scalar events retain pointwise Python test evaluation when
-  they do not implement `scan_arrays`; traced detection still requires array purity.
-- Hopf-curve BT array scans preserve near-zero terminal-frequency diagnostics
-  in a separate `EventCandidates.terminal_mask`, including padded branches.
-
-### Known limitations
-- Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
-
 ### Breaking
 
 - `floquet_multipliers` and `branch_floquet_multipliers` take a Floquet
@@ -84,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `(u, p_fixed, omega)` (width `n+2`). Use `unpack_minimal_hopf_curve`;
   select `formulation="extended"` for the previous eigenvector chart.
   `HopfCurveArgs` now includes complex borders and static chart metadata.
-  The minimal chart requires `omega > 10*default_tol(dtype)` and cannot cross BT.
+  The minimal chart requires `omega > sqrt(default_tol(dtype))` and cannot cross BT.
 
 - `fold_curve_problem` defaults to `formulation="minimal"`, packing only
   `(u, p_fixed)` (width `n+1`). Select `formulation="extended"` for the
@@ -174,8 +114,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `rejected_events`. `Hopf`/`Fold`/`BP`/codim-2/`PeriodDoubling`/`NeimarkSacker` `refine()`
   results lose the old `info["converged"]: False` / `criticality="unknown"` form. Plots show
   validated hits only.
-- `differentiable_root` returns a seed that already meets the residual tolerance unchanged
-  (previously a singular Jacobian at the root, e.g. `G = x**2` at `0`, produced NaN).
 - `ContinuationPar.newton_tol` and the `tol` arguments of the solvers, fold/Hopf/codim-2
   point finders, curve factories, `branch_switch` and `dprc_curve` now default to `None`,
   resolved from the state dtype (`1e-9` for float64, `1e-5` for float32). Previous fixed
@@ -233,8 +171,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`periodic_step_update`), so the residual of a branch point is zero with the phase reference
   of the point before it, not with the problem's original `args`. A cycle that turns far from
   its starting orbit (e.g. reverses its sense of rotation) no longer stalls.
+- `ContinuationPar` raises `ValueError` for a concrete `theta` that is not finite and
+  positive (`0`, negatives, NaN and infinities were accepted and stalled or went nonfinite);
+  traced values are not checked.
+- The minimal Hopf chart's frequency floor is `sqrt(default_tol(dtype))`
+  (`jaxcont.bifurcations.curve_layout.minimal_hopf_floor`) instead of `10*default_tol`:
+  near a Bogdanov-Takens point its border residual is O(omega), so smaller frequencies
+  accepted spurious points at the corrector tolerance. Seeds at or below the floor raise
+  `ValueError`. A corrector that leaves the chart is a rejected step (`ds` shrinks) instead
+  of a nonfinite trial that ends the run, so such curves now stop as `stalled`.
+- Corrector iterations are no longer differentiated. A converged root carries the
+  implicit-function derivative as before; at an exactly singular converged root the
+  predictor's tangent now passes through instead of the Newton iterations' tangent.
 
 ### Added
+
+- Floquet strategies `PeriodicSchur(max_sweeps=None)` and
+  `ProductFloquet(eigen_solver=DenseEigen())`, selected by `Solvers.floquet`
+  or per PD/NS event with `floquet_solver`. `floquet_spectrum` returns
+  `FloquetSpectrum(values, phase, logabs, trivial_index, converged)`; periodic
+  branches report `Branch.floquet_logabs` and `Branch.floquet_converged`.
+  `jaxcont.stability` exports the periodic Schur routines.
+
+- BT-chart event detection uses validated kappa crossings; Hopf-only events
+  require positive kappa with safe batched coefficient evaluation. Two-parameter
+  plots label and dash the neutral-saddle extension.
+
+- Opt-in real Hopf BT chart with polynomial kappa residuals, a seed-fixed
+  Jordan-chain gauge, stored real modes, and reporting-only frequency decoding.
+
+- Minimal Hopf curves with complex bordered residuals, normalized adjoint/right
+  border refresh, and unit complex diagnostic modes for events.
+
+- Minimal fold curves use bordered residual solves, accepted-step adjoint border
+  refresh, and reconstructed unit diagnostic modes.
+
+- Trace-safe event candidates on continuation results, with fixed-shape built-in
+  detection under `jit`/`vmap` and eager `refine_event_candidates` validation.
+  Bothside branches are assembled before scanning for shared-zero ownership.
 
 - Built-in `scan_arrays` event detection and `EventScanInput` / `EventCandidates`
   pytrees provide fixed-shape candidates under `jit` and `vmap`, preserving
@@ -281,15 +255,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   looser explicit value.
 - Top-level exports `periodic_orbit_problem`, `Collocation`, `prc_curve`, `branch_prc`,
   `dprc_curve`, and `PeriodicArgs` in `jaxcont.problems.periodic_args`.
-
-## [Unreleased]
-
-### Added
 - `ContinuationPar(bothside=True)`: explore both directions from `problem.p0` in one
   `continuation()` call (issue #8), matching BifurcationKit.jl's `bothside=true`. Runs the
   existing single-direction scan engine twice and stitches the two legs into one branch; no
   changes to `core/scan_continuation.py`. Eager-only (raises `NotImplementedError` under
-  `jax.vmap`/`jax.jit`, matching the existing `events=[...]` restriction).
+  `jax.vmap`/`jax.jit`).
 - MatCont cross-validation for two-parameter fold/Hopf curves: `examples/MatCont/cases.json`'s
   `US-C2-LP-001`/`US-C2-H-001` promoted to `supported`, cross-checked against a live MatCont 7.6
   run of the catalytic-oscillator LP/Hopf curves (`examples/MatCont/python_cases/codim2_curves.py`).
@@ -300,13 +270,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   period-doubled cycle, completing the branch-switching feature. Verifies the switched
   orbit is genuinely period-doubled rather than the original orbit traversed twice, and
   raises instead of returning an unverified branch. Eager-only.
+- `ContinuationResult.save`/`ContinuationResult.load`, and `ContinuationSolution` gains
+  `trivial_index`, `floquet_logabs`, `floquet_converged`, `curve_layout`, `rejected_events`
+  and `status`. They are saved with `format_version=2`; `load` still reads version 1. Loaded
+  curve results keep their `CurveLayout` and plot with `plot_two_parameter_diagram`.
+- `EventScanInput.status` carries the run's `Status` code into array event scans.
+- The API reference documents the Floquet strategies, `floquet_spectrum`, traced event
+  candidates, curve layouts and decoders, and the `natural_scan` / `*_lax_scan` engines.
 
 ### Fixed
+
+- Periodic Schur no longer deflates a subdiagonal that is small in its own
+  factor but meets a reciprocally large coupling in another factor (loop-5
+  audit): deflation also requires a negligible eigenvalue shift of the cyclic
+  `2x2` product block, so such factors now give the true spectrum instead of
+  wrong multipliers with `converged=True`. Spectrum sensitivities are published
+  only for modes whose local multipliers through the true factors reproduce
+  their multiplier; other modes get a NaN tangent.
+- Converged correctors with a nonsingular Jacobian carry the implicit-function
+  derivative of their root, for `loop='scan'` and `loop='while'`, so an exact
+  initial guess (zero Newton steps) no longer drops the solution's sensitivity
+  to args, closed-over values or the arclength constraint. Exact singular seeds
+  keep their acceptance and pass their own tangent through.
+- Periodic Schur mode reconstruction uses signed log-magnitude cyclic solves
+  for cancelling local growth; finite simple multipliers retain forward and
+  reverse sensitivities without overflowing local diagonal ratios.
+- BT Hopf initialization stops its phase gauge and uses a deterministic
+  isotropic-Gram fallback; minimal fold diagnostics stop SVD border selection
+  and differentiate modes through their bordered solves.
+- Limit-cycle examples 10 and 11 use refined meshes to resolve the Floquet
+  flow direction; example 11 also corrects to the dtype's solve tolerance.
+  Example 15 preserves structured fold args while batching user args.
+- The transformation matrix documents transformed event candidate detection
+  separately from eager refinement, with current regression references.
+
+- Eager custom scalar events retain pointwise Python test evaluation when
+  they do not implement `scan_arrays`; traced detection still requires array purity.
+- Hopf-curve BT array scans preserve near-zero terminal-frequency diagnostics
+  in a separate `EventCandidates.terminal_mask`, including padded branches.
 - `periodic_orbit_problem(...)` construction is now safe under `jax.grad`, including when
   trajectory and period guesses depend on the differentiated parameter. All parameter-dependent
   phase-reference and seed values are passed explicitly through the implicit solve instead of
   leaking captured tracers across its Newton `lax.while_loop`; existing `jax.vmap` and `jax.jit`
   construction behavior is preserved.
+- `differentiable_root` returns a seed that already meets the residual tolerance unchanged
+  (previously a singular Jacobian at the root, e.g. `G = x**2` at `0`, produced NaN).
+- Reverse mode through `periodic_spectrum` gives a NaN gradient, as forward mode gives a
+  NaN tangent, for a repeated, defective or unresolved multiplier that receives a nonzero
+  cotangent (loop-6 audit); it was silently zero. Unused such modes leave the gradients of
+  simple modes unchanged.
+- `loop="scan"` reverse-mode gradients stay finite when a run ends on a nonfinite trial
+  (an out-of-domain final step): rejected trials are replaced by the last accepted point
+  before the tangent, `step_update` and implicit-derivative evaluations, so their
+  linearization never meets nonfinite operands.
+- `BogdanovTakens(curve="hopf")` on a minimal Hopf curve records
+  `reason="curve_terminated"` in `rejected_events` when the run stops early (`stalled`,
+  `nonfinite` or `max_attempts`) with its last `omega < 10*sqrt(default_tol)`; the default
+  chart previously ended `nonfinite` with no event or rejected event. Use
+  `formulation="bt"` to locate the BT point.
+- Natural continuation lands its final step exactly on `p_end` (a remainder of at most
+  `ds_min` is absorbed into the last step), so round-off no longer adds a step beyond the
+  span or turns `reached_end` into `nonfinite`.
+- `examples/example_06_vmap_sweep.py` no longer says events are unsupported under `vmap`.
+
+### Known limitations
+
+- Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
+- Minimal Hopf curves cannot pass or locate a Bogdanov-Takens point; they report it as
+  `curve_terminated`.
 
 ## [0.4.0] - 2026-08-20
 

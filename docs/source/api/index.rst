@@ -37,6 +37,18 @@ Algorithms and events
 
 .. autoclass:: jaxcont.NeimarkSacker
 
+Traced event detection
+~~~~~~~~~~~~~~~~~~~~~~
+
+Under ``jax.jit``/``jax.vmap`` events produce fixed-shape candidate buffers
+(``ContinuationResult.event_candidates``) that are refined eagerly per slice.
+
+.. autofunction:: jaxcont.refine_event_candidates
+
+.. autoclass:: jaxcont.bifurcations.event_scan.EventCandidates
+
+.. autoclass:: jaxcont.bifurcations.event_scan.EventScanInput
+
 Branch switching
 -----------------
 
@@ -140,6 +152,18 @@ same scan engine as ordinary equilibrium continuation -- see
 
 .. autofunction:: jaxcont.hopf_curve_problem
 
+Curve states are decoded through their static layout:
+
+.. autoclass:: jaxcont.bifurcations.curve_layout.CurveLayout
+
+.. autofunction:: jaxcont.bifurcations.curve_layout.decode_curve_state
+
+.. autofunction:: jaxcont.bifurcations.curve_layout.minimal_hopf_floor
+
+.. autofunction:: jaxcont.bifurcations.curves.unpack_minimal_fold_curve
+
+.. autofunction:: jaxcont.bifurcations.curves.unpack_minimal_hopf_curve
+
 Low-level scan engine
 ---------------------
 
@@ -147,6 +171,22 @@ The fixed-shape low-level result is useful when applying ``jax.vmap`` or
 ``jax.jacfwd`` to an entire sweep.
 
 .. autofunction:: jaxcont.core.scan_continuation.pseudo_arclength_scan
+
+.. autofunction:: jaxcont.core.scan_continuation.natural_scan
+
+``pseudo_arclength_lax_scan`` and ``natural_lax_scan`` are the same engines
+with ``loop="scan"`` (a masked ``lax.scan`` with static iteration and attempt
+bounds), required for reverse-mode differentiation:
+
+.. py:function:: jaxcont.core.scan_continuation.pseudo_arclength_lax_scan(f, step_update, u0, p0, p_end, args, ds0, ds_min, ds_max, tol, max_steps, max_iter, linear_solver=Dense(), adaptive=True, max_attempts=None, theta=None)
+
+   ``pseudo_arclength_scan`` with ``loop="scan"``; ``max_iter`` and
+   ``max_attempts`` are static Python integers.
+
+.. py:function:: jaxcont.core.scan_continuation.natural_lax_scan(f, step_update, u0, p0, p_end, args, ds0, ds_min, ds_max, tol, max_steps, max_iter, linear_solver=Dense(), adaptive=True, max_attempts=None)
+
+   ``natural_scan`` with ``loop="scan"``; ``max_iter`` and ``max_attempts``
+   are static Python integers.
 
 .. autofunction:: jaxcont.core.scan_continuation.branch_eigenvalues
 
@@ -189,6 +229,17 @@ Stability analysis
 .. autofunction:: jaxcont.analyze_stability
 
 .. autofunction:: jaxcont.compute_eigenvalues
+
+Floquet strategies for periodic orbits (``Solvers.floquet`` or a PD/NS
+event's ``floquet_solver``):
+
+.. autoclass:: jaxcont.PeriodicSchur
+
+.. autoclass:: jaxcont.ProductFloquet
+
+.. autoclass:: jaxcont.FloquetSpectrum
+
+.. autofunction:: jaxcont.stability.floquet_spectrum
 
 Lower-level problem and solver infrastructure
 -----------------------------------------------

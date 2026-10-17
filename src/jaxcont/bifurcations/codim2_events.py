@@ -30,7 +30,9 @@ from jaxcont.bifurcations.codim2 import (
     generalized_hopf_point,
     zero_hopf_point,
 )
-from jaxcont.bifurcations.curve_layout import decode_curve_state, CurveModes, orient_curve_modes
+from jaxcont.bifurcations.curve_layout import (
+    decode_curve_state, CurveModes, minimal_hopf_floor, orient_curve_modes,
+)
 from jaxcont.bifurcations.events import (
     BranchPoint,
     Event,
@@ -249,11 +251,15 @@ class BogdanovTakens(_CurveEvent, Event):
     eigenvalue changes sign.
     On a BT-chart HOPF curve, kappa crosses zero. Other Hopf charts use
     the critical frequency ``omega`` changing sign, i.e.
-    the imaginary pair collides into a double zero. A Hopf curve that ends
-    with ``|omega| < 10 * default_tol`` and no sign change has stalled at
-    the BT point instead of passing it; that is recorded as a failed hit
-    with reason ``"curve_terminated"`` (in ``rejected_events``), not as a
-    located BT.
+    the imaginary pair collides into a double zero. An extended-chart Hopf
+    curve that ends with ``|omega| < 10 * default_tol`` and no sign change
+    has stalled at the BT point instead of passing it. The minimal chart
+    cannot reach ``omega = 0``: a minimal curve that stops early (status
+    ``stalled``, ``nonfinite`` or ``max_attempts``) with its last
+    ``omega < 10 * sqrt(default_tol)`` ran into a BT point. Both are recorded
+    as a failed hit with reason ``"curve_terminated"`` (in
+    ``rejected_events``), not as a located BT; use ``formulation="bt"`` to
+    locate the point.
 
     Abbreviation **BT**, see ``bifurcations.taxonomy.describe("BT")``.
     """
@@ -282,8 +288,11 @@ class BogdanovTakens(_CurveEvent, Event):
         omega = np.array([float(self._decode(pt)[2][2]) for pt in points])
         brackets = [(i, i + 1, None) for i in crossings(omega, np.isfinite(omega))]
         if not brackets and len(points) >= 2:
-            tol = default_tol(jnp.asarray(points[-1].u).dtype)
-            if abs(omega[-1]) < 10 * tol:
+            dtype = jnp.asarray(points[-1].u).dtype
+            minimal = (points[0].curve_layout is not None
+                       and points[0].curve_layout.formulation == "minimal")
+            scale = 10 * (minimal_hopf_floor(dtype) if minimal else default_tol(dtype))
+            if abs(omega[-1]) < scale:
                 n = len(points)
                 brackets = [(n - 2, n - 1, "curve_terminated")]
         return brackets

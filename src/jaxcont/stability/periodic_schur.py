@@ -539,6 +539,24 @@ def periodic_eigenvectors(
     return right, left
 
 
+def _undefined_tangent(undefined: Array, probe: Array) -> Array:
+    """Tangent of modes without a derivative, linear in the factor tangents.
+
+    ``probe`` is any real linear functional of the factor tangents, one entry
+    per mode. Entries flagged ``undefined`` are NaN in forward mode, and
+    their nonzero cotangents map to a NaN factor cotangent in reverse mode;
+    a zero cotangent (an unused mode) contributes zero, so simple modes of
+    the same spectrum keep their gradients. Other entries are zero.
+    """
+    def forward(_matvec, b):
+        return jnp.where(undefined, jnp.nan, 0 * b)
+
+    def backward(_vecmat, cotangent):
+        return jnp.where(undefined & (cotangent != 0), jnp.nan, 0 * cotangent)
+
+    return jax.lax.custom_linear_solve(lambda x: x, probe, forward, backward)
+
+
 @partial(jax.custom_jvp, nondiff_argnums=(0,))
 def _spectrum(max_sweeps, factors):
     T, Q, phase, logabs, converged = periodic_schur(factors, max_sweeps=max_sweeps)
@@ -564,9 +582,12 @@ def _spectrum_jvp(max_sweeps, primals, tangents):
     simple = jnp.all(jnp.isfinite(weights), axis=(0, 1, 2)) & reproduced & converged
     weights = jnp.where(simple, weights, 0)
     dlog = jnp.einsum("iklj,ikl->j", weights, dfactors.astype(T.dtype))
-    invalid = jnp.where(converged, jnp.nan, 0).astype(logabs.dtype)
-    dlogabs = jnp.where(simple, jnp.real(dlog), invalid)
-    dphase = jnp.where(simple, 1j * jnp.imag(dlog) * phase, invalid.astype(phase.dtype))
+    undefined = converged & ~simple
+    probe = jnp.broadcast_to(jnp.real(jnp.sum(dfactors)).astype(logabs.dtype), logabs.shape)
+    dlogabs = jnp.where(simple, jnp.real(dlog), _undefined_tangent(undefined, probe))
+    dphase = jnp.where(simple, 1j * jnp.imag(dlog) * phase,
+                       _undefined_tangent(undefined, probe)
+                       + 1j * _undefined_tangent(undefined, probe))
     dconverged = np.zeros(converged.shape, dtype=jax.dtypes.float0)
     # Phase-zero right modes identify modes; identity is not differentiated.
     return ((phase, logabs, converged, right[0]),
@@ -587,8 +608,11 @@ def periodic_spectrum(
     deflation and mode order are not differentiated. Repeated, defective
     or zero multipliers, and modes whose local multipliers through the
     factors do not reproduce ``phase * exp(logabs)`` within
-    ``500*eps*(m + sum_i |log|d_i||)``, have no derivative (NaN tangent); a
-    non-converged decomposition has zero tangents.
+    ``500*eps*(m + sum_i |log|d_i||)``, have no derivative: a NaN tangent in
+    forward mode and, in reverse mode, a NaN gradient whenever such a mode
+    receives a nonzero cotangent (an unused mode does not affect the
+    gradients of simple modes). A non-converged decomposition has zero
+    tangents.
     """
     return _spectrum(max_sweeps, jnp.asarray(factors))[:3]
 

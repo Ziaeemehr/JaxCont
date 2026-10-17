@@ -214,7 +214,9 @@ Derivatives of ``PeriodicSchur`` multipliers come from a custom JVP on
 periodic left and right eigenvectors, which also transposes for reverse mode.
 Only simple, finite, nonzero multipliers are differentiable. Repeated or
 defective multipliers have no derivative, and ``loop="scan"`` does not remove
-this spectral limitation.
+this spectral limitation: forward mode gives them a NaN tangent, and reverse
+mode a NaN gradient whenever the objective depends on them. Gradients of the
+simple multipliers of the same spectrum are unaffected.
 
 Minimal fold curves
 -------------------
@@ -240,10 +242,18 @@ right and adjoint modes at accepted points. ``HopfCurveArgs`` preserves the
 original RHS data in ``user_args``. Events reconstruct unit complex modes
 through the layout decoder, and plotting uses the same layout metadata.
 
-This chart requires ``omega > 10*default_tol(dtype)`` and cannot cross a
-Bogdanov--Takens point or continue a zero/negative-frequency segment. An eager
-seed below that floor is rejected; residual evaluations outside the chart
-return nonfinite values so continuation cannot accept them. Select
+This chart requires ``omega > sqrt(default_tol(dtype))``
+(``minimal_hopf_floor`` in ``jaxcont.bifurcations.curve_layout``) and cannot
+cross a Bogdanov--Takens point or continue a zero/negative-frequency segment.
+Near BT its border residual is of order ``omega``, so the floor keeps it
+discriminating at the corrector tolerance. An eager seed below that floor is
+rejected. Below the floor the residual stays finite but has no root, so a
+corrector that leaves the chart fails and the step is retried with a smaller
+``ds``; a curve running into BT stops as ``stalled`` just above the floor.
+``BogdanovTakens(curve="hopf")`` then records a rejected event with
+``reason="curve_terminated"`` (the run stopped early with its last frequency
+below ``10*sqrt(default_tol)``); it does not locate the point. Use
+``formulation="bt"`` (below) to locate and pass BT. Select
 ``formulation="extended"`` explicitly for the previous
 ``(u, p_fixed, q1, q2, omega)`` representation and ``unpack_hopf_curve`` helper.
 

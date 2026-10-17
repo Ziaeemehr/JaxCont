@@ -171,7 +171,11 @@ def _implicit_solution_jvp(residual, linear_solver, primals, tangents):
 
 
 def _root_with_derivative(residual, linear_solver, value, params, converged):
-    """``_implicit_solution`` for a residual that may close over traced values."""
+    """``_implicit_solution`` for a residual that may close over traced values.
+
+    The JVP linearizes ``residual`` at ``(value, params)``, so both must be
+    finite and inside the residual's domain even when ``converged`` is false.
+    """
     closed, consts = jax.closure_convert(residual, value, params)
     return _implicit_solution(lambda v, q: closed(v, q[0], *q[1]), linear_solver,
                               value, (params, consts), converged)
@@ -190,7 +194,18 @@ def _newton_correct(
     Solves the full (n+1, n+1) bordered system each iteration (well-posed through
     folds), inside a bounded ``while_loop`` with a finiteness guard. Returns
     ``(u, p, converged, iters)``; ``converged`` requires a finite, small residual.
+
+    The iteration itself is not differentiated. A converged root carries the
+    implicit-function derivative (the predictor's tangent where the bordered
+    Jacobian is singular). A rejected trial returns its raw iterate with the
+    derivative of the trivial root ``(u_prev, p_prev)`` at zero step, so its
+    linearization never sees the trial's possibly nonfinite operands.
     """
+    sg = lax.stop_gradient
+    u_pred_in, p_pred_in, args_in, u_prev_in, p_prev_in = u_pred, p_pred, args, u_prev, p_prev
+    du0_in, dp0_in, ds_in, theta_in = du0, dp0, ds, theta
+    u_pred, p_pred, args, u_prev, p_prev, du0, dp0, ds, theta = sg(
+        (u_pred, p_pred, args, u_prev, p_prev, du0, dp0, ds, theta))
 
     def residual(u, p):
         f_val = f(u, p, args)
@@ -237,8 +252,15 @@ def _newton_correct(
         g_val = weight * jnp.dot(z[:-1] - u0, t_u) + (z[-1] - p0) * t_p - step
         return jnp.concatenate([f_val, g_val.reshape(1)])
 
-    z = _root_with_derivative(stacked, linear_solver, jnp.concatenate([u_f, p_f.reshape(1)]),
-                              (args, u_prev, p_prev, du0, dp0, ds, theta), converged)
+    z_pred = jnp.concatenate([u_pred_in, jnp.reshape(p_pred_in, (1,))])
+    z_raw = jnp.concatenate([u_f, p_f.reshape(1)])
+    z_safe = jnp.concatenate([u_prev, p_prev.reshape(1)])
+    value = jnp.where(converged, z_raw, z_safe) + (z_pred - sg(z_pred))
+    step = jnp.where(converged, ds_in, jnp.zeros_like(ds_in))
+    z = _root_with_derivative(stacked, linear_solver, value,
+                              (args_in, u_prev_in, p_prev_in, du0_in, dp0_in, step, theta_in),
+                              converged)
+    z = jnp.where(converged, z, z_raw + (z - sg(z)))
     return z[:-1], z[-1], converged, it_f
 
 
@@ -421,21 +443,23 @@ def pseudo_arclength_scan(
             f, u_pred, p_pred, c.args, c.u, c.p, du0, dp0, c.ds, tol, max_iter, linear_solver, loop, theta
         )
 
-        # New tangent only meaningful if we accept; compute anyway (branch-free).
-        args = _apply_step_update(step_update, c.args, u_new, p_new, converged)
-        tan_new = _tangent(f, u_new, p_new, args, c.tan, linear_solver, theta)
+        # Rejected trials are replaced by the accepted point before any
+        # further (differentiated) evaluation; the tangent is only kept on accept.
+        u_acc = jnp.where(converged, u_new, c.u)
+        p_acc = jnp.where(converged, p_new, c.p)
+        args = _apply_step_update(step_update, c.args, u_acc, p_acc, converged)
+        tan_new = _tangent(f, u_acc, p_acc, args, c.tan, linear_solver, theta)
 
         write = c.idx + 1  # slot for the next accepted point
-        P = c.P.at[write].set(jnp.where(converged, u_new, c.P[write]))
-        Q = c.Q.at[write].set(jnp.where(converged, p_new, c.Q[write]))
+        P = c.P.at[write].set(jnp.where(converged, u_acc, c.P[write]))
+        Q = c.Q.at[write].set(jnp.where(converged, p_acc, c.Q[write]))
         T = c.T.at[write].set(jnp.where(converged, tan_new, c.T[write]))
         C = c.C.at[write].set(converged)
         D = c.D.at[write].set(jnp.where(converged, c.ds, c.D[write]))
         I = c.I.at[write].set(jnp.where(converged, iters, c.I[write]).astype(jnp.int32))
 
         # Accept -> advance state; reject -> stay put (and ds already shrinks).
-        u = jnp.where(converged, u_new, c.u)
-        p = jnp.where(converged, p_new, c.p)
+        u, p = u_acc, p_acc
         tan = jnp.where(converged, tan_new, c.tan)
         idx = c.idx + converged.astype(c.idx.dtype)
 
@@ -447,8 +471,9 @@ def pseudo_arclength_scan(
             direction >= 0, p >= p_end, p <= p_end
         )
         stalled = jnp.logical_and(jnp.logical_not(converged), c.ds <= ds_min)
-        nonfinite = ~(jnp.all(jnp.isfinite(u_new)) & jnp.isfinite(p_new)
-                      & jnp.all(jnp.isfinite(f(u_new, p_new, c.args))))
+        trial = lax.stop_gradient((u_new, p_new, c.args))
+        nonfinite = ~(jnp.all(jnp.isfinite(trial[0])) & jnp.isfinite(trial[1])
+                      & jnp.all(jnp.isfinite(f(*trial))))
         stop = jnp.logical_or(reached, jnp.logical_or(stalled, nonfinite))
         reason = jnp.where(
             reached, int(Status.REACHED_END),
@@ -491,7 +516,8 @@ def branch_eigenvalues(f, states, params, args, eigen_solver: EigenSolver = Dens
     return jax.vmap(eig_at)(states, params)
 
 
-def _natural_correct(f, u_pred, p_fixed, args, tol, max_iter, linear_solver: LinearSolver = Dense(), loop="while"):
+def _natural_correct(f, u_pred, p_fixed, args, tol, max_iter, linear_solver: LinearSolver = Dense(),
+                     loop="while", p_safe=None):
     """
     Plain Newton on ``f(u, p_fixed, args) = 0`` with ``p_fixed`` held constant --
     no bordered system, no arclength constraint. This is natural
@@ -499,7 +525,17 @@ def _natural_correct(f, u_pred, p_fixed, args, tol, max_iter, linear_solver: Lin
     absorb an ill-conditioned ``df/du`` (unlike the bordered solve in
     ``_newton_correct``), it necessarily fails to converge at a fold, where
     ``df/du`` itself is singular -- by design, not a bug.
+
+    The iteration is not differentiated: a converged root carries the
+    implicit-function derivative (the guess's tangent where ``df/du`` is
+    singular). With ``p_safe`` (a parameter at which ``u_pred`` is a root), a
+    rejected trial returns its raw iterate with the derivative taken at
+    ``(u_pred, p_safe)``, so its linearization never sees the trial's
+    possibly nonfinite operands.
     """
+    sg = lax.stop_gradient
+    u_pred_in, p_fixed_in, args_in = u_pred, p_fixed, args
+    u_pred, p_fixed, args = sg((u_pred, p_fixed, args))
 
     def cond_fun(carry):
         _, it, done, _ = carry
@@ -523,9 +559,11 @@ def _natural_correct(f, u_pred, p_fixed, args, tol, max_iter, linear_solver: Lin
     init = (u_pred, 0, r0 < tol, r0)
     u_f, it_f, _, r_f = _bounded_loop(cond_fun, body, init, max_iter if loop == "scan" else None)
     converged = jnp.logical_and(r_f < tol, jnp.all(jnp.isfinite(u_f)))
-    u_f = _root_with_derivative(lambda u, q: f(u, q[0], q[1]), linear_solver, u_f,
-                                (p_fixed, args), converged)
-    return u_f, converged, it_f
+    value = jnp.where(converged, u_f, u_pred) + (u_pred_in - sg(u_pred_in))
+    p_param = p_fixed_in if p_safe is None else jnp.where(converged, p_fixed_in, p_safe)
+    u = _root_with_derivative(lambda u, q: f(u, q[0], q[1]), linear_solver, value,
+                              (p_param, args_in), converged)
+    return jnp.where(converged, u, u_f + (u - sg(u))), converged, it_f
 
 
 @partial(jax.jit, static_argnums=(0, 1, 10, 12, 15))
@@ -609,27 +647,33 @@ def natural_scan(
         )
 
     def body(c: Carry):
+        # The final step lands exactly on p_end; a remainder of at most
+        # ds_min is absorbed into the step instead of becoming its own step.
         p_pred = c.p + direction * c.ds
-        u_new, converged, iters = _natural_correct(f, c.u, p_pred, c.args, tol, max_iter, linear_solver, loop)
-        args = _apply_step_update(step_update, c.args, u_new, p_pred, converged)
+        p_pred = jnp.where(direction * (p_end - p_pred) <= ds_min, p_end, p_pred)
+        u_new, converged, iters = _natural_correct(f, c.u, p_pred, c.args, tol, max_iter,
+                                                   linear_solver, loop, p_safe=c.p)
+        # Rejected trials are replaced by the accepted point before any
+        # further (differentiated) evaluation.
+        u = jnp.where(converged, u_new, c.u)
+        p = jnp.where(converged, p_pred, c.p)
+        args = _apply_step_update(step_update, c.args, u, p, converged)
 
         write = c.idx + 1
-        P = c.P.at[write].set(jnp.where(converged, u_new, c.P[write]))
-        Q = c.Q.at[write].set(jnp.where(converged, p_pred, c.Q[write]))
+        P = c.P.at[write].set(jnp.where(converged, u, c.P[write]))
+        Q = c.Q.at[write].set(jnp.where(converged, p, c.Q[write]))
         C = c.C.at[write].set(converged)
         D = c.D.at[write].set(jnp.where(converged, c.ds, c.D[write]))
         I = c.I.at[write].set(jnp.where(converged, iters, c.I[write]).astype(jnp.int32))
 
-        u = jnp.where(converged, u_new, c.u)
-        p = jnp.where(converged, p_pred, c.p)
         idx = c.idx + converged.astype(c.idx.dtype)
 
         ds = _adapt_ds(c.ds, iters, converged, ds_min, ds_max, adaptive)
 
         reached = jnp.where(direction >= 0, p >= p_end, p <= p_end)
         stalled = jnp.logical_and(jnp.logical_not(converged), c.ds <= ds_min)
-        nonfinite = ~(jnp.all(jnp.isfinite(u_new))
-                      & jnp.all(jnp.isfinite(f(u_new, p_pred, c.args))))
+        trial = lax.stop_gradient((u_new, p_pred, c.args))
+        nonfinite = ~(jnp.all(jnp.isfinite(trial[0])) & jnp.all(jnp.isfinite(f(*trial))))
         stop = jnp.logical_or(reached, jnp.logical_or(stalled, nonfinite))
         reason = jnp.where(
             reached, int(Status.REACHED_END),
