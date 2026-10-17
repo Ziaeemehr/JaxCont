@@ -31,9 +31,11 @@ from scipy.signal import find_peaks
 
 import jaxcont as jc
 from jaxcont.core.collocation import Collocation
+from jaxcont.utils.precision import default_tol
 from jaxcont.problems.periodic import periodic_orbit_problem
 
-NTST, NCOL, N_STATE = 20, 4, 2
+# The refined mesh resolves the flow direction for float64 stability checks.
+NTST, NCOL, N_STATE = 40, 6, 2
 A = 1.0
 
 
@@ -90,13 +92,8 @@ problem = periodic_orbit_problem(
 # %%
 # Continue the limit cycle
 # --------------------------
-# ``newton_tol=1e-4``, not Van der Pol's ``1e-5``: verified during design
-# that this system's achievable float32 residual floor at this mesh size is
-# looser than Van der Pol's -- ``1e-5`` here stalls continuation (adaptive
-# step size collapses toward ``ds_min``, the branch barely advances) even
-# though a fresh, independent refinement at a nearby parameter value
-# converges cleanly. Do not assume one system's verified tolerance transfers
-# to another.
+# Correct the orbit to the selected dtype's solve tolerance so collocation
+# and nonlinear residual errors both resolve the Floquet flow direction.
 
 result = jc.continuation(
     problem,
@@ -105,7 +102,7 @@ result = jc.continuation(
     settings=jc.ContinuationPar(
         ds=0.05,
         max_steps=350,
-        newton_tol=1e-4,
+        newton_tol=default_tol(problem.u0.dtype),
         compute_stability=True,
     ),
 )

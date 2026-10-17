@@ -375,48 +375,51 @@ def periodic_schur(
     return T, Q, phase, logabs, converged
 
 
-def _safe_divide(x: Array, y: Array) -> Array:
-    return jnp.where(y != 0, x / jnp.where(y != 0, y, 1), 0)
+def _polar(x: Array) -> tuple[Array, Array]:
+    magnitude = jnp.abs(x)
+    return x / jnp.where(magnitude > 0, magnitude, 1), jnp.log(magnitude)
 
 
-def _scale_coordinates(x: Array) -> Array:
-    """Apply one common scale to a periodic mode, preserving its recurrence."""
-    scale = jnp.max(jnp.abs(x))
-    return x / jnp.where(scale > 0, scale, 1)
+def _cyclic_log_solve(a, b, c, gain_phase, gain_log, *, backward=False):
+    """Solve a scalar cyclic recurrence without forming local ratios.
+
+    Forward equations are b_i*x_(i+1)=a_i*x_i+c_i; backward equations
+    are b_i*x_i=a_i*x_(i+1)+c_i. Each phase's cyclic forcing sum uses
+    signed log magnitudes, so cancelling local growth stays representable.
+    Returns phase and log magnitude of x, before common coordinate scaling.
+    """
+    ap, al = _polar(a)
+    bp, bl = _polar(b)
+    cp, cl = _polar(c)
+    gp, gl = ap * jnp.conj(bp), al - bl
+    ep, el = cp * jnp.conj(bp), cl - bl
+    m = a.shape[0]
+    target, offset = jnp.arange(m)[:, None], jnp.arange(m)[None, :]
+    indices = ((target + offset) if backward else (target - 1 - offset)) % m
+    gphase, glog = gp[indices], gl[indices]
+    prefix_phase = jnp.concatenate([jnp.ones((m, 1), a.dtype),
+                                    jnp.cumprod(gphase[:, :-1], axis=1)], axis=1)
+    prefix_log = jnp.concatenate([jnp.zeros((m, 1), al.dtype),
+                                  jnp.cumsum(glog[:, :-1], axis=1)], axis=1)
+    terms_log = el[indices] + prefix_log
+    scale = jnp.max(terms_log, axis=1)
+    scale = jnp.where(jnp.isfinite(scale), scale, 0)
+    total = jnp.sum(ep[indices] * prefix_phase * jnp.exp(terms_log-scale[:, None]), axis=1)
+    total_phase, total_log = _polar(total)
+    # Scale 1-gain before subtraction, including the unused growing direction.
+    gain_scale = jnp.maximum(gain_log, 0)
+    denominator = jnp.exp(-gain_scale) - gain_phase*jnp.exp(gain_log-gain_scale)
+    denom_phase, denom_log = _polar(denominator)
+    return total_phase*jnp.conj(denom_phase), total_log+scale-denom_log-gain_scale
 
 
-def _multiplier_ratio(phase: Array, logabs: Array, k, j) -> Array:
-    """``lambda_k / lambda_j`` from phase and log-magnitude, without forming
-    either multiplier."""
-    return phase[k] * jnp.conj(phase[j]) * jnp.exp(logabs[k] - logabs[j])
-
-
-def _cyclic_forward(g: Array, e: Array, gain: Array) -> Array:
-    """Solve ``x_(i+1) = g_i x_i + e_i`` with ``x_m = x_0``; ``gain = prod g``.
-
-    A unit ``gain`` (repeated multiplier) gives a non-finite solution."""
-
-    def step(x, ge):
-        x_next = ge[0] * x + ge[1]
-        return x_next, x
-
-    closure, _ = jax.lax.scan(step, jnp.zeros((), dtype=g.dtype), (g, e))
-    x0 = closure / (1 - gain)
-    _, xs = jax.lax.scan(step, x0, (g, e))
-    return xs
-
-
-def _cyclic_backward(h: Array, f: Array, gain: Array) -> Array:
-    """Solve ``x_i = h_i x_(i+1) + f_i`` with ``x_m = x_0``; ``gain = prod h``."""
-
-    def step(x_next, hf):
-        x = hf[0] * x_next + hf[1]
-        return x, x
-
-    closure, _ = jax.lax.scan(step, jnp.zeros((), dtype=h.dtype), (h, f), reverse=True)
-    x0 = closure / (1 - gain)
-    _, xs = jax.lax.scan(step, x0, (h, f), reverse=True)
-    return xs
+def _insert_log_coordinate(coordinates, k, phase, logabs, active):
+    # One common scale preserves every existing recurrence and its pivot.
+    scale = jnp.where(active, jnp.maximum(jnp.max(logabs), 0), 0)
+    scale = jnp.where(jnp.isfinite(scale), scale, 0)
+    updated = coordinates*jnp.exp(-scale)
+    column = phase*jnp.exp(logabs-scale)
+    return updated.at[:, k].set(jnp.where(active, column, updated[:, k]))
 
 
 def _schur_right_vector(T: Array, phase: Array, logabs: Array, j) -> Array:
@@ -436,14 +439,14 @@ def _schur_right_vector(T: Array, phase: Array, logabs: Array, j) -> Array:
         k = n - 1 - idx
         a = T[:, k, k]
         c = jnp.sum(T[:, k, :] * jnp.where(cols > k, y, 0), axis=-1)
-        forward = _cyclic_forward(
-            _safe_divide(a, b), _safe_divide(c, b), _multiplier_ratio(phase, logabs, k, j)
-        )
-        backward = _cyclic_backward(
-            _safe_divide(b, a), _safe_divide(-c, a), _multiplier_ratio(phase, logabs, j, k)
-        )
-        x = jnp.where(logabs[k] < logabs[j], forward, backward)
-        return _scale_coordinates(y.at[:, k].set(jnp.where(k < j, x, y[:, k])))
+        ratio_phase = phase[k] * jnp.conj(phase[j])
+        ratio_log = logabs[k] - logabs[j]
+        fp, fl = _cyclic_log_solve(a, b, c, ratio_phase, ratio_log)
+        bp, bl = _cyclic_log_solve(b, a, -c, jnp.conj(ratio_phase), -ratio_log,
+                                  backward=True)
+        forward = logabs[k] < logabs[j]
+        return _insert_log_coordinate(y, k, jnp.where(forward, fp, bp),
+                                      jnp.where(forward, fl, bl), k < j)
 
     return jax.lax.fori_loop(0, n, row, y)
 
@@ -462,14 +465,13 @@ def _schur_left_vector(T: Array, phase: Array, logabs: Array, j) -> Array:
         a = jnp.conj(T[:, k, k])
         z_next = jnp.roll(z, -1, axis=0)
         c = jnp.sum(jnp.conj(T[:, :, k]) * jnp.where(rows < k, z_next, 0), axis=-1)
-        backward = _cyclic_backward(
-            _safe_divide(a, b), _safe_divide(c, b), jnp.conj(_multiplier_ratio(phase, logabs, k, j))
-        )
-        forward = _cyclic_forward(
-            _safe_divide(b, a), _safe_divide(-c, a), jnp.conj(_multiplier_ratio(phase, logabs, j, k))
-        )
-        x = jnp.where(logabs[k] < logabs[j], backward, forward)
-        return _scale_coordinates(z.at[:, k].set(jnp.where(k > j, x, z[:, k])))
+        ratio_phase = jnp.conj(phase[k]) * phase[j]
+        ratio_log = logabs[k] - logabs[j]
+        bp, bl = _cyclic_log_solve(a, b, c, ratio_phase, ratio_log, backward=True)
+        fp, fl = _cyclic_log_solve(b, a, -c, jnp.conj(ratio_phase), -ratio_log)
+        backward = logabs[k] < logabs[j]
+        return _insert_log_coordinate(z, k, jnp.where(backward, bp, fp),
+                                      jnp.where(backward, bl, fl), k > j)
 
     return jax.lax.fori_loop(0, n, column, z)
 

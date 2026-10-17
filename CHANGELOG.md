@@ -35,6 +35,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Periodic Schur mode reconstruction uses signed log-magnitude cyclic solves
+  for cancelling local growth; finite simple multipliers retain forward and
+  reverse sensitivities without overflowing local diagonal ratios.
+- BT Hopf initialization stops its phase gauge and uses a deterministic
+  isotropic-Gram fallback; minimal fold diagnostics stop SVD border selection
+  and differentiate modes through their bordered solves.
+- Limit-cycle examples 10 and 11 use refined meshes to resolve the Floquet
+  flow direction; example 11 also corrects to the dtype's solve tolerance.
+  Example 15 preserves structured fold args while batching user args.
+- The transformation matrix documents transformed event candidate detection
+  separately from eager refinement, with current regression references.
+
 - Eager custom scalar events retain pointwise Python test evaluation when
   they do not implement `scan_arrays`; traced detection still requires array purity.
 - Hopf-curve BT array scans preserve near-zero terminal-frequency diagnostics

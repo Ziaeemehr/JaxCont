@@ -397,8 +397,13 @@ def hopf_curve_problem(
     v_anchor = lax.stop_gradient(q1_star)
     if formulation == "bt":
         # A phase rotation diagonalizes the real/imaginary Gram matrix.
-        angle = .5 * jnp.arctan2(2 * jnp.dot(q1_star, q2_star),
-                                  jnp.dot(q1_star, q1_star) - jnp.dot(q2_star, q2_star))
+        gram_cross = lax.stop_gradient(2 * jnp.dot(q1_star, q2_star))
+        gram_difference = lax.stop_gradient(
+            jnp.dot(q1_star, q1_star) - jnp.dot(q2_star, q2_star))
+        anisotropic = jnp.hypot(gram_cross, gram_difference) > default_tol(u_star.dtype)
+        # Phase is a discrete chart choice; an isotropic Gram matrix uses zero.
+        angle = .5 * jnp.arctan2(jnp.where(anisotropic, gram_cross, 0),
+                                  jnp.where(anisotropic, gram_difference, 1))
         real = jnp.cos(angle) * q1_star + jnp.sin(angle) * q2_star
         imag = -jnp.sin(angle) * q1_star + jnp.cos(angle) * q2_star
         scale = jnp.linalg.norm(real)

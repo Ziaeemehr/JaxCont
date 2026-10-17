@@ -66,7 +66,8 @@ def decode_curve_state(X, q, layout, raw_f, user_args):
                 return X[:n], p, CurveModes()
             A = jax.jacfwd(raw_f)(X[:n], p, user_args)
             left, _, vh = jnp.linalg.svd(A, full_matrices=False)
-            b, c = left[:, -1], vh[-1]
+            b = jax.lax.stop_gradient(left[:, -1])
+            c = jax.lax.stop_gradient(vh[-1])
             M = jnp.block([[A, b[:, None]], [c[None, :], jnp.zeros((1, 1), dtype=A.dtype)]])
             rhs = jnp.zeros(n + 1, dtype=X.dtype).at[-1].set(1)
             v = _unit(jnp.linalg.solve(M, rhs)[:-1])

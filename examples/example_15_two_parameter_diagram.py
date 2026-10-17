@@ -15,6 +15,7 @@ import jax
 
 jax.config.update("jax_enable_x64", True)
 
+import equinox as eqx
 import jax.numpy as jnp
 import matplotlib
 
@@ -61,23 +62,10 @@ plt.savefig("images/example_15_two_parameter_diagram.png", dpi=140,
 # %%
 # Batched: 64 curves in one kernel
 # --------------------------------
-# The curve is an ordinary BifProblem, so the existing scan engine's vmap
-# support applies -- but not by reconstructing the problem inside the
-# vmapped function. ``fold_curve_problem`` does an eager Newton seed
-# refinement (``fold_point``) at construction time; tracing that call under
-# ``jax.vmap`` doesn't raise, but it silently returns an all-zero result
-# (confirmed by direct comparison against the eager values). The fix,
-# exactly as flagged: build ONE ``BifProblem`` outside the vmapped function,
-# thread the swept quantity through ``args`` (not a Python closure), and
-# vary it per batch element with ``prob.at(args=...)``, vmapping only
-# ``jc.continuation()`` itself.
-#
-# A second wrinkle: under ``jax.vmap``/``jax.jit`` the branch buffers are
-# NOT trimmed to the number of real points (only eager calls trim to
-# ``n_valid`` -- see ``api.py``'s ``Branch`` docstring), so ``states[-1]``
-# grabs unwritten buffer padding, not the curve's actual endpoint. The
-# fix is the same ``Branch.valid`` mask the library ships for exactly this
-# situation: the last ``True`` index is the real endpoint.
+# Build the seed problem eagerly, then vary only its structured args' user_args
+# leaf under vmap. This preserves the fold borders and chart metadata.
+# Traced branches retain fixed-size buffers; Branch.valid identifies the
+# actual endpoint rather than the unwritten padding at states[-1].
 def bt_system_shiftable(u, p, args):
     shift = args
     return bt_system(u, p + jnp.array([shift, 0.0]), None)
@@ -91,7 +79,7 @@ base_prob = jc.fold_curve_problem(
 
 def curve_endpoint(shift):
     res = jc.continuation(
-        base_prob.at(args=shift), p_span=(-2.0, 0.0),
+        base_prob.at(args=eqx.tree_at(lambda a: a.user_args, base_prob.args, shift)), p_span=(-2.0, 0.0),
         settings=jc.ContinuationPar(compute_stability=False,
                                     newton_tol=1e-5, max_steps=200),
     )

@@ -16,7 +16,7 @@ follow the locally selected acceptance and stopping decisions; changes to
 those discrete decisions need not be smooth. Reverse-mode differentiation of
 the while engine raises ``ValueError`` naming ``loop='scan'``.
 
-The matrix records only transformations exercised by tests run for Task 4.1.
+The matrix records transformations exercised by the cited regression tests.
 A pass describes the tested fixture, not all problems or option combinations.
 ``untested`` makes no support claim.
 
@@ -39,9 +39,9 @@ A pass describes the tested fixture, not all problems or option combinations.
      - pass [1]
      - pass [3]
      - pass [2, 4]
-   * - events
-     - untested
-     - rejected [5]
+   * - event candidate detection
+     - pass [5]
+     - pass [5]
      - untested
      - untested
    * - fold_point
@@ -110,8 +110,6 @@ Tests in ``tests/test_functional_api.py``:
    forward while, rtol ``1e-5``), and
    ``test_grad_through_while_loop_raises_clear_error``.
 * **[3]** ``test_scan_forward_derivative_matches_while``.
-* **[5]** ``TestVmapSafety::test_vmap_with_events_raises_clearly`` (event orchestration
-   requires eager Python execution).
 * **[6]** ``TestDifferentiableFold::test_reverse_mode_grad_matches_analytic``.
 
 Test in ``tests/test_differentiable_root.py``:
@@ -124,7 +122,15 @@ The engine-level scan entry points are ``pseudo_arclength_lax_scan`` and
 ``pseudo_arclength_scan`` and ``natural_scan`` names retain the default
 while behavior and dynamic iteration/attempt bounds.
 
+Event candidates are detected inside transformed continuation calls. Refinement
+is a separate eager operation: call ``refine_event_candidates`` on each branch
+after detection. Python-only custom scanners remain eager.
+
 Additional default-suite evidence:
+
+* **[5]** ``tests/test_event_scan.py::test_jit_vmap_detects_shifted_hopf`` checks
+  transformed candidates and subsequent eager refinement;
+  ``test_loop_scan_event_detection_keeps_smooth_branch_grad`` checks scan gradients.
 
 * **[7]** ``tests/test_hopf_normal_form.py::test_hopf_parameter_grad_matches_finite_difference``
    differentiates ``hopf_parameter``, which calls ``hopf_point``.
