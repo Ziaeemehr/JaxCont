@@ -104,3 +104,115 @@ def test_periodic_hessenberg_single_factor():
     H, Q = periodic_hessenberg(factors)
     _assert_cyclic_reconstruction(factors, H, Q)
     _assert_periodic_hessenberg_structure(H)
+
+
+def _err():
+    """Exact-factor log/phase acceptance tolerance of spec 6.3."""
+    return 200 * default_tol(_real_dtype())
+
+
+def _rotation2(angle):
+    c, s = jnp.cos(angle), jnp.sin(angle)
+    return jnp.array([[c, -s], [s, c]])
+
+
+def _assert_schur_form(factors, T, Q):
+    eps = _eps()
+    _assert_cyclic_reconstruction(factors, T, Q)
+    for i in range(T.shape[0]):
+        forbidden = jnp.tril(T[i], -1)
+        assert float(jnp.max(jnp.abs(forbidden))) <= 500 * eps * float(jnp.linalg.norm(T[i])), i
+
+
+def _match(expected, actual):
+    """Permutation matching ``actual`` to ``expected`` by nearest complex value."""
+    expected = np.asarray(expected)
+    actual = np.asarray(actual)
+    order = []
+    free = list(range(actual.size))
+    for value in expected:
+        k = min(free, key=lambda j: abs(actual[j] - value))
+        order.append(k)
+        free.remove(k)
+    return np.asarray(order)
+
+
+def test_periodic_schur_rotating_scaled_factors():
+    from jaxcont.stability.periodic_schur import periodic_schur
+
+    factors = _rotating_scaled_factors()
+    T, Q, phase, logabs, converged = periodic_schur(factors)
+    assert bool(converged)
+    _assert_schur_form(factors, T, Q)
+    expected = np.array([-64.0, 0.0, 64.0])
+    order = _match(expected, logabs)
+    np.testing.assert_array_less(np.abs(np.asarray(logabs)[order] - expected), _err())
+    np.testing.assert_array_less(np.abs(np.asarray(phase) - 1.0), _err())
+    values = phase * jnp.exp(logabs)
+    smallest = values[order[0]]
+    assert float(jnp.abs(smallest)) > 0.0
+    assert abs(float(jnp.log(jnp.abs(smallest))) + 64.0) < _err()
+
+
+def test_periodic_schur_complex_equal_modulus():
+    from jaxcont.stability.periodic_schur import periodic_schur
+
+    block = 0.9 * _rotation2(jnp.asarray(0.2, dtype=_real_dtype()))
+    factors = jnp.stack([block] * 16)
+    T, Q, phase, logabs, converged = periodic_schur(factors)
+    assert bool(converged)
+    _assert_schur_form(factors, T, Q)
+    np.testing.assert_array_less(np.abs(np.asarray(logabs) - 16 * np.log(0.9)), _err())
+    expected = np.exp(np.array([3.2j, -3.2j]))
+    order = _match(expected, phase)
+    np.testing.assert_array_less(np.abs(np.asarray(phase)[order] - expected), _err())
+
+
+def test_periodic_schur_zero_and_budget_status():
+    from jaxcont.stability.periodic_schur import periodic_schur
+
+    factors = jnp.diag(jnp.array([0.0, 1.0, 2.0], dtype=_real_dtype()))[None]
+    T, Q, phase, logabs, converged = periodic_schur(factors)
+    assert bool(converged)
+    np.testing.assert_array_equal(np.asarray(logabs)[0], -np.inf)
+    np.testing.assert_array_less(np.abs(np.asarray(logabs)[1:] - [0.0, np.log(2.0)]), _err())
+    np.testing.assert_array_equal(np.asarray(phase), [0.0, 1.0, 1.0])
+
+    general = _general_factors()
+    *_, converged = periodic_schur(general, max_sweeps=0)
+    assert not bool(converged)
+    T, Q, _, _, converged = periodic_schur(general)
+    assert bool(converged)
+    _assert_schur_form(general, T, Q)
+
+
+def test_periodic_schur_general_matches_product_eigenvalues():
+    """Host reference: eigenvalues of the explicitly formed product of a
+    well-conditioned nonnormal fixture."""
+    from jaxcont.stability.periodic_schur import periodic_schur
+
+    for factors in (_general_factors(), _general_factors()[:1], _general_factors()[:2, :2, :2]):
+        product = np.eye(factors.shape[1])
+        for M in np.asarray(factors, dtype=np.float64):
+            product = M @ product
+        expected = np.linalg.eigvals(product)
+        _, _, phase, logabs, converged = periodic_schur(factors)
+        assert bool(converged)
+        values = np.asarray(phase * jnp.exp(logabs))
+        order = _match(expected, values)
+        np.testing.assert_array_less(
+            np.abs(values[order] - expected), _err() * np.max(np.abs(expected))
+        )
+
+
+def test_periodic_schur_jit_vmap():
+    from jaxcont.stability.periodic_schur import periodic_schur
+
+    batch = jnp.stack([_general_factors(), _general_factors()[::-1]])
+    T, Q, phase, logabs, converged = jax.jit(jax.vmap(periodic_schur))(batch)
+    assert bool(jnp.all(converged))
+    for lane in range(2):
+        _assert_schur_form(batch[lane], T[lane], Q[lane])
+        _, _, phase1, logabs1, _ = periodic_schur(batch[lane])
+        order = _match(phase1 * jnp.exp(logabs1), phase[lane] * jnp.exp(logabs[lane]))
+        np.testing.assert_allclose(np.asarray(logabs[lane])[order], logabs1, atol=_err())

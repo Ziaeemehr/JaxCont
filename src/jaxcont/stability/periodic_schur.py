@@ -110,3 +110,255 @@ def periodic_hessenberg(factors: Array) -> tuple[Array, Array]:
         return triangularize_all(k + 1, (H, Q))
 
     return jax.lax.fori_loop(0, max(n - 2, 0), hessenberg_column, (H, Q))
+
+
+_ORDER_RATIO = 1e-2
+
+
+def _real_eps(dtype) -> float:
+    return float(jnp.finfo(jnp.finfo(dtype).dtype).eps)
+
+
+def _givens(a: Array, b: Array) -> Array:
+    """Unitary ``G = [[c, s], [-conj(s), c]]`` (real ``c``) with
+    ``G @ [a, b] = [r, 0]``; the identity when ``a = b = 0``. Scale-safe."""
+    scale = jnp.maximum(jnp.abs(a), jnp.abs(b))
+    nonzero = scale > 0
+    safe = jnp.where(nonzero, scale, jnp.ones_like(scale))
+    a, b = a / safe, b / safe
+    abs_a = jnp.abs(a)
+    norm = jnp.sqrt(abs_a**2 + jnp.abs(b) ** 2)
+    safe_norm = jnp.where(nonzero, norm, jnp.ones_like(norm))
+    a_phase = jnp.where(abs_a > 0, a / jnp.where(abs_a > 0, abs_a, 1), 1)
+    c = jnp.where(nonzero, abs_a / safe_norm, 1).astype(a.dtype)
+    s = jnp.where(nonzero, a_phase * jnp.conj(b) / safe_norm, 0)
+    return jnp.array([[c, s], [-jnp.conj(s), c]])
+
+
+def _rotate_rows(A: Array, p, G: Array) -> Array:
+    rows = jax.lax.dynamic_slice_in_dim(A, p, 2, axis=0)
+    return jax.lax.dynamic_update_slice_in_dim(A, G @ rows, p, axis=0)
+
+
+def _rotate_cols(A: Array, p, G: Array) -> Array:
+    cols = jax.lax.dynamic_slice_in_dim(A, p, 2, axis=1)
+    return jax.lax.dynamic_update_slice_in_dim(A, cols @ jnp.conj(G).T, p, axis=1)
+
+
+def _deflate(H_last: Array, eps: float) -> Array:
+    """Zero negligible subdiagonals of the Hessenberg factor.
+
+    ``h[k+1,k]`` is negligible when, after scaling it and its neighbouring
+    diagonals ``h[k,k], h[k+1,k+1]`` by their largest magnitude,
+    ``|h[k+1,k]| <= 100*eps*(|h[k,k]| + |h[k+1,k+1]|)``: three zeros deflate,
+    a nonzero subdiagonal between two zero diagonals does not. There is no
+    absolute floor, so tiny physical modes are kept.
+    """
+    n = H_last.shape[0]
+    k = jnp.arange(n - 1)
+    sub = jnp.abs(H_last[k + 1, k])
+    d0, d1 = jnp.abs(H_last[k, k]), jnp.abs(H_last[k + 1, k + 1])
+    scale = jnp.maximum(sub, jnp.maximum(d0, d1))
+    safe = jnp.where(scale > 0, scale, jnp.ones_like(scale))
+    negligible = sub / safe <= 100 * eps * (d0 / safe + d1 / safe)
+    return H_last.at[k + 1, k].set(jnp.where(negligible, 0, H_last[k + 1, k]))
+
+
+def _active_window(H_last: Array) -> tuple[Array, Array]:
+    """Rows ``lo..hi`` of the bottom-most unreduced block (``hi = 0`` if none)."""
+    n = H_last.shape[0]
+    k = jnp.arange(n - 1)
+    zero = H_last[k + 1, k] == 0
+    hi = jnp.max(jnp.where(zero, -1, k), initial=-1) + 1
+    lo = jnp.max(jnp.where(zero & (k <= hi - 2), k + 1, 0), initial=0)
+    return lo, hi
+
+
+def _scaled_term(z: Array, log_scale: Array, ref: Array) -> Array:
+    """``z * exp(log_scale - ref)`` evaluated through ``log|z|``."""
+    abs_z = jnp.abs(z)
+    phase = jnp.where(abs_z > 0, z / jnp.where(abs_z > 0, abs_z, 1), 0)
+    exponent = jnp.log(abs_z) + log_scale - ref
+    return phase * jnp.exp(jnp.where(jnp.isnan(exponent), -jnp.inf, exponent))
+
+
+def _shift(H: Array, hi, stalled) -> tuple[Array, Array]:
+    """Shift ``mu * exp(log_scale)`` from the trailing ``2x2`` blocks at rows
+    ``hi-1, hi``. Their product is accumulated with renormalization; only
+    this scaled small block is formed, never the full product.
+
+    The block eigenvalue nearest its last diagonal entry is the shift
+    (Wilkinson), unless the other block eigenvalue is more than
+    ``1/_ORDER_RATIO`` times smaller in modulus; then the shift is zero, a
+    periodic orthogonal-iteration step converging at that ratio. The
+    leading ``k+1`` columns of every ``Q_i`` span the forward propagation of
+    those of ``Q_0``, and a block can only deflate in factored form when that
+    propagation is stable, i.e. when no much smaller multiplier sits above a
+    much larger one.
+    After ``10`` sweeps without a deflation the shift is exceptional:
+    alternately zero and the last diagonal entry plus ``0.75`` times the
+    subdiagonal modulus."""
+    blocks = jax.vmap(lambda A: jax.lax.dynamic_slice(A, (hi - 1, hi - 1), (2, 2)))(H)
+
+    def accumulate(carry, block):
+        B, log_scale = carry
+        B = block @ B
+        size = jnp.max(jnp.abs(B))
+        positive = size > 0
+        B = B / jnp.where(positive, size, 1)
+        return (B, log_scale + jnp.log(jnp.where(positive, size, 1))), None
+
+    real = jnp.finfo(H.dtype).dtype
+    init = (jnp.eye(2, dtype=H.dtype), jnp.zeros((), dtype=real))
+    (B, log_scale), _ = jax.lax.scan(accumulate, init, blocks)
+    a, b, c, d = B[0, 0], B[0, 1], B[1, 0], B[1, 1]
+    half = 0.5 * (a - d)
+    disc = jnp.sqrt(half * half + b * c)
+    mean = 0.5 * (a + d)
+    plus, minus = mean + disc, mean - disc
+    plus_nearer = jnp.abs(plus - d) <= jnp.abs(minus - d)
+    nearest = jnp.where(plus_nearer, plus, minus)
+    other = jnp.where(plus_nearer, minus, plus)
+    reorder = jnp.abs(other) < _ORDER_RATIO * jnp.abs(nearest)
+    mu = jnp.where(reorder, 0, nearest)
+    exceptional = stalled % 10 == 9
+    ad_hoc = (stalled // 10) % 2 == 1
+    mu = jnp.where(exceptional, jnp.where(ad_hoc, d + 0.75 * jnp.abs(c), 0), mu)
+    return mu, log_scale
+
+
+def _first_rotation_vector(H: Array, lo, mu: Array, log_mu: Array) -> tuple[Array, Array]:
+    """Direction of ``(Pi - sigma I) e_lo`` restricted to rows ``lo, lo+1``,
+    for the cyclic product ``Pi`` and shift ``sigma = mu*exp(log_mu)``.
+
+    ``Pi e_lo = t * H_last[:, lo]`` with ``t`` the product of the triangular
+    diagonals at ``lo``, kept as phase and log-magnitude."""
+    H_last = H[-1]
+    h0 = H_last[lo, lo]
+    h1 = H_last[lo + 1, lo]
+    diag = H[:-1, lo, lo]
+    abs_diag = jnp.abs(diag)
+    log_t = jnp.sum(jnp.log(abs_diag))
+    phase_t = jnp.prod(jnp.where(abs_diag > 0, diag / jnp.where(abs_diag > 0, abs_diag, 1), 0))
+    column_log = log_t + jnp.log(jnp.maximum(jnp.abs(h0), jnp.abs(h1)))
+    ref = jnp.maximum(column_log, log_mu + jnp.log(jnp.abs(mu)))
+    ref = jnp.where(jnp.isfinite(ref), ref, 0)
+    x0 = phase_t * _scaled_term(h0, log_t, ref) - _scaled_term(mu, log_mu, ref)
+    x1 = phase_t * _scaled_term(h1, log_t, ref)
+    return x0, x1
+
+
+def _periodic_qr_sweep(H: Array, Q: Array, lo, hi, x0: Array, x1: Array) -> tuple[Array, Array]:
+    """One implicit single-shift periodic QR step on rows ``lo..hi``.
+
+    A rotation of ``Q_i`` multiplies ``H_i`` from the right and ``H_(i-1)``
+    from the left; the bulge is chased through every factor at each plane.
+    Rotations outside the window are identities."""
+    m, n = H.shape[0], H.shape[1]
+    last = m - 1
+    eye2 = jnp.eye(2, dtype=H.dtype)
+
+    def plane(p, carry):
+        H, Q = carry
+        active = (p >= lo) & (p < hi)
+        first = p == lo
+        prev = jnp.maximum(p - 1, 0)
+        H_last = H[last]
+        a = jnp.where(first, x0, H_last[p, prev])
+        b = jnp.where(first, x1, H_last[p + 1, prev])
+        G = jnp.where(active, _givens(a, b), eye2)
+        H_last = _rotate_rows(H_last, p, G)
+        clear = active & ~first
+        H_last = H_last.at[p + 1, prev].set(jnp.where(clear, 0, H_last[p + 1, prev]))
+        H = H.at[last].set(H_last)
+        H = H.at[0].set(_rotate_cols(H[0], p, G))
+        Q = Q.at[0].set(_rotate_cols(Q[0], p, G))
+
+        def chase(i, carry):
+            H, Q = carry
+            Hi = H[i]
+            G = jnp.where(active, _givens(Hi[p, p], Hi[p + 1, p]), eye2)
+            Hi = _rotate_rows(Hi, p, G)
+            Hi = Hi.at[p + 1, p].set(jnp.where(active, 0, Hi[p + 1, p]))
+            H = H.at[i].set(Hi)
+            H = H.at[i + 1].set(_rotate_cols(H[i + 1], p, G))
+            Q = Q.at[i + 1].set(_rotate_cols(Q[i + 1], p, G))
+            return H, Q
+
+        return jax.lax.fori_loop(0, last, chase, (H, Q))
+
+    return jax.lax.fori_loop(0, n - 1, plane, (H, Q))
+
+
+def _diagonal_spectrum(T: Array) -> tuple[Array, Array]:
+    """``phase_j = prod_i T_i[j,j]/|T_i[j,j]|`` (zero for a zero entry) and
+    ``logabs_j = sum_i log|T_i[j,j]|`` (``-inf`` for a zero entry)."""
+    diag = jnp.diagonal(T, axis1=1, axis2=2)
+    abs_diag = jnp.abs(diag)
+    logabs = jnp.sum(jnp.log(abs_diag), axis=0)
+    unit = jnp.where(abs_diag > 0, diag / jnp.where(abs_diag > 0, abs_diag, 1), 0)
+    phase = jnp.prod(unit, axis=0)
+    abs_phase = jnp.abs(phase)
+    phase = jnp.where(abs_phase > 0, phase / jnp.where(abs_phase > 0, abs_phase, 1), 0)
+    return phase, logabs
+
+
+def _cyclic_backward_ok(factors: Array, T: Array, Q: Array, eps: float) -> Array:
+    """Relative cyclic reconstruction and orthogonality errors below ``500*eps``."""
+    n = factors.shape[1]
+    Q_next = jnp.roll(Q, -1, axis=0)
+    residual = jnp.linalg.norm(factors @ Q - Q_next @ T, axis=(1, 2))
+    scale = jnp.linalg.norm(factors, axis=(1, 2))
+    reconstruct = residual <= 500 * eps * scale
+    eye = jnp.eye(n, dtype=Q.dtype)
+    orthogonality = jnp.linalg.norm(jnp.conj(jnp.swapaxes(Q, 1, 2)) @ Q - eye, axis=(1, 2))
+    return jnp.all(reconstruct & (orthogonality <= 500 * eps))
+
+
+def periodic_schur(
+    factors: Array, *, max_sweeps: int | None = None
+) -> tuple[Array, Array, Array, Array, Array]:
+    """Complex periodic Schur decomposition of ``(m, n, n)`` factors.
+
+    Returns ``(T, Q, phase, logabs, converged)``: unitary ``Q`` and upper
+    triangular ``T`` with ``factors[i] @ Q[i] = Q[(i+1) % m] @ T[i]``; the
+    multipliers of the cyclic product are ``phase * exp(logabs)`` read from
+    the diagonals of ``T`` (``phase = 0``, ``logabs = -inf`` for an exactly
+    zero multiplier). ``max_sweeps`` (static, default ``200*n``) bounds the
+    shifted periodic QR steps. ``converged`` is true only when every
+    subdiagonal deflated and the cyclic reconstruction and orthogonality
+    errors are below ``500*eps``; otherwise ``T`` is not triangular and the
+    spectrum is not valid.
+    """
+    factors = jnp.asarray(factors)
+    m, n = factors.shape[0], factors.shape[1]
+    budget = 200 * n if max_sweeps is None else int(max_sweeps)
+    H, Q = periodic_hessenberg(factors)
+    eps = _real_eps(H.dtype)
+    last = m - 1
+    H = H.at[last].set(_deflate(H[last], eps))
+
+    def unfinished(state):
+        H, _, sweeps, _, _ = state
+        _, hi = _active_window(H[last])
+        return (sweeps < budget) & (hi > 0)
+
+    def step(state):
+        H, Q, sweeps, stalled, previous_hi = state
+        lo, hi = _active_window(H[last])
+        stalled = jnp.where(hi == previous_hi, stalled + 1, 0)
+        mu, log_mu = _shift(H, hi, stalled)
+        x0, x1 = _first_rotation_vector(H, lo, mu, log_mu)
+        H, Q = _periodic_qr_sweep(H, Q, lo, hi, x0, x1)
+        H = H.at[last].set(_deflate(H[last], eps))
+        return H, Q, sweeps + 1, stalled, hi
+
+    zero = jnp.asarray(0)
+    state = (H, Q, zero, zero, jnp.asarray(-1))
+    if n > 1:
+        state = jax.lax.while_loop(unfinished, step, state)
+    T, Q = state[0], state[1]
+    _, hi = _active_window(T[last])
+    converged = (hi == 0) & _cyclic_backward_ok(factors.astype(T.dtype), T, Q, eps)
+    phase, logabs = _diagonal_spectrum(T)
+    return T, Q, phase, logabs, converged
