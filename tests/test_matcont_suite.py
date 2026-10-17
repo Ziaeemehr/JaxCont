@@ -184,6 +184,20 @@ def test_radial_cycle_matches_exact_floquet_formula():
     assert result.checks["all_stable"]
 
 
+def test_adaptx_seed_refines_to_a_single_base_cycle():
+    """The Hopf seed must converge before PD continuation, in either precision."""
+    from examples.MatCont.python_cases.pd_switch import _base_cycle_problem
+    from jaxcont.utils.precision import default_tol
+
+    problem, mesh = _base_cycle_problem()
+    residual = problem.f(problem.u0, problem.p0, problem.args)
+    assert np.linalg.norm(np.asarray(residual)) < default_tol(problem.u0.dtype)
+    # Reject an equilibrium or a repeated traversal of the base orbit.
+    assert float(problem.u0[-1]) == pytest.approx(2 * np.pi, rel=0.01)
+    states = np.asarray(problem.u0[: mesh.ntst * 3]).reshape(mesh.ntst, 3)
+    assert np.ptp(states[:, 0]) > 0.1
+
+
 @pytest.mark.slow
 def test_adaptx_period_doubling_switch_matches_matcont():
     """A switch from the wrong PD point or onto a retraced orbit must fail.
@@ -371,7 +385,9 @@ def test_torbpc_known_disagreements_are_explicit_failures(torbpc_result):
     assert checks["jaxcont_max_period_error"] < 5e-3
     assert checks["jaxcont_max_extrema_error"] < 5e-3
     assert not checks["jaxcont_critical_multipliers_match"]
-    assert {"LPC", "PD"} <= set(checks["jaxcont_missing_event_types"])
+    missing = set(checks["jaxcont_missing_event_types"])
+    assert "PD" in missing
+    assert "LPC" not in missing
     assert not checks["all_comparisons_pass"]
 
 

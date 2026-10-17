@@ -39,10 +39,14 @@ def periodic_residual(U: Array, p: Array, args: PeriodicArgs) -> Array:
     coll_states = U[ntst * n : ntst * n + ntst * ncol * n].reshape(ntst, ncol, n)
     T = U[-1]
     v = jnp.concatenate([mesh_states[:, None, :], coll_states], axis=1)  # (ntst, ncol+1, n)
+    # D annihilates constants and E preserves them. Contract local differences
+    # so float32 rounding of the coefficients cannot turn the orbit offset
+    # into an O(eps * ||D|| * ||U||) defect on every mesh interval.
+    local = v - mesh_states[:, None, :]
     # Invariant: full-precision contractions; reduced GPU matmul precision corrupts D.
     with jax.default_matmul_precision("float32"):
-        Dv = jnp.einsum("jk,ikc->ijc", D, v)
-        extrap = jnp.einsum("k,ikc->ic", E, v)  # (ntst, n)
+        Dv = jnp.einsum("jk,ikc->ijc", D, local)
+        extrap = mesh_states + jnp.einsum("k,ikc->ic", E, local)  # (ntst, n)
     f_at_v = jax.vmap(jax.vmap(lambda u: raw_f(u, p, args.user_args)))(v[:, 1:, :])
     defect = Dv[:, 1:, :] - T * h * f_at_v  # (ntst, ncol, n)
     u_next = jnp.roll(mesh_states, -1, axis=0)

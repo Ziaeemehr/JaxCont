@@ -326,3 +326,17 @@ def test_trajectory_longer_than_period0_is_not_folded():
     assert float(prob.u0[-1]) == pytest.approx(2 * np.pi, rel=1e-3)
     radius = np.linalg.norm(np.asarray(prob.u0[: 2 * mesh.ntst]).reshape(-1, 2), axis=1)
     np.testing.assert_allclose(radius, 1.0, atol=1e-3)
+
+
+def test_periodic_residual_preserves_constant_polynomial():
+    """Differentiating a constant must not create float32 collocation defects."""
+    from jaxcont.problems.periodic import periodic_residual
+
+    mesh = Collocation(ntst=40, ncol=4)
+    states = jnp.full((mesh.ntst * (1 + mesh.ncol) * 2,), 1.3)
+    U = jnp.concatenate([states, jnp.array([2 * jnp.pi])])
+    reference = jnp.full((mesh.ntst, mesh.ncol, 2), 1.3)
+    args = PeriodicArgs(reference, jnp.zeros_like(reference), None,
+                        lambda u, p, args: jnp.zeros_like(u), mesh)
+    residual = jax.jit(periodic_residual)(U, jnp.array(1.), args)
+    np.testing.assert_array_equal(residual, jnp.zeros_like(U))

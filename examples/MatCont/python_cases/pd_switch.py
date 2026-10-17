@@ -58,7 +58,12 @@ def _base_cycle_problem():
     alpha = 0.9
     period = 2.0 * np.pi
     t = jnp.linspace(0.0, period, 160, endpoint=False)
-    amplitude = 0.2
+    # Leading Hopf amplitude: harmonic balance gives
+    # 1 - alpha = (9/10) * amplitude**2 + O(amplitude**4).
+    # An arbitrary smaller amplitude sends undamped Newton close to the
+    # equilibrium, where the period is undetermined, making convergence
+    # depend on rounding in the collocation residual/Jacobian.
+    amplitude = np.sqrt(10.0 * (1.0 - alpha) / 9.0)
     trajectory = jnp.stack(
         [
             amplitude * jnp.cos(t),
