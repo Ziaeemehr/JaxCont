@@ -55,7 +55,9 @@ def track_modes(spectra: np.ndarray) -> np.ndarray:
     return out
 
 
-def crossings(values: np.ndarray, where: np.ndarray) -> list[int]:
+def crossings(
+    values: np.ndarray, where: np.ndarray, *, eligible: np.ndarray | None = None
+) -> list[int]:
     """Bracket starts ``i`` where some column of ``values`` crosses zero.
 
     A bracket ``(i, i+1)`` counts for column ``k`` when
@@ -63,7 +65,9 @@ def crossings(values: np.ndarray, where: np.ndarray) -> list[int]:
     exactly zero at exactly one end. An exact zero at sample ``i`` is owned by
     bracket ``i-1`` (or bracket ``0`` when ``i == 0``): bracket ``i`` is then
     not opened for that column. ``values``/``where`` may be ``(N,)`` for a
-    single column. Returns sorted, unique starts.
+    single column. Optional ``eligible`` masks adjacent brackets before zero
+    ownership: an excluded incoming bracket cannot own a zero. Returns sorted,
+    unique starts.
     """
     values = np.asarray(values)
     where = np.asarray(where, dtype=bool)
@@ -75,6 +79,11 @@ def crossings(values: np.ndarray, where: np.ndarray) -> list[int]:
     hit = ((np.sign(a) != np.sign(b)) & ((a != 0) | (b != 0)))
     hit &= np.isfinite(a) & np.isfinite(b)
     owned = hit & where[:-1] & where[1:]
+    if eligible is not None:
+        bracket_mask = np.asarray(eligible, dtype=bool)
+        if bracket_mask.ndim == 1:
+            bracket_mask = bracket_mask[:, None]
+        owned &= bracket_mask
     # Bracket i starts on an exact zero that bracket i-1 already ends on.
     owned[1:] &= ~((a[1:] == 0) & owned[:-1])
     return np.flatnonzero(np.any(owned, axis=1)).tolist()

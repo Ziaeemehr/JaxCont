@@ -184,8 +184,8 @@ class Cusp(_CurveEvent, Event):
         modes, eligible = orient_curve_modes(CurveModes(v=raw), valid)
         values = np.array([float(fold_coefficient(self.raw_f, u, p, v, self.args))
                            for (u, p, _), v in zip(decoded, modes.v)])
-        candidates = crossings(values, np.asarray(valid))
-        return [(i, i+1, None) for i in candidates if bool(eligible[i])]
+        candidates = crossings(values, np.asarray(valid), eligible=np.asarray(eligible))
+        return [(i, i+1, None) for i in candidates]
 
     def refine(self, left, right, index, rhs, *, tolerance, max_iterations, mode=None) -> EventHit:
         u_l, p_l, _ = self._decode(left)
@@ -382,7 +382,8 @@ class GeneralizedHopf(_CurveEvent, Event):
         modes, eligible = orient_curve_modes(CurveModes(q1=q1, q2=q2), valid)
         values = np.array([float(lyapunov_coefficient(self.raw_f, u, p, a, b, extra[2], self.args))
                            for (u, p, extra), a, b in zip(decoded, modes.q1, modes.q2)])
-        return [(i, i+1, None) for i in crossings(values, np.asarray(valid)) if bool(eligible[i])]
+        candidates = crossings(values, np.asarray(valid), eligible=np.asarray(eligible))
+        return [(i, i+1, None) for i in candidates]
 
     def refine(self, left, right, index, rhs, *, tolerance, max_iterations, mode=None) -> EventHit:
         u_l, p_l, _ = self._decode(left)

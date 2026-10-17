@@ -156,6 +156,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its starting orbit (e.g. reverses its sense of rotation) no longer stalls.
 
 ### Added
+
+- Array-only predictive mode tracking with deterministic Hungarian assignment and
+  fixed-shape crossing masks with exact-zero ownership, usable under JAX transforms.
 - Static `CurveLayout` descriptors, normalized `CurveModes` diagnostic pytrees,
   and `decode_curve_state`, with branchwise diagnostic sign/phase alignment.
 

@@ -120,3 +120,49 @@ def test_layout_hopf_phase_alignment_preserves_unit_modes_after_orthogonal_step(
     aligned = modes.q1 + 1j*modes.q2
     np.testing.assert_allclose(jnp.linalg.norm(aligned, axis=-1), jnp.ones(3))
     np.testing.assert_array_equal(eligible, [False, True])
+
+
+@pytest.mark.parametrize("kind", ["fold", "hopf"])
+def test_layout_exact_zero_owned_by_eligible_outgoing_bracket(kind):
+    from jaxcont.bifurcations.codim2_events import Cusp, GeneralizedHopf
+    from jaxcont.bifurcations.curve_layout import CurveLayout
+    from jaxcont.bifurcations.events import BranchPoint
+
+    # The critical subspace changes orthogonally into the zero-coefficient
+    # sample, then stays fixed: only the outgoing bracket is reliable.
+    if kind == "fold":
+        def f(u, p, args):
+            x, y = u
+            t = p[1]
+            return jnp.array([(t + 1) * x - x*x, t*(t - 1)*y + t*y*y])
+
+        event = Cusp(f)
+        vectors = jnp.array([[1., 0.], [0., 1.], [0., 1.]])
+        states = [jnp.concatenate([jnp.zeros(3), v]) for v in vectors]
+        n = 2
+    else:
+        def f(u, p, args):
+            x, y, z, w = u
+            t = p[1]
+            r1, r2 = x*x + y*y, z*z + w*w
+            return jnp.array([(t + 1)*x - y - x*r1,
+                              x + (t + 1)*y - y*r1,
+                              t*(t - 1)*z - w + t*z*r2,
+                              z + t*(t - 1)*w + t*w*r2])
+
+        event = GeneralizedHopf(f)
+        vectors = jnp.array([[1., -1j, 0., 0.],
+                             [0., 0., 1., -1j], [0., 0., 1., -1j]])
+        states = [jnp.concatenate([jnp.zeros(5), v.real, v.imag, jnp.ones(1)])
+                  for v in vectors]
+        n = 4
+    layout = CurveLayout(kind, "extended", n, 1)
+    points = [BranchPoint(p=t, u=X, curve_layout=layout)
+              for t, X in zip([-1., 0., 1.], states)]
+    values = [event.test_function(pt) for pt in points]
+    assert values[0] < 0
+    assert values[1] == 0
+    assert values[2] > 0
+    assert event.scan(points) == [(1, 2, None)]
+    # A zero at the start of a branch still opens its first bracket.
+    assert event.scan(points[1:]) == [(0, 1, None)]
