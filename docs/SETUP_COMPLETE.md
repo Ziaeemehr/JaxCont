@@ -168,7 +168,7 @@ Upload the contents of `docs/build/html/` to any web server.
 ## File Locations
 
 ```
-/home/ziaee/git/JaxCont/
+/path/to/JaxCont/
 ├── docs/
 │   ├── Makefile                 # Build commands
 │   ├── make.bat                 # Windows build

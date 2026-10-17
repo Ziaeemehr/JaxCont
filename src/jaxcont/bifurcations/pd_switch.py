@@ -47,6 +47,7 @@ def _pd_eigenvector(
     p: Array,
     mesh: Collocation,
     *,
+    args: PyTree = None,
     pd_tol: float = 1e-2,
     imag_tol: float = 1e-3,
 ) -> Array:
@@ -66,7 +67,7 @@ def _pd_eigenvector(
     D_np, E_np, _, _ = collocation_matrices(mesh.ncol)
     D, E = jnp.asarray(D_np), jnp.asarray(E_np)
     Phi = monodromy_matrix(
-        raw_f, D, E, 1.0 / mesh.ntst, mesh_states, coll_states, T, p
+        raw_f, D, E, 1.0 / mesh.ntst, mesh_states, coll_states, T, p, args
     )
     values, vectors = jnp.linalg.eig(Phi)
     idx = int(jnp.argmin(jnp.abs(values + 1.0)))
@@ -90,7 +91,7 @@ def _pd_eigenvector(
 
 def _doubling_measure(U: Array, mesh: Collocation, n: int) -> float:
     """How much the orbit differs from its own half-period shift, relative to
-    its scale.
+    its amplitude about the mean.
 
     On a uniform mesh of ``ntst`` points over the doubled period ``2T``, the
     shift ``t -> t + T`` is an index roll of ``ntst // 2`` (``ntst`` is even by
@@ -100,6 +101,7 @@ def _doubling_measure(U: Array, mesh: Collocation, n: int) -> float:
     converges onto the retraced original with a perfectly healthy residual.
     """
     mesh_states = U[: mesh.ntst * n].reshape(mesh.ntst, n)
+    mesh_states = mesh_states - jnp.mean(mesh_states, axis=0)
     shifted = jnp.roll(mesh_states, mesh.ntst // 2, axis=0)
     spread = float(jnp.max(jnp.linalg.norm(mesh_states - shifted, axis=1)))
     scale = float(jnp.max(jnp.linalg.norm(mesh_states, axis=1)))
@@ -131,18 +133,22 @@ def branch_switch_pd(
     event: EventHit,
     mesh: Collocation,
     *,
+    args: PyTree = None,
     dp: float = 0.05,
     dp_sign: Optional[int] = None,
     eps_ladder: Sequence[float] = (0.05, 0.1, 0.2, 0.4, 0.8),
     doubling_tol: float = 1e-3,
     residual_tol: float = 1e-4,
+    refine_tol: Optional[float] = None,
     n_samples: Optional[int] = None,
     pd_tol: float = 1e-2,
 ) -> BifProblem:
     """Seed the period-doubled cycle bifurcating at a ``PeriodDoubling`` event.
 
     ``raw_f`` is the ODE right-hand side (``f(u, p, args)``), not the assembled
-    collocation residual. ``mesh`` is the ``Collocation`` the original branch was
+    collocation residual; ``args`` is the user pytree it is called with (the
+    original problem's ``args.user_args``) and is carried into the returned
+    problem. ``mesh`` is the ``Collocation`` the original branch was
     continued on; the returned problem lives on ``Collocation(ntst=2*ntst,
     ncol=ncol)``, which preserves per-unit-time resolution across the twice-as-long
     period.
@@ -159,6 +165,15 @@ def branch_switch_pd(
     ``(sign, eps)`` combinations, verifies each against
     :func:`_doubling_measure`, and returns the first that passes. If none does it
     raises, rather than returning a plausible but wrong branch.
+
+    ``refine_tol`` is the Newton residual tolerance for each candidate's
+    correction, passed to ``periodic_orbit_problem`` as its ``tol``. The
+    default ``None`` uses that function's default, ``default_tol`` of the
+    dtype. Systems with a continuous symmetry, such as an S^1-equivariant
+    transverse block, leave a family of doubled orbits that the phase
+    condition does not pin down; Newton then stalls above ``default_tol`` and
+    such systems need a looser explicit ``refine_tol``. ``residual_tol``
+    remains the acceptance test on the result.
 
     This factory is eager-only because its ``(sign, eps)`` search loop converts
     residuals to concrete Python values, branches on the doubling measure, and
@@ -182,9 +197,10 @@ def branch_switch_pd(
     T = float(T_arr)
 
     v0 = np.asarray(
-        _pd_eigenvector(raw_f, U_star, jnp.asarray(p_star), mesh, pd_tol=pd_tol)
+        _pd_eigenvector(raw_f, U_star, jnp.asarray(p_star), mesh, args=args, pd_tol=pd_tol)
     )
-    orbit_scale = float(jnp.max(jnp.linalg.norm(mesh_states, axis=1)))
+    centered_states = mesh_states - jnp.mean(mesh_states, axis=0)
+    orbit_scale = float(jnp.max(jnp.linalg.norm(centered_states, axis=1)))
 
     if n_samples is None:
         n_samples = max(240, 12 * mesh.ntst)
@@ -212,6 +228,8 @@ def branch_switch_pd(
                     2 * T,
                     p_star + sign * dp,
                     doubled_mesh,
+                    args=args,
+                    tol=refine_tol,
                 )
             except Exception as exc:  # noqa: BLE001 - reported, not swallowed
                 attempts.append(f"{label}: correction raised {type(exc).__name__}")

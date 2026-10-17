@@ -40,7 +40,8 @@ import jaxcont as jc
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 
-NTST, NCOL, N_STATE = 20, 4, 2
+# The refined mesh resolves the flow direction for float64 stability checks.
+NTST, NCOL, N_STATE = 40, 4, 2
 
 
 # %%
@@ -114,7 +115,6 @@ result = jc.continuation(
     settings=jc.ContinuationPar(
         ds=0.05,
         max_steps=250,
-        newton_tol=1e-5,
         compute_stability=True,
     ),
 )
@@ -132,7 +132,7 @@ print(f"Continued mu in [{mus[0]:.3f}, {mus[-1]:.3f}] over {n_valid} points, sta
 # ``Branch.states`` packs each point's full collocation unknown vector:
 # ``ntst`` mesh-point states first, then collocation-point states, then the
 # period. The first ``ntst*N_STATE`` entries reshape into the mesh-point
-# states -- dense enough (``ntst=20``) for a clean phase-portrait polygon.
+# states -- dense enough (``ntst=40``) for a clean phase-portrait polygon.
 
 states = np.asarray(result.branch.states)
 mesh_states = states[:, : NTST * N_STATE].reshape(n_valid, NTST, N_STATE)

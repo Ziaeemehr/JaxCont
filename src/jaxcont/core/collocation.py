@@ -27,6 +27,10 @@ class Collocation(eqx.Module):
     ntst: int = eqx.field(static=True)
     ncol: int = eqx.field(static=True)
 
+    def __post_init__(self):
+        if self.ntst <= 0:
+            raise ValueError("ntst must be positive")
+
 
 def gauss_legendre_01(ncol: int):
     """Gauss-Legendre nodes/weights of degree ``ncol`` on ``[0, 1]`` (mapped
@@ -98,7 +102,9 @@ def collocation_matrices(ncol: int):
     return D, E, gauss, gw
 
 
-def interval_propagators(raw_f, D: jnp.ndarray, E: jnp.ndarray, h: float, mesh_states, coll_states, T, p):
+def interval_propagators(
+    raw_f, D: jnp.ndarray, E: jnp.ndarray, h: float, mesh_states, coll_states, T, p, args=None
+):
     """``(ntst, n, n)`` per-interval propagator blocks ``M_i``, such that
     ``Phi(T) = M_{ntst-1} @ ... @ M_0``. Extracted from ``monodromy_matrix``
     (unchanged math) so ``stability/prc.py`` can adjoint-propagate a vector
@@ -107,10 +113,10 @@ def interval_propagators(raw_f, D: jnp.ndarray, E: jnp.ndarray, h: float, mesh_s
     docs/superpowers/specs/2026-08-05-prc-dprc-design.md."""
     _ntst, n = mesh_states.shape
     ncol = coll_states.shape[1]
-    eye_n = jnp.eye(n)
+    eye_n = jnp.eye(n, dtype=mesh_states.dtype)
 
     def interval_map(mesh_state_i, coll_states_i):
-        Jm = jax.vmap(jax.jacfwd(lambda u: raw_f(u, p, None)))(coll_states_i)  # (ncol, n, n)
+        Jm = jax.vmap(jax.jacfwd(lambda u: raw_f(u, p, args)))(coll_states_i)  # (ncol, n, n)
 
         def build_A_row(m):
             def build_block(k):
@@ -129,13 +135,15 @@ def interval_propagators(raw_f, D: jnp.ndarray, E: jnp.ndarray, h: float, mesh_s
     return jax.vmap(interval_map)(mesh_states, coll_states)
 
 
-def monodromy_matrix(raw_f, D: jnp.ndarray, E: jnp.ndarray, h: float, mesh_states, coll_states, T, p):
+def monodromy_matrix(
+    raw_f, D: jnp.ndarray, E: jnp.ndarray, h: float, mesh_states, coll_states, T, p, args=None
+):
     """``(n, n)`` monodromy matrix ``Phi(T)`` -- see ``interval_propagators``
     for the per-interval blocks this composes. Behavior/numerics unchanged
     from before the ``interval_propagators`` extraction; see
     docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md and
     docs/superpowers/specs/2026-08-05-prc-dprc-design.md."""
     n = mesh_states.shape[1]
-    M_all = interval_propagators(raw_f, D, E, h, mesh_states, coll_states, T, p)
-    Phi, _ = jax.lax.scan(lambda carry, M: (M @ carry, None), jnp.eye(n), M_all)
+    M_all = interval_propagators(raw_f, D, E, h, mesh_states, coll_states, T, p, args)
+    Phi, _ = jax.lax.scan(lambda carry, M: (M @ carry, None), jnp.eye(n, dtype=M_all.dtype), M_all)
     return Phi

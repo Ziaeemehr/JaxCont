@@ -121,7 +121,7 @@ def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
     assert "Systematic comparison: FAIL (known limitation)" in summary
     assert "multiplier" in summary
     assert "critical-signature proxy parameter discrepancies" in summary
-    assert "missing correctly located event types LPC, PD" in summary
+    assert "missing correctly located event types PD" in summary
     assert "event errors" not in summary
     assert (tmp_path / "torbpc.png").is_file()
     assert len(figure.axes) == 3
@@ -161,10 +161,17 @@ def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
         for collection in figure.axes[0].collections
     }
     matcont_lpc = amplitude_markers["MatCont 7.6 LPC"].get_offsets()[0, 0]
-    detected_lpc = amplitude_markers["JaxCont detected LPC"].get_offsets()[
-        0, 0
-    ]
-    assert abs(float(detected_lpc) - float(matcont_lpc)) > 2e-3
+    lpc_color = amplitude_markers["JaxCont detected LPC"].get_facecolors()
+    detected_lpcs = np.concatenate([
+        collection.get_offsets()[:, 0]
+        for collection in figure.axes[0].collections
+        if collection.get_label() in {"JaxCont detected LPC", "_nolegend_"}
+        and np.array_equal(collection.get_facecolors(), lpc_color)
+    ])
+    lpc_errors = np.abs(detected_lpcs - float(matcont_lpc))
+    assert np.min(lpc_errors) < 2e-3
+    # Near-Hopf spurious folds remain a known limitation.
+    assert np.max(lpc_errors) > 2e-3
 
 
 @pytest.fixture(scope="module")

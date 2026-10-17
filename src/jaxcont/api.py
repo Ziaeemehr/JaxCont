@@ -8,8 +8,9 @@ This is the blessed surface going forward:
 
 Both algorithms (`PseudoArclength()`, the default, and `Natural()`) run on
 the fully JIT-compiled whole-loop engines in `core/scan_continuation.py`,
-which is what makes `vmap`-batched continuation and `jax.grad`/`jax.jacfwd`
-through the analysis possible.
+which support `jit`, `vmap` and `jax.jacfwd`. Reverse-mode `jax.grad`
+requires `ContinuationPar(loop="scan")`; the default `loop="while"`
+uses dynamic termination. See docs/source/transformations.rst for tested coverage.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from typing import Any, Callable, Literal, Optional
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 
 from jaxcont.bifurcations.events import (
@@ -32,8 +34,12 @@ from jaxcont.bifurcations.events import (
     PeriodDoubling,
     detect_events,
 )
+from jaxcont.bifurcations.event_scan import EventCandidates
 from jaxcont.core.continuation import ContinuationSolution
 from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
+from jaxcont.stability import floquet as _floquet
+from jaxcont.stability.floquet import FloquetSpectrum, PeriodicSchur, ProductFloquet
+from jaxcont.utils.precision import default_tol
 
 __all__ = [
     "BP",
@@ -44,15 +50,19 @@ __all__ = [
     "ContinuationResult",
     "Event",
     "EventHit",
+    "FloquetSpectrum",
     "Fold",
     "Hopf",
     "Natural",
     "NeimarkSacker",
     "PeriodDoubling",
+    "PeriodicSchur",
+    "ProductFloquet",
     "PseudoArclength",
     "Solvers",
     "bif_problem",
     "continuation",
+    "refine_event_candidates",
 ]
 
 PyTree = Any
@@ -82,11 +92,20 @@ class BifProblem:
     ``state_names``/``param_name`` are display labels only (e.g. for
     ``plot_continuation``); they carry no numerical meaning.
 
+    ``step_update(args, u, p) -> args`` (optional) refreshes auxiliary data in
+    ``args`` from each accepted point -- the periodic phase-condition
+    reference, the Hopf-curve eigenvector anchor. It must return ``args``
+    with the same structure, shapes and dtypes, and may only change data that
+    selects among equivalent solutions (a phase or normalization anchor), not
+    the solution set itself: eigenvalues and event test functions are
+    evaluated with ``args``, while each event bracket is refined with
+    ``step_update(args, u_left, p_left)``.
+
     Registered as a JAX PyTree: ``u0``, ``p0``, ``args`` are dynamic leaves;
-    ``f``, ``kind``, ``state_names`` and ``param_name`` are static. This makes
-    ``jax.vmap(..., in_axes=...)`` over a batched problem structurally valid
-    (full end-to-end vmap awaits the lax.scan loop rewrite; see
-    ARCHITECTURE.md §3.1).
+    ``f``, ``kind``, ``state_names``, ``param_name``, ``curve_layout`` and ``step_update`` are
+    static. This makes ``jax.vmap(..., in_axes=...)`` over a batched problem
+    structurally valid (full end-to-end vmap awaits the lax.scan loop
+    rewrite; see ARCHITECTURE.md §3.1).
     """
 
     f: Callable[[Array, Array, PyTree], Array]
@@ -98,6 +117,9 @@ class BifProblem:
     ] = "equilibrium"
     state_names: Optional[tuple[str, ...]] = None
     param_name: Optional[str] = None
+    step_update: Optional[Callable[[PyTree, Array, Array], PyTree]] = None
+
+    curve_layout: object = None
 
     def at(
         self,
@@ -128,16 +150,16 @@ class BifProblem:
 
 def _bifproblem_flatten(prob: BifProblem):
     children = (prob.u0, prob.p0, prob.args)
-    aux = (prob.f, prob.kind, prob.state_names, prob.param_name)
+    aux = (prob.f, prob.kind, prob.state_names, prob.param_name, prob.step_update, prob.curve_layout)
     return children, aux
 
 
 def _bifproblem_unflatten(aux, children):
-    f, kind, state_names, param_name = aux
+    f, kind, state_names, param_name, step_update, curve_layout = aux
     u0, p0, args = children
     return BifProblem(
         f=f, u0=u0, p0=p0, args=args, kind=kind,
-        state_names=state_names, param_name=param_name,
+        state_names=state_names, param_name=param_name, step_update=step_update, curve_layout=curve_layout,
     )
 
 
@@ -155,10 +177,12 @@ def bif_problem(
     kind: str = "equilibrium",
     state_names: Optional[Sequence[str]] = None,
     param_name: Optional[str] = None,
+    step_update: Optional[Callable[[PyTree, Array, Array], PyTree]] = None,
 ) -> BifProblem:
     """
     Front-door factory for a :class:`BifProblem` (mirrors lyapax's
-    ``ode_problem``). Coerces ``u0``/``p0`` to JAX arrays.
+    ``ode_problem``). Coerces ``u0``/``p0`` to JAX arrays. ``step_update``
+    is described on :class:`BifProblem`.
 
     ``state_names``/``param_name`` are optional display labels (used by
     ``plot_continuation`` and friends) -- purely cosmetic, no effect on the
@@ -178,6 +202,7 @@ def bif_problem(
         kind=kind,
         state_names=tuple(state_names) if state_names is not None else None,
         param_name=param_name,
+        step_update=step_update,
     )
 
 
@@ -221,10 +246,23 @@ class ContinuationPar:
     ds_max: float = 0.1
     max_steps: int = 1000
     adaptive: bool = True
-    newton_tol: float = 1e-6
+    newton_tol: Optional[float] = None
     newton_max_iter: int = 20
+    loop: Literal["while", "scan"] = "while"
+    max_attempts: Optional[int] = None   # total corrector attempts; None -> 4 * max_steps
     compute_stability: bool = True
     bothside: bool = False
+    theta: Optional[float] = None  # state weight; None -> 1 / n_state
+
+    def __post_init__(self):
+        if self.theta is None:
+            return
+        try:
+            theta = float(self.theta)
+        except (TypeError, jax.errors.ConcretizationTypeError):
+            return  # traced theta: validated by the caller
+        if not (np.isfinite(theta) and theta > 0):
+            raise ValueError(f"ContinuationPar.theta must be finite and positive, got {self.theta!r}")
 
 
 @dataclass(frozen=True)
@@ -237,10 +275,16 @@ class Solvers:
     touching the continuation loop. Never itself crosses a jax.jit boundary
     -- only its .linear/.eigen fields do, as static arguments to
     pseudo_arclength_scan/natural_scan.
+
+    ``eigen`` serves equilibrium spectra. ``floquet`` is the periodic-orbit
+    Floquet strategy (``ProductFloquet(eigen_solver)`` or
+    ``PeriodicSchur(max_sweeps)``) for branch stability and for PD/NS events
+    without their own ``floquet_solver``.
     """
 
     linear: LinearSolver = Dense()
     eigen: EigenSolver = DenseEigen()
+    floquet: Any = _floquet.DEFAULT_FLOQUET
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +309,13 @@ class Branch:
     that buffer's first axis (``True`` for real points) -- mirrors how
     ``examples/example_06_vmap_sweep.py`` uses ``pseudo_arclength_scan``
     directly and trims per-batch-element with ``n_valid`` after the trace.
+
+    Periodic branches report the ``Solvers.floquet`` spectrum: ``eigenvalues``
+    are multipliers, ``trivial_index`` the flow-direction column,
+    ``floquet_logabs`` their log-magnitudes (usable where values under/overflow)
+    and ``floquet_converged`` the per-point status. A failed point has NaN
+    multipliers, index ``-1`` and ``stable`` false; padding has zero
+    multipliers, ``-inf`` logs, index ``-1`` and false status.
     """
 
     params: Array           # (n_valid,) eager, (buffer_len,) traced
@@ -273,27 +324,41 @@ class Branch:
     eigenvalues: Optional[Array] = None
     stable: Optional[Array] = None
     valid: Optional[Array] = None   # bool mask, only set when traced
+    trivial_index: Optional[Array] = None  # periodic flow-direction indices
+    floquet_logabs: Optional[Array] = None     # periodic log|multiplier|, (N, n)
+    floquet_converged: Optional[Array] = None  # periodic spectrum status, (N,)
+
+    curve_layout: object = None
 
     @property
-    def n_valid(self) -> int:
-        return int(self.params.shape[0])
+    def n_valid(self) -> int | Array:
+        if self.valid is None:
+            return int(self.params.shape[0])
+        count = self.valid.sum()
+        return count if isinstance(count, jax.core.Tracer) else int(count)
 
     def at_param(self, p: float) -> tuple[float, Array]:
         """Return the ``(param, state)`` on the branch closest to ``p``."""
-        idx = int(jnp.argmin(jnp.abs(self.params - p)))
+        distance = jnp.abs(self.params - p)
+        if self.valid is not None:
+            distance = jnp.where(self.valid, distance, jnp.inf)
+        idx = int(jnp.argmin(distance))
         return float(self.params[idx]), self.states[idx]
 
 
 def _branch_flatten(b: Branch):
-    children = (b.params, b.states, b.tangents, b.eigenvalues, b.stable, b.valid)
-    return children, None
+    children = (b.params, b.states, b.tangents, b.eigenvalues, b.stable, b.valid, b.trivial_index,
+                b.floquet_logabs, b.floquet_converged)
+    return children, b.curve_layout
 
 
 def _branch_unflatten(aux, children):
-    params, states, tangents, eigenvalues, stable, valid = children
+    (params, states, tangents, eigenvalues, stable, valid, trivial_index,
+     floquet_logabs, floquet_converged) = children
     return Branch(
         params=params, states=states, tangents=tangents,
-        eigenvalues=eigenvalues, stable=stable, valid=valid,
+        eigenvalues=eigenvalues, stable=stable, valid=valid, trivial_index=trivial_index,
+        floquet_logabs=floquet_logabs, floquet_converged=floquet_converged, curve_layout=aux,
     )
 
 
@@ -305,9 +370,16 @@ class ContinuationResult:
     """Return value of :func:`continuation`."""
 
     branch: Branch
+    # ``events`` holds only validated hits; refinements that failed (see
+    # ``EventHit.status``) are kept in ``rejected_events`` with ``info["reason"]``.
     events: list[EventHit] = field(default_factory=list)
+    rejected_events: list[EventHit] = field(default_factory=list)
     stats: dict = field(default_factory=dict)
     _solution: Optional[ContinuationSolution] = None
+    # Lower-case ``Status`` name (e.g. "reached_end"); None under jit/vmap,
+    # where ``stats["status"]`` holds the integer ``Status`` code instead.
+    status: Optional[str] = None
+    event_candidates: tuple[EventCandidates | None, ...] = ()
 
     def plot(self, **kwargs):
         """Plot the bifurcation diagram (delegates to the legacy solution)."""
@@ -315,15 +387,30 @@ class ContinuationResult:
             raise RuntimeError("No underlying solution to plot.")
         return self._solution.plot(**kwargs)
 
+    def save(self, filename: str):
+        """Save an eager result with :meth:`ContinuationSolution.save`."""
+        if self._solution is None:
+            raise RuntimeError("Only eager results can be saved; slice and refine traced results first.")
+        self._solution.save(filename)
+
+    @classmethod
+    def load(cls, filename: str) -> "ContinuationResult":
+        """Load a result saved by :meth:`save` (branch, events, rejected
+        events, status and curve layout; event candidates are not stored)."""
+        return _to_result(ContinuationSolution.load(filename))
+
 
 def _continuation_result_flatten(r: ContinuationResult):
-    children = (r.branch, r.events, r.stats, r._solution)
-    return children, None
+    children = (r.branch, r.events, r.rejected_events, r.stats, r._solution, r.event_candidates)
+    return children, r.status
 
 
 def _continuation_result_unflatten(aux, children):
-    branch, events, stats, solution = children
-    return ContinuationResult(branch=branch, events=events, stats=stats, _solution=solution)
+    branch, events, rejected_events, stats, solution, candidates = children
+    return ContinuationResult(
+        branch=branch, events=events, rejected_events=rejected_events,
+        stats=stats, _solution=solution, status=aux, event_candidates=candidates,
+    )
 
 
 jax.tree_util.register_pytree_node(
@@ -332,99 +419,224 @@ jax.tree_util.register_pytree_node(
 
 
 # ---------------------------------------------------------------------------
-# Adapters (BifProblem <-> legacy ContinuationProblem/Solution)
+# Adapters (BifProblem <-> ContinuationSolution)
 # ---------------------------------------------------------------------------
 
 
-def _call_scan(scan_fn, rhs2, u0, p_from, p_to, settings: ContinuationPar, solvers: Solvers, dtype):
+class _BoundF:
+    """Static engine ``f`` that closes over the non-array leaves of ``args``.
+
+    Invariant: equal ``(f, treedef, mask, static)`` compare and hash equal, so
+    repeated ``continuation()`` calls on one problem reuse the compiled kernel.
+    The array leaves of ``args`` stay dynamic and are passed as a list.
+    """
+
+    def __init__(self, f, treedef, mask, static):
+        self.f, self.treedef, self.mask, self.static = f, treedef, mask, static
+
+    def __call__(self, u, p, dyn):
+        dyn_it, static_it = iter(dyn), iter(self.static)
+        leaves = [next(dyn_it) if m else next(static_it) for m in self.mask]
+        return self.f(u, p, jax.tree_util.tree_unflatten(self.treedef, leaves))
+
+    def _key(self):
+        return (self.f, self.treedef, self.mask, self.static)
+
+    def __eq__(self, other):
+        return isinstance(other, _BoundF) and self._key() == other._key()
+
+    def __hash__(self):
+        return hash(self._key())
+
+
+class _BoundStepUpdate(_BoundF):
+    """Static engine ``step_update`` over the same split of ``args`` as :class:`_BoundF`.
+
+    Takes and returns the list of dynamic leaves; the wrapped ``step_update``
+    sees the full ``args``. Its result must keep the treedef and the static
+    leaves, so the engine's loop carry keeps its structure.
+    """
+
+    def __call__(self, dyn, u, p):
+        dyn_it, static_it = iter(dyn), iter(self.static)
+        leaves = [next(dyn_it) if m else next(static_it) for m in self.mask]
+        new = self.f(jax.tree_util.tree_unflatten(self.treedef, leaves), u, p)
+        new_leaves, new_treedef = jax.tree_util.tree_flatten(new)
+        new_static = tuple(x for x, m in zip(new_leaves, self.mask) if not m)
+        if new_treedef != self.treedef or any(
+            a is not b and a != b for a, b in zip(new_static, self.static)
+        ):
+            raise ValueError(
+                "step_update may only change the array leaves of args; it "
+                "must return args with the same structure and the same "
+                "non-array leaves"
+            )
+        return [x for x, m in zip(new_leaves, self.mask) if m]
+
+    def __eq__(self, other):
+        return isinstance(other, _BoundStepUpdate) and self._key() == other._key()
+
+    def __hash__(self):
+        return hash(("step_update",) + self._key())
+
+
+def _engine_f_args(problem: BifProblem):
+    """Return ``(f, step_update, args)`` for the scan engine.
+
+    Only ``jax.Array`` / ``np.ndarray`` leaves of ``problem.args`` are dynamic
+    engine inputs (compile-cache reuse across changed values). Every other leaf
+    -- Python scalars, callables such as the one periodic problems carry -- is
+    bound statically and stays concrete inside ``f``, so it may be used as a
+    shape, loop bound or ``if`` flag; changing its value recompiles.
+    ``step_update`` (``None`` when the problem has none) is wrapped over the
+    same split.
+    """
+    leaves, treedef = jax.tree_util.tree_flatten(problem.args)
+    mask = tuple(isinstance(x, (jax.Array, np.ndarray)) for x in leaves)
+    if all(mask):
+        return problem.f, problem.step_update, problem.args
+    dyn = [x for x, m in zip(leaves, mask) if m]
+    static = tuple(x for x, m in zip(leaves, mask) if not m)
+    step_update = (
+        None if problem.step_update is None
+        else _BoundStepUpdate(problem.step_update, treedef, mask, static)
+    )
+    return _BoundF(problem.f, treedef, mask, static), step_update, dyn
+
+
+def _call_scan(scan_fn, problem: BifProblem, u0, p_from, p_to, settings: ContinuationPar, solvers: Solvers, dtype):
+    f, step_update, args = _engine_f_args(problem)
+    from jaxcont.core.scan_continuation import natural_scan, natural_lax_scan
+    weighting = {} if scan_fn in (natural_scan, natural_lax_scan) else {
+        "theta": jnp.asarray(1 / u0.shape[0] if settings.theta is None else settings.theta, dtype)
+    }
     return scan_fn(
-        rhs2,
+        f,
+        step_update,
         u0,
         jnp.asarray(p_from, dtype),
         jnp.asarray(p_to, dtype),
+        args,
         jnp.asarray(settings.ds, dtype),
         jnp.asarray(settings.ds_min, dtype),
         jnp.asarray(settings.ds_max, dtype),
-        jnp.asarray(settings.newton_tol, dtype),
+        jnp.asarray(
+            default_tol(dtype) if settings.newton_tol is None else settings.newton_tol, dtype
+        ),
         int(settings.max_steps),
-        jnp.asarray(settings.newton_max_iter),
+        int(settings.newton_max_iter) if settings.loop == "scan" else jnp.asarray(settings.newton_max_iter),
         solvers.linear,
         jnp.asarray(settings.adaptive),
+        (4 * int(settings.max_steps) if settings.max_attempts is None
+         else int(settings.max_attempts)) if settings.loop == "scan" else jnp.asarray(
+            4 * int(settings.max_steps) if settings.max_attempts is None
+            else settings.max_attempts, jnp.int32),
+        **weighting,
     )
+
+
+def _status_name(code) -> str:
+    from jaxcont.core.scan_continuation import Status
+
+    return Status(int(code)).name.lower()
+
+
+def _periodic_spectrum(problem: BifProblem, strategy, states, params, valid=None) -> FloquetSpectrum:
+    """Branch Floquet spectrum with one static strategy.
+
+    Padding (``valid`` false) is replaced by a valid seed before evaluation,
+    so no collapsed orbit is decomposed, and masked afterwards.
+    """
+    pargs = problem.args
+    if valid is not None:
+        first = jnp.argmax(valid)
+        states = jnp.where(valid[:, None], states, states[first])
+        params = jnp.where(valid, params, params[first])
+    spectrum = _floquet._branch_spectrum(
+        strategy, pargs.raw_f, pargs.mesh, states, params, pargs.user_args)
+    if valid is None:
+        return spectrum
+    column = valid[:, None]
+    return FloquetSpectrum(
+        values=jnp.where(column, spectrum.values, 0),
+        phase=jnp.where(column, spectrum.phase, 0),
+        logabs=jnp.where(column, spectrum.logabs, -jnp.inf),
+        trivial_index=jnp.where(valid, spectrum.trivial_index, -1),
+        converged=spectrum.converged & valid,
+    )
+
+
+def _branch_spectra(problem, settings, events, solvers, states, params, valid=None):
+    """``(eigenvalues, stability, trivial_index, floquet_logabs, floquet_converged)``."""
+    from jaxcont.core.scan_continuation import branch_eigenvalues
+
+    # Curve-kind problems never need Branch.eigenvalues: the branch state is
+    # an extended-system vector, and codim-2 events compute the original
+    # spectrum from their own raw_f.
+    if problem.kind in ("fold_curve", "hopf_curve") or not (
+            settings.compute_stability or len(events) > 0) or states.shape[0] == 0:
+        return None, None, None, None, None
+    if problem.kind == "periodic":
+        spectrum = _periodic_spectrum(problem, solvers.floquet, states, params, valid)
+        stability = _floquet.floquet_stable(
+            spectrum.values, spectrum.trivial_index, logabs=spectrum.logabs) & spectrum.converged
+        return (spectrum.values, stability, spectrum.trivial_index,
+                spectrum.logabs, spectrum.converged)
+    if valid is not None:
+        states = jnp.where(valid[:, None], states, states[0])
+        params = jnp.where(valid, params, params[0])
+    eigenvalues = branch_eigenvalues(
+        problem.f, states, params, problem.args, eigen_solver=solvers.eigen
+    )
+    stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
+    if valid is not None:
+        stability = stability & valid
+        eigenvalues = jnp.where(valid[:, None], eigenvalues, 0)
+    return eigenvalues, stability, None, None, None
 
 
 def _assemble_leg(
     res,
     problem: BifProblem,
-    rhs2: Callable[[Array, Array], Array],
     settings: ContinuationPar,
     events: Sequence[Event],
     solvers: Solvers,
 ):
-    """
-    Trim one ``scan_fn`` result to its ``n_valid`` real points, compute
-    eigenvalues/stability, and detect events on it in isolation.
-
-    Isolation matters for :func:`_run_scan_bothside`: each leg starts at the
-    problem's own seed point, so scanning it for events independently (as
-    opposed to scanning a single array stitched from both legs) never lets a
-    fold/Hopf test function see the artificial tangent-direction reversal at
-    the stitch seam.
-    """
-    from jaxcont.core.scan_continuation import branch_eigenvalues
-    from jaxcont.stability.floquet import branch_floquet_multipliers, floquet_stable
+    """Trim one engine leg and compute its branch spectra."""
+    from jaxcont.core.scan_continuation import Status
 
     n = int(res.n_valid)
+    if int(res.status) == int(Status.SEED_FAILED):
+        raise ValueError(
+            "continuation() seed failed: Newton did not converge at the "
+            "starting point (u0, p0) -- the initial guess is not on a "
+            "solution branch (singular Jacobian or too far away). Refine u0 "
+            "first or pass a better initial guess."
+        )
     states = res.states[:n]
     params = res.params[:n]
     tangents = res.tangents[:n]
 
-    # Curve-kind problems (fold_curve/hopf_curve) never need Branch.eigen-
-    # values: the branch state is an extended-system vector, so eigen-
-    # decomposing its Jacobian wouldn't give the original system's
-    # spectrum anyway (see the compute_stability=True guard in _run_scan),
-    # and every codim-2 event in bifurcations/codim2_events.py carries its
-    # own raw_f and computes the original spectrum itself via
-    # BranchPoint.u -- it never reads BranchPoint.eigenvalues. Computing
-    # eigenvalues here whenever events=[...] was non-empty (the old
-    # `len(events) > 0` clause) wasted real time re-eigendecomposing a
-    # Jacobian nothing reads.
-    is_curve_kind = problem.kind in ("fold_curve", "hopf_curve")
-    eigenvalues = None
-    stability = None
-    want_eigs = not is_curve_kind and (settings.compute_stability or len(events) > 0)
-    if want_eigs and states.shape[0] > 0:
-        if problem.kind == "periodic":
-            _, _, raw_f, mesh = problem.args
-            eigenvalues = branch_floquet_multipliers(
-                raw_f, mesh, states, params, eigen_solver=solvers.eigen
-            )
-            stability = floquet_stable(eigenvalues)
-        else:
-            eigenvalues = branch_eigenvalues(rhs2, states, params, eigen_solver=solvers.eigen)
-            stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
+    eigenvalues, stability, trivial_index, logabs, floquet_ok = _branch_spectra(
+        problem, settings, events, solvers, states, params)
 
+    converged = np.asarray(res.converged[:n])
+    iters = np.asarray(res.iters[:n])
+    ds = np.asarray(res.ds[:n])
     convergence_info = [
         {
             "step": i,
-            "converged": bool(res.converged[i]),
-            "newton_iters": int(res.iters[i]),
-            "ds": float(res.ds[i]),
+            "converged": bool(converged[i]),
+            "newton_iters": int(iters[i]),
+            "ds": float(ds[i]),
         }
         for i in range(n)
     ]
 
-    # Curve-kind problems intentionally have eigenvalues=None (see above)
-    # but their codim-2 events are self-contained and never read
-    # BranchPoint.eigenvalues, so detection must still run for them.
     hits: list[EventHit] = []
-    if len(events) > 0 and (eigenvalues is not None or is_curve_kind):
-        hits = detect_events(
-            events, params, states, tangents, eigenvalues, rhs2,
-            ds=float(settings.ds), tolerance=1e-6,
-        )
 
-    return states, params, tangents, eigenvalues, stability, convergence_info, hits
+    floquet = None if logabs is None else (logabs, floquet_ok)
+    return states, params, tangents, eigenvalues, stability, trivial_index, floquet, convergence_info, hits
 
 
 def _finish_result(
@@ -434,9 +646,13 @@ def _finish_result(
     tangents,
     eigenvalues,
     stability,
+    trivial_index,
+    floquet,
     convergence_info,
     hits: list[EventHit],
     verbose: bool,
+    status: str,
+    n_attempts: int,
 ) -> ContinuationResult:
     sol = ContinuationSolution(
         states=states,
@@ -451,10 +667,15 @@ def _finish_result(
     # sol.bifurcations stays dict-shaped: viz/core.py's plotting and
     # ContinuationSolution.get_bifurcations_by_type both read
     # bif.get("type")/bif.get("parameter")/bif.get("state") directly.
-    sol.bifurcations = [
-        {"type": h.kind, "parameter": h.p, "state": h.u, "index": h.index, **h.info}
-        for h in hits
-    ]
+    validated = [h for h in hits if h.status == "validated"]
+    rejected = [h for h in hits if h.status == "failed"]
+    sol.bifurcations = _hit_records(validated)
+    sol.rejected_events = _hit_records(rejected)
+    sol.trivial_index = trivial_index
+    if floquet is not None:
+        sol.floquet_logabs, sol.floquet_converged = floquet
+    sol.curve_layout = problem.curve_layout
+    sol.status = status
 
     if verbose:
         n_converged = sum(1 for c in convergence_info if c["converged"])
@@ -470,7 +691,31 @@ def _finish_result(
             f"bifurcations: {bif_summary}"
         )
 
-    return _to_result(sol)
+    result = _to_result(sol)
+    result.rejected_events = rejected
+    result.stats["n_attempts"] = n_attempts
+    return result
+
+
+def _hit_records(hits) -> list[dict]:
+    """``EventHit`` objects as ``ContinuationSolution`` event records."""
+    return [{"type": h.kind, "parameter": h.p, "state": h.u, "index": h.index, **h.info}
+            for h in hits]
+
+
+def _record_hits(records, status: str) -> list[EventHit]:
+    return [
+        EventHit(
+            kind=b.get("type", "unknown"),
+            p=float(b.get("parameter", 0.0)),
+            u=b.get("state"),
+            index=None if b.get("index") is None else tuple(b["index"]),
+            info={k: v for k, v in b.items()
+                  if k not in ("type", "parameter", "state", "index")},
+            status=status,
+        )
+        for b in (records or [])
+    ]
 
 
 def _run_scan(
@@ -487,10 +732,10 @@ def _run_scan(
     reassemble a legacy-shaped :class:`ContinuationSolution` so
     detection/plotting reuse existing code.
     """
-    args = problem.args
-    rhs2 = lambda u, p: problem.f(u, p, args)
-
     p_start, p_end = p_span
+    if not isinstance(p_start, jax.core.Tracer) and not isinstance(p_end, jax.core.Tracer):
+        if float(p_start) == float(p_end):
+            raise ValueError("p_span must have nonzero length")
     u0 = jnp.asarray(problem.u0)
     dtype = u0.dtype
 
@@ -508,7 +753,7 @@ def _run_scan(
 
     if settings.bothside:
         return _run_scan_bothside(
-            scan_fn, problem, rhs2, u0, p_span, settings, events, solvers, verbose, dtype,
+            scan_fn, problem, u0, p_span, settings, events, solvers, verbose, dtype,
         )
 
     try:
@@ -528,7 +773,7 @@ def _run_scan(
         # the check is deferred to eager execution. Skip it here.
         pass
 
-    res = _call_scan(scan_fn, rhs2, u0, p_start, p_end, settings, solvers, dtype)
+    res = _call_scan(scan_fn, problem, u0, p_start, p_end, settings, solvers, dtype)
 
     try:
         int(res.n_valid)
@@ -536,21 +781,21 @@ def _run_scan(
         # Traced call (jax.vmap/jax.jit over this problem/settings): n_valid
         # can't become a concrete Python int, so there is no single trim
         # length. Fall back to the fixed-size-buffer + mask representation.
-        return _run_scan_traced(res, problem, rhs2, settings, events, solvers)
+        return _run_scan_traced(res, problem, settings, events, solvers)
 
-    states, params, tangents, eigenvalues, stability, convergence_info, hits = _assemble_leg(
-        res, problem, rhs2, settings, events, solvers
+    states, params, tangents, eigenvalues, stability, trivial_index, floquet, convergence_info, hits = _assemble_leg(
+        res, problem, settings, events, solvers
     )
     return _finish_result(
-        problem, states, params, tangents, eigenvalues, stability,
+        problem, states, params, tangents, eigenvalues, stability, trivial_index, floquet,
         convergence_info, hits, verbose,
+        _status_name(res.status), int(res.n_attempts),
     )
 
 
 def _run_scan_bothside(
     scan_fn,
     problem: BifProblem,
-    rhs2: Callable[[Array, Array], Array],
     u0: Array,
     p_span: tuple[float, float],
     settings: ContinuationPar,
@@ -566,9 +811,8 @@ def _run_scan_bothside(
     one branch. No changes to core/scan_continuation.py: direction there is
     already just ``sign(p_end - p0)``.
 
-    Eager-only, like ``events=[...]``: needs two full Python-level
-    ``scan_fn`` calls plus list-based stitching (and, with events, of their
-    independently-detected hit lists), none of which is traceable.
+    Eager-only: assemble states before scanning so candidate indices, mode
+    orientation and sampled-zero ownership follow the assembled branch.
     """
     p_a, p_b = p_span
     try:
@@ -591,14 +835,35 @@ def _run_scan_bothside(
             f"p_span's bounds [{p_lo}, {p_hi}]."
         )
 
-    fwd_res = _call_scan(scan_fn, rhs2, u0, p0_f, p_hi, settings, solvers, dtype)
-    bwd_res = _call_scan(scan_fn, rhs2, u0, p0_f, p_lo, settings, solvers, dtype)
+    if p0_f == p_lo or p0_f == p_hi:
+        bound = p_hi if p0_f == p_lo else p_lo
+        res = _call_scan(scan_fn, problem, u0, p0_f, bound, settings, solvers, dtype)
+        states, params, tangents, eig, stab, trivial, floquet, conv, hits = _assemble_leg(
+            res, problem, settings, events, solvers
+        )
+        if p0_f == p_hi:
+            n = len(conv) - 1
+            def reverse(array):
+                return None if array is None else jnp.flip(array, axis=0)
+            states, params, tangents = reverse(states), reverse(params), -reverse(tangents)
+            eig, stab, trivial = reverse(eig), reverse(stab), reverse(trivial)
+            floquet = None if floquet is None else tuple(reverse(a) for a in floquet)
+            conv = [{**c, "step": i} for i, c in enumerate(reversed(conv))]
+            hits = [replace(h, index=None if h.index is None else tuple(n - i for i in h.index))
+                    for h in hits]
+        return _finish_result(
+            problem, states, params, tangents, eig, stab, trivial, floquet, conv, hits,
+            verbose, _status_name(res.status), int(res.n_attempts),
+        )
 
-    f_states, f_params, f_tangents, f_eig, f_stab, f_conv, f_hits = _assemble_leg(
-        fwd_res, problem, rhs2, settings, events, solvers
+    fwd_res = _call_scan(scan_fn, problem, u0, p0_f, p_hi, settings, solvers, dtype)
+    bwd_res = _call_scan(scan_fn, problem, u0, p0_f, p_lo, settings, solvers, dtype)
+
+    f_states, f_params, f_tangents, f_eig, f_stab, f_trivial, f_floquet, f_conv, f_hits = _assemble_leg(
+        fwd_res, problem, settings, events, solvers
     )
-    b_states, b_params, b_tangents, b_eig, b_stab, b_conv, b_hits = _assemble_leg(
-        bwd_res, problem, rhs2, settings, events, solvers
+    b_states, b_params, b_tangents, b_eig, b_stab, b_trivial, b_floquet, b_conv, b_hits = _assemble_leg(
+        bwd_res, problem, settings, events, solvers
     )
 
     # Reverse the backward leg (dropping its index-0 point -- the same seed
@@ -611,9 +876,12 @@ def _run_scan_bothside(
 
     states = _stitch(b_states, f_states)
     params = _stitch(b_params, f_params)
-    tangents = _stitch(b_tangents, f_tangents)
+    tangents = _stitch(-b_tangents, f_tangents)
     eigenvalues = _stitch(b_eig, f_eig)
     stability = _stitch(b_stab, f_stab)
+    trivial_index = _stitch(b_trivial, f_trivial)
+    floquet = None if f_floquet is None or b_floquet is None else tuple(
+        _stitch(b, f) for b, f in zip(b_floquet, f_floquet))
 
     n_back = len(b_conv) - 1  # excludes the shared seed point
     convergence_info = [
@@ -622,22 +890,25 @@ def _run_scan_bothside(
         {**c, "step": i + n_back} for i, c in enumerate(f_conv)
     ]
 
-    # Each leg is scanned for events in isolation (see _assemble_leg's
-    # docstring) -- both start at the same p0, so their hit lists never
-    # need cross-leg deduping; a genuine bifurcation can only land in
-    # whichever leg's disjoint parameter interval actually contains it.
-    hits = list(b_hits) + list(f_hits)
+    hits = []
+
+    # Report the first leg that did not simply reach its end.
+    status = next(
+        (n for n in (_status_name(fwd_res.status), _status_name(bwd_res.status))
+         if n != "reached_end"),
+        "reached_end",
+    )
 
     return _finish_result(
-        problem, states, params, tangents, eigenvalues, stability,
+        problem, states, params, tangents, eigenvalues, stability, trivial_index, floquet,
         convergence_info, hits, verbose,
+        status, int(fwd_res.n_attempts) + int(bwd_res.n_attempts),
     )
 
 
 def _run_scan_traced(
     res,
     problem: BifProblem,
-    rhs2: Callable[[Array, Array], Array],
     settings: ContinuationPar,
     events: Sequence[Event],
     solvers: Solvers,
@@ -649,34 +920,10 @@ def _run_scan_traced(
     the legacy ``ContinuationSolution``/``detect_events`` machinery,
     neither of which is traceable (Python loops, ``float()``, ``list.sort()``).
     """
-    if len(events) > 0:
-        raise NotImplementedError(
-            "events=[...] is not supported when continuation() runs inside "
-            "jax.vmap/jax.jit: detect_events uses Python-level control "
-            "flow (loops, list.sort(), float()) that isn't traceable. Call "
-            "continuation() without events inside the trace -- e.g. inspect "
-            "branch.states/branch.params/branch.valid -- or run it eagerly "
-            "per point of interest outside the trace to get events."
-        )
-
-    from jaxcont.core.scan_continuation import branch_eigenvalues
-    from jaxcont.stability.floquet import branch_floquet_multipliers, floquet_stable
-
     states, params, tangents = res.states, res.params, res.tangents
     valid = jnp.arange(states.shape[0]) < res.n_valid
-
-    eigenvalues = None
-    stability = None
-    if settings.compute_stability:
-        if problem.kind == "periodic":
-            _, _, raw_f, mesh = problem.args
-            eigenvalues = branch_floquet_multipliers(
-                raw_f, mesh, states, params, eigen_solver=solvers.eigen
-            )
-            stability = floquet_stable(eigenvalues)
-        else:
-            eigenvalues = branch_eigenvalues(rhs2, states, params, eigen_solver=solvers.eigen)
-            stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
+    eigenvalues, stability, trivial_index, logabs, floquet_ok = _branch_spectra(
+        problem, settings, events, solvers, states, params, valid)
 
     branch = Branch(
         params=params,
@@ -684,10 +931,19 @@ def _run_scan_traced(
         tangents=tangents,
         eigenvalues=eigenvalues,
         stable=stability,
+        trivial_index=trivial_index,
+        floquet_logabs=logabs,
+        floquet_converged=floquet_ok,
         valid=valid,
+        curve_layout=problem.curve_layout,
     )
     return ContinuationResult(
-        branch=branch, events=[], stats={"n_valid": res.n_valid}, _solution=None,
+        branch=branch, events=[], stats={
+            "n_valid": res.n_valid,
+            "n_attempts": res.n_attempts,
+            "status": res.status,
+        },
+        _solution=None,
     )
 
 
@@ -698,25 +954,21 @@ def _to_result(sol: ContinuationSolution) -> ContinuationResult:
         tangents=sol.tangent_vectors,
         eigenvalues=sol.eigenvalues,
         stable=sol.stability,
+        trivial_index=sol.trivial_index,
+        floquet_logabs=sol.floquet_logabs,
+        floquet_converged=sol.floquet_converged,
+        curve_layout=sol.curve_layout,
     )
-    events = [
-        EventHit(
-            kind=b.get("type", "unknown"),
-            p=float(b.get("parameter", 0.0)),
-            u=b.get("state"),
-            index=b.get("index"),
-            info={k: v for k, v in b.items()
-                  if k not in ("type", "parameter", "state", "index")},
-        )
-        for b in (sol.bifurcations or [])
-    ]
     stats = {
         "n_points": sol.n_points,
         "converged_steps": sum(
             1 for c in (sol.convergence_info or []) if c.get("converged")
         ),
+        "status": sol.status,
     }
-    return ContinuationResult(branch=branch, events=events, stats=stats, _solution=sol)
+    return ContinuationResult(branch=branch, events=_record_hits(sol.bifurcations, "validated"),
+                              rejected_events=_record_hits(sol.rejected_events, "failed"),
+                              stats=stats, _solution=sol, status=sol.status)
 
 
 # ---------------------------------------------------------------------------
@@ -752,9 +1004,104 @@ def continuation(
     """
     from jaxcont.core.scan_continuation import natural_scan, pseudo_arclength_scan
 
+    if settings.loop not in ("while", "scan"):
+        raise ValueError("loop must be 'while' or 'scan'")
+    if settings.loop == "scan":
+        from jaxcont.core.scan_continuation import natural_lax_scan, pseudo_arclength_lax_scan
+        natural_scan, pseudo_arclength_scan = natural_lax_scan, pseudo_arclength_lax_scan
     if isinstance(alg, Natural):
-        return _run_scan(natural_scan, problem, p_span, settings, events, solvers, verbose)
+        result = _run_scan(natural_scan, problem, p_span, settings, events, solvers, False)
     elif isinstance(alg, PseudoArclength):
-        return _run_scan(pseudo_arclength_scan, problem, p_span, settings, events, solvers, verbose)
+        result = _run_scan(pseudo_arclength_scan, problem, p_span, settings, events, solvers, False)
     else:
         raise TypeError(f"Unknown continuation algorithm: {alg!r}")
+
+    from jaxcont.bifurcations.event_scan import EventScanInput, scan_event_candidates
+    branch = result.branch
+    traced = isinstance(branch.states, jax.core.Tracer)
+    events = _bind_floquet(events, solvers)
+    # Eager custom events without array hooks use the Python compatibility path.
+    use_arrays = tuple(traced or getattr(e, "scan_arrays", None) is not None
+                       for e in events)
+    array_events = tuple(e for e, use in zip(events, use_arrays) if use)
+    strategies, spectra = _event_floquet_spectra(problem, branch, array_events, solvers)
+    from jaxcont.core.scan_continuation import Status
+    status = (result.stats["status"] if result.status is None
+              else jnp.asarray(int(Status[result.status.upper()]), jnp.int32))
+    data = EventScanInput(branch.params, branch.states, branch.tangents,
+                          branch.eigenvalues, branch.trivial_index,
+                          jnp.ones(branch.params.shape, bool) if branch.valid is None else branch.valid,
+                          branch.curve_layout, strategies, spectra, status)
+    scanned = iter(scan_event_candidates(array_events, data, problem.args))
+    result.event_candidates = tuple(next(scanned) if use else None for use in use_arrays)
+    if not traced and events:
+        result = refine_event_candidates(result, problem, events, solvers=solvers)
+    if verbose and not traced:
+        counts: dict[str, int] = {}
+        for hit in result.events:
+            counts[hit.kind] = counts.get(hit.kind, 0) + 1
+        summary = ", ".join(f"{count} {kind}" for kind, count in sorted(counts.items())) or "none"
+        print(f"continuation(): {branch.n_valid} points "
+              f"({result.stats['converged_steps']} converged), bifurcations: {summary}")
+    return result
+
+
+def _bind_floquet(events: Sequence[Event], solvers: Solvers) -> tuple:
+    """PD/NS events without an explicit ``floquet_solver`` use ``solvers.floquet``."""
+    return tuple(
+        replace(e, floquet_solver=solvers.floquet)
+        if isinstance(e, (PeriodDoubling, NeimarkSacker)) and e.floquet_solver is None else e
+        for e in events)
+
+
+def _event_floquet_spectra(problem, branch, events, solvers):
+    """Static strategy keys and one branch spectrum per distinct effective
+    Floquet strategy; the bundle strategy reuses the branch spectrum."""
+    if problem.kind != "periodic" or branch.floquet_converged is None:
+        return (), ()
+    values = branch.eigenvalues
+    magnitude = jnp.abs(values)
+    phase = jnp.where(magnitude > 0, values / jnp.where(magnitude > 0, magnitude, 1), 0)
+    strategies = [solvers.floquet]
+    spectra = [FloquetSpectrum(values, phase, branch.floquet_logabs, branch.trivial_index,
+                               branch.floquet_converged)]
+    for event in events:
+        strategy = getattr(event, "floquet_solver", None)
+        if isinstance(event, (PeriodDoubling, NeimarkSacker)) and strategy not in strategies:
+            strategies.append(strategy)
+            spectra.append(_periodic_spectrum(problem, strategy, branch.states, branch.params,
+                                              branch.valid))
+    return tuple(strategies), tuple(spectra)
+
+
+def refine_event_candidates(result: ContinuationResult, problem: BifProblem,
+                            events: Sequence[Event], *, tolerance=None,
+                            max_iterations=50, solvers=Solvers()) -> ContinuationResult:
+    """Refine unvalidated candidates on one unbatched, eager result.
+
+    Slice batched result pytrees before calling. Use the detection solver bundle:
+    PD/NS events without their own ``floquet_solver`` refine with
+    ``solvers.floquet``, explicit event strategies are kept.
+    Bracket args are reconstructed from the left endpoint's step hook.
+    """
+    branch = result.branch
+    if isinstance(branch.states, jax.core.Tracer) or branch.states.ndim != 2:
+        raise TypeError("refine_event_candidates requires one unbatched eager result")
+    if len(events) != len(result.event_candidates):
+        raise ValueError("events must match the candidate tuple used for detection")
+    events = _bind_floquet(events, solvers)
+    hits = detect_events(events, branch.params, branch.states, branch.tangents,
+        branch.eigenvalues, lambda u,p: problem.f(u,p,problem.args), ds=0.,
+        trivial_index=branch.trivial_index, curve_layout=branch.curve_layout,
+        args=problem.args, step_update=problem.step_update,
+        f=problem.f, tolerance=tolerance, max_iterations=max_iterations,
+        candidates=result.event_candidates)
+    refined = replace(result, events=[h for h in hits if h.status == "validated"],
+                      rejected_events=[h for h in hits if h.status == "failed"])
+    if result._solution is not None:
+        import copy
+        solution = copy.copy(result._solution)
+        solution.bifurcations = _hit_records(refined.events)
+        solution.rejected_events = _hit_records(refined.rejected_events)
+        refined._solution = solution
+    return refined

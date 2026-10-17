@@ -149,9 +149,10 @@ def _sheared_circle_jac_np(t, u, rho):
 
 
 rng = np.random.default_rng(0)
-t_traj = np.sort(rng.uniform(0, 5.5, size=40))
+t_traj = np.sort(rng.uniform(0, 2 * np.pi / OMEGA, size=40))
 t_traj[0] = 0.0
-theta_guess = 2 * np.pi * t_traj / 5.5 + 0.3
+t_traj[-1] = 2 * np.pi / OMEGA
+theta_guess = 2 * np.pi * t_traj / (2 * np.pi / OMEGA) + 0.3
 u_traj = jnp.asarray(np.stack([0.8 * np.cos(theta_guess), 0.8 * np.sin(theta_guess)], axis=1))
 mesh_circle = Collocation(ntst=10, ncol=4)
 rho0 = 1.0

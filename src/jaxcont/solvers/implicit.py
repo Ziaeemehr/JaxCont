@@ -17,6 +17,8 @@ import jax
 import jax.numpy as jnp
 from jax import Array, lax
 
+from jaxcont.utils.precision import default_tol
+
 PyTree = Any
 
 
@@ -25,7 +27,7 @@ def differentiable_root(
     x0: Array | Callable[[PyTree], Array],
     theta: PyTree,
     *,
-    tol: float = 1e-8,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> Array:
     """
@@ -48,6 +50,7 @@ def differentiable_root(
 
     def newton(theta):
         x_seed = x0(theta) if callable(x0) else x0
+        tol_ = default_tol(jnp.asarray(x_seed).dtype) if tol is None else tol
 
         def cond(carry):
             _x, it, done = carry
@@ -61,12 +64,16 @@ def differentiable_root(
             x_new = x + dx
             r_new = G(x_new, theta)
             done = jnp.logical_or(
-                jnp.linalg.norm(r_new) < tol,
+                jnp.linalg.norm(r_new) < tol_,
                 jnp.logical_not(jnp.all(jnp.isfinite(r_new))),
             )
             return x_new, it + 1, done
 
-        x_star, _, _ = lax.while_loop(cond, body, (x_seed, 0, jnp.array(False)))
+        # A seed that already satisfies the residual tolerance is returned
+        # untouched: the Newton step would otherwise solve with a Jacobian
+        # that may be singular exactly at the root (e.g. G = x**2 at 0).
+        done0 = jnp.linalg.norm(G(x_seed, theta)) < tol_
+        x_star, _, _ = lax.while_loop(cond, body, (x_seed, 0, done0))
         return x_star
 
     @jax.custom_vjp
@@ -96,7 +103,7 @@ def differentiable_root_checked(
     x0: Array | Callable[[PyTree], Array],
     theta: PyTree,
     *,
-    tol: float = 1e-8,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> tuple[Array, Array]:
     """
@@ -111,9 +118,10 @@ def differentiable_root_checked(
     """
     x_star = differentiable_root(G, x0, theta, tol=tol, max_iter=max_iter)
     residual = jnp.linalg.norm(G(x_star, theta))
+    tol_ = default_tol(x_star.dtype) if tol is None else tol
     converged = (
         jnp.isfinite(residual)
-        & (residual < tol)
+        & (residual < tol_)
         & jnp.all(jnp.isfinite(x_star))
     )
     return x_star, converged

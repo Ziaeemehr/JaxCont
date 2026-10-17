@@ -17,7 +17,7 @@
 
 Because this comparison remains an open, tracked failure, treat JaxCont's fold-of-cycles, period-doubling, and Neimark-Sacker detection as experimental rather than fully validated until it closes.
 
-The reviewed references were generated with MATLAB R2020a and MatCont 7.6, then committed as normalized CSV/JSON artifacts. Comparisons use the declared case tolerances and the suite's policy for interpolated branch segments, unique event type/location assignments, and tolerance-feasible eigenvalue/Floquet-spectrum matching; Floquet comparisons remove exactly one trivial multiplier nearest `+1`.
+The reviewed references were generated with MATLAB 9.8 and MatCont 7.6, then committed as normalized CSV/JSON artifacts. Comparisons use the declared case tolerances and the suite's policy for interpolated branch segments, unique event type/location assignments, and tolerance-feasible eigenvalue/Floquet-spectrum matching; Floquet comparisons remove exactly one trivial multiplier nearest `+1`.
 
 Reproduce the CPU validation snapshot from the repository root:
 
@@ -26,3 +26,7 @@ JAX_PLATFORMS=cpu MPLCONFIGDIR=/tmp/mpl-jaxcont-validation python3 -m examples.M
 ```
 
 Exit status `1` is expected while `MC-LC-002` remains failing. See the [complete MatCont validation-suite README](https://github.com/Ziaeemehr/JaxCont/blob/main/examples/MatCont/README.md) for case definitions, artifacts, the full comparison policy, and the unsupported-capabilities matrix.
+
+Hopf coefficients use the MatCont/Kuznetsov convention with unit-norm `q`
+and denominator `2 * omega0`. The standard cubic Hopf has `l1 = -2`;
+MC-EQ-003 compares `l1 = -0.3` directly, without a scaling adapter.

@@ -6,6 +6,7 @@ import argparse
 import importlib
 import inspect
 import os
+import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -21,8 +22,6 @@ from .artifacts import (
 from .registry import load_registry, select_cases
 from .validation import evaluate_case_result
 
-_DEFAULT_MATLAB_BIN = "/home/ziaee/prog/Matlab/R2020a/bin/matlab"
-_DEFAULT_MATCONT_ROOT = "/home/ziaee/prog/MatCont/MatCont7p6"
 _SUITE_DIR = Path(__file__).resolve().parent
 _DEFAULT_REFERENCE_DIR = _SUITE_DIR / "reference"
 _DEFAULT_GENERATED_DIR = _SUITE_DIR / "generated"
@@ -32,6 +31,14 @@ _EQUATION_FILES = {
     "MC-EQ-003": _SUITE_DIR / "matlab" / "systems" / "adaptive_control.m",
     "MC-LC-001": _SUITE_DIR / "matlab" / "systems" / "radial_cycle_system.m",
 }
+
+
+def resolve_matlab_bin(override: str | None = None) -> str | None:
+    """Prefer an explicit override, then MATLAB_BIN, then MATLAB on PATH."""
+    configured = override or os.environ.get("MATLAB_BIN")
+    if configured:
+        return str(Path(configured).expanduser().resolve())
+    return shutil.which("matlab")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,12 +68,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--matlab-bin",
-        default=os.environ.get("MATLAB_BIN", _DEFAULT_MATLAB_BIN),
+        default=resolve_matlab_bin(),
         help="Path to the MATLAB executable (default: %(default)s).",
     )
     parser.add_argument(
         "--matcont-root",
-        default=os.environ.get("MATCONT_ROOT", _DEFAULT_MATCONT_ROOT),
+        default=os.environ.get("MATCONT_ROOT") or None,
         help="Path to the MatCont installation (default: %(default)s).",
     )
     parser.add_argument(
@@ -96,8 +103,9 @@ def resolve_runtime_paths(args: argparse.Namespace) -> argparse.Namespace:
     """Resolve paths before MATLAB changes its working directory."""
     args.reference_dir = Path(args.reference_dir).expanduser().resolve()
     args.generated_dir = Path(args.generated_dir).expanduser().resolve()
-    args.matlab_bin = str(Path(args.matlab_bin).expanduser().resolve())
-    args.matcont_root = str(Path(args.matcont_root).expanduser().resolve())
+    args.matlab_bin = resolve_matlab_bin(args.matlab_bin)
+    if args.matcont_root:
+        args.matcont_root = str(Path(args.matcont_root).expanduser().resolve())
     return args
 
 
@@ -120,10 +128,14 @@ def _matlab_quote(value: Path | str) -> str:
 def _run_matlab_function(
     function_name: str,
     *,
-    matlab_bin: str,
-    matcont_root: str,
+    matlab_bin: str | None,
+    matcont_root: str | None,
     output_dir: Path | None,
 ) -> None:
+    if not matlab_bin or not shutil.which(matlab_bin):
+        raise RuntimeError("MATLAB is unavailable (set MATLAB_BIN)")
+    if not matcont_root:
+        raise RuntimeError("set MATCONT_ROOT")
     matlab_dir = _SUITE_DIR / "matlab"
     unsupported_dir = matlab_dir / "unsupported"
     arguments = (

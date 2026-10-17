@@ -5,14 +5,268 @@ All notable changes to JaxCont will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - Unreleased
+
+### Breaking
+
+- `floquet_multipliers` and `branch_floquet_multipliers` take a Floquet
+  strategy `floquet_solver` in place of the positional matrix `eigen_solver`;
+  pass `ProductFloquet(eigen_solver)` to keep a custom solver and its order.
+  Periodic branch spectra use `Solvers.floquet` (default `PeriodicSchur()`),
+  no longer `Solvers.eigen`, so multiplier order, accuracy of small
+  multipliers and the derivative path change for default periodic runs.
+  Eager evaluation raises `RuntimeError` when a spectrum does not converge or
+  the flow vanishes; traced evaluation returns NaN values, index `-1` and false
+  status, and failed points are unstable and open no PD/NS brackets. Stability
+  tests nontrivial `logabs < 0`.
+
+- `hopf_curve_problem` defaults to `formulation="minimal"`, packing
+  `(u, p_fixed, omega)` (width `n+2`). Use `unpack_minimal_hopf_curve`;
+  select `formulation="extended"` for the previous eigenvector chart.
+  `HopfCurveArgs` now includes complex borders and static chart metadata.
+  The minimal chart requires `omega > sqrt(default_tol(dtype)) * |omega_seed|` (seed frequency)
+  and cannot cross BT.
+
+- `fold_curve_problem` defaults to `formulation="minimal"`, packing only
+  `(u, p_fixed)` (width `n+1`). Select `formulation="extended"` for the
+  previous `(u, p_fixed, v)` representation. Use `unpack_minimal_fold_curve`
+  for minimal states; fold problem args now wrap user data in `FoldCurveArgs`.
+
+- Curve event decoding and two-parameter plotting require explicit static
+  `CurveLayout` metadata. Curve factories and continuation results carry it;
+  manually constructed curve `BranchPoint`/`Branch` objects must supply it.
+  Packed state lengths are no longer used to infer curve dimensions.
+
+- Remove `NewtonSolver`, `Corrector`, `EquilibriumProblem`, and
+  `BoundaryValueProblem`, their modules and exports, and `Config` with its
+  global configuration helpers. Use `bif_problem`, `continuation`,
+  `ContinuationPar`, and `Solvers` instead. Installation diagnostics remain
+  available in `jaxcont.utils.config`.
+- `analyze_stability` selects the dominant eigenvalue by maximum real part,
+  including for unsorted input. Period-doubling switching scales seeds and
+  verifies doubling using `u - mean(u)`, changing results for translated orbits.
+- Pseudo-arclength continuation now weights the state by `1 / n_state` by default,
+  changing step counts and the meaning of `ds` for multi-state problems.
+- `lyapunov_coefficient` and Hopf event `l1` now use the MatCont/Kuznetsov
+  convention with unit-norm `q` and denominator `2 * omega0`. Values double
+  (the standard cubic Hopf gives `-2` instead of `-1`); multiply previously
+  tuned `Hopf.l1_tolerance` values by two. The default remains unchanged.
+  MatCont comparisons now use `l1` directly without a factor-of-two adapter.
+- Reverse-mode differentiation of the while continuation engine raises a clear
+  `ValueError` directing callers to `ContinuationPar(loop="scan")`.
+- `hopf_point(..., eigenvalue=None)` can seed the tracked eigenvalue;
+  `fold_point(..., null_vector=None)` can seed a tracked mode's eigenvector.
+  BP refinement now follows each candidate mode.
+- `interval_propagators(..., args=None)` and `monodromy_matrix(..., args=None)`
+  pass user arguments through to the right-hand side.
+- Saved event metadata encodes complex values as `[real, imaginary]` pairs;
+  `ContinuationSolution.load` preserves those pairs (decode with `complex(*pair)`).
+- Zero-length continuation spans now raise `ValueError`; bothside runs skip
+  empty legs. Collocation meshes require positive `ntst` and raise `ValueError`
+  for zero intervals.
+- Event deduplication requires adjacent brackets and refined state/parameter
+  agreement within dtype-derived refinement accuracy. Bothside stitching drops
+  a seed-touching backward event only when a matching forward event exists.
+- PD/NS refinement rejects unfinished or unresolved event brackets with
+  `reason="not_converged"`. The default event refinement budget is now 50
+  iterations to resolve float64 brackets. Direct refinement requires `PeriodicArgs` and
+  raises `ValueError` when it is missing.
+- Shared-seed events in `bothside` continuation belong to the forward leg.
+  Spectral scans preserve distinct crossing modes within a single bracket;
+  Hopf refinement follows each candidate's mode.
+- Both continuation engines report `nonfinite` for nonfinite corrector
+  trials while retaining only finite accepted branch points.
+- `floquet_multipliers(...)` now returns `(multipliers, trivial_index)`;
+  `branch_floquet_multipliers(...)` returns the corresponding batched arrays.
+  The trivial multiplier is selected by eigenvector alignment with the flow.
+  `floquet_stable(multipliers, trivial_index)` now requires those indices.
+  Periodic `Branch` objects expose `trivial_index` when spectra are computed.
+  Direct PD/NS scans require `BranchPoint.trivial_index`; `detect_events`
+  accepts the per-point `trivial_index` array and continuation supplies it.
+  PD/NS detection and refinement exclude this flow mode.
+- Eager `periodic_orbit_problem` construction now raises `ValueError` when
+  `period0` is nonpositive, the trajectory spans less than `0.95 * period0`,
+  refinement fails to converge, the refined period is nonpositive, or the
+  refined orbit amplitude is at most `10 * tol * (1 + norm(mean(u)))`. These checks are skipped for
+  traced values.
+  Trajectory times are rebased to their first sample; only `[0, period0)` of the
+  trajectory is resampled (later laps are not folded in), and a gap between the
+  last sample and `period0` is closed linearly back to the first sample. The new
+  `max_iter` keyword defaults to 50.
+- A periodic problem's `args` is now `jaxcont.problems.periodic_args.PeriodicArgs` (an
+  `eqx.Module`: dynamic `u_ref_coll`, `uref_prime_coll`, `user_args`; static `raw_f`, `mesh`)
+  instead of the tuple `(u_ref_coll, uref_prime_coll, raw_f, mesh)`, and the problem's `f` is the
+  module-level `periodic_residual`, so repeated continuations of the same `raw_f` and mesh share one
+  compiled kernel. `raw_f` is always called as `raw_f(u, p, user_args)`; the internal `None` is
+  gone.
+- `PeriodDoubling` and `NeimarkSacker` no longer take `raw_f`/`mesh`: write `jc.PeriodDoubling()`.
+  `continuation()` hands them the problem's `PeriodicArgs` through `detect_events(..., args=...)`.
+- `BP.rank_tolerance` now thresholds a scale-invariant ratio: the smallest singular
+  value of `[f_u | f_p]` at the refined point divided by the largest singular value of
+  that matrix over the two bracket endpoints and the refined point, replacing the
+  absolute smallest-singular-value criterion. Its default is now `None`, resolved to
+  `1e3 * default_tol(dtype)` (strict comparison). Scaling the right-hand side no longer changes
+  classification, scalar systems work, and an all-zero reference scale counts as rank
+  deficient.
+- `ContinuationResult.events` now holds only validated hits. A refinement that did not
+  converge, landed outside its bracket (widened by one bracket width per side) or failed a
+  spectral check is no longer reported as a located event at the right bracket end; it is
+  `EventHit(status="failed")` with `info["reason"]` and `p = nan`, listed in
+  `rejected_events`. `Hopf`/`Fold`/`BP`/codim-2/`PeriodDoubling`/`NeimarkSacker` `refine()`
+  results lose the old `info["converged"]: False` / `criticality="unknown"` form. Plots show
+  validated hits only.
+- `ContinuationPar.newton_tol` and the `tol` arguments of the solvers, fold/Hopf/codim-2
+  point finders, curve factories, `branch_switch` and `dprc_curve` now default to `None`,
+  resolved from the state dtype (`1e-9` for float64, `1e-5` for float32). Previous fixed
+  defaults (`1e-6`/`1e-8`) are gone; `detect_events(tolerance=...)` likewise. Periodic-orbit
+  problems no longer need an explicit `newton_tol=1e-5`.
+- `pseudo_arclength_scan` / `natural_scan` now take `args` as a dynamic input right after
+  `p_end`, and `f` is called as `f(u, p, args)`; `branch_eigenvalues(f, states, params, args,
+  eigen_solver)` likewise. `continuation()` reuses its compiled kernel across calls and
+  across changed `args` values (a fresh lambda `f` per call still recompiles). Only array
+  leaves of `args` are dynamic: pass arrays to get compile-cache reuse. Python scalar and
+  callable leaves stay concrete (usable as shapes or flags) and recompile when changed.
+- `continuation()` no longer lets rejected steps consume `max_steps`: total corrector
+  attempts are bounded by the new `ContinuationPar.max_attempts` (default `4 * max_steps`),
+  the initial `ds` is clipped to `[ds_min, ds_max]`, and a run stalls only when a step already
+  attempted at `ds <= ds_min` fails. A seed point that fails to converge now raises
+  `ValueError` in eager mode (under `jit`/`vmap` nothing is marked valid). `pseudo_arclength_scan`
+  / `natural_scan` take a trailing `max_attempts` argument and `ScanResult.n_valid` is `0` on
+  seed failure.
+- Spectral events detect on tracked modes. `Hopf`, `BP`, `PeriodDoubling`, `NeimarkSacker`,
+  `BogdanovTakens`, `ZeroHopf` and `DoubleHopf` reorder each point's spectrum into continuous
+  modes (`jaxcont.bifurcations.modes.track_modes`) and report a bracket only where one mode
+  meets its condition at both ends (Hopf: `Re` crosses 0 on a complex mode; BP: a real mode
+  crosses 0; PD: a real multiplier crosses -1; NS: a complex multiplier crosses the unit
+  circle). Previously Hopf/BP/BT/ZH/HH re-selected the candidate nearest critical at every
+  point, inventing crossings when two modes traded places, and PD/NS followed one multiplier
+  forever, missing crossings by any other. Each refined point is re-checked against the
+  spectrum (`reason="spectral_check_failed"` when the eigenvalue nearest the critical value
+  has the wrong real/complex type). These events now expose `scan(points)` instead of
+  `test_function`; `refine()` takes the bracket's `mode`. Removed: `select_candidate`,
+  `test_value`, `near_unit_circle` (PD/NS) and `near_critical` (BT/ZH/HH). Their `tolerance`
+  (the `|Im|` threshold between real and complex) defaults to `None`, resolved to
+  `sqrt(default_tol)` of the spectrum's dtype. PD/NS refinement re-corrects the final
+  bracket midpoint onto the collocation residual and stores the critical multiplier in
+  `info["multiplier"]`. A Hopf curve that ends with `|omega| < 10 * default_tol` and no
+  sign change records a `BogdanovTakens` entry with `reason="curve_terminated"` in
+  `rejected_events`.
+- Event deduplication no longer merges on parameter distance alone. Two validated hits of
+  one kind merge only when their brackets are adjacent and their joint `(u, p)` distance is
+  at most `sqrt(default_tol(dtype)) * (1 + max(norm(x_i), norm(x_j)))`,
+  including every parameter coordinate in `info['p']` / `p_fixed`, so hits on different sheets of a folded
+  branch at the same `p` are both kept, and a nearby but distinct event is no longer
+  swallowed. An exact zero of a test value at a sample is reported once (it owns the
+  preceding bracket), including on the `test_function` path, which previously ignored it.
+  `Event.test_function` values are evaluated in one `jax.vmap` call where the function is
+  array-pure, per point otherwise; `Fold.test_function` now returns an array.
+  `detect_events` takes an optional `ds_values`.
+- `pseudo_arclength_scan` / `natural_scan` take a static `step_update` (or `None`) as their
+  second positional argument, right after `f`; positional calls must insert it.
+- A Hopf-curve problem's `args` is now `jaxcont.bifurcations.curves.HopfCurveArgs`
+  (`q1_anchor`, `q2_anchor`, `user_args`) instead of the caller's `args`, which moves to
+  `user_args`. The phase condition is anchored to that eigenvector instead of one recomputed
+  from the seed point, and is re-anchored on every accepted point, so a curve whose critical
+  eigenvector rotates far from the seed's no longer stalls or jumps.
+- Periodic-orbit continuation re-anchors the integral phase condition on each accepted orbit
+  (`periodic_step_update`), so the residual of a branch point is zero with the phase reference
+  of the point before it, not with the problem's original `args`. A cycle that turns far from
+  its starting orbit (e.g. reverses its sense of rotation) no longer stalls.
+- `ContinuationPar` raises `ValueError` for a concrete `theta` that is not finite and
+  positive (`0`, negatives, NaN and infinities were accepted and stalled or went nonfinite);
+  traced values are not checked.
+- The minimal Hopf chart's frequency floor is `sqrt(default_tol(dtype)) * |omega_seed|`,
+  with `omega_seed` the refined seed's frequency (`HopfCurveArgs.omega_floor`, see
+  `jaxcont.bifurcations.curve_layout.minimal_hopf_floor`), instead of `10*default_tol`:
+  near a Bogdanov-Takens point its border residual is O(omega), so smaller frequencies
+  accepted spurious points at the corrector tolerance. The chart's two border equations
+  are divided by `min(|omega_seed|, 1)`, so the floor and their tolerance follow a slow
+  critical pair's time scale (a slowed-down RHS gives the same curve), a fast pair keeps the
+  stricter unscaled tolerance, and unrelated fast or stiff modes change neither. Seeds with
+  a nonpositive frequency raise `ValueError` naming `formulation='extended'` and
+  `formulation='bt'`. A corrector that
+  leaves the chart is a rejected step (`ds` shrinks) instead of a nonfinite trial that ends
+  the run, so such curves now stop as `stalled`.
+- Corrector iterations are no longer differentiated. A converged root carries the
+  implicit-function derivative as before; at an exactly singular converged root the
+  predictor's tangent now passes through instead of the Newton iterations' tangent.
 
 ### Added
+
+- Floquet strategies `PeriodicSchur(max_sweeps=None)` and
+  `ProductFloquet(eigen_solver=DenseEigen())`, selected by `Solvers.floquet`
+  or per PD/NS event with `floquet_solver`. `floquet_spectrum` returns
+  `FloquetSpectrum(values, phase, logabs, trivial_index, converged)`; periodic
+  branches report `Branch.floquet_logabs` and `Branch.floquet_converged`.
+  `jaxcont.stability` exports the periodic Schur routines.
+
+- BT-chart event detection uses validated kappa crossings; Hopf-only events
+  require positive kappa with safe batched coefficient evaluation. Two-parameter
+  plots label and dash the neutral-saddle extension.
+
+- Opt-in real Hopf BT chart with polynomial kappa residuals, a seed-fixed
+  Jordan-chain gauge, stored real modes, and reporting-only frequency decoding.
+
+- Minimal Hopf curves with complex bordered residuals, normalized adjoint/right
+  border refresh, and unit complex diagnostic modes for events.
+
+- Minimal fold curves use bordered residual solves, accepted-step adjoint border
+  refresh, and reconstructed unit diagnostic modes.
+
+- Trace-safe event candidates on continuation results, with fixed-shape built-in
+  detection under `jit`/`vmap` and eager `refine_event_candidates` validation.
+  Bothside branches are assembled before scanning for shared-zero ownership.
+
+- Built-in `scan_arrays` event detection and `EventScanInput` / `EventCandidates`
+  pytrees provide fixed-shape candidates under `jit` and `vmap`, preserving
+  tracked mode and raw trivial-multiplier identity. Curve scans use original
+  system spectra and aligned, normalized coefficient modes.
+- Array-only predictive mode tracking with deterministic Hungarian assignment and
+  fixed-shape crossing masks with exact-zero ownership, usable under JAX transforms.
+- Static `CurveLayout` descriptors, normalized `CurveModes` diagnostic pytrees,
+  and `decode_curve_state`, with branchwise diagnostic sign/phase alignment.
+
+- Publishing requires default-suite tests against the built wheel in both precisions.
+- `ContinuationPar.theta` sets the state weight in the arclength metric; `None`
+  uses `1 / n_state`. Both loop engines accept theta dynamically and reuse compilation.
+- Hopf normal forms use real directional derivatives, supporting locally smooth
+  RHS functions with inactive comparisons or clipping while preserving `l1` values.
+- `Hopf(classify=False)` skips `l1` computation, omits it from event info, and
+  reports `criticality="unknown"`.
+- Gradients through branch-switch tangents and fold/Hopf curve seed parameters
+  are supported.
+- `ContinuationPar(loop="scan")` selects masked, bounded scans for both
+  continuation algorithms and their Newton correctors, enabling reverse-mode
+  differentiation while preserving statuses and accepted-point updates.
+- A tested transformation matrix documents coverage and untested combinations.
+- `BifProblem.step_update(args, u, p) -> args` (and `bif_problem(..., step_update=...)`):
+  per-step refresh of auxiliary `args` data such as a phase-condition reference. The scan
+  engines carry `args` and apply it to the corrected seed and after every accepted step;
+  `detect_events(..., step_update=, f=)` refines each bracket with
+  `step_update(args, u_left, p_left)`. `jaxcont.problems.periodic.periodic_step_update` and
+  `jaxcont.bifurcations.curves.hopf_curve_step_update` are the periodic and Hopf-curve hooks.
+- `ContinuationResult.rejected_events` and `EventHit.status` (`"validated"` or `"failed"`),
+  with `info["reason"]` in `"not_converged"`, `"outside_bracket"`, `"spectral_check_failed"`.
+- `ContinuationResult.status` (`"reached_end"`, `"max_steps"`, `"stalled"`, `"nonfinite"`,
+  `"seed_failed"`, `"max_attempts"`) and `stats["n_attempts"]` / `stats["status"]`; under
+  `jit`/`vmap` `status` is `None` and `stats["status"]` is the integer
+  `jaxcont.core.scan_continuation.Status` code. `ScanResult` gains `status` and `n_attempts`.
+- `periodic_orbit_problem(..., args=...)`: user `args` reach the right-hand side at every
+  evaluation and are differentiable (`jax.grad` of the converged period with respect to them).
+  `floquet_multipliers`, `branch_floquet_multipliers`, `prc_curve`, `branch_prc` and
+  `branch_switch_pd` take a keyword `args=` for the same purpose; `detect_events` takes
+  `args=` (the problem's `args`).
+- `branch_switch_pd(..., refine_tol=...)`: the Newton tolerance for each candidate's
+  correction (default `None`, the `default_tol` that `periodic_orbit_problem` uses).
+  Systems with a continuous symmetry that leaves the doubled orbit unpinned need a
+  looser explicit value.
+- Top-level exports `periodic_orbit_problem`, `Collocation`, `prc_curve`, `branch_prc`,
+  `dprc_curve`, and `PeriodicArgs` in `jaxcont.problems.periodic_args`.
 - `ContinuationPar(bothside=True)`: explore both directions from `problem.p0` in one
   `continuation()` call (issue #8), matching BifurcationKit.jl's `bothside=true`. Runs the
   existing single-direction scan engine twice and stitches the two legs into one branch; no
   changes to `core/scan_continuation.py`. Eager-only (raises `NotImplementedError` under
-  `jax.vmap`/`jax.jit`, matching the existing `events=[...]` restriction).
+  `jax.vmap`/`jax.jit`).
 - MatCont cross-validation for two-parameter fold/Hopf curves: `examples/MatCont/cases.json`'s
   `US-C2-LP-001`/`US-C2-H-001` promoted to `supported`, cross-checked against a live MatCont 7.6
   run of the catalytic-oscillator LP/Hopf curves (`examples/MatCont/python_cases/codim2_curves.py`).
@@ -23,13 +277,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   period-doubled cycle, completing the branch-switching feature. Verifies the switched
   orbit is genuinely period-doubled rather than the original orbit traversed twice, and
   raises instead of returning an unverified branch. Eager-only.
+- `ContinuationResult.save`/`ContinuationResult.load`, and `ContinuationSolution` gains
+  `trivial_index`, `floquet_logabs`, `floquet_converged`, `curve_layout`, `rejected_events`
+  and `status`. They are saved with `format_version=2`; `load` still reads version 1. Loaded
+  curve results keep their `CurveLayout` and plot with `plot_two_parameter_diagram`.
+- `EventScanInput.status` carries the run's `Status` code into array event scans.
+- The API reference documents the Floquet strategies, `floquet_spectrum`, traced event
+  candidates, curve layouts and decoders, and the `natural_scan` / `*_lax_scan` engines.
 
 ### Fixed
+
+- MatCont validation resolves MATLAB from `MATLAB_BIN` or `PATH` and MatCont
+  from `MATCONT_ROOT`, removing machine-specific installation defaults.
+
+- Periodic Schur no longer deflates a subdiagonal that is small in its own
+  factor but meets a reciprocally large coupling in another factor (loop-5
+  audit): deflation also requires a negligible eigenvalue shift of the cyclic
+  `2x2` product block, so such factors now give the true spectrum instead of
+  wrong multipliers with `converged=True`. Spectrum sensitivities are published
+  only for modes whose local multipliers through the true factors reproduce
+  their multiplier; other modes get a NaN tangent.
+- Converged correctors with a nonsingular Jacobian carry the implicit-function
+  derivative of their root, for `loop='scan'` and `loop='while'`, so an exact
+  initial guess (zero Newton steps) no longer drops the solution's sensitivity
+  to args, closed-over values or the arclength constraint. Exact singular seeds
+  keep their acceptance and pass their own tangent through.
+- Periodic Schur mode reconstruction uses signed log-magnitude cyclic solves
+  for cancelling local growth; finite simple multipliers retain forward and
+  reverse sensitivities without overflowing local diagonal ratios.
+- BT Hopf initialization stops its phase gauge and uses a deterministic
+  isotropic-Gram fallback; minimal fold diagnostics stop SVD border selection
+  and differentiate modes through their bordered solves.
+- Limit-cycle examples 10 and 11 use refined meshes to resolve the Floquet
+  flow direction; example 11 also corrects to the dtype's solve tolerance.
+  Example 15 preserves structured fold args while batching user args.
+- The transformation matrix documents transformed event candidate detection
+  separately from eager refinement, with current regression references.
+
+- Eager custom scalar events retain pointwise Python test evaluation when
+  they do not implement `scan_arrays`; traced detection still requires array purity.
+- Hopf-curve BT array scans preserve near-zero terminal-frequency diagnostics
+  in a separate `EventCandidates.terminal_mask`, including padded branches.
 - `periodic_orbit_problem(...)` construction is now safe under `jax.grad`, including when
   trajectory and period guesses depend on the differentiated parameter. All parameter-dependent
   phase-reference and seed values are passed explicitly through the implicit solve instead of
   leaking captured tracers across its Newton `lax.while_loop`; existing `jax.vmap` and `jax.jit`
   construction behavior is preserved.
+- `differentiable_root` returns a seed that already meets the residual tolerance unchanged
+  (previously a singular Jacobian at the root, e.g. `G = x**2` at `0`, produced NaN).
+- Reverse mode through `periodic_spectrum` gives a NaN gradient, as forward mode gives a
+  NaN tangent, for a repeated, defective or unresolved multiplier that receives a nonzero
+  cotangent (loop-6 audit); it was silently zero. Unused such modes leave the gradients of
+  simple modes unchanged.
+- `loop="scan"` reverse-mode gradients stay finite when a run ends on a nonfinite trial
+  (an out-of-domain final step): rejected trials are replaced by the last accepted point
+  before the tangent, `step_update` and implicit-derivative evaluations, so their
+  linearization never meets nonfinite operands.
+- `BogdanovTakens(curve="hopf")` on a minimal Hopf curve records
+  `reason="curve_terminated"` in `rejected_events` when the run stops early (`stalled`,
+  `nonfinite` or `max_attempts`) with its last `omega` below
+  `max(10*omega_floor, 10*sqrt(default_tol))` (decoupled from the chart floor so slow seeds
+  still report); the
+  default chart previously ended `nonfinite` with no event or rejected event. Use
+  `formulation="bt"` to locate the BT point. `detect_events(..., status=)` applies the same
+  status gate to the eager `BogdanovTakens.scan`.
+- Natural continuation lands its final step exactly on `p_end` (a remainder of at most
+  `ds_min` is absorbed into the last step), so round-off no longer adds a step beyond the
+  span or turns `reached_end` into `nonfinite`.
+- `examples/example_06_vmap_sweep.py` no longer says events are unsupported under `vmap`.
+
+### Known limitations
+
+- Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
+- Minimal Hopf curves cannot pass or locate a Bogdanov-Takens point; they report it as
+  `curve_terminated`.
 
 ## [0.4.0] - 2026-08-20
 

@@ -5,7 +5,17 @@ if nargin < 1 || isempty(output_dir)
     output_dir = fullfile(script_dir, '..', 'generated');
 end
 addpath(script_dir, fullfile(script_dir, 'systems'));
-setup_matcont();
+root = setup_matcont();
+if exist('BVP_LC_jac', 'file') ~= 3
+    % Fresh MatCont downloads ship Windows MEX files. Its initializer builds
+    % the native cycle Jacobians; cont otherwise hides the missing-MEX error
+    % in CorrectStartPoint and reports "No convergence at x0".
+    original_dir = pwd;
+    restore_dir = onCleanup(@() cd(original_dir));
+    cd(root);
+    init();
+    clear restore_dir
+end
 clear global cds eds lds
 rho = 1;
 ntst = 25;

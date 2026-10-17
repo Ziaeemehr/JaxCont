@@ -30,11 +30,8 @@ Problems Module
 
 Defines different types of continuation problems:
 
-- ``EquilibriumProblem``: For finding equilibrium points
+- ``bif_problem``: For finding equilibrium points
 - ``periodic_orbit_problem``: For periodic orbit continuation
-- ``BoundaryValueProblem``: BVP problem definition only -- an unimplemented
-  placeholder; ``solve_collocation``/``solve_shooting`` always raise
-  ``NotImplementedError``
 
 Bifurcations Module
 ^^^^^^^^^^^^^^^^^^^
@@ -111,13 +108,13 @@ Test individual components:
 
 .. code-block:: python
 
-   def test_newton_solver():
-       solver = NewtonSolver(tol=1e-6)
-       def f(x):
-           return x**2 - 4.0
-       x, converged, iters = solver.solve(f, jnp.array([1.0]))
-       assert converged
-       assert jnp.isclose(x, 2.0)
+   def test_equilibrium_correction():
+       import jaxcont as jc
+
+       prob = jc.bif_problem(lambda u, p, args: u**2 - p,
+                             u0=jnp.array([1.0]), p0=4.0)
+       result = jc.continuation(prob, jc.Natural(), p_span=(4.0, 5.0))
+       assert jnp.allclose(result.branch.states[0], 2.0)
 
 Integration Tests
 ^^^^^^^^^^^^^^^^^

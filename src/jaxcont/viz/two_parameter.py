@@ -11,8 +11,9 @@ from collections.abc import Sequence
 from typing import Optional
 
 import matplotlib.pyplot as plt
+import numpy as np
 
-from jaxcont.bifurcations.curves import unpack_fold_curve, unpack_hopf_curve
+from jaxcont.bifurcations.curve_layout import decode_curve_state
 from jaxcont.viz.styles import style_for
 
 _CURVE_STYLE = {
@@ -25,20 +26,18 @@ def _curve_points(result, curve_kind: str, free: int):
     """Return ``(p_free, p_fixed)`` arrays for a traced curve."""
     states = result.branch.states
     params = result.branch.params
-    n_state = states.shape[1]
+    layout = result.branch.curve_layout
+    if layout is None:
+        raise ValueError("curve layout is required for curve plotting")
+    if layout.kind != curve_kind or layout.free != free:
+        raise ValueError("Plot arguments and curve layout disagree")
     fixed = []
     for i in range(states.shape[0]):
-        if curve_kind == "fold":
-            n = (n_state - 1) // 2
-            _u, p_fixed, _v = unpack_fold_curve(states[i], n)
-        elif curve_kind == "hopf":
-            n = (n_state - 2) // 3
-            _u, p_fixed, _q1, _q2, _w = unpack_hopf_curve(states[i], n)
-        else:
-            raise ValueError(
-                f"curve_kind must be 'fold' or 'hopf', got {curve_kind!r}"
-            )
-        fixed.append(float(p_fixed))
+        if result.branch.valid is not None and not bool(result.branch.valid[i]):
+            continue
+        _, p, _ = decode_curve_state(states[i], params[i], layout, None, None)
+        fixed.append(float(p[1-free]))
+    params = params if result.branch.valid is None else params[result.branch.valid]
     return [float(p) for p in params], fixed
 
 
@@ -67,7 +66,20 @@ def plot_two_parameter_diagram(
         p_free, p_fixed = _curve_points(result, curve_kind, free)
         style = _CURVE_STYLE[curve_kind]
         label = labels[i] if labels is not None else style["label"]
-        ax.plot(p_free, p_fixed, "-", color=style["color"], lw=1.8, label=label)
+        if result.branch.curve_layout.formulation == "bt":
+            kappa = np.asarray(result.branch.states[:, -1])
+            if result.branch.valid is not None:
+                kappa = kappa[np.asarray(result.branch.valid)]
+            # kappa < 0 is a neutral saddle (real pair +-sqrt(-kappa)), not
+            # Hopf; the dashed part also covers the segment across a crossing.
+            neutral = kappa <= 0
+            neutral = neutral | np.append(neutral[1:], False) | np.insert(neutral[:-1], 0, False)
+            for mask, linestyle, suffix in ((kappa >= 0, "-", "oscillatory"),
+                                             (neutral, "--", "neutral-saddle extension")):
+                ax.plot(np.where(mask, p_free, np.nan), np.where(mask, p_fixed, np.nan),
+                        linestyle, color=style["color"], lw=1.8, label=f"{label} ({suffix})")
+        else:
+            ax.plot(p_free, p_fixed, "-", color=style["color"], lw=1.8, label=label)
 
         for hit in result.events:
             bif = style_for(hit.kind)

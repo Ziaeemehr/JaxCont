@@ -104,14 +104,16 @@ def test_vmap_sweep_runs_on_gpu():
     from jaxcont.core.scan_continuation import pseudo_arclength_scan
 
     def make_rhs(b):
-        return lambda u, p: jnp.array([p * u[0] - u[0] ** 3 + b])
+        return lambda u, p, args: jnp.array([p * u[0] - u[0] ** 3 + b])
 
     def run_one(b):
         res = pseudo_arclength_scan(
             make_rhs(b),
+            None,                # step_update (static)
             jnp.array([0.05]),   # u0
             jnp.array(-1.0),     # p0
             jnp.array(2.0),      # p_end
+            None,                # args
             jnp.array(0.05),     # ds
             jnp.array(1e-5),     # ds_min
             jnp.array(0.2),      # ds_max

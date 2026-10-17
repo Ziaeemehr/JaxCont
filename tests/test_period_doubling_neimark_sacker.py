@@ -60,7 +60,7 @@ def _sweep(beta, event_cls, span):
         settings=jc.ContinuationPar(
             compute_stability=True, ds=0.02, max_steps=50, newton_tol=1e-5
         ),
-        events=[event_cls(raw_f=rhs, mesh=mesh)],
+        events=[event_cls()],
     )
     return sol
 
@@ -95,37 +95,12 @@ def test_neimark_sacker_zero_false_positives_on_period_doubling_system():
     assert sol.events == []
 
 
-def test_period_doubling_near_unit_circle_filter_prevents_double_detection():
-    # Regression for the false-positive bug found during design: a wider
-    # sweep (-0.1..0.3) that pushes the transverse multiplier well past -1
-    # must still report exactly ONE detection (at alpha=0), not two --
-    # without the near_unit_circle filter this produced a spurious second
-    # hit at p~0.110, where the "closest to -1" argmin silently switched to
-    # tracking the unrelated, always-decaying xy multiplier (~3.4e-6)
-    # instead of the true transverse candidate.
-    #
-    # This span also found a second, false-*negative* bug (v0.3.0): with the
-    # old near_unit_circle=0.5, the adaptive stepper can sample the true
-    # candidate at magnitude ~1.48 (distance 0.48 from 1, a 0.02 margin
-    # inside the 0.5 window) -- thin enough that ordinary collocation/FP
-    # differences across hardware push it outside the window, turning that
-    # bracket point's test_function to nan and silently dropping the real
-    # crossing (0 events instead of 1; reproduced on CI, not locally).
-    # near_unit_circle=0.9 gives a ~20x wider margin at that same point while
-    # still safely excluding the ~3.4e-6 decaying candidate (distance ~1.0,
-    # comfortably outside 0.9) -- see events.py's near_unit_circle comment.
-    #
-    # The same false negative resurfaced (v0.3.1) even at near_unit_circle=
-    # 0.9: a *linear* distance-from-1 window is capped below 1.0 by
-    # construction (the decaying candidate sits at exactly distance 1.0), so
-    # 0.9's magnitude ceiling of 1.9 left only ~1.4% margin over the
-    # worst-case single-step jump this test's default ds_max=0.1 allows
-    # (exp(ds_max * T) =~ 1.87x here) -- thin enough that hardware-dependent
-    # float32 rounding (different Newton iteration counts feed the adaptive
-    # step controller) tipped the post-crossing sample outside the window on
-    # some CI runners but not others. Fixed by switching the filter to a
-    # log-magnitude window (|ln|mult|| < near_unit_circle, default 2.0),
-    # which has no such ceiling -- see events.py's near_unit_circle comment.
+def test_period_doubling_wide_sweep_reports_one_detection():
+    # A wider sweep (-0.1..0.3) pushes the transverse multiplier far past -1
+    # (to ~-6.6) with large adaptive steps. Exactly one detection, at
+    # alpha = 0, must survive: the always-decaying xy multiplier (~3.4e-6)
+    # must not open a second bracket, and a large step across the crossing
+    # must not lose the real one.
     sol = _sweep(BETA_PD, jc.PeriodDoubling, span=(-0.1, 0.3))
     assert len(sol.events) == 1
     assert abs(sol.events[0].p) < 1e-4
@@ -142,12 +117,15 @@ def test_period_doubling_refine_result_satisfies_collocation_residual():
         settings=jc.ContinuationPar(
             compute_stability=True, ds=0.02, max_steps=50, newton_tol=1e-5
         ),
-        events=[jc.PeriodDoubling(raw_f=rhs, mesh=mesh)],
+        events=[jc.PeriodDoubling()],
     )
     assert len(sol.events) == 1
     hit = sol.events[0]
     assert hit.info.get("corrected", False) is True
-    residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), prob.args)
+    # Refinement anchors the phase condition on the bracket's left point.
+    i = hit.index[0]
+    bracket_args = prob.step_update(prob.args, sol.branch.states[i], sol.branch.params[i])
+    residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), bracket_args)
     assert float(jnp.abs(residual).max()) < 1e-4
 
 
@@ -158,10 +136,52 @@ def test_neimark_sacker_refine_result_satisfies_collocation_residual():
         settings=jc.ContinuationPar(
             compute_stability=True, ds=0.02, max_steps=50, newton_tol=1e-5
         ),
-        events=[jc.NeimarkSacker(raw_f=rhs, mesh=mesh)],
+        events=[jc.NeimarkSacker()],
     )
     assert len(sol.events) == 1
     hit = sol.events[0]
     assert hit.info.get("corrected", False) is True
-    residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), prob.args)
+    # Refinement anchors the phase condition on the bracket's left point.
+    i = hit.index[0]
+    bracket_args = prob.step_update(prob.args, sol.branch.states[i], sol.branch.params[i])
+    residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), bracket_args)
     assert float(jnp.abs(residual).max()) < 1e-4
+
+
+def test_pd_second_multiplier_crossing_detected():
+    # Two transverse rotation-by-pi blocks: a fixed one with multiplier
+    # -exp(alpha_f * T) = -0.8 and a moving one with -exp(alpha * T), which
+    # passes -0.5 -> -1.2 over the span. The multiplier nearest -1 at the
+    # start is the fixed one; the crossing belongs to the other.
+    alpha_fixed = float(np.log(0.8) / T_EXACT)
+
+    def rhs(u, p, args):
+        x, y, w1, w2, v1, v2 = u[0], u[1], u[2], u[3], u[4], u[5]
+        r2 = x * x + y * y
+        return jnp.array([
+            (RHO - r2) * x - y,
+            (RHO - r2) * y + x,
+            alpha_fixed * w1 - BETA_PD * w2,
+            BETA_PD * w1 + alpha_fixed * w2,
+            p * v1 - BETA_PD * v2,
+            BETA_PD * v1 + p * v2,
+        ])
+
+    span = (float(np.log(0.5) / T_EXACT), float(np.log(1.2) / T_EXACT))
+    t_traj = np.linspace(0, T_EXACT, 60, endpoint=False)
+    zeros = np.zeros_like(t_traj)
+    u_traj = np.stack(
+        [np.cos(t_traj), np.sin(t_traj), zeros, zeros, zeros, zeros], axis=1
+    )
+    mesh = Collocation(ntst=10, ncol=4)
+    prob = periodic_orbit_problem(
+        rhs, jnp.asarray(u_traj), jnp.asarray(t_traj), T_EXACT, span[0], mesh
+    )
+    sol = jc.continuation(
+        prob, p_span=span,
+        settings=jc.ContinuationPar(compute_stability=True, ds=0.02, max_steps=50),
+        events=[jc.PeriodDoubling()],
+    )
+    pd = [e for e in sol.events if e.kind == "period_doubling"]
+    assert len(pd) == 1
+    assert abs(pd[0].p) < 1e-4

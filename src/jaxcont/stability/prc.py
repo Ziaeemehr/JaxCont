@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax import Array
@@ -17,6 +18,7 @@ from jaxcont.core.collocation import (
     collocation_matrices,
     interval_propagators,
 )
+from jaxcont.problems.periodic_args import PeriodicArgs
 from jaxcont.solvers.implicit import differentiable_root
 from jaxcont.solvers.protocols import Dense, LinearSolver
 
@@ -29,6 +31,8 @@ def prc_curve(
     U: Array,
     p: Array,
     linear_solver: LinearSolver = Dense(),
+    *,
+    args: PyTree = None,
 ) -> Array:
     """Infinitesimal PRC ``Z(t)`` (shape ``(ntst, n)``, one row per mesh
     point) at one converged periodic-orbit branch point, via the adjoint
@@ -52,17 +56,17 @@ def prc_curve(
     coll_states = U[ntst * n : ntst * n + ntst * ncol * n].reshape(ntst, ncol, n)
     T = U[-1]
 
-    M_all = interval_propagators(raw_f, D, E, h, mesh_states, coll_states, T, p)
-    Phi, _ = jax.lax.scan(lambda carry, M: (M @ carry, None), jnp.eye(n), M_all)
+    M_all = interval_propagators(raw_f, D, E, h, mesh_states, coll_states, T, p, args)
+    Phi, _ = jax.lax.scan(lambda carry, M: (M @ carry, None), jnp.eye(n, dtype=M_all.dtype), M_all)
 
     x0 = mesh_states[0]
-    f0 = raw_f(x0, p, None)
+    f0 = raw_f(x0, p, args)
     omega = 2 * jnp.pi / T
 
-    A_top = jnp.concatenate([Phi.T - jnp.eye(n), f0[:, None]], axis=1)
-    A_bot = jnp.concatenate([f0[None, :], jnp.zeros((1, 1))], axis=1)
+    A_top = jnp.concatenate([Phi.T - jnp.eye(n, dtype=Phi.dtype), f0[:, None]], axis=1)
+    A_bot = jnp.concatenate([f0[None, :], jnp.zeros((1, 1), dtype=f0.dtype)], axis=1)
     A_border = jnp.concatenate([A_top, A_bot], axis=0)
-    b_border = jnp.concatenate([jnp.zeros(n), omega[None]])
+    b_border = jnp.concatenate([jnp.zeros(n, dtype=omega.dtype), omega[None]])
     Z0 = linear_solver(A_border, b_border)[:n]
 
     def step(Z_next, M_i):
@@ -79,11 +83,13 @@ def branch_prc(
     states: Array,
     params: Array,
     linear_solver: LinearSolver = Dense(),
+    *,
+    args: PyTree = None,
 ) -> Array:
     """Vectorized (vmap) iPRC curves along a stored periodic branch --
     the PRC analogue of ``stability.floquet.branch_floquet_multipliers``."""
     def at(U, p):
-        return prc_curve(raw_f, mesh, U, p, linear_solver)
+        return prc_curve(raw_f, mesh, U, p, linear_solver, args=args)
 
     return jax.vmap(at)(states, params)
 
@@ -91,7 +97,7 @@ def branch_prc(
 def dprc_curve(
     problem: BifProblem,
     linear_solver: LinearSolver = Dense(),
-    newton_tol: float = 1e-5,
+    newton_tol: float | None = None,
 ) -> Array:
     """Parameter derivative of the iPRC curve, ``d(prc_curve)/dp``, shape
     ``(ntst, n) + p.shape``. Takes the periodic orbit's ``BifProblem``
@@ -108,7 +114,7 @@ def dprc_curve(
     The re-solve's phase-condition anchor (the ``uref_prime_coll`` component
     of ``problem.args``) is recomputed from ``p`` at every Newton step,
     exactly the way ``periodic_orbit_problem`` itself derives it
-    (``f(coll_guess, p0, None)``) -- it is *not* held frozen at
+    (``f(coll_guess, p0, user_args)``) -- it is *not* held frozen at
     ``problem.args``'s baked-in value from the original construction (which
     is how ``jc.continuation()`` treats ``args`` across an ordinary branch,
     but is not what this function's re-solve needs, since the re-solve is
@@ -117,11 +123,14 @@ def dprc_curve(
     frozen disagrees with a finite difference of independently re-converged
     orbits by up to ~0.2 absolute; recomputing it from ``p`` matches that
     finite difference to ~1e-4."""
-    u_ref_coll, _uref_prime_coll0, raw_f, mesh = problem.args
+    pargs: PeriodicArgs = problem.args
+    raw_f, mesh = pargs.raw_f, pargs.mesh
 
-    def anchor_at(p: Array) -> PyTree:
-        uref_prime_coll_p = jax.vmap(jax.vmap(lambda u: raw_f(u, p, None)))(u_ref_coll)
-        return (u_ref_coll, uref_prime_coll_p, raw_f, mesh)
+    def anchor_at(p: Array) -> PeriodicArgs:
+        uref_prime_coll_p = jax.vmap(
+            jax.vmap(lambda u: raw_f(u, p, pargs.user_args))
+        )(pargs.u_ref_coll)
+        return eqx.tree_at(lambda a: a.uref_prime_coll, pargs, uref_prime_coll_p)
 
     def prc_at(p: Array) -> Array:
         U_p = differentiable_root(
@@ -130,7 +139,7 @@ def dprc_curve(
             p,
             tol=newton_tol,
         )
-        return prc_curve(raw_f, mesh, U_p, p, linear_solver)
+        return prc_curve(raw_f, mesh, U_p, p, linear_solver, args=pargs.user_args)
 
     # jax.jacrev, not jax.jacfwd: differentiable_root is built on
     # jax.custom_vjp (reverse-mode only -- see solvers/implicit.py), so

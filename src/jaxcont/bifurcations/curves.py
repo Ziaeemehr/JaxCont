@@ -1,44 +1,35 @@
 """
 Two-parameter continuation of codim-1 curves (fold curve, Hopf curve).
 
-A fold of ``f(u, p) = 0`` is the root of the extended system in
-``fold_solve.py``. A fold *curve* is that same system continued in a second
-parameter. With ``X = (u, p_fixed, v)`` and continuation parameter
-``q = p[free]``, ``F(X, q) = 0`` is an ordinary residual in a scalar
-parameter -- exactly what ``core/scan_continuation.py`` already solves.
-
-The reduction that makes this free: define
-``f_reduced(u, p_fixed, args) = f(u, assemble(p_fixed, q), args)``. From
-``f_reduced``'s point of view ``p_fixed`` is an ordinary scalar parameter,
-so ``fold_solve._extended_residual`` applies UNCHANGED. Same trick that let
-periodic-orbit collocation reuse the equilibrium engine.
-
-GPU numerics: Both fold-curve and Hopf-curve residuals are computed via
-``jacfwd`` plus matvecs, with no large einsum contractions, so TF32 precision
-is not a concern. CPU and GPU numerics match at newton_tol=1e-5 (verified).
-
-See docs/superpowers/specs/2026-08-17-two-parameter-continuation-design.md.
+Minimal fold curves continue ``X=(u,p_fixed)`` using a bordered scalar
+constraint. The explicit extended chart retains ``X=(u,p_fixed,v)``.
+Minimal Hopf curves continue ``X=(u,p_fixed,omega)`` at positive frequency.
+Both feed the ordinary continuation engines, with accepted-step hooks
+maintaining chart data.
 """
 
 from __future__ import annotations
 
 from typing import Any, Callable
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax import Array, lax
 
 from jaxcont.api import BifProblem
+from jaxcont.bifurcations.curve_layout import CurveLayout, minimal_hopf_floor
 from jaxcont.bifurcations.fold_solve import (
     _extended_residual as _fold_extended_residual,
 )
 from jaxcont.bifurcations.fold_solve import _pack as _fold_pack
 from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.bifurcations.hopf_normal_form import (
-    _extended_residual as _hopf_extended_residual,
+    _anchored_residual as _hopf_anchored_residual,
 )
 from jaxcont.bifurcations.hopf_normal_form import _pack as _hopf_pack
 from jaxcont.bifurcations.hopf_normal_form import hopf_point
+from jaxcont.utils.precision import default_tol
 
 PyTree = Any
 
@@ -66,8 +57,47 @@ def _validate(u_guess: Array, p_guess: Array, free: int) -> None:
 
 
 def unpack_fold_curve(X: Array, n: int) -> tuple[Array, Array, Array]:
-    """Split a packed fold-curve state into ``(u, p_fixed, v)``."""
+    """Split an extended-only fold-curve state into ``(u, p_fixed, v)``."""
     return X[:n], X[n], X[n + 1:]
+
+
+def unpack_minimal_fold_curve(X: Array, n: int) -> tuple[Array, Array]:
+    """Split a minimal fold state into ``(u, p_fixed)``."""
+    return X[:n], X[n]
+
+
+class FoldCurveArgs(eqx.Module):
+    """Frozen corrector borders and original-system data."""
+
+    b: Array
+    c: Array
+    user_args: PyTree
+    formulation: str = eqx.field(static=True)
+    n: int = eqx.field(static=True)
+    raw_f: Callable = eqx.field(static=True)
+    free: int = eqx.field(static=True)
+
+
+def _fold_border_matrix(A, b, c):
+    return jnp.block([[A, b[:, None]], [c[None, :], jnp.zeros((1, 1), dtype=A.dtype)]])
+
+
+def fold_curve_step_update(args: FoldCurveArgs, X: Array, q: Array) -> FoldCurveArgs:
+    """Refresh normalized right/adjoint borders at an accepted point."""
+    if args.formulation == "extended":
+        return args
+    u, fixed = unpack_minimal_fold_curve(X, args.n)
+    p = _assemble_p(fixed, q, args.free)
+    A = jax.jacfwd(args.raw_f)(u, p, args.user_args)
+    M = _fold_border_matrix(A, args.b, args.c)
+    rhs = jnp.zeros(args.n + 1, dtype=X.dtype).at[-1].set(1)
+    right = jnp.linalg.solve(M, rhs)[:-1]
+    left = jnp.linalg.solve(M.T, rhs)[:-1]
+    def aligned(v, old):
+        v = v / jnp.linalg.norm(v)
+        return lax.stop_gradient(jnp.where(jnp.dot(v, old) < 0, -v, v))
+    return eqx.tree_at(lambda a: (a.b, a.c), args,
+                       (aligned(left, args.b), aligned(right, args.c)))
 
 
 def fold_curve_problem(
@@ -77,8 +107,9 @@ def fold_curve_problem(
     *,
     free: int = 1,
     args: PyTree = None,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
+    formulation: str = "minimal",
 ) -> BifProblem:
     """
     Build a ``BifProblem`` whose solution branch is a curve of folds in the
@@ -101,9 +132,9 @@ def fold_curve_problem(
     factory use a tolerance matched to the extended-system residual, ahead
     of the scan engine's generic corrector.
 
-    ``tol``/``max_iter`` govern that initial refinement only; the
-    continuation-time tolerance is ``ContinuationPar.newton_tol`` (use
-    ``1e-5``, see the module notes and this feature's design spec).
+    ``tol``/``max_iter`` govern initial refinement only; continuation uses
+    ``ContinuationPar.newton_tol``. Minimal states pack ``(u,p_fixed)``;
+    select ``formulation="extended"`` to retain the null-vector unknowns.
 
     Pass ``p_span=(p_guess[free], ...)`` to ``continuation()``: its
     ``p_span[0]`` is the literal starting parameter value, and a mismatch is
@@ -120,6 +151,8 @@ def fold_curve_problem(
 
     Measured residual floor at refined seed: 2.4e-7 (float32).
     """
+    if formulation not in ("minimal", "extended"):
+        raise ValueError("formulation must be minimal or extended")
     u_guess = jnp.asarray(u_guess)
     p_guess = jnp.asarray(p_guess)
     _validate(u_guess, p_guess, free)
@@ -131,10 +164,11 @@ def fold_curve_problem(
     def reduced(u, p_fixed, a, q):
         return f(u, _assemble_p(p_fixed, q, free), a)
 
-    # Refine the seed onto the curve at q = q0.
+    # The root depends on (args, q0); initial guesses only select its basin.
     u_star, p_star, v_star, seed_converged = fold_point(
-        lambda u, p_fixed, a: reduced(u, p_fixed, a, q0),
-        u_guess, fixed0, args, tol=tol, max_iter=max_iter,
+        lambda u, p_fixed, theta: reduced(u, p_fixed, theta[0], theta[1]),
+        lax.stop_gradient(u_guess), lax.stop_gradient(fixed0), (args, q0),
+        tol=tol, max_iter=max_iter,
     )
     try:
         # Check the seed's convergence only in eager mode: a traced call
@@ -153,25 +187,114 @@ def fold_curve_problem(
         pass
 
     def F(X, q, a):
-        return _fold_extended_residual(
-            X, lambda u, p_fixed, aa: reduced(u, p_fixed, aa, q), a, n
-        )
+        if formulation == "extended":
+            return _fold_extended_residual(
+                X, lambda u, p_fixed, aa: reduced(u, p_fixed, aa, q), a.user_args, n
+            )
+        u, fixed = unpack_minimal_fold_curve(X, n)
+        p = _assemble_p(fixed, q, free)
+        A = jax.jacfwd(f)(u, p, a.user_args)
+        M = _fold_border_matrix(A, lax.stop_gradient(a.b), lax.stop_gradient(a.c))
+        rhs = jnp.zeros(n + 1, dtype=X.dtype).at[-1].set(1)
+        g = jnp.linalg.solve(M, rhs)[-1]
+        return jnp.concatenate([f(u, p, a.user_args), g[None]])
 
-    X0 = _fold_pack(u_star, p_star, v_star)
+    A = jax.jacfwd(f)(u_star, _assemble_p(p_star, q0, free), args)
+    left, _, _ = jnp.linalg.svd(A, full_matrices=False)
+    b = lax.stop_gradient(left[:, -1])
+    c = lax.stop_gradient(v_star / jnp.linalg.norm(v_star))
+    X0 = (_fold_pack(u_star, p_star, v_star) if formulation == "extended"
+          else jnp.concatenate([u_star, p_star[None]]))
     return BifProblem(
-        f=F,
-        u0=X0,
-        p0=jnp.asarray(q0, X0.dtype),
-        args=args,
-        kind="fold_curve",
-        param_name=f"p[{free}]",
+        f=F, u0=X0, p0=jnp.asarray(q0, X0.dtype),
+        args=FoldCurveArgs(b, c, args, formulation, n, f, free),
+        kind="fold_curve", curve_layout=CurveLayout("fold", formulation, n, free),
+        param_name=f"p[{free}]", step_update=fold_curve_step_update,
     )
+
+
+class HopfCurveArgs(eqx.Module):
+    """The ``args`` of a Hopf-curve :class:`~jaxcont.api.BifProblem`.
+
+    ``(q1_anchor, q2_anchor)`` is the eigenvector the phase condition
+    ``q1_anchor . q2 - q2_anchor . q1 = 0`` is anchored to;
+    :func:`hopf_curve_step_update` moves it to each accepted point.
+    ``b,c`` are the frozen complex left/right borders for the minimal chart.
+    ``v_anchor`` fixes the real BT gauge at the seed and is never refreshed.
+    ``omega_floor`` is the minimal chart's lowest frequency,
+    ``sqrt(default_tol) * |omega_seed|``, fixed at the seed.
+    ``user_args`` is the pytree handed to the user's right-hand side.
+    """
+
+    q1_anchor: Array
+    q2_anchor: Array
+    user_args: PyTree
+    b: Array
+    c: Array
+    formulation: str = eqx.field(static=True)
+    n: int = eqx.field(static=True)
+    raw_f: Callable = eqx.field(static=True)
+    free: int = eqx.field(static=True)
+    v_anchor: Array | None = None
+    omega_floor: Array | None = None
+
+
+def _hopf_border_matrix(A, omega, b, c):
+    C = A - 1j * omega * jnp.eye(A.shape[0], dtype=A.dtype)
+    return jnp.block([[C, b[:, None]], [c.conj()[None, :], jnp.zeros((1, 1), dtype=C.dtype)]])
+
+
+def unpack_bt_hopf_curve(X: Array, n: int) -> tuple[Array, Array, Array, Array, Array]:
+    """Split a real BT chart into ``(u,p_fixed,v,w,kappa)``."""
+    return X[:n], X[n], X[n + 1:2 * n + 1], X[2 * n + 1:3 * n + 1], X[-1]
+
+
+def hopf_curve_frequency(kappa: Array) -> tuple[Array, Array]:
+    """Report frequency and oscillatory eligibility; never used in residuals."""
+    return jnp.sqrt(jnp.maximum(kappa, 0)), kappa > 0
+
+
+def _bt_hopf_residual(X, p, f, args, n):
+    u, _, v, w, kappa = unpack_bt_hopf_curve(X, n)
+    A = jax.jacfwd(f)(u, p, args.user_args)
+    return jnp.concatenate([
+        f(u, p, args.user_args), A @ v + kappa * w, A @ w - v,
+        jnp.stack([jnp.dot(v, v) - 1, jnp.dot(lax.stop_gradient(args.v_anchor), w)]),
+    ])
+
+
+def unpack_minimal_hopf_curve(X: Array, n: int) -> tuple[Array, Array, Array]:
+    """Split a minimal positive-frequency Hopf state into (u,p_fixed,omega)."""
+    return X[:n], X[n], X[n + 1]
+
+
+def hopf_curve_step_update(args: HopfCurveArgs, X: Array, q: Array) -> HopfCurveArgs:
+    """Refresh ordinary charts; the BT gauge remains fixed at its seed."""
+    if args.formulation == "bt":
+        return args
+    if args.formulation == "extended":
+        _, _, q1, q2, _ = unpack_hopf_curve(X, args.n)
+        return eqx.tree_at(lambda a: (a.q1_anchor, a.q2_anchor), args,
+                           (lax.stop_gradient(q1), lax.stop_gradient(q2)))
+    u, fixed, omega = unpack_minimal_hopf_curve(X, args.n)
+    A = jax.jacfwd(args.raw_f)(u, _assemble_p(fixed, q, args.free), args.user_args)
+    M = _hopf_border_matrix(A, omega, args.b, args.c)
+    rhs = jnp.zeros(args.n + 1, dtype=M.dtype).at[-1].set(1)
+    right = jnp.linalg.solve(M, rhs)[:-1]
+    left = jnp.linalg.solve(M.conj().T, rhs)[:-1]
+    def aligned(v, old):
+        v = v / jnp.linalg.norm(v)
+        overlap = jnp.vdot(old, v)
+        phase = jnp.conj(overlap) / jnp.where(jnp.abs(overlap) > 0, jnp.abs(overlap), 1)
+        return lax.stop_gradient(v * phase)
+    return eqx.tree_at(lambda a: (a.b, a.c), args,
+                       (aligned(left, args.b), aligned(right, args.c)))
 
 
 def unpack_hopf_curve(
     X: Array, n: int
 ) -> tuple[Array, Array, Array, Array, Array]:
-    """Split a packed Hopf-curve state into ``(u, p_fixed, q1, q2, omega)``."""
+    """Split an extended-only Hopf-curve state into ``(u, p_fixed, q1, q2, omega)``."""
     return (
         X[:n], X[n], X[n + 1:2 * n + 1], X[2 * n + 1:3 * n + 1], X[3 * n + 1]
     )
@@ -184,8 +307,9 @@ def hopf_curve_problem(
     *,
     free: int = 1,
     args: PyTree = None,
-    tol: float = 1e-6,
+    tol: float | None = None,
     max_iter: int = 50,
+    formulation: str = "minimal",
 ) -> BifProblem:
     """
     Build a ``BifProblem`` whose solution branch is a curve of Hopf points
@@ -196,17 +320,28 @@ def hopf_curve_problem(
     seed ``ValueError`` below is an eager-mode-only check (a no-op under
     ``jax.jit``/``jax.vmap`` tracing).
 
-    Known limitation: the phase condition anchors to a seed eigenvector
-    recomputed from the refined starting point at each ``q``, so it tracks
-    gently along the curve. If the eigenvector rotates far enough to become
-    orthogonal to that seed, the phase row degenerates and the curve stalls.
-    Fixed-shape buffers (which the jit/vmap story depends on) rule out
-    MatCont-style adaptive re-anchoring; the remedy is restarting from a
-    later point.
+    The returned problem's ``args`` is a :class:`HopfCurveArgs` holding the
+    caller's ``args`` and the eigenvector the phase condition is anchored
+    to. Its ``step_update`` (:func:`hopf_curve_step_update`) re-anchors that
+    condition on every accepted point in the extended chart. The default
+    minimal chart packs ``(u,p_fixed,omega)`` and refreshes complex borders
+    instead. It requires ``omega > sqrt(default_tol(dtype)) * |omega_seed|``,
+    with ``omega_seed`` the refined seed's frequency (``HopfCurveArgs.omega_floor``, see
+    :func:`~jaxcont.bifurcations.curve_layout.minimal_hopf_floor`): a step
+    whose corrector leaves the chart is rejected, so a curve running into a
+    Bogdanov-Takens point stalls just above the floor and
+    ``BogdanovTakens(curve="hopf")`` records it as ``"curve_terminated"``.
+    Select ``formulation="bt"`` to locate BT and continue through it, or
+    ``formulation="extended"`` for the eigenvector chart.
+
+    ``formulation="bt"`` packs ``(u,p_fixed,v,w,kappa)`` with a seed-fixed
+    real Jordan-chain gauge, permitting continuation through zero frequency.
 
     Measured residual floor at refined seed: 5.96e-8 (float32).
     GPU: No precision fix (TF32) needed; CPU and GPU numerics match at newton_tol=1e-5.
     """
+    if formulation not in ("minimal", "extended", "bt"):
+        raise ValueError("formulation must be minimal, extended or bt")
     u_guess = jnp.asarray(u_guess)
     p_guess = jnp.asarray(p_guess)
     _validate(u_guess, p_guess, free)
@@ -218,9 +353,11 @@ def hopf_curve_problem(
     def reduced(u, p_fixed, a, q):
         return f(u, _assemble_p(p_fixed, q, free), a)
 
+    # The root depends on (args, q0); the moving phase anchor is stored below.
     u_star, p_star, q1_star, q2_star, omega_star, seed_converged = hopf_point(
-        lambda u, p_fixed, a: reduced(u, p_fixed, a, q0),
-        u_guess, fixed0, args, tol=tol, max_iter=max_iter,
+        lambda u, p_fixed, theta: reduced(u, p_fixed, theta[0], theta[1]),
+        lax.stop_gradient(u_guess), lax.stop_gradient(fixed0), (args, q0),
+        tol=tol, max_iter=max_iter,
     )
     try:
         # See fold_curve_problem's identical guard above for why this is
@@ -235,17 +372,80 @@ def hopf_curve_problem(
         pass
 
     def F(X, q, a):
-        return _hopf_extended_residual(
-            X, lambda u, p_fixed, aa: reduced(u, p_fixed, aa, q), a, n,
-            lax.stop_gradient(u_star), lax.stop_gradient(p_star),
-        )
+        if formulation == "bt":
+            return _bt_hopf_residual(X, _assemble_p(X[n], q, free), f, a, n)
+        if formulation == "extended":
+            return _hopf_anchored_residual(
+                X, lambda u, p_fixed, aa: reduced(u, p_fixed, aa, q), a.user_args, n,
+                lax.stop_gradient(a.q1_anchor), lax.stop_gradient(a.q2_anchor),
+            )
+        u, fixed, omega = unpack_minimal_hopf_curve(X, n)
+        p = _assemble_p(fixed, q, free)
+        # The complex chart is valid only above args.omega_floor. Below it
+        # the border solve uses the floor and the last equation is replaced
+        # by 2*floor - omega >= floor: finite, never a root, and Newton steps
+        # it back above the floor, so leaving the chart is a corrector
+        # failure (the step is rejected and ds shrinks).
+        # The border equations are divided by min(|omega_seed|, 1): a slow
+        # critical pair keeps the corrector tolerance relative to its own time
+        # scale (like the floor), and a fast pair keeps the unscaled, stricter
+        # tolerance.
+        floor = lax.stop_gradient(a.omega_floor)
+        scale = jnp.minimum(floor / minimal_hopf_floor(X.dtype), 1)
+        in_chart = omega > floor
+        omega_chart = jnp.where(in_chart, omega, floor)
+        A = jax.jacfwd(f)(u, p, a.user_args)
+        M = _hopf_border_matrix(A, omega_chart, lax.stop_gradient(a.b), lax.stop_gradient(a.c))
+        rhs = jnp.zeros(n + 1, dtype=M.dtype).at[-1].set(1)
+        g = jnp.linalg.solve(M, rhs)[-1]
+        last = jnp.where(in_chart, g.imag, 2 * floor - omega)
+        return jnp.concatenate([f(u, p, a.user_args), jnp.stack([g.real, last]) / scale])
 
-    X0 = _hopf_pack(u_star, p_star, q1_star, q2_star, omega_star)
+    A = jax.jacfwd(f)(u_star, _assemble_p(p_star, q0, free), args)
+    C = A - 1j * omega_star * jnp.eye(n, dtype=A.dtype)
+    left, _, _ = jnp.linalg.svd(C, full_matrices=False)
+    b = lax.stop_gradient(left[:, -1])
+    z = q1_star + 1j * q2_star
+    c = lax.stop_gradient(z / jnp.linalg.norm(z))
+    # The critical pair's own frequency sets the chart's scale, independent
+    # of unrelated fast modes and invariant to rescaling time.
+    omega_floor = lax.stop_gradient(
+        minimal_hopf_floor(u_star.dtype, jnp.abs(omega_star))).astype(u_star.dtype)
+    if formulation in ("minimal", "bt"):
+        try:
+            # The floor is relative to omega_seed, so this requires omega_seed > 0.
+            if formulation == "minimal" and not bool(omega_star > omega_floor):
+                raise ValueError(
+                    f"Hopf seed frequency {float(omega_star):.3g} is not positive; the minimal "
+                    f"chart needs omega > 0 at the seed (Bogdanov-Takens or real-pair seed); "
+                    f"use formulation='extended' or formulation='bt'")
+            if formulation == "bt" and not bool(omega_star > 10 * default_tol(u_star.dtype)):
+                raise ValueError("Hopf seed requires positive frequency above 10*default_tol")
+        except jax.errors.ConcretizationTypeError:
+            pass
+    X0 = (_hopf_pack(u_star, p_star, q1_star, q2_star, omega_star)
+          if formulation == "extended" else jnp.concatenate([u_star, p_star[None], omega_star[None]]))
+    v_anchor = lax.stop_gradient(q1_star)
+    if formulation == "bt":
+        # A phase rotation diagonalizes the real/imaginary Gram matrix.
+        gram_cross = lax.stop_gradient(2 * jnp.dot(q1_star, q2_star))
+        gram_difference = lax.stop_gradient(
+            jnp.dot(q1_star, q1_star) - jnp.dot(q2_star, q2_star))
+        anisotropic = jnp.hypot(gram_cross, gram_difference) > default_tol(u_star.dtype)
+        # Phase is a discrete chart choice; an isotropic Gram matrix uses zero.
+        angle = .5 * jnp.arctan2(jnp.where(anisotropic, gram_cross, 0),
+                                  jnp.where(anisotropic, gram_difference, 1))
+        real = jnp.cos(angle) * q1_star + jnp.sin(angle) * q2_star
+        imag = -jnp.sin(angle) * q1_star + jnp.cos(angle) * q2_star
+        scale = jnp.linalg.norm(real)
+        v, w = real / scale, imag / (scale * omega_star)
+        v_anchor = lax.stop_gradient(v)
+        X0 = jnp.concatenate([u_star, p_star[None], v, w, (omega_star**2)[None]])
     return BifProblem(
-        f=F,
-        u0=X0,
-        p0=jnp.asarray(q0, X0.dtype),
-        args=args,
-        kind="hopf_curve",
-        param_name=f"p[{free}]",
+        f=F, u0=X0, p0=jnp.asarray(q0, X0.dtype),
+        args=HopfCurveArgs(lax.stop_gradient(q1_star), lax.stop_gradient(q2_star), args,
+                           b, c, formulation, n, f, free, v_anchor=v_anchor,
+                           omega_floor=omega_floor),
+        kind="hopf_curve", curve_layout=CurveLayout("hopf", formulation, n, free),
+        param_name=f"p[{free}]", step_update=hopf_curve_step_update,
     )

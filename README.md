@@ -35,8 +35,9 @@ solvers, two-parameter continuation (fold/Hopf curves with their own
 codimension-two events), and infinitesimal phase response curves (iPRC,
 `prc_curve`, cross-validated against MatCont) plus their parameter-derivative
 sensitivity (dPRC, `dprc_curve`, validated independently -- MatCont does not
-compute this quantity). Branch switching and general connecting-orbit/BVP
-workflows remain future work.
+compute this quantity). Equilibrium branch switching (`BP`, `branch_switch`)
+and period-doubling switching (`branch_switch_pd`) are shipped. General
+connecting-orbit/BVP workflows remain future work.
 
 <p align="center">
   <img src="docs/images/matcont_cubic_overlay.png" width="500" alt="Cubic S-curve: JaxCont vs MatCont 7.6, folds overlaid">
@@ -147,3 +148,9 @@ GitHub renders a "Cite this repository" button from it automatically.
 ```
 
 JaxCont is distributed under the [MIT License](LICENSE).
+
+Continuation supports `jit`, `vmap` and forward-mode `jacfwd`. For reverse-mode
+`jax.grad`, pass `ContinuationPar(loop="scan")` (the default is `"while"`).
+The scan uses a fixed attempt budget and masks inactive iterations. Derivatives
+follow the locally selected branch and acceptance decisions. See the
+[transformation matrix](docs/source/transformations.rst) for tested coverage.

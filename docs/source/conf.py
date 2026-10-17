@@ -82,17 +82,7 @@ napoleon_use_admonition_for_examples = False
 napoleon_use_admonition_for_notes = False
 napoleon_use_admonition_for_references = False
 napoleon_use_ivar = True
-# True, not the sphinx default of False: with autodoc_default_options'
-# members=True below, a Google-style "Attributes:" docstring section
-# combined with the False rendering (a separate `.. attribute::` directive
-# per field) duplicate-registers each field against the same one autodoc's
-# own dataclass-field introspection already emits -- e.g.
-# `jaxcont.EquilibriumProblem.rhs` gets documented twice, which
-# fail_on_warning treats as fatal. True renders Attributes as plain `:ivar:`
-# fields instead, which don't create separate object descriptions. Confirmed
-# during design this repo's only "Attributes:"-style docstrings are
-# EquilibriumProblem/ContinuationProblem/ContinuationSolution/Config -- no
-# other documented class is affected by this flip.
+# Render dataclass Attributes sections as fields to avoid duplicate descriptions.
 napoleon_use_param = True
 napoleon_use_rtype = True
 napoleon_preprocess_types = False

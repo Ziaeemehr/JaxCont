@@ -57,10 +57,9 @@ def _unpack(x, n):
     return x[:n], x[n], x[n + 1:2 * n + 1], x[2 * n + 1:3 * n + 1], x[3 * n + 1]
 
 
-def _seed(f, u, p, args, n):
+def _seed(f, u, p, args, n, eigenvalue=None):
     """Undifferentiated Newton seed: eigenvector of J(u,p) with smallest
-    |Re(eigenvalue)| AMONG THE GENUINELY COMPLEX EIGENVALUES, matching
-    bifurcations.events.Hopf.test_function's own selection rule (mask to
+    |Re(eigenvalue)| AMONG THE GENUINELY COMPLEX EIGENVALUES (mask to
     |Im| > tolerance first, then argmin |Re| within that mask) -- NOT a
     bare argmin over all eigenvalues, which could select a real eigenvalue
     (e.g. a slow real mode near the origin) and hand differentiable_root a
@@ -104,6 +103,8 @@ def _seed(f, u, p, args, n):
     select_mask = jnp.where(has_pos_im, pos_im_mask, safe_mask)
 
     re_for_argmin = jnp.where(select_mask, jnp.abs(jnp.real(evals)), jnp.inf)
+    if eigenvalue is not None:
+        re_for_argmin = jnp.where(select_mask, jnp.abs(evals - eigenvalue), jnp.inf)
     idx = jnp.argmin(re_for_argmin)
 
     vec = evecs[:, idx]
@@ -114,21 +115,26 @@ def _seed(f, u, p, args, n):
     return q1, q2, omega
 
 
-def _extended_residual(x, f, args, n, u_guess, p_guess):
+def _extended_residual(x, f, args, n, u_guess, p_guess, eigenvalue=None):
     """G(x, args) for the Hopf extended system."""
-    u, p, q1, q2, omega = _unpack(x, n)
     # Recomputing the seed (including jnp.linalg.eig) on every Newton
     # iteration is deliberate, not an oversight: differentiable_root's
     # documented contract requires theta-dependent seeds to be computed
     # inside the traced primal (here, under stop_gradient), not hoisted out
     # as a loop-invariant -- see differentiable_root's own docstring.
-    q1_seed, q2_seed, _ = _seed(f, u_guess, p_guess, lax.stop_gradient(args), n)
+    q1_seed, q2_seed, _ = _seed(f, u_guess, p_guess, lax.stop_gradient(args), n, eigenvalue)
+    return _anchored_residual(x, f, args, n, q1_seed, q2_seed)
+
+
+def _anchored_residual(x, f, args, n, q1_anchor, q2_anchor):
+    """G(x, args) with G5 anchored to the given ``(q1_anchor, q2_anchor)``."""
+    u, p, q1, q2, omega = _unpack(x, n)
     jac = jacfwd(f, argnums=0)(u, p, args)
     g1 = f(u, p, args)
     g2 = jac @ q1 + omega * q2
     g3 = jac @ q2 - omega * q1
     g4 = jnp.dot(q1, q1) + jnp.dot(q2, q2) - 1.0
-    g5 = jnp.dot(q1_seed, q2) - jnp.dot(q2_seed, q1)
+    g5 = jnp.dot(q1_anchor, q2) - jnp.dot(q2_anchor, q1)
     return jnp.concatenate([g1, g2, g3, jnp.reshape(g4, (1,)), jnp.reshape(g5, (1,))])
 
 
@@ -138,11 +144,15 @@ def hopf_point(
     p_guess: float | Array,
     args: PyTree = None,
     *,
-    tol: float = 1e-8,
+    tol: float | None = None,
     max_iter: int = 50,
+    eigenvalue: complex | None = None,
 ) -> tuple[Array, Array, Array, Array, Array, Array]:
     """
     Locate a Hopf point near ``(u_guess, p_guess)``, differentiable in ``args``.
+
+    ``eigenvalue`` optionally selects the critical mode nearest that value
+    when several complex pairs share a bracket.
 
     Returns ``(u*, p*, q1*, q2*, omega0*, converged)``: the equilibrium,
     parameter, real and imaginary parts of the (unit) critical eigenvector,
@@ -155,10 +165,10 @@ def hopf_point(
     p_guess = jnp.asarray(p_guess, u_guess.dtype)
 
     def G(x, theta):
-        return _extended_residual(x, f, theta, n, u_guess, p_guess)
+        return _extended_residual(x, f, theta, n, u_guess, p_guess, eigenvalue)
 
     def x0(theta):
-        q1_0, q2_0, omega_0 = _seed(f, u_guess, p_guess, theta, n)
+        q1_0, q2_0, omega_0 = _seed(f, u_guess, p_guess, theta, n, eigenvalue)
         return _pack(u_guess, p_guess, q1_0, q2_0, omega_0)
 
     x_star, converged = differentiable_root_checked(G, x0, args, tol=tol, max_iter=max_iter)
@@ -172,7 +182,7 @@ def hopf_parameter(
     p_guess: float | Array,
     args: PyTree = None,
     *,
-    tol: float = 1e-8,
+    tol: float | None = None,
     max_iter: int = 50,
 ) -> Array:
     """
@@ -196,8 +206,8 @@ def lyapunov_coefficient(
 ) -> Array:
     """
     First Lyapunov coefficient l1 at a Hopf point (u, p) with critical
-    eigenvector q1 + i*q2 and frequency omega0 -- Kuznetsov's formula
-    (Elements of Applied Bifurcation Theory, 3rd ed., eq. 3.19/10.16).
+    unit-norm eigenvector q1 + i*q2 and frequency omega0 -- Kuznetsov's formula
+    (Elements of Applied Bifurcation Theory, 3rd ed., eq. 3.20).
     l1 < 0 is supercritical (stable branching limit cycle), l1 > 0 is
     subcritical. Pure algebra (directional derivatives via jax.jvp plus two
     linear solves) -- no Newton iteration, differentiable wherever its
@@ -205,31 +215,25 @@ def lyapunov_coefficient(
     ordinary reverse-mode chain-rule composition; never calls
     jnp.linalg.eig itself.
 
-    ``f`` must be complex-analytic (holomorphic) in ``u`` for this formula
-    to be correct: the derivatives above are evaluated at a complexified
-    ``u`` (real ``u`` cast to complex, then perturbed along complex
-    directions via ``jax.jvp``). Polynomial, ``exp``, ``tanh``, ``sigmoid``
-    right-hand sides are all fine (everything in this repo's examples), but
-    an RHS with an ``abs``/``clip``/comparison-based ``jnp.where`` that is
-    actually active in ``u`` near the Hopf point is not holomorphic there
-    and may produce silently wrong derivatives (and hence a silently wrong
-    ``l1``).
+    B and C are the complex multilinear extensions of real second and
+    third directional derivatives. The RHS receives only real states and
+    need only be three times differentiable near the Hopf point; inactive
+    comparisons and clipping are supported. Derivatives at nonsmooth points
+    follow JAX's derivative rules.
 
     The left eigenvector p_left (Aᵀ p_left = -i*omega0*p_left, normalized
     so conj(p_left)@q == 1) is solved directly in complex arithmetic on the
-    n x n matrix (Aᵀ + i*omega0*I) -- NOT via a real 2n x 2n block
-    representation, which structurally always has repeated singular-value
-    pairs and makes jnp.linalg.svd's gradient nan (found during design,
-    see docs/superpowers/specs/2026-08-04-hopf-normal-form-design.md).
+    bordered system [[Aᵀ + i*omega0*I, q], [conj(q)ᵀ, 0]], with
+    right-hand side [0, 1]. This avoids differentiating singular vectors,
+    whose derivatives can be undefined when stable modes repeat.
 
     Verified: the standard supercritical textbook example (f = (-y + x(mu -
-    x^2 - y^2), x + y(mu - x^2 - y^2)), exact l1 = -1 at the origin) and an
+    x^2 - y^2), x + y(mu - x^2 - y^2)), exact l1 = -2 at the origin) and an
     independent BifurcationKit.jl v0.5.2 cross-check on a less-symmetric
     example -- see examples/BifurcationKit/04_hopf_normal_form.jl.
     """
     n = u.shape[0]
     complex_dtype = jnp.complex128 if u.dtype == jnp.float64 else jnp.complex64
-    u_c = u.astype(complex_dtype)
     q = (q1 + 1j * q2).astype(complex_dtype)
     qbar = jnp.conj(q)
 
@@ -238,15 +242,21 @@ def lyapunov_coefficient(
     eye_n = jnp.eye(n, dtype=complex_dtype)
 
     m_complex = Ac.T + 1j * omega0 * eye_n
-    _, _, vh = jnp.linalg.svd(m_complex)
-    p_left = jnp.conj(vh[-1, :])
+    bordered = jnp.block([
+        [m_complex, q[:, None]],
+        [qbar[None, :], jnp.zeros((1, 1), dtype=complex_dtype)],
+    ])
+    rhs = jnp.concatenate([
+        jnp.zeros(n, dtype=complex_dtype), jnp.ones(1, dtype=complex_dtype),
+    ])
+    p_left = jnp.linalg.solve(bordered, rhs)[:n]
     p_left = p_left / jnp.conj(jnp.vdot(p_left, q))
 
-    def f_c(uu):
-        return f(uu, p, args).astype(complex_dtype)
+    def f_real(uu):
+        return f(uu, p, args)
 
     def d1(uu, y):
-        return jvp(f_c, (uu,), (y,))[1]
+        return jvp(f_real, (uu,), (y,))[1]
 
     def d2(uu, y, z):
         return jvp(lambda uu_: d1(uu_, y), (uu,), (z,))[1]
@@ -254,8 +264,20 @@ def lyapunov_coefficient(
     def d3(uu, y, z, w):
         return jvp(lambda uu_: d2(uu_, y, z), (uu,), (w,))[1]
 
-    B = lambda x, y: d2(u_c, x, y)
-    C = lambda x, y, z: d3(u_c, x, y, z)
+    def B(x, y):
+        a, b = jnp.real(x), jnp.imag(x)
+        c, d = jnp.real(y), jnp.imag(y)
+        return (d2(u, a, c) - d2(u, b, d)
+                + 1j * (d2(u, a, d) + d2(u, b, c)))
+
+    def C(x, y, z):
+        a, b = jnp.real(x), jnp.imag(x)
+        c, d = jnp.real(y), jnp.imag(y)
+        e, g = jnp.real(z), jnp.imag(z)
+        return (d3(u, a, c, e) - d3(u, a, d, g)
+                - d3(u, b, c, g) - d3(u, b, d, e)
+                + 1j * (d3(u, a, c, g) + d3(u, a, d, e)
+                        + d3(u, b, c, e) - d3(u, b, d, g)))
 
     term1 = jnp.vdot(p_left, C(q, q, qbar))
     a_inv_b = jnp.linalg.solve(Ac, B(q, qbar))
@@ -264,4 +286,4 @@ def lyapunov_coefficient(
     m2_inv_b = jnp.linalg.solve(m2, B(q, q))
     term3 = jnp.vdot(p_left, B(qbar, m2_inv_b))
 
-    return jnp.real(term1 - term2 + term3) / (4.0 * omega0)
+    return jnp.real(term1 - term2 + term3) / (2.0 * omega0)

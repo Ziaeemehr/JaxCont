@@ -40,6 +40,7 @@ differentiable fold locations.
    presentation
    auto_examples/index
    validation
+   transformations
    api/index
 
 .. toctree::

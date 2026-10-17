@@ -67,7 +67,6 @@ def run_radial_cycle() -> CaseResult:
             ds=0.05,
             ds_max=0.08,
             max_steps=35,
-            newton_tol=1e-5,
         ),
     )
     branch = result.branch
@@ -90,9 +89,15 @@ def run_radial_cycle() -> CaseResult:
     )
     radii = jnp.linalg.norm(all_orbit_states, axis=-1)
     radius_errors = jnp.abs(radii - jnp.sqrt(parameters)[:, None])
-    residuals = jax.vmap(lambda unknown, parameter: problem.f(unknown, parameter, problem.args))(
-        states, parameters
-    )
+    # Each point was corrected with the phase condition anchored on the
+    # point before it (the seed on itself).
+    previous_states = jnp.concatenate([states[:1], states[:-1]])
+    previous_parameters = jnp.concatenate([parameters[:1], parameters[:-1]])
+    residuals = jax.vmap(
+        lambda unknown, parameter, anchor, anchor_parameter: problem.f(
+            unknown, parameter, problem.step_update(problem.args, anchor, anchor_parameter)
+        )
+    )(states, parameters, previous_states, previous_parameters)
     expected_nontrivial = jnp.exp(-4.0 * jnp.pi * parameters)
     multipliers = branch.eigenvalues
     trivial_indices = jnp.argmin(jnp.abs(multipliers - 1.0), axis=1)
@@ -233,23 +238,27 @@ def _run_torbpc_jaxcont():
         period,
         start_parameter,
         mesh,
+        tol=1e-5,  # Jacobian condition number ~1.6e8 near the Hopf seed (measured)
     )
     result = jc.continuation(
         problem,
         jc.PseudoArclength(),
         p_span=(start_parameter, -0.75),
         settings=jc.ContinuationPar(
+            # Preserve dense Euclidean sampling for nearest-sample comparisons.
+            theta=1.0,
             compute_stability=True,
             ds=0.005,
             ds_min=1e-5,
             ds_max=0.02,
             max_steps=300,
+            # Jacobian condition number ~1.6e8 near the Hopf seed (measured).
             newton_tol=1e-5,
         ),
         events=[
             jc.Fold(),
-            jc.NeimarkSacker(raw_f=_torbpc_rhs, mesh=mesh),
-            jc.PeriodDoubling(raw_f=_torbpc_rhs, mesh=mesh),
+            jc.NeimarkSacker(corrector_tol=1e-5),
+            jc.PeriodDoubling(corrector_tol=1e-5),
         ],
     )
     return result, mesh

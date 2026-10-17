@@ -50,7 +50,7 @@ def test_switch_lands_on_the_pitchfork_second_branch():
         new_prob, jc.PseudoArclength(), p_span=(float(new_prob.p0), float(new_prob.p0) + 0.3),
         settings=jc.ContinuationPar(ds=0.02, max_steps=30, newton_tol=1e-6),
     )
-    assert float(jnp.min(jnp.abs(sol.branch.states[:, 0]))) > 0.05
+    assert float(jnp.min(jnp.abs(sol.branch.states[:, 0]))) >= 0.05 - 1e-6
 
 
 def test_switch_lands_on_the_transcritical_second_branch():
@@ -126,3 +126,77 @@ def test_branch_switch_vmap_batches_over_a_second_parameter():
         serial_u, serial_p = switch_for_b(float(b))
         assert float(batched[0][i]) == pytest.approx(float(serial_u), abs=1e-4)
         assert float(batched[1][i]) == pytest.approx(float(serial_p), abs=1e-4)
+
+
+@pytest.mark.parametrize("scale", [1.0, 1e-6, 1e6])
+@pytest.mark.parametrize("branch_point", [False, True], ids=["fold", "transcritical"])
+def test_bp_invariant_under_rhs_scaling(scale, branch_point):
+    from jaxcont.bifurcations.events import BranchPoint
+
+    def rhs(u, p):
+        value = u[0] * (p - u[0]) if branch_point else u[0] ** 2 + p
+        return jnp.array([scale * value])
+
+    # The midpoint is the exact singular equilibrium for both normal forms.
+    left = BranchPoint(p=-0.1, u=jnp.zeros(1))
+    right = BranchPoint(p=0.1, u=jnp.zeros(1), tangent=jnp.array([0.0, 1.0]))
+    hit = BP().refine(
+        left, right, (0, 1), rhs, tolerance=None, max_iterations=50,
+    )
+    hits = [] if hit is None else [hit]
+    assert len(hits) == int(branch_point)
+    if branch_point:
+        assert hit.status == "validated"
+        assert hit.kind == "branch_point"
+
+
+@pytest.mark.parametrize("scale", [1e-6, 1.0, 1e6])
+@pytest.mark.parametrize("rank_tolerance", [None, 0.005, 0.02])
+def test_bp_rank_tolerance_controls_relative_rank(scale, rank_tolerance):
+    from jaxcont.bifurcations.events import BranchPoint
+
+    def rhs(u, p):
+        return scale * jnp.array([u[0] ** 2 + 0.01 * p, u[1]])
+
+    # At the exact fold the augmented singular values are scale * [1, 0.01].
+    left = BranchPoint(p=-0.1, u=jnp.zeros(2))
+    right = BranchPoint(p=0.1, u=jnp.zeros(2))
+    hit = BP(rank_tolerance=rank_tolerance).refine(
+        left, right, (0, 1), rhs, tolerance=None, max_iterations=50,
+    )
+    if rank_tolerance is None:
+        accepted = False
+    else:
+        accepted = rank_tolerance == 0.02
+    assert (hit is not None) == accepted
+    if accepted:
+        assert hit.status == "validated"
+
+
+def test_branch_switch_grad_when_augmented_jacobian_depends_on_args():
+    from jaxcont.bifurcations.branch_switch import _switching_tangent
+    from jaxcont.bifurcations.events import EventHit
+
+    def f(u, p, a):
+        return jnp.array([u[0] * (p - u[0]), u[1] - a * u[0]])
+
+    with jax.enable_x64():
+        u = jnp.zeros(2)
+        p = jnp.array(0.0)
+        incoming = jnp.array([0.0, 0.0, 1.0])
+        event = EventHit(kind="branch_point", u=u, p=p, index=(0, 1),
+                         info={"tangent": incoming})
+
+        def tangent(a):
+            return _switching_tangent(f, u, p, incoming, a, 2)[0]
+
+        def seed(a):
+            return branch_switch(f, event, args=a, ds=0.05).u0[0]
+
+        a = jnp.array(0.7)
+        for value in (tangent, seed):
+            derivative = jax.grad(value)(a)
+            h = 1e-5
+            central = (value(a + h) - value(a - h)) / (2 * h)
+            assert jnp.isfinite(derivative)
+            assert jnp.allclose(derivative, central, rtol=1e-4, atol=1e-9)

@@ -61,9 +61,10 @@ def run_one(b):
             ds=0.05, ds_min=1e-5, ds_max=0.2,
             max_steps=MAX_STEPS, newton_tol=1e-6, newton_max_iter=20,
         ),
-        # events=[...] is not yet supported inside jax.vmap -- see
-        # notes/ROADMAP.md issue #13. Omitting `events` gives the
-        # vmap-safe branch/stability data used below.
+        # events=[...] works inside jax.vmap too: it returns fixed-shape
+        # result.event_candidates, refined per slice with
+        # jc.refine_event_candidates. This sweep needs only the branch and
+        # stability data, so it passes no events.
     )
 
 

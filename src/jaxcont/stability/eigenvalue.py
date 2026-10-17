@@ -75,7 +75,7 @@ def analyze_stability(eigenvalues: Array, tolerance: float = 1e-10) -> dict[str,
         "n_stable": int(n_negative),
         "n_center": int(n_zero),
         "eigenvalues": eigenvalues,
-        "dominant_eigenvalue": eigenvalues[0],  # Rightmost eigenvalue
+        "dominant_eigenvalue": eigenvalues[jnp.argmax(real_parts)],  # Rightmost eigenvalue
     }
 
 

@@ -13,6 +13,8 @@ def _json_safe(value):
     """Recursively convert JAX/NumPy arrays into plain Python lists so a
     value is safe to pass to ``json.dumps`` — used for the metadata blob
     :meth:`ContinuationSolution.save` embeds in its ``.npz`` archive."""
+    if isinstance(value, complex):
+        return [value.real, value.imag]
     if isinstance(value, dict):
         return {k: _json_safe(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
@@ -20,6 +22,10 @@ def _json_safe(value):
     if hasattr(value, "tolist"):
         return _json_safe(value.tolist())
     return value
+
+
+_OPTIONAL_ARRAYS = ("tangent_vectors", "eigenvalues", "stability", "trivial_index",
+                    "floquet_logabs", "floquet_converged")
 
 
 @dataclass
@@ -100,6 +106,12 @@ class ContinuationSolution:
         convergence_info: Information about convergence at each step
         state_names: Optional display names for each state component
         param_name: Optional display name for the continuation parameter
+        trivial_index: Periodic flow-direction multiplier index per point
+        floquet_logabs: Periodic ``log|multiplier|`` per point
+        floquet_converged: Periodic spectrum status per point
+        curve_layout: ``CurveLayout`` of a two-parameter curve branch
+        rejected_events: Failed refinements, shaped like ``bifurcations``
+        status: Lower-case ``Status`` name of the run
     """
     states: Array
     parameters: Array
@@ -110,6 +122,12 @@ class ContinuationSolution:
     convergence_info: Optional[list[dict[str, Any]]] = None
     state_names: Optional[tuple[str, ...]] = None
     param_name: Optional[str] = None
+    trivial_index: Optional[Array] = None
+    floquet_logabs: Optional[Array] = None
+    floquet_converged: Optional[Array] = None
+    curve_layout: Any = None
+    rejected_events: list[dict[str, Any]] = field(default_factory=list)
+    status: Optional[str] = None
     
     @property
     def n_points(self) -> int:
@@ -172,17 +190,23 @@ class ContinuationSolution:
     def save(self, filename: str):
         """
         Save this solution to ``filename`` (an ``.npz`` archive), using a
-        versioned, pickle-free schema (format_version=1).
+        versioned, pickle-free schema (format_version=2; :meth:`load` also
+        reads version 1, which lacks the fields added in version 2).
 
         Numeric arrays (states, parameters, tangent_vectors, eigenvalues,
-        stability) are stored as native NumPy arrays; an optional array
+        stability, trivial_index, floquet_logabs, floquet_converged) are
+        stored as native NumPy arrays; an optional array
         that is ``None`` is simply omitted from the archive rather than
         stored as ``None`` -- NumPy has no null array value, and storing
         ``None`` via ``np.array(None)`` both requires pickling on load and
         round-trips as a 0-d object array, not ``None``. Non-numeric
-        metadata (bifurcations, convergence_info, state_names, param_name)
+        metadata (bifurcations, rejected_events, convergence_info,
+        state_names, param_name, status and the curve_layout fields)
         is JSON-encoded into a single ``metadata_json`` entry, which NumPy
         stores as a plain unicode array -- no pickling needed there either.
+        Complex metadata values (including event multipliers) are encoded as
+        ``[real, imaginary]`` pairs. Loading preserves these pairs; callers
+        can recover a complex scalar with ``complex(*pair)``.
 
         Args:
             filename: Path to save file
@@ -191,21 +215,25 @@ class ContinuationSolution:
 
         import numpy as np
 
-        arrays: dict[str, Any] = {"format_version": np.array(1)}
+        arrays: dict[str, Any] = {"format_version": np.array(2)}
         arrays["states"] = np.asarray(self.states)
         arrays["parameters"] = np.asarray(self.parameters)
-        if self.tangent_vectors is not None:
-            arrays["tangent_vectors"] = np.asarray(self.tangent_vectors)
-        if self.eigenvalues is not None:
-            arrays["eigenvalues"] = np.asarray(self.eigenvalues)
-        if self.stability is not None:
-            arrays["stability"] = np.asarray(self.stability)
+        for name in _OPTIONAL_ARRAYS:
+            value = getattr(self, name)
+            if value is not None:
+                arrays[name] = np.asarray(value)
 
+        layout = self.curve_layout
         metadata = {
             "bifurcations": _json_safe(self.bifurcations),
+            "rejected_events": _json_safe(self.rejected_events),
             "convergence_info": _json_safe(self.convergence_info),
             "state_names": list(self.state_names) if self.state_names is not None else None,
             "param_name": self.param_name,
+            "status": self.status,
+            "curve_layout": None if layout is None else {
+                "kind": layout.kind, "formulation": layout.formulation,
+                "n": int(layout.n), "free": int(layout.free)},
         }
         arrays["metadata_json"] = np.array(json.dumps(metadata))
 
@@ -216,8 +244,8 @@ class ContinuationSolution:
         """
         Load a solution saved by :meth:`save`.
 
-        Reads with ``allow_pickle=False``: the format_version=1 schema
-        never needs pickling, so this refuses to execute arbitrary pickled
+        Reads with ``allow_pickle=False``: the format_version 1 and 2
+        schemas never need pickling, so this refuses to execute arbitrary pickled
         payloads from an untrusted ``.npz`` file rather than trusting them
         by default.
 
@@ -239,32 +267,29 @@ class ContinuationSolution:
                     f"schema) and cannot be loaded."
                 )
             version = int(data["format_version"])
-            if version != 1:
+            if version not in (1, 2):
                 raise ValueError(
                     f"{filename!r} uses save/load format_version={version}, "
-                    f"but this version of JaxCont only supports version 1."
+                    f"but this version of JaxCont only supports versions 1 and 2."
                 )
 
             metadata = json.loads(data["metadata_json"].item())
             state_names = metadata["state_names"]
+            layout = metadata.get("curve_layout")
+            if layout is not None:
+                from jaxcont.bifurcations.curve_layout import CurveLayout
+                layout = CurveLayout(**layout)
 
             return cls(
                 states=jnp.array(data["states"]),
                 parameters=jnp.array(data["parameters"]),
-                tangent_vectors=(
-                    jnp.array(data["tangent_vectors"])
-                    if "tangent_vectors" in data.files else None
-                ),
-                eigenvalues=(
-                    jnp.array(data["eigenvalues"])
-                    if "eigenvalues" in data.files else None
-                ),
-                stability=(
-                    jnp.array(data["stability"])
-                    if "stability" in data.files else None
-                ),
                 bifurcations=metadata["bifurcations"],
                 convergence_info=metadata["convergence_info"],
                 state_names=tuple(state_names) if state_names is not None else None,
                 param_name=metadata["param_name"],
+                curve_layout=layout,
+                rejected_events=metadata.get("rejected_events", []),
+                status=metadata.get("status"),
+                **{name: jnp.array(data[name]) if name in data.files else None
+                   for name in _OPTIONAL_ARRAYS},
             )

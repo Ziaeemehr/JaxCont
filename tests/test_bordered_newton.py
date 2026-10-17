@@ -32,7 +32,7 @@ def test_bordered_system_simple():
 
     This is simple enough that we can solve it analytically.
     """
-    def f(u, p):
+    def f(u, p, args):
         return u - p
 
     u_prev = jnp.array([1.0])
@@ -47,10 +47,10 @@ def test_bordered_system_simple():
     param_pred = param_prev + ds * dp0
 
     u_corr, p_corr, converged, _n_iter = _newton_correct(
-        f, u_pred, param_pred, u_prev, param_prev, du0, dp0, ds, 1e-6, 20
+        f, u_pred, param_pred, None, u_prev, param_prev, du0, dp0, ds, 1e-6, 20
     )
 
-    f_val = f(u_corr, p_corr)
+    f_val = f(u_corr, p_corr, None)
     g_val = jnp.dot(u_corr - u_prev, du0) + (p_corr - param_prev) * dp0 - ds
 
     assert converged, "Solver should converge"
@@ -67,7 +67,7 @@ def test_bordered_system_nonlinear():
 
     This is the classic fold bifurcation problem.
     """
-    def f(u, p):
+    def f(u, p, args):
         return u ** 2 - p
 
     u_prev = jnp.array([2.0])
@@ -76,7 +76,7 @@ def test_bordered_system_nonlinear():
     # Seed: dp=+1, matching the deleted compute_tangent(prev_tangent=None)'s
     # default orientation (it always assumed p increasing on the first call).
     seed = jnp.array([0.0, 1.0])
-    tangent = _tangent(f, u_prev, param_prev, seed)
+    tangent = _tangent(f, u_prev, param_prev, None, seed)
 
     ds = jnp.array(0.5)
     du0 = tangent[:-1]
@@ -85,10 +85,10 @@ def test_bordered_system_nonlinear():
     param_pred = param_prev + ds * dp0
 
     u_corr, p_corr, converged, _n_iter = _newton_correct(
-        f, u_pred, param_pred, u_prev, param_prev, du0, dp0, ds, 1e-6, 20
+        f, u_pred, param_pred, None, u_prev, param_prev, du0, dp0, ds, 1e-6, 20
     )
 
-    f_val = f(u_corr, p_corr)
+    f_val = f(u_corr, p_corr, None)
     g_val = jnp.dot(u_corr - u_prev, du0) + (p_corr - param_prev) * dp0 - ds
 
     assert converged, "Solver should converge"
@@ -107,7 +107,7 @@ def test_bordered_system_2d():
 
     Solution: x = p/2, y = p/2
     """
-    def f(u, p):
+    def f(u, p, args):
         x, y = u[0], u[1]
         return jnp.array([x + y - p, x - y])
 
@@ -115,7 +115,7 @@ def test_bordered_system_2d():
     param_prev = jnp.array(2.0)
 
     seed = jnp.array([0.0, 0.0, 1.0])
-    tangent = _tangent(f, u_prev, param_prev, seed)
+    tangent = _tangent(f, u_prev, param_prev, None, seed)
 
     ds = jnp.array(0.2)
     du0 = tangent[:-1]
@@ -124,10 +124,10 @@ def test_bordered_system_2d():
     param_pred = param_prev + ds * dp0
 
     u_corr, p_corr, converged, _n_iter = _newton_correct(
-        f, u_pred, param_pred, u_prev, param_prev, du0, dp0, ds, 1e-6, 20
+        f, u_pred, param_pred, None, u_prev, param_prev, du0, dp0, ds, 1e-6, 20
     )
 
-    f_val = f(u_corr, p_corr)
+    f_val = f(u_corr, p_corr, None)
     g_val = jnp.dot(u_corr - u_prev, du0) + (p_corr - param_prev) * dp0 - ds
 
     assert converged, "Solver should converge"
@@ -143,7 +143,7 @@ def test_bordered_system_continuation_branch():
 
     We'll use the pitchfork bifurcation: f(u, p) = u^3 - p*u = 0
     """
-    def f(u, p):
+    def f(u, p, args):
         return u ** 3 - p * u
 
     u_current = jnp.array([0.5])
@@ -156,7 +156,7 @@ def test_bordered_system_continuation_branch():
     for i in range(n_steps):
         # Recompute tangent at the current point first, exactly as the
         # deleted OO class's .run() loop did (tangent before predict/correct).
-        tangent = _tangent(f, u_current, param_current, tangent)
+        tangent = _tangent(f, u_current, param_current, None, tangent)
 
         du0 = tangent[:-1]
         dp0 = tangent[-1]
@@ -166,10 +166,10 @@ def test_bordered_system_continuation_branch():
         param_pred = param_prev + ds * dp0
 
         u_current, param_current, converged, _n_iter = _newton_correct(
-            f, u_pred, param_pred, u_prev, param_prev, du0, dp0, ds, 1e-6, 20
+            f, u_pred, param_pred, None, u_prev, param_prev, du0, dp0, ds, 1e-6, 20
         )
 
-        f_val = f(u_current, param_current)
+        f_val = f(u_current, param_current, None)
         residual = jnp.linalg.norm(f_val)
 
         assert converged, f"Step {i + 1} should converge"

@@ -592,7 +592,8 @@ def _fold_result():
     return jc.continuation(
         _fold_problem(),
         p_span=(-1.0, 0.1),
-        settings=jc.ContinuationPar(ds=0.02, max_steps=400),
+        # Keep the Euclidean sampling density used by the rounded interpolation checks.
+        settings=jc.ContinuationPar(theta=1.0, ds=0.02, max_steps=400),
     )
 
 
@@ -826,7 +827,7 @@ def test_plot_two_parameter_diagram_draws_curves_and_codim2_markers():
     from tests.test_codim2_events import _bt_fold_curve_seed, _bt_shifted
 
     u_guess, p_guess = _bt_fold_curve_seed()
-    prob = jc.fold_curve_problem(_bt_shifted, u_guess, p_guess, free=1)
+    prob = jc.fold_curve_problem(_bt_shifted, u_guess, p_guess, formulation="extended", free=1)
     sol = jc.continuation(
         prob, p_span=(-2.0, 0.0),
         settings=jc.ContinuationPar(compute_stability=False, newton_tol=1e-5),

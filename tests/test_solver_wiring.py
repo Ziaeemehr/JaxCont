@@ -16,7 +16,7 @@ from jaxcont.core.scan_continuation import (
 from jaxcont.solvers.protocols import Dense
 
 
-def pitchfork(u, p):
+def pitchfork(u, p, args=None):
     return jnp.array([p * u[0] - u[0] ** 3])
 
 
@@ -50,7 +50,7 @@ class _CountingEigenSolver:
 
 
 _SCAN_ARGS = (
-    pitchfork, jnp.array([0.1]), jnp.array(0.5), jnp.array(1.5),
+    pitchfork, None, jnp.array([0.1]), jnp.array(0.5), jnp.array(1.5), None,
     jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
     jnp.array(1e-6), 60, jnp.array(20),
 )
@@ -74,7 +74,7 @@ def test_branch_eigenvalues_routes_through_custom_eigen_solver():
     solver = _CountingEigenSolver()
     states = jnp.array([[0.5], [0.6]])
     params = jnp.array([1.0, 1.0])
-    branch_eigenvalues(pitchfork, states, params, eigen_solver=solver)
+    branch_eigenvalues(pitchfork, states, params, None, eigen_solver=solver)
     assert len(solver.calls) > 0
 
 
@@ -91,7 +91,7 @@ def test_pseudo_arclength_scan_accepts_independently_constructed_dense_instances
 def test_pseudo_arclength_scan_vmap_with_explicit_linear_solver():
     def run(p0):
         return pseudo_arclength_scan(
-            pitchfork, jnp.array([0.1]), p0, p0 + 1.0,
+            pitchfork, None, jnp.array([0.1]), p0, p0 + 1.0, None,
             jnp.array(0.05), jnp.array(1e-5), jnp.array(0.2),
             jnp.array(1e-6), 80, jnp.array(20), Dense(),
         )
@@ -186,4 +186,6 @@ def test_continuation_default_solvers_matches_prior_behavior():
         0.5, 0.550000011920929, 0.625, 0.737500011920929,
         0.90625, 1.1062500476837158, 1.3062500953674316, 1.5062501430511475,
     ]
-    assert result.branch.params.tolist() == expected_params
+    # The reference values were captured in float32; float64 drifts at ~1e-8.
+    assert jnp.allclose(result.branch.params, jnp.array(expected_params), atol=1e-6)
+    assert len(result.branch.params) == len(expected_params)
