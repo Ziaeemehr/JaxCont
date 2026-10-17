@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Floquet strategies `PeriodicSchur(max_sweeps=None)` and
+  `ProductFloquet(eigen_solver=DenseEigen())`, selected by `Solvers.floquet`
+  or per PD/NS event with `floquet_solver`. `floquet_spectrum` returns
+  `FloquetSpectrum(values, phase, logabs, trivial_index, converged)`; periodic
+  branches report `Branch.floquet_logabs` and `Branch.floquet_converged`.
+  `jaxcont.stability` exports the periodic Schur routines.
+
 - BT-chart event detection uses validated kappa crossings; Hopf-only events
   require positive kappa with safe batched coefficient evaluation. Two-parameter
   plots label and dash the neutral-saddle extension.
@@ -37,6 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
 
 ### Breaking
+
+- `floquet_multipliers` and `branch_floquet_multipliers` take a Floquet
+  strategy `floquet_solver` in place of the positional matrix `eigen_solver`;
+  pass `ProductFloquet(eigen_solver)` to keep a custom solver and its order.
+  Periodic branch spectra use `Solvers.floquet` (default `PeriodicSchur()`),
+  no longer `Solvers.eigen`, so multiplier order, accuracy of small
+  multipliers and the derivative path change for default periodic runs.
+  Eager evaluation raises `RuntimeError` when a spectrum does not converge or
+  the flow vanishes; traced evaluation returns NaN values, index `-1` and false
+  status, and failed points are unstable and open no PD/NS brackets. Stability
+  tests nontrivial `logabs < 0`.
 
 - `hopf_curve_problem` defaults to `formulation="minimal"`, packing
   `(u, p_fixed, omega)` (width `n+2`). Use `unpack_minimal_hopf_curve`;

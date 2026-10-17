@@ -682,9 +682,13 @@ def test_floquet_refine_spectral_check_failed(monkeypatch, event_cls, row, final
         events_mod, "differentiable_root_checked",
         lambda rhs, u, p, tol=None: (u, jnp.array(True)),
     )
+    import jaxcont.stability.floquet as floquet_mod
+    values = jnp.asarray(np.array(final, dtype=complex))
     monkeypatch.setattr(
-        events_mod, "floquet_multipliers",
-        lambda raw_f, mesh, u, p, args=None: (jnp.asarray(np.array(final, dtype=complex)), jnp.array(0)),
+        floquet_mod, "_eager_point_spectrum",
+        lambda strategy, raw_f, mesh, u, p, args: floquet_mod.FloquetSpectrum(
+            values, values / jnp.abs(values), jnp.log(jnp.abs(values)),
+            jnp.array(0), jnp.array(True)),
     )
     row = np.array(row, dtype=complex)
     mode = TrackedMode(1, row, row)

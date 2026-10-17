@@ -488,8 +488,9 @@ def periodic_eigenvectors(
 
 @partial(jax.custom_jvp, nondiff_argnums=(0,))
 def _spectrum(max_sweeps, factors):
-    _, _, phase, logabs, converged = periodic_schur(factors, max_sweeps=max_sweeps)
-    return phase, logabs, converged
+    T, Q, phase, logabs, converged = periodic_schur(factors, max_sweeps=max_sweeps)
+    right, _ = periodic_eigenvectors(factors, T, Q, phase, logabs)
+    return phase, logabs, converged, right[0]
 
 
 @_spectrum.defjvp
@@ -508,7 +509,9 @@ def _spectrum_jvp(max_sweeps, primals, tangents):
     dlogabs = jnp.where(simple, jnp.real(dlog), invalid)
     dphase = jnp.where(simple, 1j * jnp.imag(dlog) * phase, invalid.astype(phase.dtype))
     dconverged = np.zeros(converged.shape, dtype=jax.dtypes.float0)
-    return (phase, logabs, converged), (dphase, dlogabs, dconverged)
+    # Phase-zero right modes identify modes; identity is not differentiated.
+    return ((phase, logabs, converged, right[0]),
+            (dphase, dlogabs, dconverged, jnp.zeros_like(right[0])))
 
 
 def periodic_spectrum(
@@ -525,5 +528,17 @@ def periodic_spectrum(
     deflation and mode order are not differentiated. Repeated, defective
     or zero multipliers have no derivative (NaN tangent); a non-converged
     decomposition has zero tangents.
+    """
+    return _spectrum(max_sweeps, jnp.asarray(factors))[:3]
+
+
+def periodic_spectrum_modes(
+    factors: Array, *, max_sweeps: int | None = None
+) -> tuple[Array, Array, Array, Array]:
+    """``periodic_spectrum`` plus the ``(n, n)`` phase-zero right modes.
+
+    Column ``j`` is the unit right eigenvector of the cyclic product for
+    multiplier ``j`` (non-finite for repeated or zero multipliers). The
+    modes carry zero tangents: they select mode identity only.
     """
     return _spectrum(max_sweeps, jnp.asarray(factors))

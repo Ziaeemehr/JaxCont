@@ -35,7 +35,7 @@ from jaxcont.bifurcations.fold_solve import fold_point
 from jaxcont.bifurcations.hopf_normal_form import hopf_point, lyapunov_coefficient
 from jaxcont.bifurcations.modes import crossings, mode_brackets, track_modes
 from jaxcont.solvers.implicit import differentiable_root_checked
-from jaxcont.stability.floquet import floquet_multipliers
+from jaxcont.stability import floquet as _floquet
 from jaxcont.utils.precision import default_tol
 
 PyTree = Any
@@ -615,12 +615,17 @@ class _FloquetEvent:
 
     needs_args = True
 
-    @staticmethod
-    def _multipliers(u, p, args) -> tuple[np.ndarray, int]:
-        values, trivial_index = floquet_multipliers(
-            args.raw_f, args.mesh, u, p, args=args.user_args,
-        )
-        return np.asarray(values), int(trivial_index)
+    def _multipliers(self, u, p, args) -> Optional[tuple[np.ndarray, int]]:
+        """Values and trivial index from the event's effective Floquet
+        strategy, or ``None`` when that spectrum did not converge."""
+        strategy = (_floquet._default_strategy() if self.floquet_solver is None
+                    else self.floquet_solver)
+        spectrum = _floquet._eager_point_spectrum(
+            strategy, args.raw_f, args.mesh, jnp.asarray(u), jnp.asarray(p, jnp.asarray(u).dtype),
+            args.user_args)
+        if not bool(spectrum.converged):
+            return None
+        return np.asarray(spectrum.values), int(spectrum.trivial_index)
 
     def refine(
         self, left, right, index, rhs, *, tolerance, max_iterations, mode=None,
@@ -671,7 +676,10 @@ class _FloquetEvent:
             u_mid, corrected = differentiable_root_checked(rhs, u_interp, p_mid, tol=root_tol)
             if not bool(corrected):
                 return failed("not_converged")
-            row_mid = track_modes(np.stack([row_left, self._multipliers(u_mid, p_mid, args)[0]]))[1]
+            spectrum_mid = self._multipliers(u_mid, p_mid, args)
+            if spectrum_mid is None:
+                return failed("floquet_not_converged")
+            row_mid = track_modes(np.stack([row_left, spectrum_mid[0]]))[1]
             t_mid = float(self._test_value(row_mid[k]))
             if not np.isfinite(t_mid):
                 return failed("not_converged")
@@ -694,7 +702,10 @@ class _FloquetEvent:
         if not bool(corrected):
             return failed("not_converged")
 
-        multipliers, trivial_index = self._multipliers(u_bif, p_bif, args)
+        spectrum = self._multipliers(u_bif, p_bif, args)
+        if spectrum is None:
+            return failed("floquet_not_converged")
+        multipliers, trivial_index = spectrum
         tracked = track_modes(np.stack([row_left, multipliers]))[1][k]
         keep = np.arange(multipliers.shape[0]) != trivial_index
         distance = np.where(keep, np.abs(multipliers - self._critical(tracked)), np.inf)
@@ -730,12 +741,19 @@ class PeriodDoubling(_FloquetEvent, Event):
     *residual*); it reads them, and the user ``args``, from the problem's
     :class:`~jaxcont.problems.periodic_args.PeriodicArgs` that
     ``detect_events`` passes as ``args``.
+
+    ``floquet_solver`` (``PeriodicSchur()`` or ``ProductFloquet(...)``)
+    selects the Floquet strategy for both detection and refinement; ``None``
+    uses ``Solvers.floquet`` of the ``continuation``/``refine_event_candidates``
+    call. A point whose spectrum did not converge never opens a bracket.
     """
 
     kind: str = "period_doubling"
     corrector_tol: Optional[float] = None  # collocation re-correction; None -> default_tol(dtype)
     # |Im| at or below this counts as real; None -> see _classify_tol.
     tolerance: Optional[float] = None
+    # Floquet strategy for detection and refinement; None -> Solvers.floquet.
+    floquet_solver: Optional[Any] = None
 
     @staticmethod
     def _test_value(multipliers):
@@ -765,13 +783,15 @@ class NeimarkSacker(_FloquetEvent, Event):
     tracked mode's projection onto the unit circle is complex. See
     ``PeriodDoubling``'s docstring for the shared rationale
     (equilibrium-branch footgun, why ``detect_events``'s generic ``rhs``
-    isn't used).
+    isn't used) and for ``floquet_solver``.
     """
 
     kind: str = "neimark_sacker"
     corrector_tol: Optional[float] = None  # collocation re-correction; None -> default_tol(dtype)
     # |Im| above this counts as complex; None -> see _classify_tol.
     tolerance: Optional[float] = None
+    # Floquet strategy for detection and refinement; None -> Solvers.floquet.
+    floquet_solver: Optional[Any] = None
 
     @staticmethod
     def _test_value(multipliers):

@@ -21,11 +21,14 @@ from jaxcont.api import (
     ContinuationResult,
     Event,
     EventHit,
+    FloquetSpectrum,
     Fold,
     Hopf,
     Natural,
     NeimarkSacker,
     PeriodDoubling,
+    PeriodicSchur,
+    ProductFloquet,
     PseudoArclength,
     Solvers,
     bif_problem,
@@ -60,7 +63,7 @@ from jaxcont.bifurcations.pd_switch import branch_switch_pd
 
 # Periodic orbits: collocation problem factory, mesh config and the
 # phase-response-curve tools. Floquet multipliers live in
-# jaxcont.stability.floquet.
+# jaxcont.stability.floquet; its strategies are re-exported above.
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 from jaxcont.stability.prc import branch_prc, dprc_curve, prc_curve
@@ -129,6 +132,7 @@ __all__ = [
     # Problems
     "Event",
     "EventHit",
+    "FloquetSpectrum",
     "Fold",
     "GeneralizedHopf",
     "Hopf",
@@ -137,6 +141,8 @@ __all__ = [
     "NeimarkSacker",
     # Solvers
     "PeriodDoubling",
+    "PeriodicSchur",
+    "ProductFloquet",
     "PseudoArclength",
     "Solvers",
     "ZeroHopf",

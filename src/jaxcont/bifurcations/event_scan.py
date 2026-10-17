@@ -16,8 +16,11 @@ from jaxcont.utils.precision import default_tol
 class EventScanInput:
     """One branch buffer with static layout and effective Floquet strategy keys.
 
-    Per-strategy spectrum buffers are dynamic children; the empty tuple is
-    used until strategy-specific Floquet evaluation is supplied by the caller.
+    ``floquet_spectra[k]`` is the branch ``FloquetSpectrum`` computed with the
+    static strategy ``floquet_strategies[k]``. A PD/NS event whose
+    ``floquet_solver`` is set scans its matching entry (values, trivial index
+    and convergence); with no strategies supplied, Floquet events scan
+    ``eigenvalues`` and ``trivial_index``.
     """
 
     params: object
@@ -80,20 +83,33 @@ def _scalar(values, data, adjacent=None):
     return _candidates(values, jnp.ones_like(values, dtype=bool), data, adjacent=adjacent)
 
 
-def _spectral(event, data, raw, pinned=None):
+def _floquet_inputs(event, data):
+    """``(raw, trivial_index, usable)`` for the event's effective strategy."""
+    strategy = getattr(event, 'floquet_solver', None)
+    if strategy is None or not data.floquet_strategies:
+        return data.eigenvalues, data.trivial_index, data.valid
+    for key, spectrum in zip(data.floquet_strategies, data.floquet_spectra):
+        if key == strategy:
+            return spectrum.values, spectrum.trivial_index, data.valid & spectrum.converged
+    raise ValueError(f'{type(event).__name__}: no Floquet spectrum supplied for {strategy!r}')
+
+
+def _spectral(event, data, raw, pinned=None, trivial_index=None, usable=None):
     from jaxcont.bifurcations.events import Hopf, PeriodDoubling, NeimarkSacker
     from jaxcont.bifurcations.codim2_events import DoubleHopf, ZeroHopf
 
-    spectra, permutation = track_modes_array(raw, data.valid)
+    usable = data.valid if usable is None else usable
+    # Failed spectra neither update mode prediction nor open brackets.
+    spectra, permutation = track_modes_array(raw, usable)
     tolerance = getattr(event, 'tolerance', None)
     tol = default_tol(spectra.real.dtype) ** .5 if tolerance is None else tolerance
     real = jnp.abs(spectra.imag) <= tol
     complex_upper = spectra.imag > tol
     values = spectra.real
     if isinstance(event, (PeriodDoubling, NeimarkSacker)):
-        if data.trivial_index is None:
+        if trivial_index is None:
             raise ValueError('Floquet events require flow-direction trivial_index at every point')
-        keep = nontrivial_mask(permutation, data.trivial_index)
+        keep = nontrivial_mask(permutation, trivial_index) & usable[:, None]
         if isinstance(event, PeriodDoubling):
             values, eligible = spectra.real + 1, real & keep
         else:
@@ -181,7 +197,12 @@ def scan_builtin(event, data, args):
             eligible = result.eligible & (modes.kappa > 0)[:, None]
             return _candidates(result.values, eligible, data, result.spectra, result.permutation)
         return _spectral(event, data, raw, pinned)
-    if isinstance(event, (Hopf, BP, PeriodDoubling, NeimarkSacker)):
+    if isinstance(event, (PeriodDoubling, NeimarkSacker)):
+        raw, trivial, usable = _floquet_inputs(event, data)
+        if raw is None:
+            raise ValueError(f'{type(event).__name__} array scanning requires eigenvalues')
+        return _spectral(event, data, raw, trivial_index=trivial, usable=usable)
+    if isinstance(event, (Hopf, BP)):
         if data.eigenvalues is None:
             raise ValueError(f'{type(event).__name__} array scanning requires eigenvalues')
         return _spectral(event, data, data.eigenvalues)

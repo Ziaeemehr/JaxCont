@@ -173,6 +173,46 @@ retain forward-mode support with ``loop="while"``. Reverse-mode differentiation
 requires ``ContinuationPar(loop="scan")``; eager refinement has no reverse-mode
 contract.
 
+Floquet multipliers of periodic orbits
+--------------------------------------
+
+Periodic branches compute Floquet multipliers with the strategy in
+``Solvers.floquet``:
+
+- ``PeriodicSchur(max_sweeps=None)``, the default, decomposes the ordered collocation
+  interval propagators by a complex periodic Schur iteration and never forms
+  their product. Small physical multipliers keep their relative accuracy.
+- ``ProductFloquet(eigen_solver=DenseEigen())`` eigendecomposes the formed
+  monodromy matrix with a matrix ``EigenSolver`` and keeps that solver's
+  ordering. Multipliers much smaller than the largest are lost to roundoff.
+
+``Solvers.eigen`` serves equilibrium spectra only. A ``PeriodDoubling`` or
+``NeimarkSacker`` event may set its own ``floquet_solver``; it then detects and
+refines with that strategy, while branch stability keeps the bundle strategy.
+Pass the same ``solvers`` to ``refine_event_candidates``.
+
+``floquet_spectrum(raw_f, mesh, U, p, floquet_solver, args=user_args)`` returns
+``FloquetSpectrum(values, phase, logabs, trivial_index, converged)``. In 0.5.0
+the fifth positional argument of ``floquet_multipliers`` and
+``branch_floquet_multipliers`` is this strategy, no longer a matrix
+``eigen_solver``. The trivial index is the multiplier whose right eigenvector
+is most aligned with the flow ``raw_f(x0, p, args)``, not the value nearest one.
+Branches store ``floquet_logabs`` and ``floquet_converged``; stability tests
+the nontrivial ``logabs < 0``.
+
+Values equal ``phase * exp(logabs)`` and may underflow to zero or overflow to
+infinity while ``logabs`` stays finite; only an exactly zero multiplier has
+``logabs = -inf``. PD/NS detection uses finite near-unit values. A spectrum that
+does not converge raises ``RuntimeError`` in eager public calls. Under ``jit``,
+and inside continuation, it reports NaN values, index ``-1``, false status and
+stability, and never opens a bracket.
+
+Derivatives of ``PeriodicSchur`` multipliers come from a custom JVP on
+periodic left and right eigenvectors, which also transposes for reverse mode.
+Only simple, finite, nonzero multipliers are differentiable. Repeated or
+defective multipliers have no derivative, and ``loop="scan"`` does not remove
+this spectral limitation.
+
 Minimal fold curves
 -------------------
 
