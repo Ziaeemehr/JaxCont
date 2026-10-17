@@ -17,7 +17,7 @@
 
 Because this comparison remains an open, tracked failure, treat JaxCont's fold-of-cycles, period-doubling, and Neimark-Sacker detection as experimental rather than fully validated until it closes.
 
-The reviewed references were generated with MATLAB R2020a and MatCont 7.6, then committed as normalized CSV/JSON artifacts. Comparisons use the declared case tolerances and the suite's policy for interpolated branch segments, unique event type/location assignments, and tolerance-feasible eigenvalue/Floquet-spectrum matching; Floquet comparisons remove exactly one trivial multiplier nearest `+1`.
+The reviewed references were generated with MATLAB 9.8 and MatCont 7.6, then committed as normalized CSV/JSON artifacts. Comparisons use the declared case tolerances and the suite's policy for interpolated branch segments, unique event type/location assignments, and tolerance-feasible eigenvalue/Floquet-spectrum matching; Floquet comparisons remove exactly one trivial multiplier nearest `+1`.
 
 Reproduce the CPU validation snapshot from the repository root:
 

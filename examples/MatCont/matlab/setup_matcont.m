@@ -5,7 +5,7 @@ if nargin < 1 || isempty(root)
     root = getenv('MATCONT_ROOT');
 end
 if isempty(root)
-    root = '/home/ziaee/prog/MatCont/MatCont7p6';
+    error('JaxContValidation:MissingMatCont', 'set MATCONT_ROOT');
 end
 if ~isfolder(root)
     error('JaxContValidation:MissingMatCont', ...

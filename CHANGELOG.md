@@ -287,6 +287,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- MatCont validation resolves MATLAB from `MATLAB_BIN` or `PATH` and MatCont
+  from `MATCONT_ROOT`, removing machine-specific installation defaults.
+
 - Periodic Schur no longer deflates a subdiagonal that is small in its own
   factor but meets a reciprocally large coupling in another factor (loop-5
   audit): deflation also requires a negligible eigenvalue shift of the cyclic

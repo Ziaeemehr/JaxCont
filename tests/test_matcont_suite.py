@@ -45,7 +45,11 @@ from examples.MatCont.python_cases.transforms import (
     run_transform_checks,
 )
 from examples.MatCont.registry import load_registry, select_cases
-from examples.MatCont.run_validation import build_parser, resolve_runtime_paths
+from examples.MatCont.run_validation import (
+    build_parser,
+    resolve_matlab_bin,
+    resolve_runtime_paths,
+)
 from examples.MatCont.validation import case_result_passes
 
 REQUIRED_CASE_FIELDS = {
@@ -285,10 +289,18 @@ def test_equilibrium_reference_schema_requires_spectra_and_normal_forms(tmp_path
 
 
 @pytest.fixture(scope="module")
-def matcont_generated_dir(tmp_path_factory):
-    matlab = Path("/home/ziaee/prog/Matlab/R2020a/bin/matlab")
-    if not matlab.is_file():
-        pytest.skip("MATLAB R2020a is unavailable")
+def matlab_runtime():
+    args = resolve_runtime_paths(build_parser().parse_args([]))
+    if not args.matlab_bin or not shutil.which(args.matlab_bin):
+        pytest.skip("MATLAB is unavailable (set MATLAB_BIN)")
+    if not args.matcont_root:
+        pytest.skip("set MATCONT_ROOT")
+    return args
+
+
+@pytest.fixture(scope="module")
+def matcont_generated_dir(tmp_path_factory, matlab_runtime):
+    matlab = matlab_runtime.matlab_bin
     output = tmp_path_factory.mktemp("matcont-generated")
     matlab_dir = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "matlab"
     completed = subprocess.run(
@@ -519,6 +531,58 @@ def test_cli_parser_exposes_the_foundation_options_and_environment_defaults(monk
     assert args.matcont_root == "/custom/matcont"
 
 
+@pytest.mark.parametrize("configured", [None, "", "/custom/matlab"])
+def test_matlab_resolution_prefers_environment_then_path(monkeypatch, configured):
+    monkeypatch.delenv("MATLAB_BIN", raising=False)
+    if configured is not None:
+        monkeypatch.setenv("MATLAB_BIN", configured)
+    calls = []
+
+    def which(command):
+        calls.append(command)
+        return "/path/bin/matlab"
+
+    monkeypatch.setattr(matcont_runner.shutil, "which", which)
+    assert resolve_matlab_bin() == (configured or "/path/bin/matlab")
+    assert calls == ([] if configured else ["matlab"])
+    args = resolve_runtime_paths(build_parser().parse_args([]))
+    assert args.matlab_bin == (configured or "/path/bin/matlab")
+
+
+def test_runtime_resolution_keeps_explicit_cli_overrides(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("MATLAB_BIN", "/environment/matlab")
+    monkeypatch.setenv("MATCONT_ROOT", "/environment/matcont")
+    args = resolve_runtime_paths(build_parser().parse_args([
+        "--matlab-bin", "local/bin/matlab", "--matcont-root", "local/matcont"
+    ]))
+    assert args.matlab_bin == str(tmp_path / "local/bin/matlab")
+    assert args.matcont_root == str(tmp_path / "local/matcont")
+
+
+def test_missing_runtime_has_no_machine_specific_defaults(monkeypatch):
+    monkeypatch.delenv("MATLAB_BIN", raising=False)
+    monkeypatch.delenv("MATCONT_ROOT", raising=False)
+    monkeypatch.setattr(matcont_runner.shutil, "which", lambda command: None)
+    args = resolve_runtime_paths(build_parser().parse_args([]))
+    assert args.matlab_bin is None
+    assert args.matcont_root is None
+    with pytest.raises(RuntimeError, match=r"MATLAB is unavailable \(set MATLAB_BIN\)"):
+        matcont_runner._run_matlab_function(
+            "run_supported", matlab_bin=args.matlab_bin,
+            matcont_root=args.matcont_root, output_dir=None,
+        )
+
+
+def test_missing_matcont_root_does_not_launch_matlab(monkeypatch):
+    monkeypatch.setattr(matcont_runner.shutil, "which", lambda command: "/bin/matlab")
+    with pytest.raises(RuntimeError, match="set MATCONT_ROOT"):
+        matcont_runner._run_matlab_function(
+            "run_supported", matlab_bin="/bin/matlab", matcont_root=None,
+            output_dir=None,
+        )
+
+
 def _run_matcont_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "examples.MatCont.run_validation", *arguments],
@@ -612,7 +676,7 @@ def _complete_metadata(case_id: str) -> dict:
         "provenance": "regenerated with the committed standalone producer",
         "source": "analytic fixture",
         "source_section": "validation test",
-        "matlab_version": "9.8.0.1323502 (R2020a)",
+        "matlab_version": "9.8.0.1323502",
         "matcont_version": "7.6",
         "jaxcont_version": "0.1.0",
         "python_version": "3.11.0",
@@ -714,7 +778,7 @@ def test_generated_metadata_is_enriched_with_runtime_and_equation_provenance(tmp
             {
                 "case_id": "MC-EQ-001",
                 "source": "analytic cubic fold",
-                "matlab_version": "9.8.0 (R2020a)",
+                "matlab_version": "9.8.0",
                 "matcont_version": "7.6",
                 "precision": "double",
                 "mesh": {"kind": "equilibrium"},
@@ -1064,11 +1128,9 @@ def test_unsupported_template_is_never_reported_as_executed():
 
 
 @pytest.mark.slow
-def test_executable_unsupported_wrapper_runs_only_after_opt_in():
+def test_executable_unsupported_wrapper_runs_only_after_opt_in(matlab_runtime):
     """Executable MatCont-only cases must run and remain labeled unsupported."""
-    matlab = Path("/home/ziaee/prog/Matlab/R2020a/bin/matlab")
-    if not matlab.is_file():
-        pytest.skip("MATLAB R2020a is unavailable")
+    matlab = matlab_runtime.matlab_bin
 
     completed = _run_matcont_cli(
         "--case", "US-BP-001", "--include-unsupported", "--matlab-bin", str(matlab)

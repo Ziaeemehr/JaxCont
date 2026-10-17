@@ -1,7 +1,7 @@
 # MatCont validation suite
 
 This directory contains reproducible cross-validation cases for JaxCont. The
-reviewed references were regenerated with MATLAB R2020a and MatCont 7.6 and are
+reviewed references were regenerated with MATLAB 9.8 and MatCont 7.6 and are
 stored as normalized CSV/JSON text in `reference/`; `.mat` files, plots, and
 frozen JaxCont outputs are intentionally excluded.
 
@@ -30,10 +30,19 @@ python3 -m examples.MatCont.run_validation --regenerate-matcont
 python3 -m examples.MatCont.run_validation --verify-references
 ```
 
-The defaults are
-`/home/ziaee/prog/Matlab/R2020a/bin/matlab` and
-`/home/ziaee/prog/MatCont/MatCont7p6`. Override them with `--matlab-bin` and
-`--matcont-root`, or the `MATLAB_BIN` and `MATCONT_ROOT` environment variables.
+MATLAB is resolved from `MATLAB_BIN` first, then `matlab` on `PATH`, with no
+required MATLAB version. Set `MATCONT_ROOT` to your extracted MatCont installation;
+there is no default installation directory. Download MatCont 7.6 from
+[SourceForge](https://sourceforge.net/projects/matcont/files/MatCont/MatCont7p6/MatCont7p6.zip/download).
+
+```bash
+export MATLAB_BIN=/path/to/MATLAB/bin/matlab  # Optional when matlab is on PATH.
+export MATCONT_ROOT=/path/to/MatCont7p6
+```
+
+The runner also accepts explicit `--matlab-bin` and `--matcont-root` overrides.
+MATLAB integration tests skip when MATLAB is unavailable or `MATCONT_ROOT` is unset.
+Offline comparisons against committed references need neither installation.
 Use `--reference-dir` and `--generated-dir` for alternate artifact locations.
 `--case` may be repeated. Relative reference/generated overrides are resolved
 against the caller's working directory before MATLAB changes directory.
