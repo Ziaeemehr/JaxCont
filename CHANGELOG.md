@@ -332,7 +332,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   linearization never meets nonfinite operands.
 - `BogdanovTakens(curve="hopf")` on a minimal Hopf curve records
   `reason="curve_terminated"` in `rejected_events` when the run stops early (`stalled`,
-  `nonfinite` or `max_attempts`) with its last `omega` below ten times the chart floor; the
+  `nonfinite` or `max_attempts`) with its last `omega` below
+  `max(10*omega_floor, 10*sqrt(default_tol))` (decoupled from the chart floor so slow seeds
+  still report); the
   default chart previously ended `nonfinite` with no event or rejected event. Use
   `formulation="bt"` to locate the BT point. `detect_events(..., status=)` applies the same
   status gate to the eager `BogdanovTakens.scan`.

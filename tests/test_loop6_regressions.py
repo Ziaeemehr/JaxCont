@@ -436,3 +436,32 @@ def test_fast_brusselator_hopf_curve_is_unchanged():
     # Hopf curve b = 1 + a**2 at x = a, y = b/a, omega = a.
     np.testing.assert_allclose(r.branch.states[-1], [3.0, 10 / 3, 10.0, 3.0],
                                rtol=1e-6 if jax.config.x64_enabled else 1e-5)
+
+
+# ---------------------------------------------------------------------------
+# Fix round 3: the termination gate is not tied to a slow seed's floor
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize('d', [1e-3, 1e-4])
+@pytest.mark.parametrize('alg', [jc.Natural(), jc.PseudoArclength()], ids=['natural', 'palc'])
+def test_slow_seed_reports_terminated_bt(alg, d):
+    from jaxcont.bifurcations.codim2_events import BogdanovTakens
+    from jaxcont.bifurcations.curves import hopf_curve_problem
+    from jaxcont.bifurcations.events import detect_events
+
+    dt = _dtype()
+    q0 = 1.2 + d
+    problem = hopf_curve_problem(_shifted_bt, jnp.array([.7 - d, -.4], dt),
+                                 jnp.array([.3 - d * d, q0], dt))
+    events = [BogdanovTakens(_shifted_bt, curve='hopf')]
+    settings = jc.ContinuationPar(ds=d, ds_max=.02, max_steps=200, compute_stability=False)
+    r = jc.continuation(problem, alg, p_span=(q0, 1.0), settings=settings, events=events)
+    assert r.status == 'stalled'
+    assert abs(float(r.branch.params[-1]) - 1.2) < 1e-3
+    assert [(h.kind, h.info['reason']) for h in r.rejected_events] == [
+        ('bogdanov_takens', 'curve_terminated')]
+    b = r.branch
+    eager = detect_events(events, b.params, b.states, b.tangents, None,
+                          lambda u, p: problem.f(u, p, problem.args), ds=0.,
+                          curve_layout=b.curve_layout, args=problem.args, status=r.status)
+    assert [h.info.get('reason') for h in eager] == ['curve_terminated']

@@ -253,7 +253,8 @@ corrector that leaves the chart fails and the step is retried with a smaller
 ``ds``; a curve running into BT stops as ``stalled`` just above the floor.
 ``BogdanovTakens(curve="hopf")`` then records a rejected event with
 ``reason="curve_terminated"`` (the run stopped early with its last frequency
-below ten times the floor); it does not locate the point. The border
+below ``max(10*omega_floor, 10*sqrt(default_tol))``); it does not locate
+the point. The border
 equations are divided by ``min(|omega_seed|, 1)``, so a slowed-down system
 gives the same curve, a fast critical pair keeps the stricter unscaled
 tolerance, and unrelated fast or stiff modes change neither. Use

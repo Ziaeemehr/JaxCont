@@ -264,8 +264,8 @@ class BogdanovTakens(_CurveEvent, Event):
     has stalled at the BT point instead of passing it. The minimal chart
     cannot reach ``omega = 0``: a minimal curve that stops early (status
     ``stalled``, ``nonfinite`` or ``max_attempts``) with its last ``omega``
-    below ten times its floor (``HopfCurveArgs.omega_floor``) ran into a BT
-    point. Both are recorded
+    below ``max(10*omega_floor, 10*sqrt(default_tol))`` (``omega_floor`` from
+    ``HopfCurveArgs``) ran into a BT point. Both are recorded
     as a failed hit with reason ``"curve_terminated"`` (in
     ``rejected_events``), not as a located BT; use ``formulation="bt"`` to
     locate the point.
@@ -300,12 +300,12 @@ class BogdanovTakens(_CurveEvent, Event):
         omega = np.array([float(self._decode(pt)[2][2]) for pt in points])
         brackets = [(i, i + 1, None) for i in crossings(omega, np.isfinite(omega))]
         if not brackets and len(points) >= 2:
-            from jaxcont.bifurcations.event_scan import minimal_floor, terminated_status
+            from jaxcont.bifurcations.event_scan import minimal_termination_scale, terminated_status
             dtype = jnp.asarray(points[-1].u).dtype
             minimal = (points[0].curve_layout is not None
                        and points[0].curve_layout.formulation == "minimal")
             if minimal:
-                scale = 10 * float(minimal_floor(args, dtype))
+                scale = float(minimal_termination_scale(args, dtype))
                 stopped = bool(terminated_status(_status_code(status)))
             else:
                 scale, stopped = 10 * default_tol(dtype), True

@@ -60,6 +60,13 @@ def minimal_floor(args, dtype):
     return minimal_hopf_floor(dtype) if floor is None else jnp.asarray(floor)
 
 
+def minimal_termination_scale(args, dtype):
+    """Last-frequency bound below which a stopped minimal Hopf curve ran into
+    BT: ``max(10*omega_floor, 10*sqrt(default_tol))``. The absolute term keeps
+    slow seeds (whose seed-relative floor is tiny) reportable."""
+    return jnp.maximum(10 * minimal_floor(args, dtype), 10 * minimal_hopf_floor(dtype))
+
+
 def terminated_status(status):
     """Whether a run's ``Status`` code means it stopped before its span ended
     (stalled, nonfinite or out of attempts); ``None`` counts as terminated."""
@@ -209,7 +216,7 @@ def scan_builtin(event, data, args):
             if layout.formulation == 'minimal':
                 # The chart cannot reach omega = 0: a run that stopped just
                 # above its frequency floor ran into the BT point.
-                near_zero = ((last_omega < 10 * minimal_floor(args, data.states.dtype))
+                near_zero = ((last_omega < minimal_termination_scale(args, data.states.dtype))
                              & terminated_status(data.status))
             else:
                 near_zero = last_omega < 10 * default_tol(data.states.dtype)
