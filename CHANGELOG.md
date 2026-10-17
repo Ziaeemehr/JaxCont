@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] - Unreleased
 
+### Fixed
+
+- Hopf-curve BT array scans preserve near-zero terminal-frequency diagnostics
+  in a separate `EventCandidates.terminal_mask`, including padded branches.
+
 ### Known limitations
 - Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
 

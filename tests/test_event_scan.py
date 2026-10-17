@@ -210,3 +210,39 @@ def test_array_gh_normalizes_modes_and_bt_frequency_is_scalar():
     result = jax.jit(lambda d: bt.scan_arrays(d, None))(data)
     np.testing.assert_array_equal(result.bracket_mask, [[True]])
     assert result.spectra is result.permutation is None
+
+
+@pytest.mark.parametrize('frequencies,valid', [
+    ([20., 1., np.nan, np.nan], [1, 1, 0, 0]),
+    ([20., -1., np.nan, np.nan], [1, 1, 0, 0]),
+    ([-20., 20., 1., np.nan], [1, 1, 1, 0]),
+    ([20., 11., np.nan, np.nan], [1, 1, 0, 0]),
+    ([1., np.nan, np.nan, np.nan], [1, 0, 0, 0]),
+    ([np.nan]*4, [0]*4),
+    ([], []),
+])
+def test_bt_terminal_frequency_matches_eager_with_padding(frequencies, valid):
+    from jaxcont.bifurcations.codim2_events import BogdanovTakens
+    from jaxcont.bifurcations.curve_layout import CurveLayout
+    from jaxcont.bifurcations.event_scan import EventScanInput
+    from jaxcont.bifurcations.events import BranchPoint
+    from jaxcont.utils.precision import default_tol
+
+    def rhs(u, p, args):
+        return jnp.array([-u[1], u[0]])
+
+    omega = jnp.asarray(frequencies, dtype=float) * default_tol(jnp.asarray(0.).dtype)
+    states = jnp.tile(jnp.array([0., 0., 0., 1., 0., 0., -1., 1.]), (len(valid), 1))
+    states = states.at[:, -1].set(omega)
+    data = EventScanInput(jnp.arange(len(valid), dtype=float), states, None, None,
+                          None, jnp.asarray(valid, bool), CurveLayout('hopf', 'extended', 2, 1))
+    event = BogdanovTakens(rhs, curve='hopf')
+    result = jax.jit(lambda d: event.scan_arrays(d, None))(data)
+    points = [BranchPoint(data.params[i], states[i], curve_layout=data.curve_layout)
+              for i in range(len(valid)) if valid[i]]
+    expected_crossings = np.zeros((max(len(valid)-1, 0), 1), bool)
+    expected_terminal = expected_crossings.copy()
+    for i, _, mode in event.scan(points):
+        (expected_terminal if mode == 'curve_terminated' else expected_crossings)[i, 0] = True
+    np.testing.assert_array_equal(result.bracket_mask, expected_crossings)
+    np.testing.assert_array_equal(result.terminal_mask, expected_terminal)

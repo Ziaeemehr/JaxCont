@@ -44,11 +44,17 @@ class EventScanInput:
 
 
 class EventCandidates(NamedTuple):
+    """Crossings plus optional non-root ``curve_terminated`` bracket flags.
+
+    ``terminal_mask`` has the same shape as ``bracket_mask`` when supplied;
+    its entries require failed-hit reporting rather than root refinement.
+    """
     values: object
     eligible: object
     bracket_mask: object
     spectra: object
     permutation: object
+    terminal_mask: object = None
 
 
 def nontrivial_mask(permutation, trivial_index):
@@ -124,7 +130,10 @@ def scan_builtin(event, data, args):
         if data.params.shape[0] == 0:
             if isinstance(event, (Cusp, GeneralizedHopf)) or (
                     isinstance(event, BogdanovTakens) and event.curve == 'hopf'):
-                return _scalar(jnp.empty((0,), data.states.dtype), data)
+                result = _scalar(jnp.empty((0,), data.states.dtype), data)
+                if isinstance(event, BogdanovTakens):
+                    result = result._replace(terminal_mask=jnp.zeros_like(result.bracket_mask))
+                return result
             raw = jnp.empty((0, layout.n), jnp.result_type(data.states, jnp.complex64))
             return _spectral(event, data, raw)
         # Padding evaluates a valid branch state before any spectral or coefficient solve.
@@ -144,7 +153,15 @@ def scan_builtin(event, data, args):
                         u, p, modes.q1, modes.q2, modes.omega)
             return _scalar(values, data, adjacent)
         if isinstance(event, BogdanovTakens) and event.curve == 'hopf':
-            return _scalar(modes.omega, data)
+            result = _scalar(modes.omega, data)
+            indices = jnp.arange(data.params.shape[0])
+            last = jnp.max(jnp.where(data.valid, indices, -1))
+            terminal = ((indices[:-1] == last - 1) & data.valid[:-1]
+                        & data.valid[1:])[:, None]
+            near_zero = jnp.abs(modes.omega[jnp.maximum(last, 0)]) < (
+                10 * default_tol(data.states.dtype))
+            terminal = terminal & near_zero & ~jnp.any(result.bracket_mask)
+            return result._replace(terminal_mask=jax.lax.stop_gradient(terminal))
         raw = jax.vmap(event._eigenvalues)(u, p)
         if event.curve == 'fold':
             pinned = lambda rows: jax.vmap(lambda row: _drop_nearest(row, 0j))(rows)
