@@ -463,3 +463,48 @@ def test_failed_schur_masks_events_and_padding(monkeypatch):
                             settings=_fixed_steps())
     assert eager.events == [] and eager.rejected_events == []
     assert not np.asarray(eager.branch.stable).any()
+
+
+def test_repeated_unit_flow_does_not_select_overlapping_physical_mode(monkeypatch):
+    """Unavailable unit modes must not make (1,0,1) the e0 flow mode."""
+    import importlib
+    import pytest
+    module = importlib.import_module('jaxcont.stability.floquet')
+    # Unit eigenspace span(e0,e1); the .5 eigenvector is (1,0,1).
+    factor = jnp.array([[1., 0., -.5], [0., 1., 0.], [0., 0., .5]])
+    monkeypatch.setattr(module, 'interval_propagators', lambda *a: factor[None])
+    reconstruct = module.periodic_spectrum_modes
+
+    def unavailable_unit_modes(*a, **kw):
+        phase, logabs, converged, right = reconstruct(*a, **kw)
+        # Model unavailable reconstructed columns, retaining the real spectrum
+        # and the finite nonnormal physical mode from the Schur computation.
+        return phase, logabs, converged, right.at[:, :2].set(jnp.nan)
+
+    monkeypatch.setattr(module, 'periodic_spectrum_modes', unavailable_unit_modes)
+    mesh = Collocation(ntst=1, ncol=1)
+    U = jnp.array([1., 0., 0., 1., 0., 0., 1.])
+    flow = lambda u, p, args: jnp.array([1., 0., 0.])
+    evaluate = lambda U: floquet_spectrum(flow, mesh, U, jnp.array(0.), PeriodicSchur())
+    spectrum = jax.jit(evaluate)(U)
+    assert not bool(spectrum.converged)
+    assert int(spectrum.trivial_index) == -1
+    assert np.all(np.isnan(np.asarray(spectrum.values)))
+    assert not bool(floquet_stable(spectrum.values, spectrum.trivial_index,
+                                   logabs=spectrum.logabs))
+    with pytest.raises(RuntimeError, match='did not converge'):
+        evaluate(U)
+
+
+def test_flow_alignment_requires_direction_not_partial_overlap():
+    from jaxcont.stability.floquet import _aligned
+    vectors = jnp.array([[jnp.nan, jnp.nan, 1.],
+                         [jnp.nan, jnp.nan, 0.],
+                         [jnp.nan, jnp.nan, 1.]], dtype=complex)
+    flow = jnp.array([1., 0., 0.])
+    for run in (_aligned, jax.jit(_aligned)):
+        _, valid = run(vectors, flow)
+        assert not bool(valid)
+        # Arbitrary complex phase and column scaling preserve identity.
+        index, valid = run(jnp.diag(jnp.array([2j, 3., 4.])), flow)
+        assert bool(valid) and int(index) == 0

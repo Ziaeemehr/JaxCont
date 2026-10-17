@@ -196,7 +196,10 @@ Pass the same ``solvers`` to ``refine_event_candidates``.
 the fifth positional argument of ``floquet_multipliers`` and
 ``branch_floquet_multipliers`` is this strategy, no longer a matrix
 ``eigen_solver``. The trivial index is the multiplier whose right eigenvector
-is most aligned with the flow ``raw_f(x0, p, args)``, not the value nearest one.
+matches the flow direction ``raw_f(x0, p, args)`` within a normalized residual
+of ``10 * sqrt(default_tol(dtype))``, not the value nearest one. If no reconstructed
+column meets this check, flow identity is unresolved and the spectrum reports
+failure, even if a physical mode has nonzero overlap with the flow.
 Branches store ``floquet_logabs`` and ``floquet_converged``; stability tests
 the nontrivial ``logabs < 0``.
 

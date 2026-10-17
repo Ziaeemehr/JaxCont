@@ -27,6 +27,7 @@ from jaxcont.core.collocation import (
 )
 from jaxcont.solvers.protocols import DenseEigen, EigenSolver
 from jaxcont.stability.periodic_schur import periodic_spectrum_modes
+from jaxcont.utils.precision import default_tol
 
 PyTree = Any
 
@@ -63,7 +64,7 @@ class FloquetSpectrum(NamedTuple):
     while ``logabs`` stays usable (``-inf`` only for an exactly zero
     multiplier). ``trivial_index`` is the flow-direction multiplier in this
     strategy's order. When ``converged`` is false the decomposition failed
-    or the flow vanished: values, phase and logabs are NaN and the index is
+    or flow identity is unresolved: values, phase and logabs are NaN and the index is
     ``-1``.
     """
 
@@ -84,14 +85,25 @@ def _orbit(mesh: Collocation, U: Array):
 
 
 def _aligned(vectors: Array, flow: Array) -> tuple[Array, Array]:
-    """Column most aligned with ``flow``; invalid when no alignment is finite
-    or the flow vanishes. Columns are normalized; complex phase cancels."""
+    """Select a reconstructed column only if it represents the flow direction.
+
+    The normalized projection residual permits discretization error while
+    rejecting physical modes that merely overlap a missing flow mode.
+    Complex phase and column/flow scaling do not change the test.
+    """
     norms = jnp.linalg.norm(vectors, axis=0)
-    alignment = jnp.abs(jnp.conj(vectors).T @ flow.astype(vectors.dtype)) / norms
-    alignment = jnp.where(jnp.isfinite(alignment), alignment, -1.0)
     flow_norm = jnp.linalg.norm(flow)
-    ok = (jnp.max(alignment) > 0) & (flow_norm > 0) & jnp.isfinite(flow_norm)
-    return jnp.argmax(alignment), ok
+    unit_flow = flow.astype(vectors.dtype) / jnp.where(flow_norm > 0, flow_norm, 1)
+    unit_vectors = vectors / jnp.where(norms > 0, norms, 1)
+    overlap = jnp.conj(unit_vectors).T @ unit_flow
+    residual = jnp.linalg.norm(unit_flow[:, None] - unit_vectors * overlap, axis=0)
+    usable = (norms > 0) & jnp.isfinite(norms) & jnp.isfinite(residual)
+    residual = jnp.where(usable, residual, jnp.inf)
+    column = jnp.argmin(residual)
+    # Coarse collocation can rotate the flow mode beyond the solve tolerance.
+    ok = ((residual[column] <= 10 * jnp.sqrt(default_tol(flow.real.dtype)))
+          & (flow_norm > 0) & jnp.isfinite(flow_norm))
+    return column, ok
 
 
 def _product_spectrum(strategy, raw_f, mesh, U, p, args):
@@ -167,7 +179,7 @@ def _require_converged(spectrum: FloquetSpectrum) -> FloquetSpectrum:
         raise RuntimeError(
             "Floquet spectrum did not converge (periodic Schur iteration "
             "budget exhausted, failed backward check, non-finite values or "
-            "zero flow direction); increase PeriodicSchur(max_sweeps=...) "
+            "unresolved flow direction); increase PeriodicSchur(max_sweeps=...) "
             "or check the orbit")
     return spectrum
 
