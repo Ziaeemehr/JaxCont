@@ -254,3 +254,39 @@ def test_bt_plot_neutral_segment_dashed():
     np.testing.assert_array_equal(solid, [True, True, False, False])
     np.testing.assert_array_equal(dashed, [False, True, True, True])
     plt.close(ax.figure)
+
+
+def test_bt_domain_restricted_coefficient_grad():
+    from jaxcont.bifurcations.codim2_events import GeneralizedHopf
+    from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
+
+    def rhs(z, p, a):
+        center = .7+(1.2-p[1])
+        cubic = a*(jnp.log(z[0])-jnp.log(center))**3
+        return shifted(z, p, None).at[1].add(cubic)
+
+    k = jnp.array([.2, 0., -.2])
+    a = jnp.full((3,), .7)
+
+    def coefficient(strength, kappa):
+        data = scan_data(jnp.reshape(kappa, (1,)))
+        return GeneralizedHopf(rhs, args=strength).scan_arrays(data, None).values[0, 0]
+
+    values = jax.jit(jax.vmap(coefficient))(a, k)
+    gradients = jax.jit(jax.grad(
+        lambda strengths: jnp.sum(jax.vmap(coefficient)(strengths, k))))(a)
+
+    def reference(strength):
+        data = scan_data(k[:1])
+        q = jnp.array([1., 1j*jnp.sqrt(k[0])])
+        q = q/jnp.linalg.norm(q)
+        return lyapunov_coefficient(rhs, data.states[0, :2],
+            jnp.array([data.states[0, 2], data.params[0]]),
+            q.real, q.imag, jnp.sqrt(k[0]), strength)
+
+    tol = 100*default_tol(a.dtype)
+    assert abs(values[0]-reference(a[0])) < tol
+    assert abs(gradients[0]-jax.grad(reference)(a[0])) < tol
+    assert jnp.all(jnp.isfinite(gradients))
+    np.testing.assert_array_equal(values[1:], 0)
+    np.testing.assert_array_equal(gradients[1:], 0)

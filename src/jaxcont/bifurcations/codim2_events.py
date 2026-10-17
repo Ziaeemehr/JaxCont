@@ -165,7 +165,10 @@ def _bt_coefficient(event, u, p, modes):
     q = q/jnp.linalg.norm(q)
     x = jnp.where(eligible, u, jnp.zeros_like(u))
     def selected(z, parameters, args):
-        return jnp.where(eligible, event.raw_f(z, parameters, args), A@z)
+        # Batched selection evaluates both RHS branches. Keep the unused user
+        # RHS in its branch domain, independent of the surrogate coordinate.
+        user_z = jnp.where(eligible, z, lax.stop_gradient(u))
+        return jnp.where(eligible, event.raw_f(user_z, parameters, args), A@z)
     value = lyapunov_coefficient(selected, x, p, q.real, q.imag, omega, event.args)
     return jnp.where(eligible, value, 0.)
 
