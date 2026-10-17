@@ -10,8 +10,11 @@ cyclic index ``Q_m = Q_0``.
 
 from __future__ import annotations
 
+from functools import partial
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 
 
@@ -362,3 +365,165 @@ def periodic_schur(
     converged = (hi == 0) & _cyclic_backward_ok(factors.astype(T.dtype), T, Q, eps)
     phase, logabs = _diagonal_spectrum(T)
     return T, Q, phase, logabs, converged
+
+
+def _safe_divide(x: Array, y: Array) -> Array:
+    return jnp.where(y != 0, x / jnp.where(y != 0, y, 1), 0)
+
+
+def _multiplier_ratio(phase: Array, logabs: Array, k, j) -> Array:
+    """``lambda_k / lambda_j`` from phase and log-magnitude, without forming
+    either multiplier."""
+    return phase[k] * jnp.conj(phase[j]) * jnp.exp(logabs[k] - logabs[j])
+
+
+def _cyclic_forward(g: Array, e: Array, gain: Array) -> Array:
+    """Solve ``x_(i+1) = g_i x_i + e_i`` with ``x_m = x_0``; ``gain = prod g``.
+
+    A unit ``gain`` (repeated multiplier) gives a non-finite solution."""
+
+    def step(x, ge):
+        x_next = ge[0] * x + ge[1]
+        return x_next, x
+
+    closure, _ = jax.lax.scan(step, jnp.zeros((), dtype=g.dtype), (g, e))
+    x0 = closure / (1 - gain)
+    _, xs = jax.lax.scan(step, x0, (g, e))
+    return xs
+
+
+def _cyclic_backward(h: Array, f: Array, gain: Array) -> Array:
+    """Solve ``x_i = h_i x_(i+1) + f_i`` with ``x_m = x_0``; ``gain = prod h``."""
+
+    def step(x_next, hf):
+        x = hf[0] * x_next + hf[1]
+        return x, x
+
+    closure, _ = jax.lax.scan(step, jnp.zeros((), dtype=h.dtype), (h, f), reverse=True)
+    x0 = closure / (1 - gain)
+    _, xs = jax.lax.scan(step, x0, (h, f), reverse=True)
+    return xs
+
+
+def _schur_right_vector(T: Array, phase: Array, logabs: Array, j) -> Array:
+    """Schur coordinates ``y`` (``(m, n)``) of mode ``j``: ``T_i y_i = t_i y_(i+1)``
+    with ``t_i = T_i[j, j]``, ``y_i[j] = 1`` and ``y_i[k] = 0`` for ``k > j``.
+
+    Row ``k < j`` is a cyclic first-order recurrence across the phases; it is
+    run in the direction whose cyclic gain has modulus at most one (forward
+    when ``|lambda_k| < |lambda_j|``)."""
+    m, n = T.shape[0], T.shape[1]
+    cols = jnp.arange(n)
+    b = T[:, j, j]
+    y = jnp.zeros((m, n), dtype=T.dtype).at[:, j].set(1)
+
+    def row(idx, y):
+        k = n - 1 - idx
+        a = T[:, k, k]
+        c = jnp.sum(T[:, k, :] * jnp.where(cols > k, y, 0), axis=-1)
+        forward = _cyclic_forward(
+            _safe_divide(a, b), _safe_divide(c, b), _multiplier_ratio(phase, logabs, k, j)
+        )
+        backward = _cyclic_backward(
+            _safe_divide(b, a), _safe_divide(-c, a), _multiplier_ratio(phase, logabs, j, k)
+        )
+        x = jnp.where(logabs[k] < logabs[j], forward, backward)
+        return y.at[:, k].set(jnp.where(k < j, x, y[:, k]))
+
+    return jax.lax.fori_loop(0, n, row, y)
+
+
+def _schur_left_vector(T: Array, phase: Array, logabs: Array, j) -> Array:
+    """Schur coordinates ``z`` of the left mode ``j``:
+    ``z_(i+1)^H T_i = t_i z_i^H``, ``z_i[j] = 1``, ``z_i[k] = 0`` for ``k < j``;
+    rows ``k > j`` are solved in the direction whose cyclic gain has modulus
+    at most one."""
+    m, n = T.shape[0], T.shape[1]
+    rows = jnp.arange(n)
+    b = jnp.conj(T[:, j, j])
+    z = jnp.zeros((m, n), dtype=T.dtype).at[:, j].set(1)
+
+    def column(k, z):
+        a = jnp.conj(T[:, k, k])
+        z_next = jnp.roll(z, -1, axis=0)
+        c = jnp.sum(jnp.conj(T[:, :, k]) * jnp.where(rows < k, z_next, 0), axis=-1)
+        backward = _cyclic_backward(
+            _safe_divide(a, b), _safe_divide(c, b), jnp.conj(_multiplier_ratio(phase, logabs, k, j))
+        )
+        forward = _cyclic_forward(
+            _safe_divide(b, a), _safe_divide(-c, a), jnp.conj(_multiplier_ratio(phase, logabs, j, k))
+        )
+        x = jnp.where(logabs[k] < logabs[j], backward, forward)
+        return z.at[:, k].set(jnp.where(k > j, x, z[:, k]))
+
+    return jax.lax.fori_loop(0, n, column, z)
+
+
+def periodic_eigenvectors(
+    factors: Array, T: Array, Q: Array, phase: Array, logabs: Array
+) -> tuple[Array, Array]:
+    """Right and left periodic eigenvectors from a converged ``periodic_schur``.
+
+    Returns ``(right, left)``, each ``(m, n, n)`` with ``right[i, :, j]`` the
+    mode of diagonal position ``j`` at phase ``i``. Each ``right[i, :, j]`` has
+    unit norm and ``left[i, :, j]^H right[i, :, j] = 1``; with local
+    multipliers ``d_i = left[i+1]^H M_i right[i]`` (product ``phase_j *
+    exp(logabs_j)``), ``M_i r_i = d_i r_(i+1)`` and
+    ``M_i^H l_(i+1) = conj(d_i) l_i``. Schur vectors are not eigenvectors:
+    they come from periodic triangular back substitution. Modes are defined
+    only for simple multipliers; repeated or zero multipliers give
+    non-finite or meaningless vectors. ``factors`` are the decomposed
+    factors and fix the working dtype.
+    """
+    T = jnp.asarray(T).astype(_complex_dtype(jnp.result_type(factors, T)))
+    Q = jnp.asarray(Q).astype(T.dtype)
+    modes = jnp.arange(T.shape[1])
+    y = jax.vmap(lambda j: _schur_right_vector(T, phase, logabs, j))(modes)
+    z = jax.vmap(lambda j: _schur_left_vector(T, phase, logabs, j))(modes)
+    Y = jnp.einsum("iab,jib->iaj", Q, y)
+    Z = jnp.einsum("iab,jib->iaj", Q, z)
+    alpha = jnp.linalg.norm(Y, axis=1, keepdims=True)
+    return Y / alpha, Z * alpha
+
+
+@partial(jax.custom_jvp, nondiff_argnums=(0,))
+def _spectrum(max_sweeps, factors):
+    _, _, phase, logabs, converged = periodic_schur(factors, max_sweeps=max_sweeps)
+    return phase, logabs, converged
+
+
+@_spectrum.defjvp
+def _spectrum_jvp(max_sweeps, primals, tangents):
+    (factors,), (dfactors,) = primals, tangents
+    T, Q, phase, logabs, converged = periodic_schur(factors, max_sweeps=max_sweeps)
+    right, left = periodic_eigenvectors(factors, T, Q, phase, logabs)
+    M = factors.astype(T.dtype)
+    left_next = jnp.conj(jnp.roll(left, -1, axis=0))
+    local = jnp.einsum("ikj,ikl,ilj->ij", left_next, M, right)
+    weights = left_next[:, :, None, :] * right[:, None, :, :] / local[:, None, None, :]
+    simple = jnp.all(jnp.isfinite(weights), axis=(0, 1, 2)) & converged
+    weights = jnp.where(simple, weights, 0)
+    dlog = jnp.einsum("iklj,ikl->j", weights, dfactors.astype(T.dtype))
+    invalid = jnp.where(converged, jnp.nan, 0).astype(logabs.dtype)
+    dlogabs = jnp.where(simple, jnp.real(dlog), invalid)
+    dphase = jnp.where(simple, 1j * jnp.imag(dlog) * phase, invalid.astype(phase.dtype))
+    dconverged = np.zeros(converged.shape, dtype=jax.dtypes.float0)
+    return (phase, logabs, converged), (dphase, dlogabs, dconverged)
+
+
+def periodic_spectrum(
+    factors: Array, *, max_sweeps: int | None = None
+) -> tuple[Array, Array, Array]:
+    """Differentiable ``(phase, logabs, converged)`` of the cyclic product of
+    ``(m, n, n)`` factors, as returned by ``periodic_schur``.
+
+    For a simple multiplier ``lambda`` with periodic modes ``r_i, l_i``
+    (``l_i^H r_i = 1``) the JVP is ``d log(lambda) = sum_i
+    l_(i+1)^H dM_i r_i / d_i`` with local multipliers ``d_i``, so
+    ``d logabs = Re`` and ``d phase = 1j * Im * phase``; it is linear in the
+    factor tangents and transposes for reverse mode. The QR iteration,
+    deflation and mode order are not differentiated. Repeated, defective
+    or zero multipliers have no derivative (NaN tangent); a non-converged
+    decomposition has zero tangents.
+    """
+    return _spectrum(max_sweeps, jnp.asarray(factors))
