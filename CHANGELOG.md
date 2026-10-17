@@ -157,6 +157,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Built-in `scan_arrays` event detection and `EventScanInput` / `EventCandidates`
+  pytrees provide fixed-shape candidates under `jit` and `vmap`, preserving
+  tracked mode and raw trivial-multiplier identity. Curve scans use original
+  system spectra and aligned, normalized coefficient modes.
 - Array-only predictive mode tracking with deterministic Hungarian assignment and
   fixed-shape crossing masks with exact-zero ownership, usable under JAX transforms.
 - Static `CurveLayout` descriptors, normalized `CurveModes` diagnostic pytrees,

@@ -1,0 +1,186 @@
+"""Fixed-shape, array-only event detection; candidates are unvalidated."""
+
+from dataclasses import dataclass
+from typing import NamedTuple
+
+import jax
+import jax.numpy as jnp
+
+from jaxcont.bifurcations.array_modes import crossing_mask, track_modes_array
+from jaxcont.bifurcations.curve_layout import decode_curve_state, orient_curve_modes
+from jaxcont.utils.precision import default_tol
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class EventScanInput:
+    """One branch buffer with static layout and effective Floquet strategy keys.
+
+    Per-strategy spectrum buffers are dynamic children; the empty tuple is
+    used until strategy-specific Floquet evaluation is supplied by the caller.
+    """
+
+    params: object
+    states: object
+    tangents: object
+    eigenvalues: object
+    trivial_index: object
+    valid: object
+    curve_layout: object = None
+    floquet_strategies: tuple = ()
+    floquet_spectra: tuple = ()
+
+    def tree_flatten(self):
+        return ((self.params, self.states, self.tangents, self.eigenvalues,
+                 self.trivial_index, self.valid, self.floquet_spectra),
+                (self.curve_layout, self.floquet_strategies))
+
+    @classmethod
+    def tree_unflatten(cls, metadata, children):
+        layout, strategies = metadata
+        params, states, tangents, eigenvalues, trivial, valid, spectra = children
+        return cls(params, states, tangents, eigenvalues, trivial, valid,
+                   layout, strategies, spectra)
+
+
+class EventCandidates(NamedTuple):
+    values: object
+    eligible: object
+    bracket_mask: object
+    spectra: object
+    permutation: object
+
+
+def nontrivial_mask(permutation, trivial_index):
+    """Exclude raw integer identity, including repeated unit multipliers."""
+    return permutation != jnp.asarray(trivial_index)[:, None]
+
+
+def _candidates(values, eligible, data, spectra=None, permutation=None, adjacent=None):
+    eligible = eligible & data.valid[:, None] & jnp.isfinite(values)
+    mask = crossing_mask(values, eligible, data.valid)
+    if adjacent is not None:
+        a, b = values[:-1], values[1:]
+        possible = ((jnp.sign(a) != jnp.sign(b)) & jnp.isfinite(a) & jnp.isfinite(b)
+                    & eligible[:-1] & eligible[1:] & adjacent[:, None])
+        preceding = jnp.concatenate((jnp.zeros_like(possible[:1]), possible[:-1]), axis=0)
+        mask = possible & ~((a == 0) & preceding)
+    return EventCandidates(values, jax.lax.stop_gradient(eligible),
+                           jax.lax.stop_gradient(mask), spectra, permutation)
+
+
+def _scalar(values, data, adjacent=None):
+    values = jnp.asarray(values).reshape((data.params.shape[0], 1))
+    return _candidates(values, jnp.ones_like(values, dtype=bool), data, adjacent=adjacent)
+
+
+def _spectral(event, data, raw, pinned=None):
+    from jaxcont.bifurcations.events import Hopf, PeriodDoubling, NeimarkSacker
+    from jaxcont.bifurcations.codim2_events import DoubleHopf, ZeroHopf
+
+    spectra, permutation = track_modes_array(raw, data.valid)
+    tolerance = getattr(event, 'tolerance', None)
+    tol = default_tol(spectra.real.dtype) ** .5 if tolerance is None else tolerance
+    real = jnp.abs(spectra.imag) <= tol
+    complex_upper = spectra.imag > tol
+    values = spectra.real
+    if isinstance(event, (PeriodDoubling, NeimarkSacker)):
+        if data.trivial_index is None:
+            raise ValueError('Floquet events require flow-direction trivial_index at every point')
+        keep = nontrivial_mask(permutation, data.trivial_index)
+        if isinstance(event, PeriodDoubling):
+            values, eligible = spectra.real + 1, real & keep
+        else:
+            values, eligible = jnp.abs(spectra) - 1, complex_upper & keep
+    else:
+        upper = isinstance(event, (Hopf, DoubleHopf)) or (
+            isinstance(event, ZeroHopf) and event.curve == 'fold')
+        eligible = complex_upper if upper else real
+    if pinned is not None:
+        eligible = eligible & pinned(spectra)
+    return _candidates(values, eligible, data, spectra, permutation)
+
+
+def scan_builtin(event, data, args):
+    """Dispatch on static event types; all sample-dependent work stays in JAX."""
+    from jaxcont.bifurcations.events import Fold, Hopf, BP, PeriodDoubling, NeimarkSacker
+    from jaxcont.bifurcations.codim2_events import (
+        _CurveEvent, Cusp, GeneralizedHopf, BogdanovTakens,
+        _drop_nearest, _drop_nearest_pinned_pair,
+    )
+    from jaxcont.bifurcations.fold_normal_form import fold_coefficient
+    from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
+
+    if isinstance(event, Fold):
+        if data.tangents is None:
+            raise ValueError('Fold array scanning requires tangents')
+        return _scalar(data.tangents[:, -1], data)
+    if isinstance(event, _CurveEvent):
+        layout = data.curve_layout
+        if layout is None:
+            raise ValueError('curve layout is required for curve decoding')
+        if layout.kind != event.curve or layout.free != event.free:
+            raise ValueError('Event and curve layout disagree')
+        if data.params.shape[0] == 0:
+            if isinstance(event, (Cusp, GeneralizedHopf)) or (
+                    isinstance(event, BogdanovTakens) and event.curve == 'hopf'):
+                return _scalar(jnp.empty((0,), data.states.dtype), data)
+            raw = jnp.empty((0, layout.n), jnp.result_type(data.states, jnp.complex64))
+            return _spectral(event, data, raw)
+        # Padding evaluates a valid branch state before any spectral or coefficient solve.
+        first = jnp.argmax(data.valid)
+        states = jnp.where(data.valid[:, None], data.states, data.states[first])
+        params = jnp.where(data.valid, data.params, data.params[first])
+        u, p, modes = jax.vmap(lambda X, q: decode_curve_state(
+            X, q, layout, event.raw_f, event.args))(states, params)
+        if isinstance(event, (Cusp, GeneralizedHopf)):
+            modes, adjacent = orient_curve_modes(modes, data.valid)
+            if isinstance(event, Cusp):
+                values = jax.vmap(lambda x, q, v: fold_coefficient(
+                    event.raw_f, x, q, v, event.args))(u, p, modes.v)
+            else:
+                values = jax.vmap(lambda x, q, a, b, w: lyapunov_coefficient(
+                    event.raw_f, x, q, a, b, w, event.args))(
+                        u, p, modes.q1, modes.q2, modes.omega)
+            return _scalar(values, data, adjacent)
+        if isinstance(event, BogdanovTakens) and event.curve == 'hopf':
+            return _scalar(modes.omega, data)
+        raw = jax.vmap(event._eigenvalues)(u, p)
+        if event.curve == 'fold':
+            pinned = lambda rows: jax.vmap(lambda row: _drop_nearest(row, 0j))(rows)
+        else:
+            pinned = lambda rows: jax.vmap(_drop_nearest_pinned_pair)(rows, modes.omega)
+        return _spectral(event, data, raw, pinned)
+    if isinstance(event, (Hopf, BP, PeriodDoubling, NeimarkSacker)):
+        if data.eigenvalues is None:
+            raise ValueError(f'{type(event).__name__} array scanning requires eigenvalues')
+        return _spectral(event, data, data.eigenvalues)
+    raise TypeError(f'{type(event).__name__} has no built-in array scanner')
+
+
+def scan_event_candidates(events, data, args):
+    """Return one fixed-shape candidate buffer per event.
+
+    Custom eager scanners remain supported by ``detect_events``. Array-pure
+    custom scalar tests and explicit ``scan_arrays`` hooks support transforms.
+    """
+    from jaxcont.bifurcations.events import BranchPoint
+
+    result = []
+    for event in events:
+        scanner = getattr(event, 'scan_arrays', None)
+        if scanner is not None:
+            result.append(scanner(data, args))
+            continue
+        name = type(event).__name__
+        if getattr(event, 'scan', None) is not None:
+            raise TypeError(f'{name}: Python scan(points) requires eager detect_events; implement scan_arrays(data, args) for traced detection')
+        try:
+            values = jax.vmap(lambda p, u, t, e, i: event.test_function(
+                BranchPoint(p, u, t, e, i, data.curve_layout)))(
+                    data.params, data.states, data.tangents, data.eigenvalues, data.trivial_index)
+        except (jax.errors.TracerArrayConversionError, jax.errors.ConcretizationTypeError,
+                jax.errors.TracerBoolConversionError) as error:
+            raise TypeError(f'{name}: test_function must be array-pure or implement scan_arrays(data, args)') from error
+        result.append(_scalar(values, data))
+    return tuple(result)

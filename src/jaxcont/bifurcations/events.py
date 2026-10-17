@@ -9,9 +9,8 @@ the pseudo-arclength tangent's parameter-component sign change instead), so
 a Hopf pair's crossing can no longer masquerade as a fold. See
 docs/superpowers/specs/2026-07-23-event-protocol-rewrite-design.md.
 
-Eager-only: this module uses plain Python loops (sign-change scanning,
-bisection) and is not jax.jit/jax.vmap-traceable -- matches api.py's
-existing NotImplementedError for events=[...] under jax.vmap/jax.jit.
+Refinement and legacy scanners are eager-only. Built-in ``scan_arrays``
+hooks provide fixed-shape detection under JAX transforms.
 """
 
 from __future__ import annotations
@@ -129,6 +128,11 @@ class Fold(Event):
 
     kind: str = "fold"
 
+    def scan_arrays(self, data, args):
+        """Return fixed-shape, unvalidated array candidates."""
+        from jaxcont.bifurcations.event_scan import scan_builtin
+        return scan_builtin(self, data, args)
+
     def test_function(self, point: BranchPoint):
         return point.tangent[-1]
 
@@ -212,6 +216,11 @@ class Hopf(Event):
     l1_tolerance: float = 1e-6
     classify: bool = True
 
+    def scan_arrays(self, data, args):
+        """Return fixed-shape, unvalidated array candidates."""
+        from jaxcont.bifurcations.event_scan import scan_builtin
+        return scan_builtin(self, data, args)
+
     def scan(self, points: Sequence[BranchPoint]) -> list[tuple[int, int, Any]]:
         spectra = _branch_spectra(points)
         if spectra is None:
@@ -290,6 +299,11 @@ class BP(Event):
     # Threshold on sigma_min([f_u|f_p]) at the refined point over the largest
     # sigma_max across the bracket and that point; None -> 1e3 * default_tol(dtype).
     rank_tolerance: Optional[float] = None
+
+    def scan_arrays(self, data, args):
+        """Return fixed-shape, unvalidated array candidates."""
+        from jaxcont.bifurcations.event_scan import scan_builtin
+        return scan_builtin(self, data, args)
 
     def scan(self, points: Sequence[BranchPoint]) -> list[tuple[int, int, Any]]:
         spectra = _branch_spectra(points)
@@ -572,6 +586,11 @@ class _FloquetEvent:
     refined spectrum is checked against (``_critical``) and the condition the
     multiplier nearest it must satisfy (``_spectral_ok``).
     """
+
+    def scan_arrays(self, data, args):
+        """Return fixed-shape, unvalidated array candidates."""
+        from jaxcont.bifurcations.event_scan import scan_builtin
+        return scan_builtin(self, data, args)
 
     def scan(self, points: Sequence[BranchPoint]) -> list[tuple[int, int, Any]]:
         spectra = _branch_spectra(points)
