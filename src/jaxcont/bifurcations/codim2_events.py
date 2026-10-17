@@ -21,7 +21,7 @@ from typing import Any, Callable, Optional
 
 import jax.numpy as jnp
 import numpy as np
-from jax import Array, jacfwd
+from jax import Array, jacfwd, lax
 
 from jaxcont.bifurcations.codim2 import (
     bogdanov_takens_point,
@@ -107,10 +107,23 @@ class _CurveEvent:
             ]
         return np.asarray(jnp.stack(rows))
 
+    def _bt_scan(self, points):
+        from jaxcont.bifurcations.event_scan import EventScanInput
+        from jaxcont.bifurcations.modes import TrackedMode
+        data = EventScanInput(jnp.stack([pt.p for pt in points]),
+            jnp.stack([pt.u for pt in points]), None, None, None,
+            jnp.ones(len(points), dtype=bool), points[0].curve_layout)
+        c = self.scan_arrays(data, None)
+        return [(int(i), int(i)+1, None if c.spectra is None else
+                 TrackedMode(int(k), np.asarray(c.spectra[i]), np.asarray(c.spectra[i+1])))
+                for i, k in np.argwhere(np.asarray(c.bracket_mask))]
+
     def _scan_modes(self, points):
         """Brackets from ``self.mode_values`` (a tracked-mode ``scan``)."""
         if len(points) < 2:
             return []
+        if points[0].curve_layout is not None and points[0].curve_layout.formulation == "bt":
+            return self._bt_scan(points)
         return mode_brackets(*self.mode_values(points))
 
 
@@ -136,6 +149,25 @@ def _drop_nearest_pinned_pair(values: Array, omega, near_zero: float = 1e-6) -> 
     first = _drop_nearest(values, first_target)
     second_index = jnp.argmin(jnp.where(first, jnp.abs(values - second_target), jnp.inf))
     return first & (jnp.arange(values.shape[0]) != second_index)
+
+
+def _bt_coefficient(event, u, p, modes):
+    """Select a complete regular Hopf surrogate before coefficient solves."""
+    eligible = lax.stop_gradient(modes.kappa > 0)
+    omega = jnp.sqrt(jnp.where(eligible, modes.kappa, 1))
+    n = u.shape[0]
+    A = -2*jnp.eye(n, dtype=u.dtype)
+    A = A.at[:2, :2].set(jnp.array([[0., -1.], [1., 0.]], dtype=u.dtype))
+    surrogate = (jnp.eye(n, dtype=u.dtype)[0]-1j*jnp.eye(n, dtype=u.dtype)[1])/jnp.sqrt(2.)
+    v = jnp.where(eligible, modes.v, surrogate.real)
+    w = jnp.where(eligible, modes.w, surrogate.imag)
+    q = v+1j*omega*w
+    q = q/jnp.linalg.norm(q)
+    x = jnp.where(eligible, u, jnp.zeros_like(u))
+    def selected(z, parameters, args):
+        return jnp.where(eligible, event.raw_f(z, parameters, args), A@z)
+    value = lyapunov_coefficient(selected, x, p, q.real, q.imag, omega, event.args)
+    return jnp.where(eligible, value, 0.)
 
 
 def _refine_tol(tolerance, dtype):
@@ -212,7 +244,8 @@ class BogdanovTakens(_CurveEvent, Event):
 
     On a FOLD curve: a tracked real mode other than the pinned zero
     eigenvalue changes sign.
-    On a HOPF curve: the critical frequency ``omega`` changes sign, i.e.
+    On a BT-chart HOPF curve, kappa crosses zero. Other Hopf charts use
+    the critical frequency ``omega`` changing sign, i.e.
     the imaginary pair collides into a double zero. A Hopf curve that ends
     with ``|omega| < 10 * default_tol`` and no sign change has stalled at
     the BT point instead of passing it; that is recorded as a failed hit
@@ -241,6 +274,8 @@ class BogdanovTakens(_CurveEvent, Event):
     def scan(self, points):
         if self.curve != "hopf":
             return self._scan_modes(points)
+        if points and points[0].curve_layout is not None and points[0].curve_layout.formulation == "bt":
+            return self._bt_scan(points)
         omega = np.array([float(self._decode(pt)[2][2]) for pt in points])
         brackets = [(i, i + 1, None) for i in crossings(omega, np.isfinite(omega))]
         if not brackets and len(points) >= 2:
@@ -360,12 +395,17 @@ class GeneralizedHopf(_CurveEvent, Event):
     curve: str = "hopf"
 
     def test_function(self, point: BranchPoint) -> Array:
+        if point.curve_layout is not None and point.curve_layout.formulation == "bt":
+            u, p, modes = decode_curve_state(point.u, point.p, point.curve_layout, self.raw_f, self.args)
+            return _bt_coefficient(self, u, p, modes)
         u, p, (q1, q2, omega) = self._decode(point)
         return lyapunov_coefficient(self.raw_f, u, p, q1, q2, omega, self.args)
 
     def scan(self, points):
         if len(points) < 2:
             return []
+        if points[0].curve_layout is not None and points[0].curve_layout.formulation == "bt":
+            return self._bt_scan(points)
         decoded = [self._decode(pt) for pt in points]
         q1 = jnp.stack([extra[0] for _, _, extra in decoded])
         q2 = jnp.stack([extra[1] for _, _, extra in decoded])

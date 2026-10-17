@@ -203,3 +203,18 @@ seed below that floor is rejected; residual evaluations outside the chart
 return nonfinite values so continuation cannot accept them. Select
 ``formulation="extended"`` explicitly for the previous
 ``(u, p_fixed, q1, q2, omega)`` representation and ``unpack_hopf_curve`` helper.
+
+Hopf curves through BT
+----------------------
+
+Select ``hopf_curve_problem(..., formulation="bt")`` to continue through a
+Bogdanov-Takens point using the real state ``(u, p_fixed, v, w, kappa)``
+(width ``3*n+2``, larger than the default minimal chart's ``n+2``).
+The seed must have positive Hopf frequency. The seed-fixed gauge remains local;
+loss of chart regularity reports solver failure.
+
+Positive kappa describes an oscillatory Hopf pair. Negative kappa describes
+a neutral-saddle extension with real eigenvalues ``+/-sqrt(-kappa)``, rather
+than an oscillatory Hopf bifurcation. Two-parameter plots label this extension
+and draw it dashed. BT events use kappa crossings followed by original-system
+root validation; GH, ZH and HH events require strictly positive kappa.

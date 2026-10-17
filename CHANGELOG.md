@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- BT-chart event detection uses validated kappa crossings; Hopf-only events
+  require positive kappa with safe batched coefficient evaluation. Two-parameter
+  plots label and dash the neutral-saddle extension.
+
 - Opt-in real Hopf BT chart with polynomial kappa residuals, a seed-fixed
   Jordan-chain gauge, stored real modes, and reporting-only frequency decoding.
 

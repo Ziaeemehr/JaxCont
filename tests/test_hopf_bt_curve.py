@@ -1,5 +1,7 @@
 """Real Jordan-chain Hopf chart through a shifted BT point."""
 
+from dataclasses import replace
+
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -125,3 +127,130 @@ def test_bt_singular_gauge_reports_failure_without_reanchoring():
     assert result.status in ("nonfinite", "stalled", "seed_failed")
     assert result.branch.states.shape[0] <= 1
     np.testing.assert_array_equal(problem.args.v_anchor, jnp.zeros(2))
+
+
+def scan_data(kappas):
+    from jaxcont.bifurcations.event_scan import EventScanInput
+    from jaxcont.bifurcations.curve_layout import CurveLayout
+    k = jnp.asarray(kappas)
+    x = -k/2
+    states = jnp.stack([.7+x, jnp.full_like(k, -.4), .3-x*x,
+                       jnp.ones_like(k), jnp.zeros_like(k), jnp.zeros_like(k),
+                       jnp.ones_like(k), k], axis=1)
+    return EventScanInput(1.2-x, states, None, None, None,
+                          jnp.ones(k.shape, bool), CurveLayout('hopf', 'bt', 2, 1))
+
+
+def test_bt_kappa_event_once_and_validated():
+    from jaxcont.bifurcations.codim2_events import BogdanovTakens
+    event = BogdanovTakens(shifted, curve='hopf')
+    from jaxcont.bifurcations.events import BranchPoint
+    data = scan_data([.2, 0., -.2])
+    points = [BranchPoint(q, X, None, None, None, data.curve_layout)
+              for q, X in zip(data.params, data.states)]
+    assert event.scan(points) == [(0, 1, None)]
+    # Kappa owns BT brackets: a tiny positive kappa without a crossing is
+    # neither a candidate nor an omega-style curve_terminated stall.
+    stall = scan_data([.2, .1, 1e-12])
+    stall_points = [BranchPoint(q, X, None, None, None, stall.curve_layout)
+                    for q, X in zip(stall.params, stall.states)]
+    assert event.scan(stall_points) == []
+    c = event.scan_arrays(stall, None)
+    assert not jnp.any(c.bracket_mask) and not jnp.any(c.terminal_mask)
+    result = jc.continuation(seed(), p_span=(1.3, 1.1), alg=jc.Natural(),
+        settings=jc.ContinuationPar(ds=.01, adaptive=False, max_steps=20,
+                                   compute_stability=False), events=[event])
+    assert len(result.events) == 1
+    hit = result.events[0]
+    assert hit.info['converged']
+    assert jnp.max(jnp.abs(hit.info['p']-jnp.array([.3, 1.2]))) < 100*default_tol(hit.u.dtype)
+    assert not any(h.info.get('reason') == 'curve_terminated' for h in result.rejected_events)
+
+
+def test_bt_chart_masks_hopf_only_events():
+    from jaxcont.bifurcations.codim2_events import GeneralizedHopf, ZeroHopf, DoubleHopf
+    from jaxcont.bifurcations.curve_layout import CurveLayout
+    data = scan_data([.2, 0., -.2])
+    def extra_modes(u, p, args):
+        beta = p[1]-1.15
+        return jnp.concatenate([shifted(u[:2], p, args),
+            jnp.array([beta*u[2], beta*u[3]-2*u[4], 2*u[3]+beta*u[4]])])
+    n = 5
+    states = jnp.zeros((3, 3*n+2), dtype=data.states.dtype)
+    states = states.at[:, :2].set(data.states[:, :2]).at[:, n].set(data.states[:, 2])
+    states = states.at[:, n+1].set(1).at[:, 2*n+2].set(1).at[:, -1].set(data.states[:, -1])
+    data = replace(data, states=states, curve_layout=CurveLayout('hopf', 'bt', n, 1))
+    for cls in (GeneralizedHopf, ZeroHopf, DoubleHopf):
+        c = jax.jit(lambda d: cls(extra_modes).scan_arrays(d, None))(data)
+        assert jnp.all(jnp.isfinite(c.values))
+        assert not jnp.any(c.eligible[1:])
+        assert not jnp.any(c.bracket_mask)
+
+
+def test_bt_chart_jit_vmap_scan_gradient():
+    from jaxcont.bifurcations.codim2_events import BogdanovTakens, GeneralizedHopf
+    def solve(a):
+        def f(u, p, args):
+            return shifted(u, p, None).at[1].add(.3-args)
+        problem = hopf_curve_problem(f, jnp.array([.6, -.4]),
+            jnp.array([a-.01, 1.3]), args=a, formulation='bt')
+        result = jc.continuation(problem, p_span=(1.3, 1.1), alg=jc.Natural(),
+            settings=jc.ContinuationPar(ds=.01, adaptive=False, max_steps=20,
+                compute_stability=False, loop='scan'),
+            events=[BogdanovTakens(f, curve='hopf', args=a), GeneralizedHopf(f, args=a)])
+        return jnp.mean(result.branch.states[:, 2])
+    values = jax.jit(jax.vmap(solve))(jnp.array([.3, .4]))
+    assert jnp.all(jnp.isfinite(values))
+    grad = jax.jit(jax.grad(solve))(jnp.asarray(.3))
+    assert abs(grad-1) < 100*default_tol(grad.dtype)
+
+
+def test_bt_mixed_kappa_coefficient_grad():
+    from jaxcont.bifurcations.codim2_events import GeneralizedHopf
+    from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
+    def coefficient(a, k):
+        def f(z, p, args):
+            hopf = jnp.sqrt(.2)*jnp.array([-z[1], z[0]])-args*jnp.dot(z,z)*z
+            return jnp.where(k > 0, hopf, shifted(z, p, None))
+        d = scan_data(jnp.reshape(k, (1,)))
+        d = replace(d, states=d.states.at[0, :2].set(jnp.where(k > 0, jnp.zeros(2), d.states[0,:2])).at[0, 6].set(jnp.where(k > 0, -1/jnp.sqrt(.2), 1.)))
+        return GeneralizedHopf(f, args=a).scan_arrays(d, None).values[0,0]
+    k = jnp.array([.2, 0., -.2])
+    a = jnp.full((3,), .7)
+    values = jax.jit(jax.vmap(coefficient))(a, k)
+    grads = jax.jit(jax.grad(lambda aa: jnp.sum(jax.vmap(coefficient)(aa, k))))(a)
+    def reference(a):
+        def f(z,p,args):
+            return jnp.sqrt(.2)*jnp.array([-z[1],z[0]])-args*jnp.dot(z,z)*z
+        q = jnp.array([1., -1j])
+        q = q/jnp.linalg.norm(q)
+        return lyapunov_coefficient(f,jnp.zeros(2),jnp.zeros(2),q.real,q.imag,jnp.sqrt(.2),a)
+    tol = 100*default_tol(a.dtype)
+    assert abs(values[0]-reference(a[0])) < tol
+    assert abs(grads[0]-jax.grad(reference)(a[0])) < tol
+    assert jnp.all(jnp.isfinite(grads))
+    np.testing.assert_array_equal(values[1:], 0)
+    np.testing.assert_array_equal(grads[1:], 0)
+    eligible = jax.vmap(lambda kk: GeneralizedHopf(shifted).scan_arrays(
+        scan_data(jnp.reshape(kk, (1,))), None).eligible[0, 0])(k)
+    np.testing.assert_array_equal(eligible, [True, False, False])
+
+
+def test_bt_plot_neutral_segment_dashed():
+    import matplotlib.pyplot as plt
+    from types import SimpleNamespace
+    from jaxcont.viz.two_parameter import plot_two_parameter_diagram
+    d = scan_data([.2, 0., -.2])
+    branch = SimpleNamespace(states=d.states, params=d.params, valid=d.valid, curve_layout=d.curve_layout)
+    ax = plot_two_parameter_diagram([(SimpleNamespace(branch=branch, events=[]), 'hopf')])
+    assert any('oscillatory' in line.get_label() for line in ax.lines)
+    assert any('neutral' in line.get_label() and line.get_linestyle() == '--' for line in ax.lines)
+    plt.close(ax.figure)
+    # Without a sampled zero the dashed segment still joins the solid one.
+    d = scan_data([.2, .1, -.1, -.2])
+    branch = SimpleNamespace(states=d.states, params=d.params, valid=d.valid, curve_layout=d.curve_layout)
+    ax = plot_two_parameter_diagram([(SimpleNamespace(branch=branch, events=[]), 'hopf')])
+    solid, dashed = (np.isfinite(line.get_xdata()) for line in ax.lines[:2])
+    np.testing.assert_array_equal(solid, [True, True, False, False])
+    np.testing.assert_array_equal(dashed, [False, True, True, True])
+    plt.close(ax.figure)

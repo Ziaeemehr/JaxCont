@@ -112,7 +112,7 @@ def scan_builtin(event, data, args):
     from jaxcont.bifurcations.events import Fold, Hopf, BP, PeriodDoubling, NeimarkSacker
     from jaxcont.bifurcations.codim2_events import (
         _CurveEvent, Cusp, GeneralizedHopf, BogdanovTakens,
-        _drop_nearest, _drop_nearest_pinned_pair,
+        _drop_nearest, _drop_nearest_pinned_pair, _bt_coefficient,
     )
     from jaxcont.bifurcations.fold_normal_form import fold_coefficient
     from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
@@ -143,6 +143,9 @@ def scan_builtin(event, data, args):
         u, p, modes = jax.vmap(lambda X, q: decode_curve_state(
             X, q, layout, event.raw_f, event.args))(states, params)
         if isinstance(event, (Cusp, GeneralizedHopf)):
+            if isinstance(event, GeneralizedHopf) and layout.formulation == 'bt':
+                values = jax.vmap(lambda x, q, m: _bt_coefficient(event, x, q, m))(u, p, modes)
+                return _candidates(values[:, None], (modes.kappa > 0)[:, None], data)
             modes, adjacent = orient_curve_modes(modes, data.valid)
             if isinstance(event, Cusp):
                 values = jax.vmap(lambda x, q, v: fold_coefficient(
@@ -153,6 +156,9 @@ def scan_builtin(event, data, args):
                         u, p, modes.q1, modes.q2, modes.omega)
             return _scalar(values, data, adjacent)
         if isinstance(event, BogdanovTakens) and event.curve == 'hopf':
+            if layout.formulation == 'bt':
+                result = _scalar(modes.kappa, data)
+                return result._replace(terminal_mask=jnp.zeros_like(result.bracket_mask))
             result = _scalar(modes.omega, data)
             indices = jnp.arange(data.params.shape[0])
             last = jnp.max(jnp.where(data.valid, indices, -1))
@@ -167,6 +173,13 @@ def scan_builtin(event, data, args):
             pinned = lambda rows: jax.vmap(lambda row: _drop_nearest(row, 0j))(rows)
         else:
             pinned = lambda rows: jax.vmap(_drop_nearest_pinned_pair)(rows, modes.omega)
+        if layout.formulation == 'bt':
+            def pinned(rows):
+                roots = jnp.sqrt(modes.kappa.astype(rows.dtype))
+                return jax.vmap(_drop_nearest_pinned_pair)(rows, roots)
+            result = _spectral(event, data, raw, pinned)
+            eligible = result.eligible & (modes.kappa > 0)[:, None]
+            return _candidates(result.values, eligible, data, result.spectra, result.permutation)
         return _spectral(event, data, raw, pinned)
     if isinstance(event, (Hopf, BP, PeriodDoubling, NeimarkSacker)):
         if data.eigenvalues is None:
