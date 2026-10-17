@@ -949,9 +949,9 @@ def continuation(
     from jaxcont.bifurcations.event_scan import EventScanInput, scan_event_candidates
     branch = result.branch
     traced = isinstance(branch.states, jax.core.Tracer)
-    # Python-only custom scanners participate only in eager refinement.
+    # Eager custom events without array hooks use the Python compatibility path.
     use_arrays = tuple(traced or getattr(e, "scan_arrays", None) is not None
-                       or getattr(e, "scan", None) is None for e in events)
+                       for e in events)
     array_events = tuple(e for e, use in zip(events, use_arrays) if use)
     data = EventScanInput(branch.params, branch.states, branch.tangents,
                           branch.eigenvalues, branch.trivial_index,

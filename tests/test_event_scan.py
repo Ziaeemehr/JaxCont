@@ -399,3 +399,45 @@ def test_eager_custom_scanner_receives_assembled_branch():
     np.testing.assert_allclose(seen, np.arange(-.25, .501, .125))
     assert result.event_candidates == (None,)
     assert len(result.events) == 1
+
+
+@pytest.mark.parametrize('bothside', [False, True])
+def test_eager_python_scalar_event_falls_back_to_pointwise_tests(bothside):
+    import jaxcont as jc
+    from jaxcont.bifurcations.events import EventHit
+
+    class PythonScalarEvent:
+        def test_function(self, point):
+            return float(point.p) - .5
+
+        def refine(self, left, right, index, rhs, *, tolerance, max_iterations):
+            assert float(left.p) <= .5 <= float(right.p)
+            return EventHit('custom_scalar', .5, jnp.array([.5]), index)
+
+    problem = jc.bif_problem(lambda u, p, args: u-p, jnp.zeros(1), 0.)
+    settings = jc.ContinuationPar(ds=.25, ds_max=.25, adaptive=False,
+                                 max_steps=6, bothside=bothside,
+                                 compute_stability=False)
+    result = jc.continuation(problem, jc.Natural(), p_span=(-.5, 1.) if bothside else (0., 1.),
+                             settings=settings, events=(PythonScalarEvent(),))
+    assert result.event_candidates == (None,)
+    assert len(result.events) == 1
+    assert result.events[0].p == .5
+    np.testing.assert_allclose(result.events[0].u, [.5])
+    assert result.rejected_events == []
+
+
+def test_python_scalar_event_rejected_under_jit():
+    import jaxcont as jc
+
+    class PythonScalarEvent:
+        def test_function(self, point):
+            return float(point.p) - .5
+
+    def run(u):
+        return jc.continuation(jc.bif_problem(lambda u, p, args: u-p, u, 0.),
+            jc.Natural(), p_span=(0., 1.), events=(PythonScalarEvent(),),
+            settings=jc.ContinuationPar(max_steps=2, compute_stability=False))
+
+    with pytest.raises(TypeError, match='array-pure'):
+        jax.jit(run)(jnp.zeros(1))

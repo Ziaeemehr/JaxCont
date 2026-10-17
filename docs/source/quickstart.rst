@@ -153,7 +153,9 @@ points can open a bracket. Traced ``events`` and ``rejected_events`` stay empty.
 Eager calls use these same scanners and validate roots automatically.
 Custom Python ``scan(points)`` hooks remain eager only; implement
 ``scan_arrays(data, args)`` or an array-pure scalar ``test_function`` for tracing.
-Eager Python-only scanners have ``None`` in their candidate tuple slot.
+Eager custom events without ``scan_arrays`` use the Python compatibility path,
+including pointwise evaluation of Python scalar tests, and have ``None`` in
+their candidate tuple slot.
 
 Slice a batched result pytree before refining outside the trace::
 

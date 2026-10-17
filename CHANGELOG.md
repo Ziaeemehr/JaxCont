@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Eager custom scalar events retain pointwise Python test evaluation when
+  they do not implement `scan_arrays`; traced detection still requires array purity.
 - Hopf-curve BT array scans preserve near-zero terminal-frequency diagnostics
   in a separate `EventCandidates.terminal_mask`, including padded branches.
 
