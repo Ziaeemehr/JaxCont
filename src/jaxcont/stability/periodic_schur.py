@@ -156,22 +156,48 @@ def _rotate_cols(A: Array, p, G: Array) -> Array:
     return jax.lax.dynamic_update_slice_in_dim(A, cols @ jnp.conj(G).T, p, axis=1)
 
 
-def _deflate(H_last: Array, eps: float) -> Array:
-    """Zero negligible subdiagonals of the Hessenberg factor.
+def _deflate(H: Array, eps: float) -> Array:
+    """Zero negligible subdiagonals of the Hessenberg factor ``H[-1]``.
 
-    ``h[k+1,k]`` is negligible when, after scaling it and its neighbouring
-    diagonals ``h[k,k], h[k+1,k+1]`` by their largest magnitude,
-    ``|h[k+1,k]| <= 100*eps*(|h[k,k]| + |h[k+1,k+1]|)``: three zeros deflate,
-    a nonzero subdiagonal between two zero diagonals does not. There is no
-    absolute floor, so tiny physical modes are kept.
+    ``h = H[-1][k+1,k]`` is deleted only when two tests hold. Locally, after
+    scaling ``h`` and its neighbouring diagonals ``h[k,k], h[k+1,k+1]`` by
+    their largest magnitude, ``|h| <= 100*eps*(|h[k,k]| + |h[k+1,k+1]|)``:
+    three zeros pass, a nonzero subdiagonal between two zero diagonals does
+    not, and there is no absolute floor. Cyclically, ``h`` enters the cyclic
+    product only through the ``2x2`` product block ``[[a, b], [c, d]]`` of
+    rows ``k, k+1`` (``c`` is ``h`` times the triangular diagonals at ``k``,
+    ``b`` carries every factor's coupling); deleting it moves that block's
+    eigenvalues by about ``|c*b| / max(|a-d|, sqrt|c*b|)``, which must be at
+    most ``100*eps*max(|a|, |d|)``. A coupling that is small in its own
+    factor but meets a reciprocally large coupling in another factor
+    therefore stays.
     """
+    H_last = H[-1]
     n = H_last.shape[0]
     k = jnp.arange(n - 1)
     sub = jnp.abs(H_last[k + 1, k])
     d0, d1 = jnp.abs(H_last[k, k]), jnp.abs(H_last[k + 1, k + 1])
     scale = jnp.maximum(sub, jnp.maximum(d0, d1))
     safe = jnp.where(scale > 0, scale, jnp.ones_like(scale))
-    negligible = sub / safe <= 100 * eps * (d0 / safe + d1 / safe)
+    local = sub / safe <= 100 * eps * (d0 / safe + d1 / safe)
+
+    window = k[:, None] + jnp.arange(2)
+    blocks = H[:, window[:, :, None], window[:, None, :]]
+
+    def accumulate(P, block):
+        # The test is homogeneous in the block, so renormalization is exact.
+        P = block @ P
+        size = jnp.max(jnp.abs(P), axis=(1, 2), keepdims=True)
+        return P / jnp.where(size > 0, size, 1), None
+
+    eye = jnp.broadcast_to(jnp.eye(2, dtype=H.dtype), (n - 1, 2, 2))
+    P, _ = jax.lax.scan(accumulate, eye, blocks)
+    a, b, c, d = P[:, 0, 0], P[:, 0, 1], P[:, 1, 0], P[:, 1, 1]
+    coupling = jnp.abs(c) * jnp.abs(b)
+    separation = jnp.maximum(jnp.abs(a - d), jnp.sqrt(coupling))
+    shift = coupling / jnp.where(separation > 0, separation, 1)
+    cyclic = shift <= 100 * eps * jnp.maximum(jnp.abs(a), jnp.abs(d))
+    negligible = local & cyclic
     return H_last.at[k + 1, k].set(jnp.where(negligible, 0, H_last[k + 1, k]))
 
 
@@ -347,7 +373,7 @@ def periodic_schur(
     H, Q = periodic_hessenberg(factors)
     eps = _real_eps(H.dtype)
     last = m - 1
-    H = H.at[last].set(_deflate(H[last], eps))
+    H = H.at[last].set(_deflate(H, eps))
 
     def unfinished(state):
         H, _, sweeps, _, _ = state
@@ -361,7 +387,7 @@ def periodic_schur(
         mu, log_mu = _shift(H, hi, stalled)
         x0, x1 = _first_rotation_vector(H, lo, mu, log_mu)
         H, Q = _periodic_qr_sweep(H, Q, lo, hi, x0, x1)
-        H = H.at[last].set(_deflate(H[last], eps))
+        H = H.at[last].set(_deflate(H, eps))
         return H, Q, sweeps + 1, stalled, hi
 
     zero = jnp.asarray(0)
@@ -529,7 +555,13 @@ def _spectrum_jvp(max_sweeps, primals, tangents):
     left_next = jnp.conj(jnp.roll(left, -1, axis=0))
     local = jnp.einsum("ikj,ikl,ilj->ij", left_next, M, right)
     weights = left_next[:, :, None, :] * right[:, None, :, :] / local[:, None, None, :]
-    simple = jnp.all(jnp.isfinite(weights), axis=(0, 1, 2)) & converged
+    # The local gains of a mode, taken through the true factors, must
+    # reproduce its multiplier before its weights are used.
+    local_phase, local_logs = _polar(local)
+    bound = 500 * _real_eps(T.dtype) * (M.shape[0] + jnp.sum(jnp.abs(local_logs), axis=0))
+    reproduced = ((jnp.abs(jnp.sum(local_logs, axis=0) - logabs) <= bound)
+                  & (jnp.abs(jnp.prod(local_phase, axis=0) - phase) <= bound))
+    simple = jnp.all(jnp.isfinite(weights), axis=(0, 1, 2)) & reproduced & converged
     weights = jnp.where(simple, weights, 0)
     dlog = jnp.einsum("iklj,ikl->j", weights, dfactors.astype(T.dtype))
     invalid = jnp.where(converged, jnp.nan, 0).astype(logabs.dtype)
@@ -553,8 +585,10 @@ def periodic_spectrum(
     ``d logabs = Re`` and ``d phase = 1j * Im * phase``; it is linear in the
     factor tangents and transposes for reverse mode. The QR iteration,
     deflation and mode order are not differentiated. Repeated, defective
-    or zero multipliers have no derivative (NaN tangent); a non-converged
-    decomposition has zero tangents.
+    or zero multipliers, and modes whose local multipliers through the
+    factors do not reproduce ``phase * exp(logabs)`` within
+    ``500*eps*(m + sum_i |log|d_i||)``, have no derivative (NaN tangent); a
+    non-converged decomposition has zero tangents.
     """
     return _spectrum(max_sweeps, jnp.asarray(factors))[:3]
 

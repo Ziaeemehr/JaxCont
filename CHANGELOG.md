@@ -35,6 +35,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Periodic Schur no longer deflates a subdiagonal that is small in its own
+  factor but meets a reciprocally large coupling in another factor (loop-5
+  audit): deflation also requires a negligible eigenvalue shift of the cyclic
+  `2x2` product block, so such factors now give the true spectrum instead of
+  wrong multipliers with `converged=True`. Spectrum sensitivities are published
+  only for modes whose local multipliers through the true factors reproduce
+  their multiplier; other modes get a NaN tangent.
+- Converged correctors with a nonsingular Jacobian carry the implicit-function
+  derivative of their root, for `loop='scan'` and `loop='while'`, so an exact
+  initial guess (zero Newton steps) no longer drops the solution's sensitivity
+  to args, closed-over values or the arclength constraint. Exact singular seeds
+  keep their acceptance and pass their own tangent through.
 - Periodic Schur mode reconstruction uses signed log-magnitude cyclic solves
   for cancelling local growth; finite simple multipliers retain forward and
   reverse sensitivities without overflowing local diagonal ratios.

@@ -143,6 +143,40 @@ def _tangent(f, u, p, args, prev_tangent, linear_solver: LinearSolver = Dense(),
     return t
 
 
+@partial(jax.custom_jvp, nondiff_argnums=(0, 1))
+def _implicit_solution(residual, linear_solver, value, params, converged):
+    """Identity on a corrector result ``value`` that carries its root's derivative.
+
+    At a converged root of ``residual(value, params)`` with a nonsingular
+    Jacobian, the tangent is the implicit-function derivative
+    ``-J^{-1} (d residual / d params)``, whatever the iteration count, so an
+    exact initial guess (zero Newton steps) keeps the solution sensitivity.
+    Otherwise (singular Jacobian or not converged) the iteration's own
+    tangent passes through unchanged.
+    """
+    return value
+
+
+@_implicit_solution.defjvp
+def _implicit_solution_jvp(residual, linear_solver, primals, tangents):
+    value, params, converged = primals
+    dvalue, dparams, _ = tangents
+    jac = jacfwd(residual)(value, params)
+    _, logdet = jnp.linalg.slogdet(jac)
+    regular = converged & jnp.isfinite(logdet)
+    safe = jnp.where(regular, jac, jnp.eye(value.shape[0], dtype=jac.dtype))
+    _, forcing = jax.jvp(lambda q: residual(value, q), (params,), (dparams,))
+    implicit = -linear_solver(safe, forcing)
+    return value, jnp.where(regular, implicit, dvalue)
+
+
+def _root_with_derivative(residual, linear_solver, value, params, converged):
+    """``_implicit_solution`` for a residual that may close over traced values."""
+    closed, consts = jax.closure_convert(residual, value, params)
+    return _implicit_solution(lambda v, q: closed(v, q[0], *q[1]), linear_solver,
+                              value, (params, consts), converged)
+
+
 def _newton_correct(
     f, u_pred, p_pred, args, u_prev, p_prev, du0, dp0, ds, tol, max_iter,
     linear_solver: LinearSolver = Dense(), loop="while", theta=1.0,
@@ -196,7 +230,16 @@ def _newton_correct(
         r_f < tol,
         jnp.logical_and(jnp.all(jnp.isfinite(u_f)), jnp.isfinite(p_f)),
     )
-    return u_f, p_f, converged, it_f
+
+    def stacked(z, q):
+        a, u0, p0, t_u, t_p, step, weight = q
+        f_val = f(z[:-1], z[-1], a)
+        g_val = weight * jnp.dot(z[:-1] - u0, t_u) + (z[-1] - p0) * t_p - step
+        return jnp.concatenate([f_val, g_val.reshape(1)])
+
+    z = _root_with_derivative(stacked, linear_solver, jnp.concatenate([u_f, p_f.reshape(1)]),
+                              (args, u_prev, p_prev, du0, dp0, ds, theta), converged)
+    return z[:-1], z[-1], converged, it_f
 
 
 def _adapt_ds(ds_mag, iters, converged, ds_min, ds_max, adaptive=True):
@@ -480,6 +523,8 @@ def _natural_correct(f, u_pred, p_fixed, args, tol, max_iter, linear_solver: Lin
     init = (u_pred, 0, r0 < tol, r0)
     u_f, it_f, _, r_f = _bounded_loop(cond_fun, body, init, max_iter if loop == "scan" else None)
     converged = jnp.logical_and(r_f < tol, jnp.all(jnp.isfinite(u_f)))
+    u_f = _root_with_derivative(lambda u, q: f(u, q[0], q[1]), linear_solver, u_f,
+                                (p_fixed, args), converged)
     return u_f, converged, it_f
 
 
