@@ -31,7 +31,7 @@ from jaxcont.bifurcations.codim2 import (
     zero_hopf_point,
 )
 from jaxcont.bifurcations.curve_layout import (
-    decode_curve_state, CurveModes, minimal_hopf_floor, orient_curve_modes,
+    decode_curve_state, CurveModes, orient_curve_modes,
 )
 from jaxcont.bifurcations.events import (
     BranchPoint,
@@ -243,6 +243,14 @@ class Cusp(_CurveEvent, Event):
         )
 
 
+def _status_code(status):
+    """``Status`` code for a name, code or ``None``."""
+    if isinstance(status, str):
+        from jaxcont.core.scan_continuation import Status
+        return int(Status[status.upper()])
+    return status
+
+
 @dataclass(frozen=True)
 class BogdanovTakens(_CurveEvent, Event):
     """A Bogdanov-Takens (BT) point, where fold and Hopf curves meet.
@@ -255,8 +263,9 @@ class BogdanovTakens(_CurveEvent, Event):
     curve that ends with ``|omega| < 10 * default_tol`` and no sign change
     has stalled at the BT point instead of passing it. The minimal chart
     cannot reach ``omega = 0``: a minimal curve that stops early (status
-    ``stalled``, ``nonfinite`` or ``max_attempts``) with its last
-    ``omega < 10 * sqrt(default_tol)`` ran into a BT point. Both are recorded
+    ``stalled``, ``nonfinite`` or ``max_attempts``) with its last ``omega``
+    below ten times its floor (``HopfCurveArgs.omega_floor``) ran into a BT
+    point. Both are recorded
     as a failed hit with reason ``"curve_terminated"`` (in
     ``rejected_events``), not as a located BT; use ``formulation="bt"`` to
     locate the point.
@@ -280,7 +289,10 @@ class BogdanovTakens(_CurveEvent, Event):
         where = self._pinned_mask(spectra, extras) & (np.abs(spectra.imag) <= tol)
         return spectra, spectra.real, where
 
-    def scan(self, points):
+    def scan(self, points, *, status=None, args=None):
+        """Brackets along ``points``. ``status`` (the run's ``Status`` code or
+        name) and ``args`` (the curve problem's ``HopfCurveArgs``) gate the
+        minimal chart's ``curve_terminated`` report as in the array path."""
         if self.curve != "hopf":
             return self._scan_modes(points)
         if points and points[0].curve_layout is not None and points[0].curve_layout.formulation == "bt":
@@ -288,11 +300,16 @@ class BogdanovTakens(_CurveEvent, Event):
         omega = np.array([float(self._decode(pt)[2][2]) for pt in points])
         brackets = [(i, i + 1, None) for i in crossings(omega, np.isfinite(omega))]
         if not brackets and len(points) >= 2:
+            from jaxcont.bifurcations.event_scan import minimal_floor, terminated_status
             dtype = jnp.asarray(points[-1].u).dtype
             minimal = (points[0].curve_layout is not None
                        and points[0].curve_layout.formulation == "minimal")
-            scale = 10 * (minimal_hopf_floor(dtype) if minimal else default_tol(dtype))
-            if abs(omega[-1]) < scale:
+            if minimal:
+                scale = 10 * float(minimal_floor(args, dtype))
+                stopped = bool(terminated_status(_status_code(status)))
+            else:
+                scale, stopped = 10 * default_tol(dtype), True
+            if stopped and abs(omega[-1]) < scale:
                 n = len(points)
                 brackets = [(n - 2, n - 1, "curve_terminated")]
         return brackets

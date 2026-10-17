@@ -468,6 +468,7 @@ def detect_events(
     args: PyTree = None,
     step_update: Optional[Callable[[PyTree, Array, Array], PyTree]] = None,
     f: Optional[Callable[[Array, Array, PyTree], Array]] = None,
+    status=None,
 ) -> list[EventHit]:
     """Detect and refine all requested events along a branch, deduped.
 
@@ -496,6 +497,10 @@ def detect_events(
     corrected with -- both as the ``args`` of ``needs_args`` events and in
     the ``rhs(u, p) = f(u, p, bracket_args)`` handed to ``refine``. Test
     functions read only the branch points, so they need no args.
+
+    ``status`` is the run's ``Status`` code or name; it reaches Python
+    ``scan`` methods that accept a ``status`` keyword (together with
+    ``args``), e.g. the minimal-chart ``BogdanovTakens`` termination check.
 
     The result holds the validated hits (sorted, deduped) followed by the
     failed ones (``status == "failed"``), which are never deduped.
@@ -541,7 +546,10 @@ def detect_events(
                 brackets.extend((int(i), int(i+1), "curve_terminated")
                                 for i, _ in np.argwhere(np.asarray(candidate.terminal_mask)))
         elif scan is not None:
-            brackets = scan(points)
+            import inspect
+            accepted = inspect.signature(scan).parameters
+            extra = {k: v for k, v in (("status", status), ("args", args)) if k in accepted}
+            brackets = scan(points, **extra)
         else:
             test_vals = _test_values(event, points)
             brackets = [

@@ -221,6 +221,8 @@ class HopfCurveArgs(eqx.Module):
     :func:`hopf_curve_step_update` moves it to each accepted point.
     ``b,c`` are the frozen complex left/right borders for the minimal chart.
     ``v_anchor`` fixes the real BT gauge at the seed and is never refreshed.
+    ``omega_floor`` is the minimal chart's lowest frequency,
+    ``sqrt(default_tol) * ||A(u_seed, p_seed)||_2``, fixed at the seed.
     ``user_args`` is the pytree handed to the user's right-hand side.
     """
 
@@ -234,6 +236,7 @@ class HopfCurveArgs(eqx.Module):
     raw_f: Callable = eqx.field(static=True)
     free: int = eqx.field(static=True)
     v_anchor: Array | None = None
+    omega_floor: Array | None = None
 
 
 def _hopf_border_matrix(A, omega, b, c):
@@ -322,8 +325,9 @@ def hopf_curve_problem(
     to. Its ``step_update`` (:func:`hopf_curve_step_update`) re-anchors that
     condition on every accepted point in the extended chart. The default
     minimal chart packs ``(u,p_fixed,omega)`` and refreshes complex borders
-    instead. It requires ``omega > sqrt(default_tol(dtype))``
-    (:func:`~jaxcont.bifurcations.curve_layout.minimal_hopf_floor`): a step
+    instead. It requires ``omega > sqrt(default_tol(dtype)) * ||A||_2``, with
+    ``A`` the Jacobian at the refined seed (``HopfCurveArgs.omega_floor``, see
+    :func:`~jaxcont.bifurcations.curve_layout.minimal_hopf_floor`): a step
     whose corrector leaves the chart is rejected, so a curve running into a
     Bogdanov-Takens point stalls just above the floor and
     ``BogdanovTakens(curve="hopf")`` records it as ``"curve_terminated"``.
@@ -377,12 +381,15 @@ def hopf_curve_problem(
             )
         u, fixed, omega = unpack_minimal_hopf_curve(X, n)
         p = _assemble_p(fixed, q, free)
-        # The complex chart is valid only above minimal_hopf_floor. Below it
+        # The complex chart is valid only above args.omega_floor. Below it
         # the border solve uses the floor and the last equation is replaced
         # by 2*floor - omega >= floor: finite, never a root, and Newton steps
         # it back above the floor, so leaving the chart is a corrector
         # failure (the step is rejected and ds shrinks).
-        floor = minimal_hopf_floor(X.dtype)
+        # The border equations are divided by the seed's ||A||_2, so their
+        # tolerance (and the floor) follow the system's time scale.
+        floor = lax.stop_gradient(a.omega_floor)
+        scale = floor / minimal_hopf_floor(X.dtype)
         in_chart = omega > floor
         omega_chart = jnp.where(in_chart, omega, floor)
         A = jax.jacfwd(f)(u, p, a.user_args)
@@ -390,7 +397,7 @@ def hopf_curve_problem(
         rhs = jnp.zeros(n + 1, dtype=M.dtype).at[-1].set(1)
         g = jnp.linalg.solve(M, rhs)[-1]
         last = jnp.where(in_chart, g.imag, 2 * floor - omega)
-        return jnp.concatenate([f(u, p, a.user_args), jnp.stack([g.real, last])])
+        return jnp.concatenate([f(u, p, a.user_args), jnp.stack([g.real, last]) / scale])
 
     A = jax.jacfwd(f)(u_star, _assemble_p(p_star, q0, free), args)
     C = A - 1j * omega_star * jnp.eye(n, dtype=A.dtype)
@@ -398,14 +405,17 @@ def hopf_curve_problem(
     b = lax.stop_gradient(left[:, -1])
     z = q1_star + 1j * q2_star
     c = lax.stop_gradient(z / jnp.linalg.norm(z))
+    omega_floor = lax.stop_gradient(
+        minimal_hopf_floor(u_star.dtype, jnp.linalg.norm(A, 2))).astype(u_star.dtype)
     if formulation in ("minimal", "bt"):
         try:
-            floor = (minimal_hopf_floor(u_star.dtype) if formulation == "minimal"
-                     else 10 * default_tol(u_star.dtype))
-            if not bool(omega_star > floor):
+            if formulation == "minimal" and not bool(omega_star > omega_floor):
                 raise ValueError(
-                    "Hopf seed requires positive frequency above "
-                    + ("sqrt(default_tol)" if formulation == "minimal" else "10*default_tol"))
+                    f"Hopf seed frequency {float(omega_star):.3g} is at or below the minimal "
+                    f"chart's floor sqrt(default_tol)*||A||_2 = {float(omega_floor):.3g}; "
+                    f"use formulation='extended' or formulation='bt'")
+            if formulation == "bt" and not bool(omega_star > 10 * default_tol(u_star.dtype)):
+                raise ValueError("Hopf seed requires positive frequency above 10*default_tol")
         except jax.errors.ConcretizationTypeError:
             pass
     X0 = (_hopf_pack(u_star, p_star, q1_star, q2_star, omega_star)
@@ -429,7 +439,8 @@ def hopf_curve_problem(
     return BifProblem(
         f=F, u0=X0, p0=jnp.asarray(q0, X0.dtype),
         args=HopfCurveArgs(lax.stop_gradient(q1_star), lax.stop_gradient(q2_star), args,
-                           b, c, formulation, n, f, free, v_anchor=v_anchor),
+                           b, c, formulation, n, f, free, v_anchor=v_anchor,
+                           omega_floor=omega_floor),
         kind="hopf_curve", curve_layout=CurveLayout("hopf", formulation, n, free),
         param_name=f"p[{free}]", step_update=hopf_curve_step_update,
     )

@@ -197,9 +197,11 @@ def _newton_correct(
 
     The iteration itself is not differentiated. A converged root carries the
     implicit-function derivative (the predictor's tangent where the bordered
-    Jacobian is singular). A rejected trial returns its raw iterate with the
-    derivative of the trivial root ``(u_prev, p_prev)`` at zero step, so its
-    linearization never sees the trial's possibly nonfinite operands.
+    Jacobian is singular). A rejected trial returns its raw iterate carrying
+    the predictor's tangent. Its derivative machinery is evaluated at the
+    trivial root ``(u_prev, p_prev)`` with zero step, which only keeps the
+    linearization (and so reverse mode) away from the trial's possibly
+    nonfinite operands.
     """
     sg = lax.stop_gradient
     u_pred_in, p_pred_in, args_in, u_prev_in, p_prev_in = u_pred, p_pred, args, u_prev, p_prev
@@ -528,9 +530,10 @@ def _natural_correct(f, u_pred, p_fixed, args, tol, max_iter, linear_solver: Lin
 
     The iteration is not differentiated: a converged root carries the
     implicit-function derivative (the guess's tangent where ``df/du`` is
-    singular). With ``p_safe`` (a parameter at which ``u_pred`` is a root), a
-    rejected trial returns its raw iterate with the derivative taken at
-    ``(u_pred, p_safe)``, so its linearization never sees the trial's
+    singular). A rejected trial returns its raw iterate carrying the guess's
+    tangent. With ``p_safe`` (a parameter at which ``u_pred`` is a root), its
+    derivative machinery is evaluated at ``(u_pred, p_safe)``, which only
+    keeps the linearization (and so reverse mode) away from the trial's
     possibly nonfinite operands.
     """
     sg = lax.stop_gradient

@@ -24,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `(u, p_fixed, omega)` (width `n+2`). Use `unpack_minimal_hopf_curve`;
   select `formulation="extended"` for the previous eigenvector chart.
   `HopfCurveArgs` now includes complex borders and static chart metadata.
-  The minimal chart requires `omega > sqrt(default_tol(dtype))` and cannot cross BT.
+  The minimal chart requires `omega > sqrt(default_tol(dtype)) * ||A||_2` (seed Jacobian)
+  and cannot cross BT.
 
 - `fold_curve_problem` defaults to `formulation="minimal"`, packing only
   `(u, p_fixed)` (width `n+1`). Select `formulation="extended"` for the
@@ -174,12 +175,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ContinuationPar` raises `ValueError` for a concrete `theta` that is not finite and
   positive (`0`, negatives, NaN and infinities were accepted and stalled or went nonfinite);
   traced values are not checked.
-- The minimal Hopf chart's frequency floor is `sqrt(default_tol(dtype))`
-  (`jaxcont.bifurcations.curve_layout.minimal_hopf_floor`) instead of `10*default_tol`:
+- The minimal Hopf chart's frequency floor is `sqrt(default_tol(dtype)) * ||A||_2`, with
+  `A` the Jacobian at the refined seed (`HopfCurveArgs.omega_floor`, see
+  `jaxcont.bifurcations.curve_layout.minimal_hopf_floor`), instead of `10*default_tol`:
   near a Bogdanov-Takens point its border residual is O(omega), so smaller frequencies
-  accepted spurious points at the corrector tolerance. Seeds at or below the floor raise
-  `ValueError`. A corrector that leaves the chart is a rejected step (`ds` shrinks) instead
-  of a nonfinite trial that ends the run, so such curves now stop as `stalled`.
+  accepted spurious points at the corrector tolerance. The chart's two border equations
+  are divided by the same `||A||_2`, so the floor and their tolerance follow the system's
+  time scale (a time-rescaled RHS gives the same curve). Seeds at or below the floor raise
+  `ValueError` naming `formulation='extended'` and `formulation='bt'`. A corrector that
+  leaves the chart is a rejected step (`ds` shrinks) instead of a nonfinite trial that ends
+  the run, so such curves now stop as `stalled`.
 - Corrector iterations are no longer differentiated. A converged root carries the
   implicit-function derivative as before; at an exactly singular converged root the
   predictor's tangent now passes through instead of the Newton iterations' tangent.
@@ -325,9 +330,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   linearization never meets nonfinite operands.
 - `BogdanovTakens(curve="hopf")` on a minimal Hopf curve records
   `reason="curve_terminated"` in `rejected_events` when the run stops early (`stalled`,
-  `nonfinite` or `max_attempts`) with its last `omega < 10*sqrt(default_tol)`; the default
-  chart previously ended `nonfinite` with no event or rejected event. Use
-  `formulation="bt"` to locate the BT point.
+  `nonfinite` or `max_attempts`) with its last `omega` below ten times the chart floor; the
+  default chart previously ended `nonfinite` with no event or rejected event. Use
+  `formulation="bt"` to locate the BT point. `detect_events(..., status=)` applies the same
+  status gate to the eager `BogdanovTakens.scan`.
 - Natural continuation lands its final step exactly on `p_end` (a remainder of at most
   `ds_min` is absorbed into the last step), so round-off no longer adds a step beyond the
   span or turns `reached_end` into `nonfinite`.

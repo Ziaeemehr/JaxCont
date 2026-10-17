@@ -53,6 +53,13 @@ class EventScanInput:
                    layout, strategies, spectra, status)
 
 
+def minimal_floor(args, dtype):
+    """The minimal Hopf chart floor carried in ``HopfCurveArgs.omega_floor``;
+    ``minimal_hopf_floor(dtype)`` when ``args`` does not carry one."""
+    floor = getattr(args, 'omega_floor', None)
+    return minimal_hopf_floor(dtype) if floor is None else jnp.asarray(floor)
+
+
 def terminated_status(status):
     """Whether a run's ``Status`` code means it stopped before its span ended
     (stalled, nonfinite or out of attempts); ``None`` counts as terminated."""
@@ -202,7 +209,7 @@ def scan_builtin(event, data, args):
             if layout.formulation == 'minimal':
                 # The chart cannot reach omega = 0: a run that stopped just
                 # above its frequency floor ran into the BT point.
-                near_zero = ((last_omega < 10 * minimal_hopf_floor(data.states.dtype))
+                near_zero = ((last_omega < 10 * minimal_floor(args, data.states.dtype))
                              & terminated_status(data.status))
             else:
                 near_zero = last_omega < 10 * default_tol(data.states.dtype)

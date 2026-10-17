@@ -317,3 +317,72 @@ def test_natural_final_step_is_clipped_to_p_end():
                                                            adaptive=False, compute_stability=False))
     assert backward.status == 'reached_end'
     assert float(backward.branch.params[-1]) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Fix round 1: the minimal Hopf floor follows the system's time scale
+# ---------------------------------------------------------------------------
+
+def _scaled_bt(s):
+    def f(u, p, args):
+        return s * _shifted_bt(u, p, args)
+    return f
+
+
+def test_low_frequency_minimal_seed_is_accepted():
+    from jaxcont.bifurcations.curves import hopf_curve_problem
+    from jaxcont.utils.precision import default_tol
+
+    dt = _dtype()
+    s = 1e-5 if jax.config.x64_enabled else 1e-3
+    problem = hopf_curve_problem(_scaled_bt(s), jnp.array([.6, -.4], dt), jnp.array([.29, 1.3], dt))
+    # ||A(u_seed, p_seed)||_2 = s for this seed.
+    np.testing.assert_allclose(problem.args.omega_floor, default_tol(dt) ** .5 * s, rtol=1e-3)
+    r = jc.continuation(problem, jc.PseudoArclength(), p_span=(1.3, 1.25), settings=_BT_SETTINGS)
+    assert r.status == 'reached_end'
+
+
+@pytest.mark.parametrize('alg', [jc.Natural(), jc.PseudoArclength()], ids=['natural', 'palc'])
+def test_low_frequency_minimal_curve_terminates_near_bt(alg):
+    from jaxcont.bifurcations.codim2_events import BogdanovTakens
+    from jaxcont.bifurcations.curves import hopf_curve_problem
+
+    dt = _dtype()
+    s = 1e-4 if jax.config.x64_enabled else 1e-2
+    f = _scaled_bt(s)
+    problem = hopf_curve_problem(f, jnp.array([.6, -.4], dt), jnp.array([.29, 1.3], dt))
+    r = jc.continuation(problem, alg, p_span=(1.3, 1.0), settings=_BT_SETTINGS,
+                        events=[BogdanovTakens(f, curve='hopf')])
+    assert r.status == 'stalled'
+    assert [(h.kind, h.info['reason']) for h in r.rejected_events] == [
+        ('bogdanov_takens', 'curve_terminated')]
+    # Same tolerance as the unscaled fixture.
+    assert abs(float(r.branch.params[-1]) - 1.2) < 1e-2
+
+
+def test_minimal_seed_below_floor_names_other_charts():
+    from jaxcont.bifurcations.curves import hopf_curve_problem
+
+    dt = _dtype()
+    d = 1e-10 if jax.config.x64_enabled else 1e-6
+    with pytest.raises(ValueError, match="formulation='extended' or formulation='bt'"):
+        hopf_curve_problem(_shifted_bt, jnp.array([.7 - d, -.4], dt), jnp.array([.3 - d * d, 1.2 + d], dt))
+
+
+def test_eager_bt_scan_is_gated_on_status():
+    from jaxcont.bifurcations.codim2_events import BogdanovTakens
+    from jaxcont.bifurcations.events import detect_events
+
+    problem = _bt_problem()
+    r = jc.continuation(problem, jc.PseudoArclength(), p_span=(1.3, 1.0), settings=_BT_SETTINGS)
+    assert r.status == 'stalled'
+    b = r.branch
+
+    def reasons(status):
+        hits = detect_events([BogdanovTakens(_shifted_bt, curve='hopf')], b.params, b.states,
+                             b.tangents, None, lambda u, p: problem.f(u, p, problem.args), ds=0.,
+                             curve_layout=b.curve_layout, args=problem.args, status=status)
+        return [h.info.get('reason') for h in hits]
+
+    assert reasons('stalled') == ['curve_terminated']
+    assert reasons('reached_end') == []
