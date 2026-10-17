@@ -174,6 +174,7 @@ def run_two_parameter_hopf_curve() -> CaseResult:
 
     problem = hopf_curve_problem(
         _cataloscill, h_event.u, jnp.array([h_event.p, _K0]), free=1, tol=1e-6,
+        formulation="extended",
     )
     result = jc.continuation(
         problem, p_span=(_K0, 0.2),

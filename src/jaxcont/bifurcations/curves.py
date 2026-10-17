@@ -3,8 +3,9 @@ Two-parameter continuation of codim-1 curves (fold curve, Hopf curve).
 
 Minimal fold curves continue ``X=(u,p_fixed)`` using a bordered scalar
 constraint. The explicit extended chart retains ``X=(u,p_fixed,v)``.
-Hopf curves use their extended eigenvector chart. Both feed the ordinary
-continuation engines, with accepted-step hooks maintaining chart data.
+Minimal Hopf curves continue ``X=(u,p_fixed,omega)`` at positive frequency.
+Both feed the ordinary continuation engines, with accepted-step hooks
+maintaining chart data.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from jaxcont.bifurcations.hopf_normal_form import (
 )
 from jaxcont.bifurcations.hopf_normal_form import _pack as _hopf_pack
 from jaxcont.bifurcations.hopf_normal_form import hopf_point
+from jaxcont.utils.precision import default_tol
 
 PyTree = Any
 
@@ -217,21 +219,50 @@ class HopfCurveArgs(eqx.Module):
     ``(q1_anchor, q2_anchor)`` is the eigenvector the phase condition
     ``q1_anchor . q2 - q2_anchor . q1 = 0`` is anchored to;
     :func:`hopf_curve_step_update` moves it to each accepted point.
+    ``b,c`` are the frozen complex left/right borders for the minimal chart.
     ``user_args`` is the pytree handed to the user's right-hand side.
     """
 
     q1_anchor: Array
     q2_anchor: Array
     user_args: PyTree
+    b: Array
+    c: Array
+    formulation: str = eqx.field(static=True)
+    n: int = eqx.field(static=True)
+    raw_f: Callable = eqx.field(static=True)
+    free: int = eqx.field(static=True)
+
+
+def _hopf_border_matrix(A, omega, b, c):
+    C = A - 1j * omega * jnp.eye(A.shape[0], dtype=A.dtype)
+    return jnp.block([[C, b[:, None]], [c.conj()[None, :], jnp.zeros((1, 1), dtype=C.dtype)]])
+
+
+def unpack_minimal_hopf_curve(X: Array, n: int) -> tuple[Array, Array, Array]:
+    """Split a minimal positive-frequency Hopf state into (u,p_fixed,omega)."""
+    return X[:n], X[n], X[n + 1]
 
 
 def hopf_curve_step_update(args: HopfCurveArgs, X: Array, q: Array) -> HopfCurveArgs:
-    """Anchor the Hopf phase condition on the accepted point's ``(q1, q2)``."""
-    n = args.q1_anchor.shape[0]
-    _u, _p_fixed, q1, q2, _omega = unpack_hopf_curve(X, n)
-    return HopfCurveArgs(
-        q1.astype(args.q1_anchor.dtype), q2.astype(args.q2_anchor.dtype), args.user_args,
-    )
+    """Refresh complex borders or the extended phase anchor at an accepted point."""
+    if args.formulation == "extended":
+        _, _, q1, q2, _ = unpack_hopf_curve(X, args.n)
+        return eqx.tree_at(lambda a: (a.q1_anchor, a.q2_anchor), args,
+                           (lax.stop_gradient(q1), lax.stop_gradient(q2)))
+    u, fixed, omega = unpack_minimal_hopf_curve(X, args.n)
+    A = jax.jacfwd(args.raw_f)(u, _assemble_p(fixed, q, args.free), args.user_args)
+    M = _hopf_border_matrix(A, omega, args.b, args.c)
+    rhs = jnp.zeros(args.n + 1, dtype=M.dtype).at[-1].set(1)
+    right = jnp.linalg.solve(M, rhs)[:-1]
+    left = jnp.linalg.solve(M.conj().T, rhs)[:-1]
+    def aligned(v, old):
+        v = v / jnp.linalg.norm(v)
+        overlap = jnp.vdot(old, v)
+        phase = jnp.conj(overlap) / jnp.where(jnp.abs(overlap) > 0, jnp.abs(overlap), 1)
+        return lax.stop_gradient(v * phase)
+    return eqx.tree_at(lambda a: (a.b, a.c), args,
+                       (aligned(left, args.b), aligned(right, args.c)))
 
 
 def unpack_hopf_curve(
@@ -252,6 +283,7 @@ def hopf_curve_problem(
     args: PyTree = None,
     tol: float | None = None,
     max_iter: int = 50,
+    formulation: str = "minimal",
 ) -> BifProblem:
     """
     Build a ``BifProblem`` whose solution branch is a curve of Hopf points
@@ -265,12 +297,16 @@ def hopf_curve_problem(
     The returned problem's ``args`` is a :class:`HopfCurveArgs` holding the
     caller's ``args`` and the eigenvector the phase condition is anchored
     to. Its ``step_update`` (:func:`hopf_curve_step_update`) re-anchors that
-    condition on every accepted point, so the curve follows the critical
-    eigenvector however far it rotates.
+    condition on every accepted point in the extended chart. The default
+    minimal chart packs ``(u,p_fixed,omega)`` and refreshes complex borders
+    instead. It requires ``omega > 10*default_tol(dtype)``; select
+    ``formulation="extended"`` for the eigenvector chart.
 
     Measured residual floor at refined seed: 5.96e-8 (float32).
     GPU: No precision fix (TF32) needed; CPU and GPU numerics match at newton_tol=1e-5.
     """
+    if formulation not in ("minimal", "extended"):
+        raise ValueError("formulation must be minimal or extended")
     u_guess = jnp.asarray(u_guess)
     p_guess = jnp.asarray(p_guess)
     _validate(u_guess, p_guess, free)
@@ -301,21 +337,39 @@ def hopf_curve_problem(
         pass
 
     def F(X, q, a):
-        return _hopf_anchored_residual(
-            X, lambda u, p_fixed, aa: reduced(u, p_fixed, aa, q), a.user_args, n,
-            lax.stop_gradient(a.q1_anchor), lax.stop_gradient(a.q2_anchor),
-        )
+        if formulation == "extended":
+            return _hopf_anchored_residual(
+                X, lambda u, p_fixed, aa: reduced(u, p_fixed, aa, q), a.user_args, n,
+                lax.stop_gradient(a.q1_anchor), lax.stop_gradient(a.q2_anchor),
+            )
+        u, fixed, omega = unpack_minimal_hopf_curve(X, n)
+        p = _assemble_p(fixed, q, free)
+        A = jax.jacfwd(f)(u, p, a.user_args)
+        M = _hopf_border_matrix(A, omega, lax.stop_gradient(a.b), lax.stop_gradient(a.c))
+        rhs = jnp.zeros(n + 1, dtype=M.dtype).at[-1].set(1)
+        g = jnp.linalg.solve(M, rhs)[-1]
+        residual = jnp.concatenate([f(u, p, a.user_args), jnp.stack([g.real, g.imag])])
+        # The complex chart is valid only above the dtype's frequency floor.
+        return jnp.where(omega > 10 * default_tol(X.dtype), residual, jnp.full_like(residual, jnp.nan))
 
-    X0 = _hopf_pack(u_star, p_star, q1_star, q2_star, omega_star)
+    A = jax.jacfwd(f)(u_star, _assemble_p(p_star, q0, free), args)
+    C = A - 1j * omega_star * jnp.eye(n, dtype=A.dtype)
+    left, _, _ = jnp.linalg.svd(C, full_matrices=False)
+    b = lax.stop_gradient(left[:, -1])
+    z = q1_star + 1j * q2_star
+    c = lax.stop_gradient(z / jnp.linalg.norm(z))
+    if formulation == "minimal":
+        try:
+            if not bool(omega_star > 10 * default_tol(u_star.dtype)):
+                raise ValueError("minimal Hopf chart requires positive frequency above 10*default_tol")
+        except jax.errors.ConcretizationTypeError:
+            pass
+    X0 = (_hopf_pack(u_star, p_star, q1_star, q2_star, omega_star)
+          if formulation == "extended" else jnp.concatenate([u_star, p_star[None], omega_star[None]]))
     return BifProblem(
-        f=F,
-        u0=X0,
-        p0=jnp.asarray(q0, X0.dtype),
-        args=HopfCurveArgs(
-            lax.stop_gradient(q1_star), lax.stop_gradient(q2_star), args,
-        ),
-        kind="hopf_curve",
-        curve_layout=CurveLayout("hopf", "extended", n, free),
-        param_name=f"p[{free}]",
-        step_update=hopf_curve_step_update,
+        f=F, u0=X0, p0=jnp.asarray(q0, X0.dtype),
+        args=HopfCurveArgs(lax.stop_gradient(q1_star), lax.stop_gradient(q2_star), args,
+                           b, c, formulation, n, f, free),
+        kind="hopf_curve", curve_layout=CurveLayout("hopf", formulation, n, free),
+        param_name=f"p[{free}]", step_update=hopf_curve_step_update,
     )

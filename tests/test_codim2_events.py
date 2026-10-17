@@ -125,7 +125,7 @@ def test_bogdanov_takens_detected_on_the_hopf_curve():
     move monotonically) and omega changes sign, giving the crossing.
     """
     prob = hopf_curve_problem(
-        _bt_shifted, jnp.array([5.0, 2.0]), jnp.array([3.0, -2.0]), free=1,
+        _bt_shifted, jnp.array([5.0, 2.0]), jnp.array([3.0, -2.0]), formulation="extended", free=1,
     )
     sol = jc.continuation(
         prob,
@@ -189,7 +189,7 @@ def _zh_system(u, p, args):
 def test_zero_hopf_detected_on_the_hopf_curve():
     # Seed at p1 = 0 -> p0 = 1, equilibrium (1,-2,3,-1).
     prob = hopf_curve_problem(
-        _zh_system, jnp.array([1.0, -2.0, 3.0, -1.0]), jnp.array([1.0, 0.0]), free=1,
+        _zh_system, jnp.array([1.0, -2.0, 3.0, -1.0]), jnp.array([1.0, 0.0]), formulation="extended", free=1,
     )
     sol = jc.continuation(
         prob,
@@ -269,7 +269,7 @@ def _bautin(u, p, args):
 
 def test_generalized_hopf_detected_on_the_hopf_curve():
     prob = hopf_curve_problem(
-        _bautin, jnp.array([0.4, -0.6]), jnp.array([0.0, 0.0]), free=1,
+        _bautin, jnp.array([0.4, -0.6]), jnp.array([0.0, 0.0]), formulation="extended", free=1,
     )
     sol = jc.continuation(
         prob,
@@ -310,7 +310,7 @@ def test_double_hopf_detected_with_automatic_seed_b():
     prob = hopf_curve_problem(
         _hh_system,
         jnp.array([0.2, -0.1, 0.3, -0.4]),
-        jnp.array([0.0, 0.0]),
+        jnp.array([0.0, 0.0]), formulation="extended",
         free=1,
     )
     sol = jc.continuation(

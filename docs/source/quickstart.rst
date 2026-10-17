@@ -185,3 +185,21 @@ receives only ``user_args``. Diagnostic null vectors are reconstructed by the
 layout decoder for events and plotting. To retain the previous packed
 ``(u, p_fixed, v)`` state and ``unpack_fold_curve`` helper, pass
 ``formulation="extended"`` explicitly.
+
+Minimal positive-frequency Hopf curves
+--------------------------------------
+
+In 0.5.0, ``hopf_curve_problem`` defaults to ``formulation="minimal"``.
+Its state is ``(u, p_fixed, omega)``, of width ``n+2``; use
+``unpack_minimal_hopf_curve(X, n)`` from ``jaxcont.bifurcations.curves``.
+Complex borders are frozen during correction and refreshed with normalized
+right and adjoint modes at accepted points. ``HopfCurveArgs`` preserves the
+original RHS data in ``user_args``. Events reconstruct unit complex modes
+through the layout decoder, and plotting uses the same layout metadata.
+
+This chart requires ``omega > 10*default_tol(dtype)`` and cannot cross a
+Bogdanov--Takens point or continue a zero/negative-frequency segment. An eager
+seed below that floor is rejected; residual evaluations outside the chart
+return nonfinite values so continuation cannot accept them. Select
+``formulation="extended"`` explicitly for the previous
+``(u, p_fixed, q1, q2, omega)`` representation and ``unpack_hopf_curve`` helper.

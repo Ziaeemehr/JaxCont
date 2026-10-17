@@ -17,7 +17,7 @@ class CurveLayout:
     free: int
 
     def __post_init__(self):
-        if self.kind not in ("fold", "hopf") or self.formulation != "extended" and not (self.kind == "fold" and self.formulation == "minimal"):
+        if self.kind not in ("fold", "hopf") or self.formulation not in ("minimal", "extended"):
             raise ValueError("Unsupported curve layout")
         if self.n < 1 or self.free not in (0, 1):
             raise ValueError("Invalid curve layout dimensions or free parameter")
@@ -47,7 +47,7 @@ def decode_curve_state(X, q, layout, raw_f, user_args):
     if layout is None:
         raise ValueError("curve layout is required for curve decoding")
     n = layout.n
-    width = (n + 1 if layout.formulation == "minimal" else 2 * n + 1) if layout.kind == "fold" else 3 * n + 2
+    width = (n + 1 if layout.formulation == "minimal" else 2 * n + 1) if layout.kind == "fold" else (n + 2 if layout.formulation == "minimal" else 3 * n + 2)
     if X.shape[-1] != width:
         raise ValueError("State width does not match curve layout")
     p = jnp.stack((jnp.asarray(q), X[n])) if layout.free == 0 else jnp.stack((X[n], jnp.asarray(q)))
@@ -67,7 +67,18 @@ def decode_curve_state(X, q, layout, raw_f, user_args):
         v = jnp.where(pivot < 0, -v, v)
         modes = CurveModes(v=v)
     else:
-        z = _unit(X[n + 1 : 2 * n + 1] + 1j * X[2 * n + 1 : 3 * n + 1])
+        if layout.formulation == "minimal":
+            if raw_f is None:
+                return X[:n], p, CurveModes(omega=X[-1], oscillatory=X[-1] > 0)
+            from jaxcont.bifurcations.curves import _hopf_border_matrix
+            A = jax.jacfwd(raw_f)(X[:n], p, user_args)
+            C = A - 1j * X[-1] * jnp.eye(n, dtype=A.dtype)
+            left, _, vh = jnp.linalg.svd(C, full_matrices=False)
+            M = _hopf_border_matrix(A, X[-1], left[:, -1], vh[-1].conj())
+            rhs = jnp.zeros(n + 1, dtype=M.dtype).at[-1].set(1)
+            z = _unit(jnp.linalg.solve(M, rhs)[:-1])
+        else:
+            z = _unit(X[n + 1 : 2 * n + 1] + 1j * X[2 * n + 1 : 3 * n + 1])
         modes = CurveModes(q1=z.real, q2=z.imag, omega=X[-1], oscillatory=X[-1] > 0)
     return X[:n], p, modes
 

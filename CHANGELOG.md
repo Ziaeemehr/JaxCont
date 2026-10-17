@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Minimal Hopf curves with complex bordered residuals, normalized adjoint/right
+  border refresh, and unit complex diagnostic modes for events.
+
 - Minimal fold curves use bordered residual solves, accepted-step adjoint border
   refresh, and reconstructed unit diagnostic modes.
 
@@ -27,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Near a Hopf seed, periodic branches can report spurious folds at very small amplitude.
 
 ### Breaking
+
+- `hopf_curve_problem` defaults to `formulation="minimal"`, packing
+  `(u, p_fixed, omega)` (width `n+2`). Use `unpack_minimal_hopf_curve`;
+  select `formulation="extended"` for the previous eigenvector chart.
+  `HopfCurveArgs` now includes complex borders and static chart metadata.
+  The minimal chart requires `omega > 10*default_tol(dtype)` and cannot cross BT.
 
 - `fold_curve_problem` defaults to `formulation="minimal"`, packing only
   `(u, p_fixed)` (width `n+1`). Select `formulation="extended"` for the

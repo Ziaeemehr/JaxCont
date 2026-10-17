@@ -18,7 +18,7 @@ def test_curve_layout_roundtrip_extended():
         mu = p[0] + p[1] ** 2 - 2
         return jnp.array([mu * x - y, x + mu * y])
 
-    problem = hopf_curve_problem(f, jnp.array([0.5, -0.3]), jnp.array([1.75, 0.5]))
+    problem = hopf_curve_problem(f, jnp.array([0.5, -0.3]), jnp.array([1.75, 0.5]), formulation="extended")
     layout = problem.curve_layout
     u, p, modes = jax.jit(lambda X: decode_curve_state(X, 0.5, layout, f, None))(problem.u0)
     tol = default_tol(u.dtype)
@@ -245,3 +245,129 @@ def test_minimal_fold_default_plotting():
     ax = plot_two_parameter_diagram([(result, "fold")])
     np.testing.assert_allclose(ax.lines[0].get_ydata(), result.branch.states[:, 1])
     plt.close(ax.figure)
+
+
+def _shifted_hopf(u, p, args):
+    x, y = u - args
+    mu = p[0] + p[1]**2 - 2
+    r = x*x + y*y
+    return jnp.array([mu*x-y-x*r, x+mu*y-y*r])
+
+
+def _hopf_problem(q=0., formulation="minimal"):
+    from jaxcont.bifurcations.curves import hopf_curve_problem
+    center = jnp.array([.5, -.3])
+    return hopf_curve_problem(_shifted_hopf, center, jnp.array([2-q*q, q]),
+                              args=center, formulation=formulation)
+
+
+def _hopf_branch(formulation="minimal"):
+    return jc.continuation(_hopf_problem(formulation=formulation), p_span=(0., 1.),
+        alg=jc.Natural(), settings=jc.ContinuationPar(ds=.25, ds_max=.25, adaptive=False,
+            max_steps=4, compute_stability=False, loop="scan"))
+
+
+def test_minimal_hopf_shifted_parabola():
+    result = _hopf_branch()
+    X = result.branch.states
+    tol = default_tol(X.dtype)
+    assert X.shape == (5, 4)
+    assert result.branch.valid is None or jnp.all(result.branch.valid)
+    assert jnp.max(jnp.abs(X[:, :2] - jnp.array([.5, -.3]))) < 100*tol
+    assert jnp.max(jnp.abs(X[:, 2] - jnp.array([2, 1.9375, 1.75, 1.4375, 1]))) < 100*tol
+    assert jnp.max(jnp.abs(X[:, 3] - 1)) < 100*tol
+
+
+def test_minimal_and_extended_agree_at_fixed_parameters():
+    minimal, extended = _hopf_branch(), _hopf_branch("extended")
+    assert jnp.max(jnp.abs(minimal.branch.states[:, :3] - extended.branch.states[:, :3])) < 100*default_tol(minimal.branch.states.dtype)
+    np.testing.assert_allclose(minimal.branch.params, [0, .25, .5, .75, 1])
+
+
+def test_minimal_curve_decoding_events_and_plotting():
+    import matplotlib.pyplot as plt
+    from jaxcont.bifurcations.curve_layout import decode_curve_state
+    from jaxcont.bifurcations.codim2_events import GeneralizedHopf
+    from jaxcont.bifurcations.events import BranchPoint
+    from jaxcont.viz.two_parameter import plot_two_parameter_diagram
+    result = _hopf_branch()
+    layout = result.branch.curve_layout
+    event = GeneralizedHopf(_shifted_hopf, args=jnp.array([.5, -.3]))
+    points = []
+    for X, q in zip(result.branch.states, result.branch.params):
+        u, p, modes = decode_curve_state(X, q, layout, _shifted_hopf, event.args)
+        assert u.shape == (2,)
+        assert abs(jnp.linalg.norm(modes.q1+1j*modes.q2)-1) < 100*default_tol(X.dtype)
+        points.append(BranchPoint(p=q, u=X, curve_layout=layout))
+    assert event.scan(points) == []
+    ax = plot_two_parameter_diagram([(result, "hopf")])
+    np.testing.assert_allclose(ax.lines[0].get_ydata(), [2, 1.9375, 1.75, 1.4375, 1], atol=100*default_tol(X.dtype))
+    plt.close(ax.figure)
+
+
+def test_minimal_curve_seed_q_sensitivity():
+    seed = lambda q: _hopf_problem(q).u0[2]
+    derivative = jax.jit(jax.grad(seed))(.5)
+    assert abs(derivative + 1) < 100*default_tol(derivative.dtype)
+    np.testing.assert_allclose(jax.jit(jax.vmap(seed))(jnp.array([0., .5, 1.])), [2, 1.75, 1], atol=100*default_tol(derivative.dtype))
+    def branch_sum(q):
+        problem = _hopf_problem(q)
+        result = jc.continuation(problem, p_span=(q, q+.5), alg=jc.Natural(),
+            settings=jc.ContinuationPar(ds=.25, ds_max=.25, adaptive=False, max_steps=2,
+                compute_stability=False, loop="scan"))
+        return result.branch.states.sum()
+    assert jnp.isfinite(jax.jit(jax.grad(branch_sum))(.25))
+
+
+def test_hopf_diagnostic_unit_norm():
+    test_layout_hopf_diagnostic_unit_norm()
+    from jaxcont.bifurcations.curve_layout import decode_curve_state
+    from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
+    problem = _hopf_problem(.5)
+    u, p, m = decode_curve_state(problem.u0, .5, problem.curve_layout, _shifted_hopf, problem.args.user_args)
+    assert abs(jnp.linalg.norm(m.q1+1j*m.q2)-1) < 100*default_tol(u.dtype)
+    minimal = lyapunov_coefficient(_shifted_hopf, u, p, m.q1, m.q2, m.omega, problem.args.user_args)
+    extended = _hopf_problem(.5, "extended")
+    _, _, e = decode_curve_state(extended.u0, .5, extended.curve_layout, _shifted_hopf, extended.args.user_args)
+    expected = lyapunov_coefficient(_shifted_hopf, u, p, e.q1, e.q2, e.omega, problem.args.user_args)
+    assert abs(minimal-expected) < 100*default_tol(u.dtype)
+
+
+def test_minimal_hopf_border_refresh_and_frequency_limit():
+    import equinox as eqx
+    from jaxcont.bifurcations.curves import hopf_curve_step_update, unpack_minimal_hopf_curve
+    from jaxcont.core.scan_continuation import _apply_step_update
+    problem = _hopf_problem(.5)
+    a = eqx.tree_at(lambda a: (a.b, a.c), problem.args,
+        (2*jnp.exp(.7j)*problem.args.b, -3*jnp.exp(.2j)*problem.args.c))
+    refreshed = jax.jit(hopf_curve_step_update)(a, problem.u0, problem.p0)
+    tol = default_tol(problem.u0.dtype)
+    for border in [refreshed.b, refreshed.c]:
+        assert abs(jnp.linalg.norm(border)-1) < 100*tol
+    for updated in [a, refreshed]:
+        assert jnp.max(jnp.abs(problem.f(problem.u0, problem.p0, updated))) < 100*tol
+    rejected = jax.jit(lambda a: _apply_step_update(hopf_curve_step_update, a, problem.u0, problem.p0, False))(a)
+    for before, after in zip(jax.tree.leaves(a), jax.tree.leaves(rejected)):
+        np.testing.assert_array_equal(before, after)
+    u, fixed, omega = unpack_minimal_hopf_curve(problem.u0, 2)
+    assert u.shape == (2,) and abs(fixed-1.75) < 100*tol and abs(omega-1) < 100*tol
+    for frequency in [0., -1., 10*tol]:
+        assert jnp.all(jnp.isnan(problem.f(problem.u0.at[-1].set(frequency), problem.p0, a)))
+
+
+def test_minimal_hopf_array_gh_crossing():
+    from jaxcont.bifurcations.codim2_events import GeneralizedHopf
+    from jaxcont.bifurcations.curve_layout import CurveLayout
+    from jaxcont.bifurcations.event_scan import EventScanInput
+    def f(u, p, args):
+        x, y = u
+        r = x*x + y*y
+        return jnp.array([p[0]*x-y+p[1]*x*r, x+p[0]*y+p[1]*y*r])
+    event = GeneralizedHopf(f)
+    valid = jnp.array([True, True, True, False])
+    data = EventScanInput(jnp.array([-.5, 0., .5, .5]),
+        jnp.tile(jnp.array([0., 0., 0., 1.]), (4, 1)),
+        None, None, None, valid, CurveLayout("hopf", "minimal", 2, 1))
+    candidates = jax.jit(event.scan_arrays)(data, None)
+    np.testing.assert_array_equal(candidates.bracket_mask[:, 0], [True, False, False])
+    assert jnp.all(jnp.isfinite(candidates.values))

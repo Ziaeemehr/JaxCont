@@ -72,7 +72,7 @@ def test_hopf_curve_traces_the_exact_parabola():
     prob = hopf_curve_problem(
         _hopf_parabola,
         jnp.array([0.5, -0.3]),
-        jnp.array([2.0, 0.0]),
+        jnp.array([2.0, 0.0]), formulation="extended",
         free=1,
     )
     sol = jc.continuation(
@@ -130,7 +130,7 @@ def test_hopf_curve_continuation_under_jit():
         prob = hopf_curve_problem(
             _hopf_parabola,
             u_guess,
-            p_guess,
+            p_guess, formulation="extended",
             free=1,
         )
         sol = jc.continuation(
@@ -285,7 +285,7 @@ def test_hopf_curve_events_do_not_eigendecompose_the_extended_jacobian():
         ])
 
     prob = hopf_curve_problem(
-        _bautin, jnp.array([0.4, -0.6]), jnp.array([0.0, 0.0]), free=1,
+        _bautin, jnp.array([0.4, -0.6]), jnp.array([0.0, 0.0]), formulation="extended", free=1,
     )
     sol = jc.continuation(
         prob,
@@ -323,7 +323,7 @@ def _flipping_hopf(u, p, args):
 
 def test_hopf_curve_survives_eigenvector_rotation():
     prob = hopf_curve_problem(
-        _flipping_hopf, _FLIP_CENTRE, jnp.array([0.0, 0.0]), free=1,
+        _flipping_hopf, _FLIP_CENTRE, jnp.array([0.0, 0.0]), formulation="extended", free=1,
     )
     sol = jc.continuation(
         prob,
@@ -370,7 +370,7 @@ def test_hopf_curve_seed_grad_wrt_start_parameter():
 
         def seed(q):
             return hopf_curve_problem(
-                f, jnp.array([0.6, 0.6]), jnp.array([0.6, q]),
+                f, jnp.array([0.6, 0.6]), jnp.array([0.6, q]), formulation="extended",
             ).u0[0]
 
         q = jnp.array(0.7)
