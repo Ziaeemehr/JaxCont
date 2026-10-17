@@ -32,13 +32,38 @@ Return `phase_j=product(T_i[j,j]/abs(T_i[j,j]))` and
 small blocks. Represent shifts with mantissa/exponent and apply periodic
 bulge chasing to factors. Use a static sweep budget `max_sweeps=200*n`,
 dtype-scaled deflation, and return an explicit convergence boolean.
-For the sole Hessenberg factor `H_(m-1)`, test subdiagonal `h[k+1,k]`
-against `100*eps*(abs(h[k,k])+abs(h[k+1,k+1]))`; other factors are triangular.
-Scale these three entries by their maximum magnitude before the comparison to
-avoid under/overflow. If all three are zero, deflate; if both diagonals are zero
-but the subdiagonal is nonzero, do not deflate. Never use an absolute unit-scale
-floor that would erase tiny physical modes. After chasing, apply this local
-test to each active subdiagonal and verify cyclic backward error. Test cyclic reconstruction before accepting values.
+Only the sole Hessenberg factor `H_(m-1)` has subdiagonals; the other factors
+are triangular. Delete its subdiagonal `h=h[k+1,k]` only when two tests hold.
+Local test: after scaling `h`, `h[k,k]` and `h[k+1,k+1]` by their maximum
+magnitude (to avoid under/overflow), `abs(h)<=100*eps*(abs(h[k,k])+abs(h[k+1,k+1]))`.
+If all three are zero it passes; if both diagonals are zero but `h` is nonzero
+it fails. Cyclic test: accumulate the `2x2` product block `[[a,b],[c,d]]` of
+rows `k,k+1` from every factor's diagonal block, renormalizing by the largest
+entry after each factor (the test is homogeneous, so this is exact). `c` is `h`
+times the triangular diagonals at `k`, and `b` carries every factor's coupling.
+Deleting `h` moves the block's eigenvalues by about
+`abs(c*b)/max(abs(a-d),sqrt(abs(c*b)))`, which must be at most
+`100*eps*max(abs(a),abs(d))`. A coupling that is small in its own factor but
+meets a reciprocally large coupling in another factor therefore stays (loop-5
+audit). Only the `2x2` diagonal blocks enter, as in the LAPACK Ahues–Tisseur
+test; contributions through the subdiagonal above, `h[k,k-1]`, are ignored.
+Never use an absolute unit-scale floor that would erase tiny physical modes.
+Apply both tests to every subdiagonal after the Hessenberg reduction and after
+each sweep, and verify cyclic backward error. Test cyclic reconstruction before
+accepting values. Spectrum derivatives are published only for modes whose local
+multipliers through the true factors reproduce `phase*exp(logabs)` within
+`500*eps*(m+sum_i abs(log(abs(d_i))))`; other modes get a NaN tangent.
+
+Shift heuristics (deliberate extension beyond MB03WD's plain Wilkinson
+shift). The shift comes from the scaled `2x2` product block at rows `hi-1,hi`.
+It is the block eigenvalue nearest the block's last diagonal entry
+(Wilkinson), except that it is zero when the other block eigenvalue is smaller
+in modulus by more than `1/_ORDER_RATIO` (`_ORDER_RATIO=1e-2`). That zero shift
+is a periodic orthogonal-iteration step: a block can deflate in factored form
+only when no much smaller multiplier sits above a much larger one. Exceptional
+shifts: on the 10th, 20th, ... consecutive sweep with the same bottom row `hi`
+of the active window, the shift is alternately zero (first) and the scaled
+block's last diagonal entry plus `0.75` times its subdiagonal modulus.
 
 Rejected: re-integrating an IVP (different discretization), scalar rescaling
 of the whole product (still loses relative modes), unshifted orthogonal
