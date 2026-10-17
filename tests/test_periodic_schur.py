@@ -461,3 +461,44 @@ def test_periodic_schur_zero_underflow_overflow():
     assert np.isfinite(np.asarray(logabs)).all()
     _, (_, t_logabs, _) = jax.jvp(lambda a: periodic_spectrum(extreme(a)), (a,), (jnp.ones_like(a),))
     np.testing.assert_allclose(np.asarray(t_logabs)[order], [-960.0, 960.0], rtol=20 * _err())
+
+
+@pytest.mark.parametrize("position", range(4))
+@pytest.mark.parametrize("compiled", [False, True])
+def test_periodic_schur_zero_factor_every_position(position, compiled):
+    from jaxcont.stability.periodic_schur import periodic_schur
+
+    factors = _general_factors().at[position].set(0)
+    solve = jax.jit(periodic_schur) if compiled else periodic_schur
+    T, Q, phase, logabs, converged = solve(factors)
+    assert bool(converged)
+    assert bool(jnp.all(phase == 0))
+    assert bool(jnp.all(jnp.isneginf(logabs)))
+    _assert_cyclic_reconstruction(factors, T, Q)
+    assert bool(jnp.all(jnp.tril(T, -1) == 0))
+
+
+@pytest.mark.parametrize("n,coupling", [(2, 1e25), (3, 1e12)])
+def test_periodic_eigenvectors_highly_nonnormal_finite(n, coupling):
+    from jaxcont.stability.periodic_schur import periodic_eigenvectors, periodic_schur
+
+    factors = (
+        jnp.diag(jnp.arange(1, n + 1, dtype=_real_dtype()))
+        + coupling * jnp.eye(n, k=1, dtype=_real_dtype())
+    )[None]
+    T, Q, phase, logabs, converged = periodic_schur(factors)
+    assert bool(converged)
+    right, left = jax.jit(periodic_eigenvectors)(factors, T, Q, phase, logabs)
+    assert bool(jnp.all(jnp.isfinite(right)))
+    assert bool(jnp.all(jnp.isfinite(left)))
+    np.testing.assert_allclose(jnp.sum(jnp.abs(right) ** 2, axis=1), 1, atol=500 * _eps())
+    np.testing.assert_allclose(jnp.sum(jnp.conj(left) * right, axis=1), 1, atol=500 * _eps())
+    values = phase * jnp.exp(logabs)
+    for vectors, matrix, eigenvalues in [
+        (right, factors, values),
+        (left, factors.swapaxes(-1, -2), values.conj()),
+    ]:
+        scale = jnp.max(jnp.abs(vectors), axis=1, keepdims=True)
+        scaled = vectors / scale
+        residual = matrix @ scaled - scaled * eigenvalues[None, None, :]
+        assert float(jnp.max(jnp.abs(residual)) / coupling) < 500 * _eps()

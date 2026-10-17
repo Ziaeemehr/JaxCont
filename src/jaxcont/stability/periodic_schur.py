@@ -90,6 +90,12 @@ def periodic_hessenberg(factors: Array) -> tuple[Array, Array]:
     """
     H = jnp.asarray(factors).astype(_complex_dtype(jnp.asarray(factors).dtype))
     m, n = H.shape[0], H.shape[1]
+    # A zero map breaks the cyclic basis constraint: start immediately after
+    # it, so sequential QR triangularizes every nonzero map independently.
+    zero_factor = jnp.all(H == 0, axis=(1, 2))
+    offset = jnp.where(jnp.any(zero_factor), jnp.argmax(zero_factor) + 1, 0)
+    order = (jnp.arange(m) + offset) % m
+    H = H[order]
     Q = jnp.broadcast_to(jnp.eye(n, dtype=H.dtype), H.shape)
     rows = jnp.arange(n)
     last = m - 1
@@ -112,7 +118,9 @@ def periodic_hessenberg(factors: Array) -> tuple[Array, Array]:
         Q = Q.at[0].set(_reflect_right(Q[0], v, beta))
         return triangularize_all(k + 1, (H, Q))
 
-    return jax.lax.fori_loop(0, max(n - 2, 0), hessenberg_column, (H, Q))
+    H, Q = jax.lax.fori_loop(0, max(n - 2, 0), hessenberg_column, (H, Q))
+    inverse = (jnp.arange(m) - offset) % m
+    return H[inverse], Q[inverse]
 
 
 _ORDER_RATIO = 1e-2
@@ -371,6 +379,12 @@ def _safe_divide(x: Array, y: Array) -> Array:
     return jnp.where(y != 0, x / jnp.where(y != 0, y, 1), 0)
 
 
+def _scale_coordinates(x: Array) -> Array:
+    """Apply one common scale to a periodic mode, preserving its recurrence."""
+    scale = jnp.max(jnp.abs(x))
+    return x / jnp.where(scale > 0, scale, 1)
+
+
 def _multiplier_ratio(phase: Array, logabs: Array, k, j) -> Array:
     """``lambda_k / lambda_j`` from phase and log-magnitude, without forming
     either multiplier."""
@@ -407,7 +421,8 @@ def _cyclic_backward(h: Array, f: Array, gain: Array) -> Array:
 
 def _schur_right_vector(T: Array, phase: Array, logabs: Array, j) -> Array:
     """Schur coordinates ``y`` (``(m, n)``) of mode ``j``: ``T_i y_i = t_i y_(i+1)``
-    with ``t_i = T_i[j, j]``, ``y_i[j] = 1`` and ``y_i[k] = 0`` for ``k > j``.
+    with ``t_i = T_i[j, j]`` and ``y_i[k] = 0`` for ``k > j``. The pivot
+    starts at one; common rescaling across phases keeps coordinates bounded.
 
     Row ``k < j`` is a cyclic first-order recurrence across the phases; it is
     run in the direction whose cyclic gain has modulus at most one (forward
@@ -428,16 +443,16 @@ def _schur_right_vector(T: Array, phase: Array, logabs: Array, j) -> Array:
             _safe_divide(b, a), _safe_divide(-c, a), _multiplier_ratio(phase, logabs, j, k)
         )
         x = jnp.where(logabs[k] < logabs[j], forward, backward)
-        return y.at[:, k].set(jnp.where(k < j, x, y[:, k]))
+        return _scale_coordinates(y.at[:, k].set(jnp.where(k < j, x, y[:, k])))
 
     return jax.lax.fori_loop(0, n, row, y)
 
 
 def _schur_left_vector(T: Array, phase: Array, logabs: Array, j) -> Array:
     """Schur coordinates ``z`` of the left mode ``j``:
-    ``z_(i+1)^H T_i = t_i z_i^H``, ``z_i[j] = 1``, ``z_i[k] = 0`` for ``k < j``;
-    rows ``k > j`` are solved in the direction whose cyclic gain has modulus
-    at most one."""
+    ``z_(i+1)^H T_i = t_i z_i^H``, ``z_i[k] = 0`` for ``k < j``; the pivot
+    starts at one with common rescaling across phases. Rows ``k > j`` are
+    solved in the direction whose cyclic gain has modulus at most one."""
     m, n = T.shape[0], T.shape[1]
     rows = jnp.arange(n)
     b = jnp.conj(T[:, j, j])
@@ -454,7 +469,7 @@ def _schur_left_vector(T: Array, phase: Array, logabs: Array, j) -> Array:
             _safe_divide(b, a), _safe_divide(-c, a), jnp.conj(_multiplier_ratio(phase, logabs, j, k))
         )
         x = jnp.where(logabs[k] < logabs[j], backward, forward)
-        return z.at[:, k].set(jnp.where(k > j, x, z[:, k]))
+        return _scale_coordinates(z.at[:, k].set(jnp.where(k > j, x, z[:, k])))
 
     return jax.lax.fori_loop(0, n, column, z)
 
@@ -482,8 +497,18 @@ def periodic_eigenvectors(
     z = jax.vmap(lambda j: _schur_left_vector(T, phase, logabs, j))(modes)
     Y = jnp.einsum("iab,jib->iaj", Q, y)
     Z = jnp.einsum("iab,jib->iaj", Q, z)
+    # Scale before squaring; keeping the scale separate also avoids forming
+    # an overflowing norm when the final unit vector is representable.
+    size = jnp.max(jnp.abs(Y), axis=1, keepdims=True)
+    Y = Y / size
     alpha = jnp.linalg.norm(Y, axis=1, keepdims=True)
-    return Y / alpha, Z * alpha
+    right = Y / alpha
+    # Triangular supports overlap only at the pivot. This pairing avoids
+    # cancellation in highly nonnormal modes after the unitary transform.
+    pivot_y = jnp.diagonal(y, axis1=0, axis2=2)[:, None, :]
+    pivot_z = jnp.diagonal(z, axis1=0, axis2=2)[:, None, :]
+    left = (Z / pivot_z) * (size * alpha / jnp.conj(pivot_y))
+    return right, left
 
 
 @partial(jax.custom_jvp, nondiff_argnums=(0,))
