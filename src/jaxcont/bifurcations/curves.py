@@ -222,7 +222,7 @@ class HopfCurveArgs(eqx.Module):
     ``b,c`` are the frozen complex left/right borders for the minimal chart.
     ``v_anchor`` fixes the real BT gauge at the seed and is never refreshed.
     ``omega_floor`` is the minimal chart's lowest frequency,
-    ``sqrt(default_tol) * ||A(u_seed, p_seed)||_2``, fixed at the seed.
+    ``sqrt(default_tol) * |omega_seed|``, fixed at the seed.
     ``user_args`` is the pytree handed to the user's right-hand side.
     """
 
@@ -325,8 +325,8 @@ def hopf_curve_problem(
     to. Its ``step_update`` (:func:`hopf_curve_step_update`) re-anchors that
     condition on every accepted point in the extended chart. The default
     minimal chart packs ``(u,p_fixed,omega)`` and refreshes complex borders
-    instead. It requires ``omega > sqrt(default_tol(dtype)) * ||A||_2``, with
-    ``A`` the Jacobian at the refined seed (``HopfCurveArgs.omega_floor``, see
+    instead. It requires ``omega > sqrt(default_tol(dtype)) * |omega_seed|``,
+    with ``omega_seed`` the refined seed's frequency (``HopfCurveArgs.omega_floor``, see
     :func:`~jaxcont.bifurcations.curve_layout.minimal_hopf_floor`): a step
     whose corrector leaves the chart is rejected, so a curve running into a
     Bogdanov-Takens point stalls just above the floor and
@@ -386,10 +386,12 @@ def hopf_curve_problem(
         # by 2*floor - omega >= floor: finite, never a root, and Newton steps
         # it back above the floor, so leaving the chart is a corrector
         # failure (the step is rejected and ds shrinks).
-        # The border equations are divided by the seed's ||A||_2, so their
-        # tolerance (and the floor) follow the system's time scale.
+        # The border equations are divided by min(|omega_seed|, 1): a slow
+        # critical pair keeps the corrector tolerance relative to its own time
+        # scale (like the floor), and a fast pair keeps the unscaled, stricter
+        # tolerance.
         floor = lax.stop_gradient(a.omega_floor)
-        scale = floor / minimal_hopf_floor(X.dtype)
+        scale = jnp.minimum(floor / minimal_hopf_floor(X.dtype), 1)
         in_chart = omega > floor
         omega_chart = jnp.where(in_chart, omega, floor)
         A = jax.jacfwd(f)(u, p, a.user_args)
@@ -405,14 +407,17 @@ def hopf_curve_problem(
     b = lax.stop_gradient(left[:, -1])
     z = q1_star + 1j * q2_star
     c = lax.stop_gradient(z / jnp.linalg.norm(z))
+    # The critical pair's own frequency sets the chart's scale, independent
+    # of unrelated fast modes and invariant to rescaling time.
     omega_floor = lax.stop_gradient(
-        minimal_hopf_floor(u_star.dtype, jnp.linalg.norm(A, 2))).astype(u_star.dtype)
+        minimal_hopf_floor(u_star.dtype, jnp.abs(omega_star))).astype(u_star.dtype)
     if formulation in ("minimal", "bt"):
         try:
+            # The floor is relative to omega_seed, so this requires omega_seed > 0.
             if formulation == "minimal" and not bool(omega_star > omega_floor):
                 raise ValueError(
-                    f"Hopf seed frequency {float(omega_star):.3g} is at or below the minimal "
-                    f"chart's floor sqrt(default_tol)*||A||_2 = {float(omega_floor):.3g}; "
+                    f"Hopf seed frequency {float(omega_star):.3g} is not positive; the minimal "
+                    f"chart needs omega > 0 at the seed (Bogdanov-Takens or real-pair seed); "
                     f"use formulation='extended' or formulation='bt'")
             if formulation == "bt" and not bool(omega_star > 10 * default_tol(u_star.dtype)):
                 raise ValueError("Hopf seed requires positive frequency above 10*default_tol")

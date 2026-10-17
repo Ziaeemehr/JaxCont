@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `(u, p_fixed, omega)` (width `n+2`). Use `unpack_minimal_hopf_curve`;
   select `formulation="extended"` for the previous eigenvector chart.
   `HopfCurveArgs` now includes complex borders and static chart metadata.
-  The minimal chart requires `omega > sqrt(default_tol(dtype)) * ||A||_2` (seed Jacobian)
+  The minimal chart requires `omega > sqrt(default_tol(dtype)) * |omega_seed|` (seed frequency)
   and cannot cross BT.
 
 - `fold_curve_problem` defaults to `formulation="minimal"`, packing only
@@ -175,14 +175,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ContinuationPar` raises `ValueError` for a concrete `theta` that is not finite and
   positive (`0`, negatives, NaN and infinities were accepted and stalled or went nonfinite);
   traced values are not checked.
-- The minimal Hopf chart's frequency floor is `sqrt(default_tol(dtype)) * ||A||_2`, with
-  `A` the Jacobian at the refined seed (`HopfCurveArgs.omega_floor`, see
+- The minimal Hopf chart's frequency floor is `sqrt(default_tol(dtype)) * |omega_seed|`,
+  with `omega_seed` the refined seed's frequency (`HopfCurveArgs.omega_floor`, see
   `jaxcont.bifurcations.curve_layout.minimal_hopf_floor`), instead of `10*default_tol`:
   near a Bogdanov-Takens point its border residual is O(omega), so smaller frequencies
   accepted spurious points at the corrector tolerance. The chart's two border equations
-  are divided by the same `||A||_2`, so the floor and their tolerance follow the system's
-  time scale (a time-rescaled RHS gives the same curve). Seeds at or below the floor raise
-  `ValueError` naming `formulation='extended'` and `formulation='bt'`. A corrector that
+  are divided by `min(|omega_seed|, 1)`, so the floor and their tolerance follow a slow
+  critical pair's time scale (a slowed-down RHS gives the same curve), a fast pair keeps the
+  stricter unscaled tolerance, and unrelated fast or stiff modes change neither. Seeds with
+  a nonpositive frequency raise `ValueError` naming `formulation='extended'` and
+  `formulation='bt'`. A corrector that
   leaves the chart is a rejected step (`ds` shrinks) instead of a nonfinite trial that ends
   the run, so such curves now stop as `stalled`.
 - Corrector iterations are no longer differentiated. A converged root carries the

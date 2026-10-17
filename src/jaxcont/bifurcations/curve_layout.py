@@ -13,8 +13,8 @@ def minimal_hopf_floor(dtype, scale=1.0):
     """Lowest frequency of the minimal Hopf chart,
     ``sqrt(default_tol(dtype)) * scale``.
 
-    ``hopf_curve_problem`` uses ``scale = ||A||_2``, the spectral norm of the
-    Jacobian at the seed, so the floor follows the system's time scale. The
+    ``hopf_curve_problem`` uses ``scale = |omega_seed|``, the critical pair's
+    frequency at the seed, so the floor follows that pair's time scale. The
     chart's border residual is O(omega) near a Bogdanov-Takens point, so
     below this floor it no longer separates Hopf points from their
     neighbourhood at the corrector tolerance.

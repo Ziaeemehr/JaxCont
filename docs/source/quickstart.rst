@@ -242,20 +242,21 @@ right and adjoint modes at accepted points. ``HopfCurveArgs`` preserves the
 original RHS data in ``user_args``. Events reconstruct unit complex modes
 through the layout decoder, and plotting uses the same layout metadata.
 
-This chart requires ``omega > sqrt(default_tol(dtype)) * ||A||_2``, with ``A``
-the Jacobian at the refined seed (``HopfCurveArgs.omega_floor``; see
+This chart requires ``omega > sqrt(default_tol(dtype)) * |omega_seed|``, with
+``omega_seed`` the refined seed's frequency (``HopfCurveArgs.omega_floor``; see
 ``minimal_hopf_floor`` in ``jaxcont.bifurcations.curve_layout``), and cannot
 cross a Bogdanov--Takens point or continue a zero/negative-frequency segment.
 Near BT its border residual is of order ``omega``, so the floor keeps it
-discriminating at the corrector tolerance. An eager seed below that floor is
-rejected. Below the floor the residual stays finite but has no root, so a
+discriminating at the corrector tolerance. An eager seed with a nonpositive
+frequency is rejected. Below the floor the residual stays finite but has no root, so a
 corrector that leaves the chart fails and the step is retried with a smaller
 ``ds``; a curve running into BT stops as ``stalled`` just above the floor.
 ``BogdanovTakens(curve="hopf")`` then records a rejected event with
 ``reason="curve_terminated"`` (the run stopped early with its last frequency
 below ten times the floor); it does not locate the point. The border
-equations are divided by the same ``||A||_2``, so a time-rescaled system
-gives the same curve. Use
+equations are divided by ``min(|omega_seed|, 1)``, so a slowed-down system
+gives the same curve, a fast critical pair keeps the stricter unscaled
+tolerance, and unrelated fast or stiff modes change neither. Use
 ``formulation="bt"`` (below) to locate and pass BT. Select
 ``formulation="extended"`` explicitly for the previous
 ``(u, p_fixed, q1, q2, omega)`` representation and ``unpack_hopf_curve`` helper.

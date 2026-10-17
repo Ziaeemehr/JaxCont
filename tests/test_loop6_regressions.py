@@ -336,8 +336,9 @@ def test_low_frequency_minimal_seed_is_accepted():
     dt = _dtype()
     s = 1e-5 if jax.config.x64_enabled else 1e-3
     problem = hopf_curve_problem(_scaled_bt(s), jnp.array([.6, -.4], dt), jnp.array([.29, 1.3], dt))
-    # ||A(u_seed, p_seed)||_2 = s for this seed.
-    np.testing.assert_allclose(problem.args.omega_floor, default_tol(dt) ** .5 * s, rtol=1e-3)
+    # The floor follows the seed frequency, omega_seed = s * sqrt(0.2).
+    np.testing.assert_allclose(problem.args.omega_floor, default_tol(dt) ** .5 * s * np.sqrt(.2),
+                               rtol=1e-3)
     r = jc.continuation(problem, jc.PseudoArclength(), p_span=(1.3, 1.25), settings=_BT_SETTINGS)
     assert r.status == 'reached_end'
 
@@ -364,9 +365,9 @@ def test_minimal_seed_below_floor_names_other_charts():
     from jaxcont.bifurcations.curves import hopf_curve_problem
 
     dt = _dtype()
-    d = 1e-10 if jax.config.x64_enabled else 1e-6
+    # A seed exactly at the BT point has zero frequency.
     with pytest.raises(ValueError, match="formulation='extended' or formulation='bt'"):
-        hopf_curve_problem(_shifted_bt, jnp.array([.7 - d, -.4], dt), jnp.array([.3 - d * d, 1.2 + d], dt))
+        hopf_curve_problem(_shifted_bt, jnp.array([.7, -.4], dt), jnp.array([.3, 1.2], dt))
 
 
 def test_eager_bt_scan_is_gated_on_status():
@@ -386,3 +387,52 @@ def test_eager_bt_scan_is_gated_on_status():
 
     assert reasons('stalled') == ['curve_terminated']
     assert reasons('reached_end') == []
+
+
+# ---------------------------------------------------------------------------
+# Fix round 2: the scale is the critical pair's seed frequency
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize('K', [1.0, 1e3, 1e6])
+def test_stiff_mode_does_not_change_minimal_hopf_scale(K):
+    from jaxcont.bifurcations.codim2_events import BogdanovTakens
+    from jaxcont.bifurcations.curves import hopf_curve_problem
+
+    dt = _dtype()
+
+    def f(u, p, a):
+        return jnp.concatenate([_shifted_bt(u[:2], p, a), -K * u[2:]])
+
+    problem = hopf_curve_problem(f, jnp.array([.6, -.4, 0.], dt), jnp.array([.29, 1.3], dt))
+    r = jc.continuation(problem, jc.PseudoArclength(), p_span=(1.3, 1.0), settings=_BT_SETTINGS,
+                        events=[BogdanovTakens(f, curve='hopf')])
+    assert r.status == 'stalled'
+    assert [(h.kind, h.info['reason']) for h in r.rejected_events] == [
+        ('bogdanov_takens', 'curve_terminated')]
+    X, q = r.branch.states, r.branch.params
+    assert abs(float(q[-1]) - 1.2) < 1e-3
+    # Exact Hopf curve: trace q - 1.2 + x = 0 and omega**2 = -2 x.
+    x = X[:, 0] - .7
+    tol = 1e-5 if jax.config.x64_enabled else 1e-4
+    assert float(jnp.max(jnp.abs(q - 1.2 + x))) < tol
+    assert float(jnp.max(jnp.abs(X[:, 4] ** 2 + 2 * x))) < tol
+
+
+def test_fast_brusselator_hopf_curve_is_unchanged():
+    """Seed frequency 2 > 1: the border equations stay unscaled (as at 7eb53f1)."""
+    from jaxcont.bifurcations.curves import hopf_curve_problem
+
+    dt = _dtype()
+
+    def bru(u, p, a):
+        x, y = u
+        return jnp.array([p[1] - (p[0] + 1) * x + x * x * y, p[0] * x - x * x * y])
+
+    problem = hopf_curve_problem(bru, jnp.array([2.0, 2.5], dt), jnp.array([5.0, 2.0], dt))
+    settings = jc.ContinuationPar(ds=.01, ds_max=.05, max_steps=60, compute_stability=False)
+    r = jc.continuation(problem, jc.Natural(), p_span=(2.0, 3.0), settings=settings)
+    assert r.status == 'reached_end'
+    assert len(r.branch.params) == (47 if jax.config.x64_enabled else 24)
+    # Hopf curve b = 1 + a**2 at x = a, y = b/a, omega = a.
+    np.testing.assert_allclose(r.branch.states[-1], [3.0, 10 / 3, 10.0, 3.0],
+                               rtol=1e-6 if jax.config.x64_enabled else 1e-5)
