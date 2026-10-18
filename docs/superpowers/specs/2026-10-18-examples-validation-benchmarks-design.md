@@ -88,7 +88,7 @@ an external route fails, its row stays visibly FAIL or PENDING.
 examples/
   README.md  __init__.py
   tutorials/   GALLERY_HEADER.rst  plot_NN_<topic>.py   # public-API lessons only
-validation/                      # repo tooling, not part of the jaxcont wheel
+examples/validation/             # repo tooling inside examples/
   README.md registry.py artifacts.py compare.py validation.py
   visualize.py run_validation.py
   gallery/  GALLERY_HEADER.rst  plot_<run>.py   # 10–30 line evidence pages
@@ -113,6 +113,9 @@ scripts/
 docs/source/  validation.md benchmarks.md  auto_tutorials/ auto_validation/
 ```
 
+`examples/` is not part of the wheel, so committed reference data does not
+grow the installed package.
+
 There is no new public API in `src/jaxcont`. Commands run from the repository
 root with the package installed. Tutorials keep the system, seed, problem,
 `ContinuationPar`, continuation, and plot visible. The budget is ≤60
@@ -121,8 +124,16 @@ matching, and report logic stay in tooling. All outputs go to an explicit
 directory, and nothing is written to repository-root `images/`.
 
 Sphinx-Gallery gets two explicit roots (`examples/tutorials` →
-`auto_tutorials`, `validation/gallery` → `auto_validation`) with a `plot_`
-pattern. This structural whitelist replaces the basename blacklist. The
+`auto_tutorials`, `examples/validation/gallery` → `auto_validation`) with a `plot_`
+pattern. In `docs/source/conf.py`, replace the current single
+`examples_dirs='../../examples'` root with exactly
+`examples_dirs=['../../examples/tutorials', '../../examples/validation/gallery']`
+and matching `gallery_dirs=['auto_tutorials', 'auto_validation']`.
+`examples/validation/cases/`, `examples/validation/reference/`, and
+`examples/validation/regenerate/` are never scanned or executed by Sphinx-Gallery.
+An executed Sphinx build acceptance check must prove that no file outside the
+two roots is executed or listed as a gallery source. This structural whitelist
+replaces the basename blacklist. The
 current CPU forcing, execution opt-in, abort-on-error, downloads, and ordering
 are kept. Moves are direct, with no Python alias modules. Old gallery URLs get
 redirects. A durable `docs/source/examples-migration.json` maps every old path
@@ -131,15 +142,15 @@ to its new path.
 ## Offline reference data (rule 6)
 
 - Every external result that a page, figure, or default test uses lives under
-  `validation/reference/<system>/<tool>/<run>/` as a committed v2 bundle with
+  `examples/validation/reference/<system>/<tool>/<run>/` as a committed v2 bundle with
   `metadata.json` provenance. External tools: `matcont`, `bifurcationkit`.
-  Analytic values live in `validation/cases/systems/` with their derivation.
+  Analytic values live in `examples/validation/cases/systems/` with their derivation.
 - Default code paths never resolve `MATLAB_BIN`, `MATCONT_ROOT`, `JULIA_BIN`, or
   `BIFURCATIONKIT_PROJECT`. A guard test runs every tutorial and every
   validation entry in a subprocess. In that subprocess the variables are unset,
   `PATH` excludes `matlab`/`julia`, and any `subprocess` launch of them raises.
 - Regeneration is opt-in only:
-  `python3 -m validation.run_validation --regenerate {matcont,bifurcationkit}
+  `python3 -m examples.validation.run_validation --regenerate {matcont,bifurcationkit}
   --case <id> --output-dir <dir>`. The existing `--regenerate-matcont` flag
   remains as an alias. Regeneration writes candidates, `--verify-references`
   compares them numerically with the committed bundles, and promotion is an
@@ -175,8 +186,8 @@ to its new path.
 | `example_22_period_doubling_switch.py` | move | `tutorials/plot_14_pd_switch.py`; embedded MatCont numbers move to a bundle |
 | `example_09_neimark_sacker.py` | move | `tutorials/plot_15_neimark_sacker.py`; analytic control |
 | `example_23_periodic_vmap_grad.py` | move | `tutorials/plot_16_periodic_transforms.py` |
-| `example_14_prc_shooting_validation.py` | split | `validation/cases/python_cases/shooting.py` + `validation/gallery/plot_prc_shooting.py` |
-| `example_16`–`example_20` overlays | merge | `validation/gallery/plot_{cubic_fold,vanderpol_hopf,adaptx_hopf,radial_cycle,torbpc_ns}.py`, all failures kept |
+| `example_14_prc_shooting_validation.py` | split | `examples/validation/cases/python_cases/shooting.py` + `examples/validation/gallery/plot_prc_shooting.py` |
+| `example_16`–`example_20` overlays | merge | `examples/validation/gallery/plot_{cubic_fold,vanderpol_hopf,adaptx_hopf,radial_cycle,torbpc_ns}.py`, all failures kept |
 | `demo_jit_speedup.py` | drop | its hard-coded 10–50x claim and toy tangent are not continuation evidence; replaced by benchmarks |
 | `profile_continuation.py` | move | `scripts/profile_continuation.py`; public results only, synchronized timing, host-cProfile label |
 | `check_installation.py` | move | `scripts/check_installation.py` |
@@ -188,10 +199,10 @@ New evidence pages: `plot_lorenz84_equilibria.py`, `plot_lorenz84_codim2.py`,
 ### Tooling, external scripts, and references (rules)
 
 - `examples/MatCont/*.py`, `cases.json`, `python_cases/`, and
-  `generated/.gitignore` move to `validation/`, with `cases.json` and
-  `python_cases/` under `validation/cases/`, unchanged in behaviour. Drop
+  `generated/.gitignore` move to `examples/validation/`, with `cases.json` and
+  `python_cases/` under `examples/validation/cases/`, unchanged in behaviour. Drop
   `GALLERY_HEADER.txt`. Merge the README after fixing stale claims.
-- `examples/MatCont/matlab/**` moves to `validation/regenerate/matcont/`.
+- `examples/MatCont/matlab/**` moves to `examples/validation/regenerate/matcont/`.
   Exceptions: the catalytic fold/Hopf curve drivers leave `unsupported/` for
   the adapter root; Bratu, connecting-orbit, LPC/NS/PD-curve wrappers go to
   `capability_gaps/`; the general-BVP and heteroclinic files go to
@@ -200,7 +211,7 @@ New evidence pages: `plot_lorenz84_equilibria.py`, `plot_lorenz84_codim2.py`,
   `lorenz84_codim2.jl` (headless, exported data, events selected by type and
   window). 03 and 04 move as `neural_mass.jl` and `hopf_normal_form.jl`.
 - Reference files move byte-identical to
-  `validation/reference/<system>/matcont/<legacy-id>/`, with system `cubic`,
+  `examples/validation/reference/<system>/matcont/<legacy-id>/`, with system `cubic`,
   `vanderpol`, `adaptx`, `radial`, or `torbpc`. PRC-001 goes to `adaptx`. Old
   and new SHA-256 hashes go into the migration map. v2 conversion writes a new
   bundle plus a conversion manifest.
@@ -356,7 +367,7 @@ reported per workload, with no rankings or aggregate speedups.
 
 - **Julia.** Install user-local with juliaup (no sudo), choosing versions from
   the official BifurcationKit compatibility notes at execution time. Do not
-  rely on old v0.5.2 comments. `validation/regenerate/bifurcationkit/` holds
+  rely on old v0.5.2 comments. `examples/validation/regenerate/bifurcationkit/` holds
   `Project.toml` and `Manifest.toml` (BifurcationKit, Accessors, CSV, JSON,
   LinearAlgebra; periodic packages only if they are used; no Revise or
   Plots), plus `setup.jl` (instantiate, precompile, version report) and
@@ -418,3 +429,7 @@ only the relevant excerpts. Only Codex edits the registry and report files.
   block offline examples.
 - Thread policy and caching can dominate small cases. They are disclosed, and
   such rows are marked non-comparable.
+
+## Review history
+
+- Owner decision (2026-10-18): move all validation tooling, evidence pages, cases, references, and regeneration under `examples/validation/`; scan only the tutorials and validation gallery roots.

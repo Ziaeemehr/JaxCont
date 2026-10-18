@@ -6,8 +6,8 @@ checks behind every figure. Fair, accuracy-qualified benchmarks. Docs audited
 against 0.5.0. Everything user-facing runs without MATLAB or Julia.
 
 **Architecture:** Two gallery roots, `examples/tutorials` and
-`validation/gallery`, both read committed reference bundles under
-`validation/reference/`. External tools only regenerate those bundles through
+`examples/validation/gallery`, both read committed reference bundles under
+`examples/validation/reference/`. External tools only regenerate those bundles through
 opt-in commands. `benchmarks/` reuses the validation workloads and accuracy
 checks.
 
@@ -41,7 +41,7 @@ Status: proposed, not yet executed. Test names below are new unless marked
 - **Ownership.** Codex owns contracts, JaxCont code, integration, reports, and
   docs fixes. Copilot owns the Julia/MATLAB setup and producers, plus the
   ledger re-reviews. Claude gets three reviews of ≤2,000 tokens each, in
-  Tasks 2.3, 3.1, and 5.2. Only Codex edits `validation/cases/cases.json` and the
+  Tasks 2.3, 3.1, and 5.2. Only Codex edits `examples/validation/cases/cases.json` and the
   report modules. When an agent is unavailable, record the blocked task
   rather than reassigning it silently.
 
@@ -60,10 +60,10 @@ with the best scorecard; ties go to the later loop.
 | Gate | Command (from the repository root) | Pass condition |
 |---|---|---|
 | G1 | `JAXCONT_TEST_X64=0 python3 -m pytest -n 8` and `JAXCONT_TEST_X64=1 python3 -m pytest -n 8` | green |
-| G2 | `python3 -m pytest tests/test_offline_examples.py -m 'slow or not slow' -q` | every entry in `examples/tutorials` and `validation/gallery` runs with MATLAB/Julia hidden |
+| G2 | `python3 -m pytest tests/test_offline_examples.py -m 'slow or not slow' -q` | every entry in `examples/tutorials` and `examples/validation/gallery` runs with MATLAB/Julia hidden |
 | G3 | `JAXCONT_TEST_X64=1 python3 -m pytest tests/test_matcont_suite.py tests/test_validation_reports.py tests/test_lorenz84_three_tool.py tests/test_periodic_validation.py tests/test_curves.py tests/test_codim2.py -m slow` | green; torBPC xfail strict |
 | G4 | `python3 scripts/build_validation_figures.py --output-dir /tmp/jaxcont-evidence --check` | every figure has a sidecar that agrees with its report |
-| G5 | `JAXCONT_DOCS_EXECUTE_GALLERY=1 JAX_PLATFORMS=cpu MPLBACKEND=Agg python3 -m sphinx -E -a -W --keep-going -b html docs/source /tmp/jaxcont-html` on a clean tree with MATLAB/Julia hidden | no warnings |
+| G5 | `JAXCONT_DOCS_EXECUTE_GALLERY=1 JAX_PLATFORMS=cpu MPLBACKEND=Agg python3 -m sphinx -E -a -W --keep-going -b html docs/source /tmp/jaxcont-html` on a clean tree with MATLAB/Julia hidden | no warnings; no gallery source outside the two configured roots is executed or listed |
 | G6 | `python3 scripts/check_docs.py --snippets --changelog 0.5.0 --ledger docs/audits/2026-10-18-loop-N.md` | snippets run; every changelog entry has a disposition; ledger closed |
 | G7 | `python3 -m benchmarks.reporting --check benchmarks/results/reviewed` | categories, accuracy, and comparability valid |
 | G8 (opt-in) | `JAXCONT_TEST_X64=1 python3 -m pytest -m matlab` and `-m julia` | real runs; candidates verify numerically against committed bundles |
@@ -72,9 +72,9 @@ with the best scorecard; ties go to the later loop.
 
 ### Task 0.1: Verify MATLAB and pin the Julia environment — Copilot
 
-**Files:** Create `validation/regenerate/bifurcationkit/{Project.toml,Manifest.toml,setup.jl,README.md}`.
+**Files:** Create `examples/validation/regenerate/bifurcationkit/{Project.toml,Manifest.toml,setup.jl,README.md}`.
 
-**Interfaces:** `julia --project=validation/regenerate/bifurcationkit validation/regenerate/bifurcationkit/setup.jl`
+**Interfaces:** `julia --project=examples/validation/regenerate/bifurcationkit examples/validation/regenerate/bifurcationkit/setup.jl`
 instantiates and precompiles the environment, then prints a JSON version
 report: Julia, packages, and the manifest hash.
 
@@ -91,8 +91,8 @@ report: Julia, packages, and the manifest hash.
 
 ### Task 0.2: Opt-in runners and markers — Copilot
 
-**Files:** Create `validation/__init__.py` (merged in Task 1.2),
-`validation/regenerate/bifurcationkit/runner.py`, and `tests/test_external_runners.py`.
+**Files:** Create `examples/validation/__init__.py` (merged in Task 1.2),
+`examples/validation/regenerate/bifurcationkit/runner.py`, and `tests/test_external_runners.py`.
 Modify `tests/conftest.py` (register the `matlab` and `julia` markers) and
 `pyproject.toml` (addopts `-m 'not slow and not gpu and not matlab and not julia'`).
 
@@ -135,16 +135,16 @@ destinations exist and the sources are gone.
 ### Task 1.2: Move validation tooling and references — Codex
 
 **Files:** Move `examples/MatCont/{*.py,cases.json,python_cases/,generated/.gitignore}`
-to `validation/`, with `cases.json` and `python_cases/` under `validation/cases/`. Move `reference/*` to `validation/reference/<system>/matcont/<id>/`.
+to `examples/validation/`, with `cases.json` and `python_cases/` under `examples/validation/cases/`. Move `reference/*` to `examples/validation/reference/<system>/matcont/<id>/`.
 Update the imports in `tests/test_matcont_suite.py`, `tests/test_matcont_visualization.py`,
-and overlays 16–20. Create `validation/README.md`.
+and overlays 16–20. Create `examples/validation/README.md`.
 
 **Interfaces:** `CaseResult`, registry selection, and the comparison/renderer
-signatures do not change. The CLI becomes `python3 -m validation.run_validation --case MC-EQ-001`.
+signatures do not change. The CLI becomes `python3 -m examples.validation.run_validation --case MC-EQ-001`.
 
 - [ ] **Step 1:** Move the files and update the dotted producer paths and test
-  imports in one change, using `validation.cases.python_cases` for producers
-  and `validation.regenerate` for external tooling. Reference bytes stay identical.
+  imports in one change, using `examples.validation.cases.python_cases` for producers
+  and `examples.validation.regenerate` for external tooling. Reference bytes stay identical.
 - [ ] **Step 2:** Run the existing tests
   `tests/test_matcont_suite.py::test_offline_cli_validates_supported_reference_case`,
   `::test_folded_branch_comparison_preserves_duplicate_parameter_arms`, and
@@ -155,9 +155,9 @@ signatures do not change. The CLI becomes `python3 -m validation.run_validation 
 
 ### Task 1.3: Move external adapters — Copilot
 
-**Files:** Move `examples/MatCont/matlab/**` to `validation/regenerate/matcont/`
+**Files:** Move `examples/MatCont/matlab/**` to `examples/validation/regenerate/matcont/`
 following the spec's folder rules. Move `examples/BifurcationKit/*.jl` to their
-spec names. Update the producer paths in `validation/cases/cases.json` (handing them
+spec names. Update the producer paths in `examples/validation/cases/cases.json` (handing them
 to Codex) and the MATLAB directory in `tests/test_matcont_suite.py`.
 
 **Interfaces:** MATLAB resolution and CLI precedence do not change. The
@@ -179,7 +179,7 @@ are separated. Legacy `US-` IDs are kept.
 ### Task 1.4: Equilibrium and transform tutorials — Codex
 
 **Files:** Create `examples/tutorials/plot_01`…`plot_08` per the spec table.
-Create `validation/cases/systems/{cubic,lorenz84,vanderpol}.py` and
+Create `examples/validation/cases/systems/{cubic,lorenz84,vanderpol}.py` and
 `tests/test_examples.py`. Update the path in `tests/test_loop6_regressions.py`.
 
 **Interfaces:** Public `bif_problem`, `ContinuationPar`, `continuation`, the
@@ -203,7 +203,7 @@ curve unpackers, and `CurveLayout`. A tutorial runs as
 ### Task 1.5: Periodic tutorials, evidence entries, and scripts — Codex
 
 **Files:** Create `examples/tutorials/plot_09`…`plot_16`,
-`validation/cases/python_cases/shooting.py`, and `validation/gallery/plot_*.py` for
+`examples/validation/cases/python_cases/shooting.py`, and `examples/validation/gallery/plot_*.py` for
 overlays 16–20 and the PRC shooting page. Move `check_installation.py` and
 `profile_continuation.py` to `scripts/`. Update `examples/__init__.py`.
 
@@ -225,31 +225,41 @@ producer and keeps its numerical method unchanged.
 
 **Files:** Modify `docs/source/conf.py`, `docs/source/index.rst`, `README.md`
 (links and paths), and `examples/README.md`. Create the two gallery headers,
-`examples/tutorials/GALLERY_HEADER.rst` and `validation/gallery/GALLERY_HEADER.rst`,
+`examples/tutorials/GALLERY_HEADER.rst` and `examples/validation/gallery/GALLERY_HEADER.rst`,
 `tests/test_gallery_sources.py`, and `tests/test_offline_examples.py`. Remove
 the old root scripts and the `examples/MatCont`/`examples/BifurcationKit`
 directories.
 
-**Interfaces:** `examples_dirs` is `examples/tutorials` plus `validation/gallery`;
-`gallery_dirs` is auto_tutorials plus auto_validation; the pattern is `plot_`.
+**Interfaces:** `docs/source/conf.py` currently uses the single gallery root
+`examples_dirs='../../examples'`. Switch to exactly
+`examples_dirs=['../../examples/tutorials', '../../examples/validation/gallery']`
+with matching `gallery_dirs=['auto_tutorials', 'auto_validation']`; the pattern is `plot_`.
+The `examples/validation/cases/`, `examples/validation/reference/`, and
+`examples/validation/regenerate/` trees are never scanned or executed.
 Execution semantics stay the same. Old URLs redirect.
 
 - [ ] **Step 1:** Add `tests/test_gallery_sources.py::test_execution_semantics_survive_root_split`
-  (covering both environment branches) and `::test_only_tutorials_and_validation_gallery_plot_sources_become_pages`.
-- [ ] **Step 2:** Add `tests/test_offline_examples.py::test_every_entry_runs_without_matlab_or_julia`
-  (slow), covering `examples/tutorials` and `validation/gallery`. Each entry runs in a subprocess with the MATLAB/Julia environment
+  (covering both environment branches) and `::test_only_examples_tutorials_and_examples_validation_gallery_plot_sources_become_pages`.
+  Add `::test_sphinx_build_executes_and_lists_only_the_two_examples_roots`: run
+  an executed Sphinx build with sentinel `plot_*.py` sources in cases/, reference/,
+  and regenerate/; assert no source outside the two configured roots is executed
+  or listed in generated gallery pages or downloads.
+- [ ] **Step 2:** Add `tests/test_offline_examples.py::test_examples_tutorials_and_validation_gallery_run_without_matlab_or_julia`
+  (slow), covering `examples/tutorials` and `examples/validation/gallery`. Each entry runs in a subprocess with the MATLAB/Julia environment
   variables unset, those binaries removed from `PATH`, and a guard that fails
   on any external launch. This is gate G2.
-- [ ] **Step 3:** Run both tests, `python3 scripts/check_examples_migration_map.py --completed`,
+- [ ] **Step 3:** Run both test files (including the executed-build acceptance test),
+  `python3 scripts/check_examples_migration_map.py --completed`,
   and `JAXCONT_DOCS_EXECUTE_GALLERY=0 python3 -m sphinx -W --keep-going -b html docs/source /tmp/jaxcont-layout`.
-  Acceptance: helper files cannot become pages, and every entry passes G2.
+  Acceptance: helper files cannot become pages; the executed build lists and
+  executes sources only from the two roots, and every entry passes G2.
 
 ## Phase 2: Reference data and quantitative validation
 
 ### Task 2.1: v2 schema, provenance, and the regeneration CLI — Codex
 
-**Files:** Modify `validation/{registry,artifacts,run_validation}.py` and
-`validation/cases/cases.json`. Create `validation/reference/schema-v2.json` and
+**Files:** Modify `examples/validation/{registry,artifacts,run_validation}.py` and
+`examples/validation/cases/cases.json`. Create `examples/validation/reference/schema-v2.json` and
 `tests/test_validation_schema.py`.
 
 **Interfaces:** Each registry run has `canonical_id`, `aliases`, `system`,
@@ -271,7 +281,7 @@ writes candidates only; `--regenerate-matcont` remains an alias.
 
 ### Task 2.2: One report gate — Codex
 
-**Files:** Modify `validation/{compare,validation}.py`. Create `tests/test_validation_reports.py`.
+**Files:** Modify `examples/validation/{compare,validation}.py`. Create `tests/test_validation_reports.py`.
 
 **Interfaces:** `ValidationReport` holds the per-tool coverage, pairwise and
 independent per-metric value/limit/verdict, source hashes, and the overall
@@ -290,8 +300,8 @@ status. The CLI exits nonzero on FAIL.
 
 ### Task 2.3: Lorenz-84 model contract — Codex
 
-**Files:** Complete `validation/cases/systems/lorenz84.py`. Create `tests/test_reference_systems.py`.
-Add the four `lorenz84.*` runs to `validation/cases/cases.json`.
+**Files:** Complete `examples/validation/cases/systems/lorenz84.py`. Create `tests/test_reference_systems.py`.
+Add the four `lorenz84.*` runs to `examples/validation/cases/cases.json`.
 
 **Interfaces:** The right-hand side, parameter order, fixed constants, seeds,
 and windows (T=0.04 F-sweep from Julia 02), plus RHS/Jacobian values at sample
@@ -306,7 +316,7 @@ type and window, never by index.
 
 ### Task 2.4: JaxCont Lorenz-84 producer — Codex
 
-**Files:** Create `validation/cases/python_cases/lorenz84.py` and `tests/test_lorenz84_producer.py`.
+**Files:** Create `examples/validation/cases/python_cases/lorenz84.py` and `tests/test_lorenz84_producer.py`.
 
 **Interfaces:** Fresh v2-shaped results for the four flagship runs, with
 residual and BT structure checks.
@@ -320,7 +330,7 @@ residual and BT structure checks.
 
 ### Task 2.5: MatCont Lorenz-84 producer — Copilot
 
-**Files:** Create `validation/regenerate/matcont/systems/lorenz84.m`,
+**Files:** Create `examples/validation/regenerate/matcont/systems/lorenz84.m`,
 `run_lorenz84_equilibria.m`, `run_lorenz84_codim2.m`, and `tests/test_lorenz84_matcont.py`.
 
 **Interfaces:** An independent transcription. The drivers export v2 candidates
@@ -331,7 +341,7 @@ raw logs.
   `matlab`-marked `::test_flagship_exports_all_four_runs` and
   `::test_matlab_rhs_samples_match_contract`. The latter also runs offline on
   the bundle once Task 2.12 has promoted it.
-- [ ] **Step 2:** Run `python3 -m validation.run_validation --regenerate matcont --case lorenz84.eq-f --output-dir /tmp/jc-cand`
+- [ ] **Step 2:** Run `python3 -m examples.validation.run_validation --regenerate matcont --case lorenz84.eq-f --output-dir /tmp/jc-cand`
   for each run, then `pytest -m matlab tests/test_lorenz84_matcont.py`.
 - [ ] **Step 3:** Hand the candidates and logs to Task 2.12. Acceptance: a real
   local run with the full domain and events. License or path errors are
@@ -341,7 +351,7 @@ raw logs.
 
 **Files:** Rewrite `cubic_fold.jl`, `lorenz84_equilibria.jl`, and
 `hopf_normal_form.jl`. Create `export.jl` and `radial_cycle.jl` in
-`validation/regenerate/bifurcationkit/`. Create `tests/test_julia_exports.py`.
+`examples/validation/regenerate/bifurcationkit/`. Create `tests/test_julia_exports.py`.
 
 **Interfaces:** Headless scripts take `--case` and `--output-dir`, write v2
 candidates, and exit nonzero on failure. They do not read JaxCont solutions.
@@ -356,7 +366,7 @@ candidates, and exit nonzero on failure. They do not read JaxCont solutions.
 
 ### Task 2.7: Julia Lorenz-84 codim-2 — Copilot
 
-**Files:** Rewrite `validation/regenerate/bifurcationkit/lorenz84_codim2.jl`.
+**Files:** Rewrite `examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl`.
 Extend `export.jl` and `tests/test_julia_exports.py`.
 
 **Interfaces:** (F,T) fold and Hopf curves and the refined BT, selected by type
@@ -370,7 +380,7 @@ and window, with the chart settings recorded.
 
 ### Task 2.8: JaxCont periodic checks — Codex
 
-**Files:** Modify `validation/cases/python_cases/{periodic,pd_switch,prc}.py`. Create
+**Files:** Modify `examples/validation/cases/python_cases/{periodic,pd_switch,prc}.py`. Create
 `tests/test_periodic_validation.py`.
 
 **Interfaces:** adaptx Hopf/PD/doubled-branch records and the complete torBPC
@@ -390,7 +400,7 @@ collocation residual).
 
 ### Task 2.9: MatCont adaptx PD export — Copilot
 
-**Files:** Create `validation/regenerate/matcont/run_adaptx_pd.m`. Extend
+**Files:** Create `examples/validation/regenerate/matcont/run_adaptx_pd.m`. Extend
 `export_cycle_run.m` for orbits and flow-mode data.
 
 **Interfaces:** A v2 candidate for `adaptx.cycle-pd-switch` (base branch, PD,
@@ -403,7 +413,7 @@ doubled branch, orbits, spectra) from a real R2024a run.
 
 ### Task 2.10: Julia adaptx PD — Copilot
 
-**Files:** Create `validation/regenerate/bifurcationkit/adaptx_pd.jl`. Extend
+**Files:** Create `examples/validation/regenerate/bifurcationkit/adaptx_pd.jl`. Extend
 `tests/test_julia_exports.py`.
 
 **Interfaces:** The same adaptx parameters and window. The independent Hopf →
@@ -419,7 +429,7 @@ and refinement.
 
 ### Task 2.11: Julia torBPC — Copilot
 
-**Files:** Create `validation/regenerate/bifurcationkit/torbpc_ns.jl`. Extend
+**Files:** Create `examples/validation/regenerate/bifurcationkit/torbpc_ns.jl`. Extend
 `tests/test_julia_exports.py`.
 
 **Interfaces:** The full existing torBPC window with every expected LPC/PD/NS
@@ -433,7 +443,7 @@ label, plus the NS angle and crossing.
 
 ### Task 2.12: Promote bundles and remove hand-copied constants — Codex
 
-**Files:** Add `validation/reference/{lorenz84,cubic,radial,adaptx,torbpc}/{matcont,bifurcationkit}/**`.
+**Files:** Add `examples/validation/reference/{lorenz84,cubic,radial,adaptx,torbpc}/{matcont,bifurcationkit}/**`.
 Create `tests/test_lorenz84_three_tool.py`. Modify `tests/test_codim2.py`,
 `tests/test_curves.py`, and `tests/test_hopf_normal_form.py` so that their
 BifurcationKit constants are read from bundles. Historical values become v1
@@ -448,14 +458,14 @@ date (Decision 6).
   offline `tests/test_validation_schema.py::test_no_hand_copied_external_constants_in_tests`,
   which flags external-tool literals that have no bundle source.
 - [ ] **Step 2:** Review each candidate (provenance, coverage, pairwise diffs)
-  and promote it. A failed route is recorded as PENDING/FAIL in `validation/cases/cases.json`.
+  and promote it. A failed route is recorded as PENDING/FAIL in `examples/validation/cases/cases.json`.
 - [ ] **Step 3:** Run G1 and G3. Acceptance: every claimed three-tool run has
   committed, reviewed bundles, and the offline tests pass without runtimes.
 
 ### Task 2.13: Evidence gallery and publication gate — Codex
 
-**Files:** Modify `validation/visualize.py`. Create
-`validation/gallery/plot_{lorenz84_equilibria,lorenz84_codim2,adaptx_pd}.py`,
+**Files:** Modify `examples/validation/visualize.py`. Create
+`examples/validation/gallery/plot_{lorenz84_equilibria,lorenz84_codim2,adaptx_pd}.py`,
 `scripts/build_validation_figures.py`, and `tests/test_validation_figures.py`.
 Rebuild `docs/images/matcont_cubic_overlay.png`.
 
@@ -615,7 +625,7 @@ and changelog. The final handoff names the selected snapshot.
 ## Decisions for the owner
 
 1. **Reference systems:** Lorenz-84 as the single flagship (equilibria, (F,T) curves, BT), with adaptx PD and torBPC NS as periodic supplements and cubic/radial as controls. *Recommended: approve.*
-2. **Layout (owner decision):** `examples/` holds only `examples/tutorials/`. One top-level `validation/` holds `gallery/` (user-facing comparison scripts that build figures), `cases/` (case definitions), `reference/<system>/<tool>/<run>/` (committed reference bundles with provenance), and `regenerate/` (opt-in MATLAB and Julia regeneration tooling). `benchmarks/` stays top-level. Direct moves with no Python alias modules, gallery URL redirects, and legacy case IDs kept as aliases.
+2. **Layout (owner decision):** `examples/` holds `examples/tutorials/` and the whole `examples/validation/` tree: `examples/validation/gallery/` (user-facing comparison scripts that build figures), `examples/validation/cases/` (case definitions), `examples/validation/reference/<system>/<tool>/<run>/` (committed reference bundles with provenance), and `examples/validation/regenerate/` (opt-in MATLAB and Julia regeneration tooling). Sphinx scans exactly the tutorials and validation gallery roots. `benchmarks/` stays top-level. Direct moves with no Python alias modules, gallery URL redirects, and legacy case IDs kept as aliases.
 3. **Performance scripts:** drop `demo_jit_speedup.py`; keep `profile_continuation.py`, rewritten under `scripts/` as a developer-only diagnostic. *Recommended: approve.*
 4. **Benchmark budget:** float64 CPU on one named machine; 5 fresh-process first calls and 20 warm repetitions; batch sizes 1/8/32/128; GPU as a separate optional experiment; no cross-tool rankings. *Recommended: approve.*
 5. **Known failures:** torBPC stays FAIL with its strict xfail, and any failed external route stays visibly FAIL or PENDING. Solver fixes go to a separate proposal. *Recommended: approve.*
@@ -627,4 +637,4 @@ and changelog. The final handoff names the selected snapshot.
 - v0 (Codex): first draft of the spec and plan.
 - Review 1 (Copilot): Julia was deferred too late, there was no work split, tolerance equality was untested, MATLAB was optional, and canonical IDs were missing. Codex fixed these in v1.
 - Review 2 (Claude): enforced rule 6 (offline committed bundles, a guard gate, and hand-copied constants removed), restructured execution into three run → debug → fix loops with gates G1–G8, renumbered and split the Phase 2 tasks, fixed the `MC-PRC-001` system (adaptx, not radial), unified the external markers, required benchmark accuracy against committed bundles, consolidated helper scripts, and trimmed both documents.
-- Owner decision (2026-10-18): merged validation into one top-level `validation/` with `gallery/`, `cases/`, `reference/<system>/<tool>/<run>/`, and `regenerate/`; `examples/` holds only tutorials.
+- Owner decision (2026-10-18): move the whole validation tree inside `examples/validation/`, alongside `examples/tutorials/`; Sphinx scans exactly those tutorials and `examples/validation/gallery/`.
