@@ -88,15 +88,18 @@ an external route fails, its row stays visibly FAIL or PENDING.
 examples/
   README.md  __init__.py
   tutorials/   GALLERY_HEADER.rst  plot_NN_<topic>.py   # public-API lessons only
-  validation/  GALLERY_HEADER.rst  plot_<run>.py        # 10–30 line evidence pages
 validation/                      # repo tooling, not part of the jaxcont wheel
-  README.md cases.json registry.py artifacts.py compare.py validation.py
+  README.md registry.py artifacts.py compare.py validation.py
   visualize.py run_validation.py
-  systems/                       # named equations, parameter order, seeds
-  python_cases/                  # JaxCont producers, no plotting
-  adapters/matcont/              # MATLAB drivers/exporters/systems
-    capability_gaps/ templates/
-  adapters/bifurcationkit/       # .jl producers, Project/Manifest, setup.jl, runner.py
+  gallery/  GALLERY_HEADER.rst  plot_<run>.py   # 10–30 line evidence pages
+  cases/
+    cases.json
+    systems/                     # named equations, parameter order, seeds
+    python_cases/                # JaxCont producers, no plotting
+  regenerate/                   # opt-in MATLAB and Julia tooling
+    matcont/                    # MATLAB drivers/exporters/systems
+      capability_gaps/ templates/
+    bifurcationkit/             # .jl producers, Project/Manifest, setup.jl, runner.py
   reference/<system>/<tool>/<run>/   # committed reviewed bundles (rule 6)
   generated/                     # git-ignored candidates, reports, figures
 benchmarks/
@@ -118,7 +121,7 @@ matching, and report logic stay in tooling. All outputs go to an explicit
 directory, and nothing is written to repository-root `images/`.
 
 Sphinx-Gallery gets two explicit roots (`examples/tutorials` →
-`auto_tutorials`, `examples/validation` → `auto_validation`) with a `plot_`
+`auto_tutorials`, `validation/gallery` → `auto_validation`) with a `plot_`
 pattern. This structural whitelist replaces the basename blacklist. The
 current CPU forcing, execution opt-in, abort-on-error, downloads, and ordering
 are kept. Moves are direct, with no Python alias modules. Old gallery URLs get
@@ -130,7 +133,7 @@ to its new path.
 - Every external result that a page, figure, or default test uses lives under
   `validation/reference/<system>/<tool>/<run>/` as a committed v2 bundle with
   `metadata.json` provenance. External tools: `matcont`, `bifurcationkit`.
-  Analytic values live in `validation/systems/` with their derivation.
+  Analytic values live in `validation/cases/systems/` with their derivation.
 - Default code paths never resolve `MATLAB_BIN`, `MATCONT_ROOT`, `JULIA_BIN`, or
   `BIFURCATIONKIT_PROJECT`. A guard test runs every tutorial and every
   validation entry in a subprocess. In that subprocess the variables are unset,
@@ -172,8 +175,8 @@ to its new path.
 | `example_22_period_doubling_switch.py` | move | `tutorials/plot_14_pd_switch.py`; embedded MatCont numbers move to a bundle |
 | `example_09_neimark_sacker.py` | move | `tutorials/plot_15_neimark_sacker.py`; analytic control |
 | `example_23_periodic_vmap_grad.py` | move | `tutorials/plot_16_periodic_transforms.py` |
-| `example_14_prc_shooting_validation.py` | split | `validation/python_cases/shooting.py` + `examples/validation/plot_prc_shooting.py` |
-| `example_16`–`example_20` overlays | merge | `examples/validation/plot_{cubic_fold,vanderpol_hopf,adaptx_hopf,radial_cycle,torbpc_ns}.py`, all failures kept |
+| `example_14_prc_shooting_validation.py` | split | `validation/cases/python_cases/shooting.py` + `validation/gallery/plot_prc_shooting.py` |
+| `example_16`–`example_20` overlays | merge | `validation/gallery/plot_{cubic_fold,vanderpol_hopf,adaptx_hopf,radial_cycle,torbpc_ns}.py`, all failures kept |
 | `demo_jit_speedup.py` | drop | its hard-coded 10–50x claim and toy tangent are not continuation evidence; replaced by benchmarks |
 | `profile_continuation.py` | move | `scripts/profile_continuation.py`; public results only, synchronized timing, host-cProfile label |
 | `check_installation.py` | move | `scripts/check_installation.py` |
@@ -185,9 +188,10 @@ New evidence pages: `plot_lorenz84_equilibria.py`, `plot_lorenz84_codim2.py`,
 ### Tooling, external scripts, and references (rules)
 
 - `examples/MatCont/*.py`, `cases.json`, `python_cases/`, and
-  `generated/.gitignore` move to `validation/` unchanged in behaviour. Drop
+  `generated/.gitignore` move to `validation/`, with `cases.json` and
+  `python_cases/` under `validation/cases/`, unchanged in behaviour. Drop
   `GALLERY_HEADER.txt`. Merge the README after fixing stale claims.
-- `examples/MatCont/matlab/**` moves to `validation/adapters/matcont/`.
+- `examples/MatCont/matlab/**` moves to `validation/regenerate/matcont/`.
   Exceptions: the catalytic fold/Hopf curve drivers leave `unsupported/` for
   the adapter root; Bratu, connecting-orbit, LPC/NS/PD-curve wrappers go to
   `capability_gaps/`; the general-BVP and heteroclinic files go to
@@ -352,7 +356,7 @@ reported per workload, with no rankings or aggregate speedups.
 
 - **Julia.** Install user-local with juliaup (no sudo), choosing versions from
   the official BifurcationKit compatibility notes at execution time. Do not
-  rely on old v0.5.2 comments. `validation/adapters/bifurcationkit/` holds
+  rely on old v0.5.2 comments. `validation/regenerate/bifurcationkit/` holds
   `Project.toml` and `Manifest.toml` (BifurcationKit, Accessors, CSV, JSON,
   LinearAlgebra; periodic packages only if they are used; no Revise or
   Plots), plus `setup.jl` (instantiate, precompile, version report) and
