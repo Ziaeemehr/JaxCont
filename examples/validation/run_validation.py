@@ -231,7 +231,7 @@ def _validate_case(case: dict, reference_dir: Path) -> tuple[bool, dict]:
         validate_periodic_artifacts(reference_dir, case["id"])
     function = _load_case_callable(case["python"])
     parameters = inspect.signature(function).parameters
-    result = function(reference_dir) if parameters else function()
+    result = function(reference_dir) if "reference_dir" in parameters else function()
     validation = evaluate_case_result(case, result, reference_dir)
     return validation.passed, validation.checks
 

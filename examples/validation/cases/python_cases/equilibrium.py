@@ -34,35 +34,38 @@ def _maximum_residual(rhs, states, parameters, args=None) -> float:
     return float(jnp.max(jnp.abs(residuals)))
 
 
-def run_cubic_fold() -> CaseResult:
+def run_cubic_fold(*, computed=None) -> CaseResult:
     """Continue the cubic S-curve and refine both analytic folds."""
     # The historical example uses x=-2 as a convenient Newton guess.  Case
     # artifacts include the seed itself, so use the refined analytic root to
     # keep every exported branch point on f(x, -1)=0.
-    problem = jc.bif_problem(
-        _cubic_rhs, u0=jnp.array([-2.1038034027355366]), p0=-1.0
-    )
-    settings = jc.ContinuationPar(
-        ds=0.01,
-        ds_min=1e-5,
-        ds_max=0.05,
-        max_steps=300,
-        newton_tol=1e-6,
-        compute_stability=True,
-    )
-    result = jc.continuation(
-        problem,
-        jc.PseudoArclength(),
-        p_span=(-1.0, 1.0),
-        settings=settings,
-        events=[jc.Fold()],
-    )
-    natural_result = jc.continuation(
-        problem,
-        jc.Natural(),
-        p_span=(-1.0, 1.0),
-        settings=settings,
-    )
+    if computed is None:
+        problem = jc.bif_problem(
+            _cubic_rhs, u0=jnp.array([-2.1038034027355366]), p0=-1.0
+        )
+        settings = jc.ContinuationPar(
+            ds=0.01,
+            ds_min=1e-5,
+            ds_max=0.05,
+            max_steps=300,
+            newton_tol=1e-6,
+            compute_stability=True,
+        )
+        result = jc.continuation(
+            problem,
+            jc.PseudoArclength(),
+            p_span=(-1.0, 1.0),
+            settings=settings,
+            events=[jc.Fold()],
+        )
+        natural_result = jc.continuation(
+            problem,
+            jc.Natural(),
+            p_span=(-1.0, 1.0),
+            settings=settings,
+        )
+    else:
+        result, natural_result = computed
     fold_events = [event for event in result.events if event.kind == "fold"]
     refined = [jc.fold_point(_cubic_rhs, event.u, event.p) for event in fold_events]
     actual = sorted(
@@ -147,24 +150,27 @@ def run_cubic_fold() -> CaseResult:
     )
 
 
-def run_vanderpol_hopf() -> CaseResult:
+def run_vanderpol_hopf(*, computed=None) -> CaseResult:
     """Validate the degenerate Van der Pol equilibrium Hopf at ``mu=0``."""
-    problem = jc.bif_problem(
-        _van_der_pol_rhs, u0=jnp.array([0.0, 0.0]), p0=-2.0
-    )
-    result = jc.continuation(
-        problem,
-        jc.PseudoArclength(),
-        p_span=(-2.0, 2.0),
-        settings=jc.ContinuationPar(
-            ds=0.02,
-            ds_max=0.05,
-            max_steps=160,
-            newton_tol=1e-7,
-            compute_stability=True,
-        ),
-        events=[jc.Hopf()],
-    )
+    if computed is None:
+        problem = jc.bif_problem(
+            _van_der_pol_rhs, u0=jnp.array([0.0, 0.0]), p0=-2.0
+        )
+        result = jc.continuation(
+            problem,
+            jc.PseudoArclength(),
+            p_span=(-2.0, 2.0),
+            settings=jc.ContinuationPar(
+                ds=0.02,
+                ds_max=0.05,
+                max_steps=160,
+                newton_tol=1e-7,
+                compute_stability=True,
+            ),
+            events=[jc.Hopf()],
+        )
+    else:
+        result = computed
     hopf_events = [event for event in result.events if event.kind == "hopf"]
     if hopf_events:
         state, parameter, q1, q2, omega, _converged = jc.hopf_point(
@@ -233,28 +239,32 @@ def run_vanderpol_hopf() -> CaseResult:
     )
 
 
-def run_adaptive_control_hopf() -> CaseResult:
+def run_adaptive_control_hopf(*, computed=None) -> CaseResult:
     """Validate MatCont's adaptive-control equilibrium Hopf analytically."""
-    beta = jnp.array(1.0)
-    problem = jc.bif_problem(
-        _adaptive_control_rhs,
-        u0=jnp.zeros(3),
-        p0=-2.0,
-        args=beta,
-    )
-    result = jc.continuation(
-        problem,
-        jc.PseudoArclength(),
-        p_span=(-2.0, 2.0),
-        settings=jc.ContinuationPar(
-            ds=0.03,
-            ds_max=0.08,
-            max_steps=100,
-            newton_tol=1e-7,
-            compute_stability=True,
-        ),
-        events=[jc.Hopf()],
-    )
+    if computed is None:
+        beta = jnp.array(1.0)
+        problem = jc.bif_problem(
+            _adaptive_control_rhs,
+            u0=jnp.zeros(3),
+            p0=-2.0,
+            args=beta,
+        )
+        result = jc.continuation(
+            problem,
+            jc.PseudoArclength(),
+            p_span=(-2.0, 2.0),
+            settings=jc.ContinuationPar(
+                ds=0.03,
+                ds_max=0.08,
+                max_steps=100,
+                newton_tol=1e-7,
+                compute_stability=True,
+            ),
+            events=[jc.Hopf()],
+        )
+    else:
+        result = computed
+        beta = jnp.array(1.0)
     hopf_events = [event for event in result.events if event.kind == "hopf"]
     if hopf_events:
         state, parameter, q1, q2, omega, _converged = jc.hopf_point(

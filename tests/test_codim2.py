@@ -516,7 +516,7 @@ def test_codim2_names_are_listed_in_dunder_all():
 #
 # Route (a): a real applied model neither implementation was tuned for --
 # the Lorenz-84 atmospheric circulation model (already used in
-# examples/BifurcationKit/02_lorenz84.jl). BifurcationKit.jl's OWN test
+# examples/validation/regenerate/bifurcationkit/lorenz84_equilibria.jl). BifurcationKit.jl's OWN test
 # suite (test/lorenz84.jl, shipped inside the installed BifurcationKit.jl
 # package tree) independently proves this exact model has a genuine
 # Bogdanov-Takens point, reached by continuing the equilibrium branch in F,

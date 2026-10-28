@@ -57,7 +57,7 @@ def _run_registered_case(
         raise ValueError(f"invalid Python case entry point: {case['python']}")
     function = getattr(importlib.import_module(module_name), function_name)
     parameters = inspect.signature(function).parameters
-    result = function(reference_dir) if parameters else function()
+    result = function(reference_dir) if "reference_dir" in parameters else function()
     return case, result
 
 
@@ -556,7 +556,8 @@ def plot_torbpc_overlay(
             "JaxCont and MatCont branches have no shared parameter domain"
         )
     for axis in (amplitude_axis, period_axis):
-        axis.set_xlim(shared_min, shared_max)
+        axis.set_xlim(min(jax_parameters.min(), matcont_parameters.min()),
+                      max(jax_parameters.max(), matcont_parameters.max()))
         axis.grid(alpha=0.2)
         axis.legend(fontsize=8, ncols=2)
 
@@ -954,3 +955,92 @@ __all__ = [
     "render_equilibrium_overlay",
     "render_periodic_overlay",
 ]
+
+
+def render_report_table(report):
+    """Render measured values, unchanged limits, and verdicts from one report."""
+    figure, axis = plt.subplots(figsize=(11, max(2, len(report.metrics) * 0.38)))
+    axis.axis('off')
+    values = [[r['metric'], f"{r['measured']:.3g}", f"{r['limit']:.3g}",
+               'PASS' if r['passed'] else 'FAIL'] for r in report.metrics]
+    table = axis.table(cellText=values, colLabels=['Metric', 'Measured', 'Limit', 'Verdict'],
+                       colWidths=[0.61, 0.13, 0.13, 0.13], loc='center')
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1, 1.5)
+    return figure
+
+
+def render_comparison(result, report, reference_dir):
+    """Use the existing family overlays and add a diagnostic error panel.
+
+    Error interpolation follows a monotone physical coordinate (x for cubic),
+    avoiding interpolation across duplicate parameter arms at a fold.
+    """
+    case_id = result.case_id
+    reference_dir = reference_directory(reference_dir, case_id)
+    if case_id.startswith('MC-EQ-'):
+        figure = plot_equilibrium_overlay(result, reference_dir,
+                                           include_spectrum=case_id != 'MC-EQ-001')
+    elif case_id == 'MC-LC-001':
+        figure = plot_radial_cycle_overlay(result, reference_dir)
+    elif case_id == 'MC-LC-002':
+        figure = plot_torbpc_overlay(result, reference_dir)
+    elif case_id == 'MC-PRC-001':
+        figure, axis = plt.subplots()
+        a = result.artifacts
+        phase = np.arange(len(a['jaxcont_prc'])) / len(a['jaxcont_prc'])
+        axis.plot(phase, a['jaxcont_prc'], 'o-', label='JaxCont (fresh)')
+        axis.plot(phase, a['reference_prc'], 'x--', label='MatCont (committed, aligned)')
+        axis.set(xlabel='JaxCont mesh phase fraction', ylabel='iPRC x (cycle-fraction units)')
+        axis.legend()
+    else:
+        raise ValueError(case_id)
+    _annotate_summary(figure, status=report.status, passed=report.status == 'PASS',
+                      details=['JaxCont: fresh; MatCont 7.6: committed series',
+                               report.mismatch or 'Limits and measurements are in the report table.'])
+    error_figure, axis = plt.subplots(figsize=(9, 3))
+    a = result.artifacts
+    if case_id == 'MC-PRC-001':
+        x = phase
+        errors = np.abs(a['jaxcont_prc'] - a['reference_prc'])
+        label = 'phase-aligned iPRC absolute difference'
+        xlabel = 'mesh phase fraction'
+    else:
+        rows = _read_csv(reference_dir / f'{case_id}_branch.csv')
+        if case_id == 'MC-EQ-001':
+            x = np.asarray(a['states'])[:, 0]
+            y = np.asarray(a['parameters'])
+            rx = np.array([float(r['state_0']) for r in rows])
+            ry = np.array([float(r['parameter']) for r in rows])
+            label, xlabel = 'parameter absolute difference', 'state x (monotone sheet coordinate)'
+        elif case_id.startswith('MC-EQ-'):
+            x = np.asarray(a['parameters'])
+            y = np.max(np.real(a['spectra']), axis=1)
+            spectra = _branch_spectral_abscissa(_read_csv(reference_dir / f'{case_id}_multipliers.csv'))
+            selected = [r for r in rows if int(r['point']) in spectra]
+            rx = np.array([float(r['parameter']) for r in selected])
+            ry = np.array([spectra[int(r['point'])] for r in selected])
+            label, xlabel = 'spectral abscissa absolute difference', 'parameter'
+        elif case_id == 'MC-LC-001':
+            x, y = np.asarray(a['parameters']), np.asarray(a['periods'])
+            rx = np.array([float(r['parameter']) for r in rows])
+            ry = np.array([float(r['period']) for r in rows])
+            label, xlabel = 'period absolute difference', 'rho'
+        else:
+            # torBPC folds in parameter: show event-local discrepancies already
+            # measured by the producer, without re-sorting branch sheets.
+            errors = np.array(list(result.observations['jaxcont_spectrum_errors'].values()))
+            x = np.arange(len(errors))
+            axis.set_xticks(x, list(result.observations['jaxcont_spectrum_errors']))
+            label, xlabel = 'event-local Floquet spectrum error', 'MatCont event'
+        if case_id != 'MC-LC-002':
+            order = np.argsort(rx)
+            mask = (x >= rx.min()) & (x <= rx.max())
+            x, y = x[mask], y[mask]
+            errors = np.abs(y - np.interp(x, rx[order], ry[order]))
+    axis.plot(x, errors, 'o-', markersize=3)
+    axis.set(xlabel=xlabel, ylabel=label, title=f'{report.status}: JaxCont fresh − MatCont committed')
+    axis.grid(alpha=0.2)
+    error_figure.tight_layout()
+    return figure, error_figure

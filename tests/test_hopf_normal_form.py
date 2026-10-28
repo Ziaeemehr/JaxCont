@@ -149,7 +149,7 @@ def test_lyapunov_coefficient_grad_matches_finite_difference():
 
 def test_lyapunov_coefficient_matches_bifurcationkit_jl_independent_run():
     # Independent cross-check against BifurcationKit.jl v0.5.2's own hopf
-    # normal form (examples/BifurcationKit/04_hopf_normal_form.jl, run
+    # normal form (examples/validation/regenerate/bifurcationkit/hopf_normal_form.jl, run
     # 2026-08-04): Hopf at p=5.392241290723402e-7, omega0=1.0, BK's own
     # normal-form b=-1.7500010784482587, giving l1=b=-1.7500010784482587.
     def f(u, p, args):

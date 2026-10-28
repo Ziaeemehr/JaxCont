@@ -262,7 +262,7 @@ def _diagnose(actual: np.ndarray, reference: np.ndarray, *, atol: float, rtol: f
         return {"passed": False, **scaled_close(actual, reference, atol=1e6, rtol=0.0)}
 
 
-def run_adaptx_prc_dprc(reference_dir: Path) -> CaseResult:
+def run_adaptx_prc_dprc(reference_dir: Path, *, computed=None) -> CaseResult:
     """Compare JaxCont's prc_curve on the adaptx system against MatCont's
     own PRC processor output. dprc_curve is computed too (returned in
     observations/artifacts for anyone inspecting the case), but is not
@@ -271,7 +271,7 @@ def run_adaptx_prc_dprc(reference_dir: Path) -> CaseResult:
     reference = _load_reference_prc(reference_dir)
     alpha, period = _load_converged_point(reference_dir)
 
-    problem, mesh = _run_adaptx_jaxcont(alpha, period)
+    problem, mesh = _run_adaptx_jaxcont(alpha, period) if computed is None else computed
     with jax.default_matmul_precision("float32"):
         jaxcont_prc_radian = np.asarray(prc_curve(_adaptx_rhs, mesh, problem.u0, problem.p0))
         jaxcont_dprc_radian = np.asarray(dprc_curve(problem))

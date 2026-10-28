@@ -811,6 +811,7 @@ def _gallery_environment(repository, tmp_path):
         {
             "JAX_PLATFORMS": "cpu",
             "MPLBACKEND": "Agg",
+            "JAX_ENABLE_X64": os.environ.get("JAXCONT_TEST_X64", "0"),
             "MPLCONFIGDIR": str(tmp_path / "mpl"),
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONPATH": os.pathsep.join(
@@ -821,27 +822,12 @@ def _gallery_environment(repository, tmp_path):
     return environment
 
 
-@pytest.mark.parametrize(
-    ("script_name", "image_name"),
-    [
-        ("example_16_matcont_cubic_overlay.py", "matcont_cubic_overlay.png"),
-        (
-            "example_17_matcont_vanderpol_overlay.py",
-            "matcont_vanderpol_overlay.png",
-        ),
-        (
-            "example_18_matcont_adaptive_control_overlay.py",
-            "matcont_adaptive_control_overlay.png",
-        ),
-        (
-            "example_19_matcont_radial_cycle_overlay.py",
-            "matcont_radial_cycle_overlay.png",
-        ),
-        ("example_20_matcont_torbpc_overlay.py", "matcont_torbpc_overlay.png"),
-    ],
-)
+@pytest.mark.parametrize("script_name", [
+    "plot_cubic.py", "plot_vanderpol.py", "plot_adaptx.py", "plot_radial.py",
+    "plot_torbpc.py", "plot_prc_shooting.py",
+])
 def test_gallery_example_runs_from_outside_repository_root(
-    tmp_path, script_name, image_name
+    tmp_path, script_name
 ):
     """Sphinx-Gallery execution must work outside the repository root."""
     repository = Path(__file__).resolve().parents[1]
@@ -850,13 +836,14 @@ def test_gallery_example_runs_from_outside_repository_root(
     environment = _gallery_environment(repository, tmp_path)
 
     completed = subprocess.run(
-        [sys.executable, str(repository / "examples" / script_name)],
+        [sys.executable, str(repository / "examples/validation/gallery" / script_name), "--output-dir", str(tmp_path / "generated")],
         cwd=tmp_path,
         env=environment,
         text=True,
         capture_output=True,
-        timeout=300,
+        timeout=900,
     )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert (tmp_path / "images" / image_name).is_file()
+    assert list((tmp_path / "generated").glob("*.png"))
+    assert not (tmp_path / "images").exists()

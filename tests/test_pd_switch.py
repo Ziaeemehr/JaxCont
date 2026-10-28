@@ -205,7 +205,7 @@ def test_detect_then_switch_end_to_end():
     switch on the detected event.
 
     Continuing the switched branch is covered by
-    examples/example_22_period_doubling_switch.py rather than here, to keep this
+    examples/tutorials/plot_14_pd_switch.py rather than here, to keep this
     test's runtime down -- the switch itself is what this file is testing."""
     prob, mesh = base_problem(-0.1)
     result = jc.continuation(

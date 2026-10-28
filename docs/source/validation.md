@@ -22,10 +22,10 @@ The reviewed references were generated with MATLAB 9.8 and MatCont 7.6, then com
 Reproduce the CPU validation snapshot from the repository root:
 
 ```bash
-JAX_PLATFORMS=cpu MPLCONFIGDIR=/tmp/mpl-jaxcont-validation python3 -m examples.MatCont.run_validation
+JAX_PLATFORMS=cpu MPLCONFIGDIR=/tmp/mpl-jaxcont-validation python3 -m examples.validation.run_validation
 ```
 
-Exit status `1` is expected while `MC-LC-002` remains failing. See the [complete MatCont validation-suite README](https://github.com/Ziaeemehr/JaxCont/blob/main/examples/MatCont/README.md) for case definitions, artifacts, the full comparison policy, and the unsupported-capabilities matrix.
+Exit status `1` is expected while `MC-LC-002` remains failing. See the [complete MatCont validation-suite README](https://github.com/Ziaeemehr/JaxCont/blob/main/examples/validation/README.md) for case definitions, artifacts, the full comparison policy, and the unsupported-capabilities matrix.
 
 Hopf coefficients use the MatCont/Kuznetsov convention with unit-norm `q`
 and denominator `2 * omega0`. The standard cubic Hopf has `l1 = -2`;

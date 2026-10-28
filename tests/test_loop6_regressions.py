@@ -280,7 +280,7 @@ def test_api_reference_lists_the_0_5_0_surface():
 
 
 def test_vmap_example_does_not_claim_events_are_unsupported():
-    text = (ROOT / 'examples/example_06_vmap_sweep.py').read_text()
+    text = (ROOT / 'examples/tutorials/plot_07_vmap_sweep.py').read_text()
     assert 'not yet supported inside jax.vmap' not in text
 
 

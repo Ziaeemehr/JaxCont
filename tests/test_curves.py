@@ -186,7 +186,7 @@ def test_every_codim2_event_kind_has_a_plot_style():
 # no guess anywhere near the BT is ever supplied.
 #
 # Seed values below are BifurcationKit.jl's own first fold-curve point
-# (`sn_codim2.sol[1]`), printed by examples/BifurcationKit/05_codim2.jl:
+# (`sn_codim2.sol[1]`), printed by examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl:
 #     first point x = [1.3117855253168738, -0.04287499818491644,
 #                      0.18038939415099514, -0.15702758496684757,
 #                      1.5466483725981275]     # (X, Y, Z, U, F)
@@ -196,7 +196,7 @@ def test_every_codim2_event_kind_has_a_plot_style():
 # convention, where p[0]=F is solved for (p_fixed) and p[1]=T is continued.
 #
 # P_TARGET_FREE is NOT BifurcationKit's full curve endpoint (T=-0.0735).
-# examples/BifurcationKit/05_codim2.jl's specialpoint list shows TWO BT
+# examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl's specialpoint list shows TWO BT
 # points on that curve (T=0.018390565929128334 and T=-0.023705593679238822,
 # from `sp.param`) -- the Lorenz-84 model here is exactly symmetric under
 # (U, T) -> (-U, -T) (U and T enter the RHS only as U**2 and as the U-row's
@@ -219,13 +219,13 @@ P_TARGET_FREE = -0.01  # T target; see margin note above
 
 def test_lorenz84_bt_matches_bifurcationkit():
     """Detection along a traced fold curve must land on the BT point
-    BifurcationKit.jl v0.5.2 finds independently (examples/BifurcationKit/
-    05_codim2.jl). tests/test_codim2.py asserts the direct SOLVER matches
+    BifurcationKit.jl v0.5.2 finds independently (examples/validation/regenerate/bifurcationkit/
+    lorenz84_codim2.jl). tests/test_codim2.py asserts the direct SOLVER matches
     these values; this asserts the DETECTOR finds them without a guess."""
     from tests.test_codim2 import BK_BT_P, BK_BT_U, _bk_model
 
     # Seed the fold curve at a fold point away from the BT, then continue
-    # toward it. Exact seed values come from 05_codim2.jl's printed output.
+    # toward it. Exact seed values come from lorenz84_codim2.jl's printed output.
     prob = jc.fold_curve_problem(
         _bk_model, U_SEED, P_SEED, formulation="extended", free=1,
     )

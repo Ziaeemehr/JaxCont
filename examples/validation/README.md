@@ -39,5 +39,15 @@ Candidates remain separate from the reviewed references. A custom flat
 `--reference-dir` remains supported for candidate checks. MATLAB drivers are
 under `regenerate/matcont/`, with capability gaps and templates separated.
 Julia scripts are under `regenerate/bifurcationkit/`; their headless export
-rewrite is a later task. The tutorials and comparison galleries are planned
-in the migration map and have not yet been created by this migration.
+rewrite is a later task. The [comparison gallery](gallery/) now contains cubic, Van der Pol,
+adaptx Hopf/iPRC, radial, torBPC and independent PRC-shooting pages. Each page
+runs fresh JaxCont computations, renders report-driven tables and writes PNG
+figures with matching `.checks.json` sidecars. For example:
+
+```sh
+python3 examples/validation/gallery/plot_cubic.py --output-dir /tmp/jaxcont-evidence
+```
+
+Figures remain open for Sphinx-Gallery capture. The 16 public API lessons
+live separately in `../tutorials/`. Later comparison pages and external
+series remain future work; no missing result is substituted with JaxCont data.

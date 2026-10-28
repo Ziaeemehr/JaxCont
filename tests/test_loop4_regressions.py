@@ -77,13 +77,16 @@ def test_cancelling_local_growth_derivatives():
 @pytest.mark.parametrize('number', [10, 11, 15])
 def test_shipped_gallery_example(number, tmp_path):
     """Run the full gallery script with its documented float64 setting."""
-    (tmp_path/'images').mkdir()
-    script = next((ROOT/'examples').glob(f'example_{number:02d}_*.py'))
+    lesson = {10: 'plot_09_vanderpol_cycle.py', 11: 'plot_10_brusselator_cycle.py',
+              15: 'plot_06_two_parameter.py'}[number]
+    script = ROOT / 'examples/tutorials' / lesson
     env = dict(os.environ, MPLBACKEND='Agg', JAX_PLATFORMS='cpu',
-               OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1')
-    runner = ("import runpy, sys; ns = runpy.run_path(sys.argv[1]); "
+               OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', JAX_ENABLE_X64='1')
+    runner = ("import runpy, sys; sys.argv = sys.argv[1:]; "
+              "ns = runpy.run_path(sys.argv[0], run_name='__main__'); "
               "r = ns.get('result'); "
               "assert r is None or r.status == 'reached_end', getattr(r, 'status', None)")
-    result = subprocess.run([sys.executable, '-c', runner, str(script)], cwd=tmp_path, env=env,
+    result = subprocess.run([sys.executable, '-c', runner, str(script),
+                             '--output-dir', str(tmp_path / 'generated')], cwd=tmp_path, env=env,
                             capture_output=True, text=True, timeout=600)
     assert result.returncode == 0, result.stdout + result.stderr

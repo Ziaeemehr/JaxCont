@@ -1,0 +1,143 @@
+r"""
+torBPC: a visible failing stress case
+=====================================
+
+The system
+----------
+MatCont's ``testtorBPC1`` uses state (x,y,z), free nu, and fixed
+beta=0.5, gamma=-0.6, r=0.6, a3=0.32858, b3=0.93358, epsilon=0.001:
+
+.. math::
+
+   r\dot x&=-(\beta+\nu)x+\beta y-a_3x^3+b_3(y-x)^3,\\
+   \dot y&=\beta x-(\beta+\gamma)y-z-b_3(y-x)^3,\\
+   \dot z&=y+\epsilon.
+
+The committed series is MatCont's full LPC/PD/NS branch, without trimming.
+"""
+
+# %%
+# What to look for
+# ----------------
+# LPC is a turning point of cycles, PD a multiplier crossing minus one,
+# and NS a complex pair crossing the unit circle. The envelopes and periods
+# show the branch while the event-centred spectrum exposes discrepancies.
+# JaxCont's missing LPC/PD labels and multiplier mismatch keep this case FAIL;
+# nearest-spectrum proxies are not detected events.
+
+import argparse
+import tempfile
+from pathlib import Path
+import sys
+if "__file__" in globals():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+import jax
+import jax.numpy as jnp
+import numpy as np
+import matplotlib.pyplot as plt
+import jaxcont as jc
+from jaxcont.core.collocation import Collocation
+from jaxcont.problems.periodic import periodic_orbit_problem
+from examples.validation.reporting import make_report, save_checked_figure
+from examples.validation.visualize import render_comparison, render_report_table
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated"
+)
+options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+import examples.validation as validation_package
+reference_dir = Path(validation_package.__file__).resolve().parent / "reference"
+
+# %%
+# The JaxCont computation
+# -----------------------
+# The following equations, seed, settings, and solve produce the fresh series.
+
+from examples.validation.cases.python_cases.periodic import (
+    _TORBPC_FIXED,
+    _torbpc_hopf_seed,
+    run_torbpc_cycle,
+)
+
+
+def _torbpc_rhs(u, nu, args):
+    del args
+    beta = _TORBPC_FIXED["beta"]
+    gamma = _TORBPC_FIXED["gamma"]
+    scale = _TORBPC_FIXED["r"]
+    a3 = _TORBPC_FIXED["a3"]
+    b3 = _TORBPC_FIXED["b3"]
+    epsilon = _TORBPC_FIXED["epsilon"]
+    x, y, z = u
+    difference = y - x
+    return jnp.array(
+        [
+            (-(beta + nu) * x + beta * y - a3 * x**3 + b3 * difference**3) / scale,
+            beta * x - (beta + gamma) * y - z - b3 * difference**3,
+            y + epsilon,
+        ]
+    )
+
+
+start_parameter = -0.589286291695516
+trajectory, period = _torbpc_hopf_seed(start_parameter)
+time = np.linspace(0.0, period, trajectory.shape[0], endpoint=False)
+mesh = Collocation(ntst=10, ncol=4)
+problem = periodic_orbit_problem(
+    _torbpc_rhs,
+    jnp.asarray(trajectory),
+    jnp.asarray(time),
+    period,
+    start_parameter,
+    mesh,
+    tol=1e-5,  # Jacobian condition number ~1.6e8 near the Hopf seed (measured)
+)
+result = jc.continuation(
+    problem,
+    jc.PseudoArclength(),
+    p_span=(start_parameter, -0.75),
+    settings=jc.ContinuationPar(
+        # Preserve dense Euclidean sampling for nearest-sample comparisons.
+        theta=1.0,
+        compute_stability=True,
+        ds=0.005,
+        ds_min=1e-5,
+        ds_max=0.02,
+        max_steps=300,
+        # Jacobian condition number ~1.6e8 near the Hopf seed (measured).
+        newton_tol=1e-5,
+    ),
+    events=[
+        jc.Fold(),
+        jc.NeimarkSacker(corrector_tol=1e-5),
+        jc.PeriodDoubling(corrector_tol=1e-5),
+    ],
+)
+case_result = run_torbpc_cycle(reference_dir, computed=(result, mesh))
+# %%
+# Comparison figures
+# ------------------
+# JaxCont is computed fresh. MatCont 7.6 is a committed reference series
+# from the bundled MatCont test systems; reference hashes are in the sidecars.
+# The error panel reveals discrepancies hidden by coincident curves.
+
+report = make_report(case_result, reference_dir)
+figures = render_comparison(case_result, report, reference_dir)
+for index, figure in enumerate(figures):
+    save_checked_figure(figure, report, options.output_dir / f"plot_torbpc_{index}.png")
+
+# %%
+# Quantitative summary
+# --------------------
+# This table is generated from the same report as the figures and sidecars.
+
+summary = render_report_table(report)
+save_checked_figure(summary, report, options.output_dir / "plot_torbpc_table.png")
+
+# %%
+# Takeaway
+# --------
+# The report retains FAIL when labels or multipliers disagree even where
+# the envelopes look close. The untrimmed stress case remains a limitation;
+# the event-local error panel and table show why it cannot be called a pass.

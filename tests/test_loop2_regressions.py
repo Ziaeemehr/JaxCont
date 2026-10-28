@@ -90,7 +90,8 @@ def test_example14_completes_in_scratch(tmp_path):
     scratch = tmp_path / 'examples'
     shutil.copytree(source, scratch)
     run = subprocess.run(
-        [sys.executable, str(scratch / 'example_14_prc_shooting_validation.py')],
+        [sys.executable, str(scratch / 'validation/gallery/plot_prc_shooting.py'),
+         '--output-dir', str(tmp_path / 'generated')],
         cwd=scratch, env={**os.environ, 'MPLBACKEND': 'Agg'},
         capture_output=True, text=True,
     )

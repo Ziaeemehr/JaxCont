@@ -81,7 +81,7 @@ def test_fold_test_function_is_tangent_dp_component():
 
 def test_detect_events_ignores_real_to_complex_transition_far_from_axis():
     # Regression for the inf-sentinel bug found during design (reproduced
-    # from example_05_neural_mass.py's actual data): eigenvalue structure
+    # from plot_05_neural_mass.py's actual data): eigenvalue structure
     # changes from all-real to a genuine complex pair between two branch
     # points, but that pair's real part (-9.0) is nowhere near zero. With
     # the old inf sentinel this false-positived as a hopf crossing; with
@@ -136,7 +136,7 @@ def test_hopf_refine_marks_non_finite_result_as_unknown(monkeypatch):
     # Newton solve (via differentiable_root) has no convergence guarantee --
     # if a bracket's test-function sign change wasn't actually a real Hopf
     # point (a known occurrence, see the "no close match -- spurious"
-    # branches printed by examples/example_05_neural_mass.py), p/l1/omega0
+    # branches printed by examples/tutorials/plot_05_neural_mass.py), p/l1/omega0
     # can come back non-finite (e.g. p=-inf, l1=nan). Both `abs(nan) < tol`
     # and `nan < 0` are False in Python/NumPy/JAX, so without a finiteness
     # guard, refine()'s sign-based classifier would silently fall through to

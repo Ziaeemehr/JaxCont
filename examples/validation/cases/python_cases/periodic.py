@@ -55,21 +55,24 @@ def _radial_problem(rho: float, mesh: Collocation):
     )
 
 
-def run_radial_cycle() -> CaseResult:
+def run_radial_cycle(*, computed=None) -> CaseResult:
     """Validate collocation and Floquet stability for an exact radial cycle."""
-    mesh = Collocation(ntst=10, ncol=4)
-    problem = _radial_problem(0.5, mesh)
-    result = jc.continuation(
-        problem,
-        jc.PseudoArclength(),
-        p_span=(0.5, 1.5),
-        settings=jc.ContinuationPar(
-            compute_stability=True,
-            ds=0.05,
-            ds_max=0.08,
-            max_steps=35,
-        ),
-    )
+    if computed is None:
+        mesh = Collocation(ntst=10, ncol=4)
+        problem = _radial_problem(0.5, mesh)
+        result = jc.continuation(
+            problem,
+            jc.PseudoArclength(),
+            p_span=(0.5, 1.5),
+            settings=jc.ContinuationPar(
+                compute_stability=True,
+                ds=0.05,
+                ds_max=0.08,
+                max_steps=35,
+            ),
+        )
+    else:
+        result, mesh, problem = computed
     branch = result.branch
     states = branch.states
     parameters = branch.params
@@ -382,13 +385,13 @@ def load_torbpc_reference(reference_dir: Path) -> dict:
     }
 
 
-def run_torbpc_cycle(reference_dir: Path) -> CaseResult:
+def run_torbpc_cycle(reference_dir: Path, *, computed=None) -> CaseResult:
     """Compare JaxCont's torBPC branch with normalized MatCont artifacts."""
     reference = load_torbpc_reference(reference_dir)
     branch = reference["branch"]
     events = reference["events"]
     multiplier_rows = reference["multiplier_rows"]
-    jaxcont_result, mesh = _run_torbpc_jaxcont()
+    jaxcont_result, mesh = _run_torbpc_jaxcont() if computed is None else computed
     jaxcont_branch = jaxcont_result.branch
     jaxcont_parameters = np.asarray(jaxcont_branch.params)
     jaxcont_states = np.asarray(jaxcont_branch.states)

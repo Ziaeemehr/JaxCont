@@ -89,7 +89,7 @@ def test_vmap_sweep_runs_on_gpu():
     """The flagship `vmap`-batched sweep (example_06) executes on GPU.
 
     Deliberately calls `pseudo_arclength_scan` directly rather than the
-    higher-level `jc.continuation()`, matching `example_06_vmap_sweep.py` --
+    higher-level `jc.continuation()`, matching `plot_07_vmap_sweep.py` --
     for the same reason that example does: `jc.continuation()`'s `_run_scan`
     concretizes `n_valid` with a bare `int(...)` to trim the fixed-size
     buffer, which raises `jax.errors.ConcretizationTypeError` under `vmap`

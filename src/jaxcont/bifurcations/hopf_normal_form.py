@@ -230,7 +230,7 @@ def lyapunov_coefficient(
     Verified: the standard supercritical textbook example (f = (-y + x(mu -
     x^2 - y^2), x + y(mu - x^2 - y^2)), exact l1 = -2 at the origin) and an
     independent BifurcationKit.jl v0.5.2 cross-check on a less-symmetric
-    example -- see examples/BifurcationKit/04_hopf_normal_form.jl.
+    example -- see examples/validation/regenerate/bifurcationkit/hopf_normal_form.jl.
     """
     n = u.shape[0]
     complex_dtype = jnp.complex128 if u.dtype == jnp.float64 else jnp.complex64

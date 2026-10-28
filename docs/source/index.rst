@@ -38,7 +38,8 @@ differentiable fold locations.
    installation
    quickstart
    presentation
-   auto_examples/index
+   auto_tutorials/index
+   auto_validation/index
    validation
    transformations
    api/index

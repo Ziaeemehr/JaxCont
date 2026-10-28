@@ -114,3 +114,6 @@ docs/_templates/
 # task-observer skill's log -- written into the repo root by the skill
 # itself instead of its own workspace folder; not project content.
 skill-observations/
+
+docs/source/auto_tutorials/
+docs/source/auto_validation/
