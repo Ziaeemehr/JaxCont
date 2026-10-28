@@ -10,47 +10,48 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import examples.MatCont.run_validation as matcont_runner
-from examples.MatCont.artifacts import (
+import examples.validation.run_validation as matcont_runner
+from examples.validation.artifacts import (
     enrich_generated_metadata,
+    reference_directory,
     validate_equilibrium_artifacts,
     validate_reference_metadata,
     verify_case_references,
 )
-from examples.MatCont.compare import (
+from examples.validation.compare import (
     ValidationMismatch,
     interpolate_observable,
     match_events,
     match_spectrum,
     scaled_close,
 )
-from examples.MatCont.python_cases.codim2 import run_codim2_points
-from examples.MatCont.python_cases.codim2_curves import (
+from examples.validation.cases.python_cases.codim2 import run_codim2_points
+from examples.validation.cases.python_cases.codim2_curves import (
     run_two_parameter_fold_curve,
     run_two_parameter_hopf_curve,
 )
-from examples.MatCont.python_cases.equilibrium import (
+from examples.validation.cases.python_cases.equilibrium import (
     run_adaptive_control_hopf,
     run_cubic_fold,
     run_vanderpol_hopf,
 )
-from examples.MatCont.python_cases.periodic import (
+from examples.validation.cases.python_cases.periodic import (
     load_torbpc_reference,
     run_radial_cycle,
     run_torbpc_cycle,
 )
-from examples.MatCont.python_cases.pd_switch import run_adaptx_pd_switch
-from examples.MatCont.python_cases.transforms import (
+from examples.validation.cases.python_cases.pd_switch import run_adaptx_pd_switch
+from examples.validation.cases.python_cases.transforms import (
     _batched_branch,
     run_transform_checks,
 )
-from examples.MatCont.registry import load_registry, select_cases
-from examples.MatCont.run_validation import (
+from examples.validation.registry import load_registry, select_cases
+from examples.validation.run_validation import (
     build_parser,
     resolve_matlab_bin,
     resolve_runtime_paths,
 )
-from examples.MatCont.validation import case_result_passes
+from examples.validation.validation import case_result_passes
 
 REQUIRED_CASE_FIELDS = {
     "id",
@@ -186,7 +187,7 @@ def test_radial_cycle_matches_exact_floquet_formula():
 
 def test_adaptx_seed_refines_to_a_single_base_cycle():
     """The Hopf seed must converge before PD continuation, in either precision."""
-    from examples.MatCont.python_cases.pd_switch import _base_cycle_problem
+    from examples.validation.cases.python_cases.pd_switch import _base_cycle_problem
     from jaxcont.utils.precision import default_tol
 
     problem, mesh = _base_cycle_problem()
@@ -316,18 +317,20 @@ def matlab_runtime():
 def matcont_generated_dir(tmp_path_factory, matlab_runtime):
     matlab = matlab_runtime.matlab_bin
     output = tmp_path_factory.mktemp("matcont-generated")
-    matlab_dir = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "matlab"
+    matlab_dir = Path(__file__).resolve().parents[1] / "examples" / "validation" / "regenerate" / "matcont"
     completed = subprocess.run(
         [str(matlab), "-batch", f"cd('{matlab_dir}'); run_supported('{output}')"],
         text=True,
         capture_output=True,
-        timeout=120,
+        # Cold MATLAB startup and shutdown can dominate the five real runs.
+        timeout=300,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     return output
 
 
 @pytest.mark.slow
+@pytest.mark.matlab
 def test_matlab_equilibrium_exporters_preserve_spectra_and_normal_forms(matcont_generated_dir):
     cubic = validate_equilibrium_artifacts(matcont_generated_dir, "MC-EQ-001")
     vanderpol = validate_equilibrium_artifacts(matcont_generated_dir, "MC-EQ-002")
@@ -339,6 +342,21 @@ def test_matlab_equilibrium_exporters_preserve_spectra_and_normal_forms(matcont_
     assert vanderpol["first_lyapunov"] == pytest.approx(0.0, abs=1e-4)
     assert adaptive["hopf_frequency"] == pytest.approx(1.0, abs=5e-4)
     assert adaptive["first_lyapunov"] == pytest.approx(-0.3, abs=5e-4)
+
+    # Historical metadata keeps its original runtime versions. Compare the
+    # regenerated numerical artifacts without rewriting that provenance.
+    reviewed = Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference"
+    for case in load_registry()["cases"]:
+        if case["id"].startswith("MC-EQ-"):
+            numeric_case = {
+                **case,
+                "references": [
+                    name for name in case["references"]
+                    if not name.endswith("_metadata.json")
+                ],
+            }
+            diagnostics = verify_case_references(numeric_case, matcont_generated_dir, reviewed)
+            assert diagnostics["artifact_count"] == 3
 
 
 @pytest.mark.slow
@@ -601,7 +619,7 @@ def test_missing_matcont_root_does_not_launch_matlab(monkeypatch):
 
 def _run_matcont_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "examples.MatCont.run_validation", *arguments],
+        [sys.executable, "-m", "examples.validation.run_validation", *arguments],
         cwd=Path(__file__).resolve().parents[1],
         text=True,
         capture_output=True,
@@ -611,7 +629,7 @@ def _run_matcont_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
 
 def test_offline_cli_validates_supported_reference_case():
     """A supported case with reviewed artifacts must execute, not stop at selection."""
-    reference_dir = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reference_dir = Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference"
 
     completed = _run_matcont_cli(
         "--case", "MC-EQ-001", "--reference-dir", str(reference_dir)
@@ -640,7 +658,7 @@ def test_unsupported_registry_covers_every_deferred_feature_family():
     - ``prc`` (infinitesimal PRC, ``prc_curve``) is no longer a deferred
       MatCont capability: MC-PRC-001 promotes it to ``support: "supported"``
       and cross-validates it against MatCont 7.6's own PRC processor
-      (``examples/MatCont/matlab/export_prc_run.m`` /
+      (``examples/validation/regenerate/matcont/export_prc_run.m`` /
       ``python_cases/prc.py``).
     - ``dprc`` was never actually a MatCont capability gap in the sense this
       registry tracks (a capability *MatCont has that JaxCont lacks*).
@@ -767,7 +785,7 @@ def test_default_reference_rejects_unreviewed_and_explicit_rejects_malformed_has
 @pytest.mark.slow
 def test_cli_validates_explicit_generated_reference_directory(tmp_path):
     """The CLI must run a supported case directly against fresh producer output."""
-    committed = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    committed = reference_directory(Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference", "MC-EQ-001")
     generated = tmp_path / "generated"
     shutil.copytree(committed, generated)
     metadata_path = generated / "MC-EQ-001_metadata.json"
@@ -807,7 +825,7 @@ def test_generated_metadata_is_enriched_with_runtime_and_equation_provenance(tmp
     case = {
         "id": "MC-EQ-001",
         "manual_source": "MatCont manual section 3",
-        "python": "examples.MatCont.python_cases.equilibrium:run_cubic_fold",
+        "python": "examples.validation.cases.python_cases.equilibrium:run_cubic_fold",
     }
 
     enriched = enrich_generated_metadata(metadata_path, case, equation_path)
@@ -1159,7 +1177,7 @@ def test_executable_unsupported_wrapper_runs_only_after_opt_in(matlab_runtime):
 @pytest.mark.slow
 def test_offline_cli_rejects_corrupted_matcont_fold_event(tmp_path):
     """Analytic fold checks must not let a corrupted committed MatCont event pass."""
-    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reference = reference_directory(Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference", "MC-EQ-001")
     mutated = tmp_path / "reference"
     shutil.copytree(reference, mutated)
     event_path = mutated / "MC-EQ-001_events.csv"
@@ -1177,7 +1195,7 @@ def test_offline_cli_rejects_corrupted_matcont_fold_event(tmp_path):
 @pytest.mark.slow
 def test_offline_cli_rejects_corrupted_radial_matcont_branch(tmp_path):
     """Exact radial checks must not let a corrupted committed MatCont period pass."""
-    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reference = reference_directory(Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference", "MC-LC-001")
     mutated = tmp_path / "reference"
     shutil.copytree(reference, mutated)
     branch_path = mutated / "MC-LC-001_branch.csv"
@@ -1195,7 +1213,7 @@ def test_offline_cli_rejects_corrupted_radial_matcont_branch(tmp_path):
 
 def test_offline_cli_rejects_corrupted_radial_branch_schema(tmp_path):
     """A radial reference without period data must fail before numerical execution."""
-    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reference = reference_directory(Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference", "MC-LC-001")
     mutated = tmp_path / "reference"
     shutil.copytree(reference, mutated)
     branch_path = mutated / "MC-LC-001_branch.csv"
@@ -1247,7 +1265,7 @@ def test_reference_verification_rejects_vanderpol_stability_and_spectrum_mutatio
     tmp_path, mutation
 ):
     """Regeneration review must cover discrete stability and every branch eigenvalue."""
-    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reference = reference_directory(Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference", "MC-EQ-002")
     reviewed = tmp_path / "reviewed"
     generated = tmp_path / "generated"
     shutil.copytree(reference, reviewed)
@@ -1269,7 +1287,7 @@ def test_offline_cli_rejects_vanderpol_stability_and_spectrum_mutations(
     tmp_path, mutation
 ):
     """Analytic landmarks must not mask corrupted MatCont branch diagnostics."""
-    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reference = reference_directory(Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference", "MC-EQ-002")
     mutated = tmp_path / "reference"
     shutil.copytree(reference, mutated)
     _mutate_vanderpol_reference(mutated, mutation)

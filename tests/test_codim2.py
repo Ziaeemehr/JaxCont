@@ -511,8 +511,8 @@ def test_codim2_names_are_listed_in_dunder_all():
 # --------------------------------------------------------------------------
 #
 # Reference values from an independent BifurcationKit.jl v0.5.2 run -- see
-# examples/BifurcationKit/05_codim2.jl. Regenerate with:
-#     julia examples/BifurcationKit/05_codim2.jl
+# examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl. Regenerate with:
+#     julia examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl
 #
 # Route (a): a real applied model neither implementation was tuned for --
 # the Lorenz-84 atmospheric circulation model (already used in
@@ -545,7 +545,7 @@ _LOR84_GAMMA = 0.987
 
 def _bk_model(u, p, args):
     # The Lorenz-84 atmospheric circulation model -- the same right-hand
-    # side as examples/BifurcationKit/05_codim2.jl's `Lor`, with F and T as
+    # side as examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl's `Lor`, with F and T as
     # the two free (continuation) parameters and the rest fixed at the
     # values BifurcationKit.jl's own test suite uses.
     X, Y, Z, U = u

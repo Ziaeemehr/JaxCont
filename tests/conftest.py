@@ -17,3 +17,5 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "gpu: marks tests requiring GPU (deselect with '-m \"not gpu\"')"
     )
+
+    config.addinivalue_line("markers", "matlab: opt-in tests requiring MATLAB and MatCont")

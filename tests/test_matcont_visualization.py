@@ -14,12 +14,12 @@ import matplotlib
 import numpy as np
 import pytest
 
-from examples.MatCont.python_cases import CaseResult
+from examples.validation.cases.python_cases import CaseResult
 
 matplotlib.use("Agg")
 
 _REPOSITORY = Path(__file__).resolve().parents[1]
-_REFERENCE_DIR = _REPOSITORY / "examples" / "MatCont" / "reference"
+_REFERENCE_DIR = _REPOSITORY / "examples" / "validation" / "reference"
 
 
 def _write_rows(path, fieldnames, rows):
@@ -37,7 +37,7 @@ def test_registered_hopf_case_renders_spectral_pass_figure(
     case_id, hopf_parameter, tmp_path
 ):
     """Hopf views compare stability crossings as well as flat equilibria."""
-    from examples.MatCont.visualize import render_equilibrium_overlay
+    from examples.validation.visualize import render_equilibrium_overlay
 
     output = tmp_path / f"{case_id}.png"
     figure = render_equilibrium_overlay(case_id, output_path=output)
@@ -87,7 +87,7 @@ def test_registered_hopf_case_renders_spectral_pass_figure(
 
 def test_registered_radial_cycle_renders_three_panel_pass_figure(tmp_path):
     """The periodic overlay compares all three radial diagnostics."""
-    from examples.MatCont.visualize import render_periodic_overlay
+    from examples.validation.visualize import render_periodic_overlay
 
     output = tmp_path / "radial.png"
     figure = render_periodic_overlay(
@@ -111,7 +111,7 @@ def test_registered_radial_cycle_renders_three_panel_pass_figure(tmp_path):
 
 
 def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
-    from examples.MatCont.visualize import render_periodic_overlay
+    from examples.validation.visualize import render_periodic_overlay
 
     figure = render_periodic_overlay(
         "MC-LC-002", output_path=tmp_path / "torbpc.png"
@@ -176,8 +176,8 @@ def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
 
 @pytest.fixture(scope="module")
 def cubic_registered_case():
-    from examples.MatCont.python_cases.equilibrium import run_cubic_fold
-    from examples.MatCont.registry import load_registry
+    from examples.validation.cases.python_cases.equilibrium import run_cubic_fold
+    from examples.validation.registry import load_registry
 
     case = next(
         case for case in load_registry()["cases"] if case["id"] == "MC-EQ-001"
@@ -189,7 +189,7 @@ def test_equilibrium_renderer_reports_failed_producer_predicate(
     monkeypatch, cubic_registered_case
 ):
     """A MatCont match cannot override a failed producer self-check."""
-    from examples.MatCont import visualize
+    from examples.validation import visualize
 
     case, result = cubic_registered_case
     failed_result = replace(
@@ -219,7 +219,7 @@ def test_equilibrium_renderer_turns_numerical_mismatch_into_diagnostic(
     monkeypatch, cubic_registered_case
 ):
     """A numerical mismatch must remain drawable for diagnosis."""
-    from examples.MatCont import visualize
+    from examples.validation import visualize
 
     case, result = cubic_registered_case
     shifted_states = np.asarray(result.artifacts["states"]).copy()
@@ -250,7 +250,7 @@ def test_equilibrium_renderer_keeps_missing_artifacts_exceptional(
     monkeypatch, tmp_path, cubic_registered_case
 ):
     """Diagnostic FAIL handling must not hide a missing structural artifact."""
-    from examples.MatCont import visualize
+    from examples.validation import visualize
 
     case, result = cubic_registered_case
     monkeypatch.setattr(
@@ -270,7 +270,7 @@ def test_equilibrium_renderer_rejects_family_before_running_producer(
     monkeypatch,
 ):
     """An invalid family must not execute an unrelated registered producer."""
-    from examples.MatCont import visualize
+    from examples.validation import visualize
 
     producer_called = False
 
@@ -298,7 +298,7 @@ def test_hopf_overlay_rejects_missing_event_spectrum(
     tmp_path, missing_source, message
 ):
     """A missing Hopf spectrum must not become a fabricated zero marker."""
-    from examples.MatCont.visualize import plot_equilibrium_overlay
+    from examples.validation.visualize import plot_equilibrium_overlay
 
     _write_rows(
         tmp_path / "MC-EQ-002_branch.csv",
@@ -411,7 +411,7 @@ def test_hopf_overlay_rejects_missing_event_spectrum(
 
 def test_radial_overlay_filters_native_samples_before_y_autoscaling(tmp_path):
     """Out-of-domain sentinels must not flatten any radial comparison panel."""
-    from examples.MatCont.visualize import plot_radial_cycle_overlay
+    from examples.validation.visualize import plot_radial_cycle_overlay
 
     branch_rows = [
         {
@@ -526,7 +526,7 @@ def test_radial_overlay_filters_native_samples_before_y_autoscaling(tmp_path):
 
 def test_equilibrium_overlay_draws_both_branches_and_event_sources(tmp_path):
     """The overlay must retain both solver curves and event markers."""
-    from examples.MatCont.visualize import plot_equilibrium_overlay
+    from examples.validation.visualize import plot_equilibrium_overlay
 
     _write_rows(
         tmp_path / "MC-EQ-001_branch.csv",
@@ -620,7 +620,7 @@ def test_equilibrium_overlay_resolves_matcont_event_state_from_branch_point(
     tmp_path,
 ):
     """MatCont event artifacts resolve their state from branch rows."""
-    from examples.MatCont.visualize import plot_equilibrium_overlay
+    from examples.validation.visualize import plot_equilibrium_overlay
 
     _write_rows(
         tmp_path / "MC-EQ-001_branch.csv",
@@ -678,12 +678,12 @@ def test_equilibrium_overlay_resolves_matcont_event_state_from_branch_point(
 
 def test_render_case_overlay_reuses_registered_case_and_writes_png(tmp_path):
     """The renderer must execute the registered JaxCont case."""
-    from examples.MatCont.visualize import render_case_overlay
+    from examples.validation.visualize import render_case_overlay
 
     reference_dir = (
         Path(__file__).resolve().parents[1]
         / "examples"
-        / "MatCont"
+        / "validation"
         / "reference"
     )
     output_path = tmp_path / "mc-eq-001-overlay.png"
@@ -708,7 +708,7 @@ def test_render_case_overlay_reuses_registered_case_and_writes_png(tmp_path):
 
 def test_equilibrium_overlay_limits_view_to_shared_parameter_domain(tmp_path):
     """A longer run from one package must not look like branch disagreement."""
-    from examples.MatCont.visualize import plot_equilibrium_overlay
+    from examples.validation.visualize import plot_equilibrium_overlay
 
     _write_rows(
         tmp_path / "MC-EQ-001_branch.csv",
@@ -753,7 +753,7 @@ def test_equilibrium_overlay_limits_view_to_shared_parameter_domain(tmp_path):
 
 def test_equilibrium_overlay_accepts_domain_labels_and_title(tmp_path):
     """A gallery figure must use model-specific labels."""
-    from examples.MatCont.visualize import plot_equilibrium_overlay
+    from examples.validation.visualize import plot_equilibrium_overlay
 
     _write_rows(
         tmp_path / "MC-EQ-001_branch.csv",
