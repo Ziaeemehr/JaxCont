@@ -32,6 +32,7 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
         raise ValueError("MatCont registry must contain a non-empty 'cases' list")
 
     case_ids = []
+    names = {}
     for case in cases:
         if not isinstance(case, dict):
             raise ValueError("MatCont registry cases must be objects")
@@ -47,6 +48,12 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
                 "Unsupported MatCont cases require unsupported_execution=executable|template"
             )
         case_ids.append(case["id"])
+        for name in set(
+            [case["id"], case.get("canonical_id", case["id"]), *case.get("aliases", [])]
+        ):
+            if name in names:
+                raise ValueError(f"Registry alias collision: {name}")
+            names[name] = case["id"]
 
     if len(case_ids) != len(set(case_ids)):
         raise ValueError("MatCont registry case IDs must be unique")
@@ -64,12 +71,19 @@ def select_cases(
         raise ValueError("MatCont registry must contain a 'cases' list")
 
     requested_ids = None if ids is None else set(ids)
-    known_ids = {case["id"] for case in cases}
+    lookup = {
+        name: case["id"]
+        for case in cases
+        for name in [case["id"], case.get("canonical_id", case["id"]), *case.get("aliases", [])]
+    }
+    known_ids = set(lookup)
     unknown_ids = set() if requested_ids is None else requested_ids - known_ids
     if unknown_ids:
         unknown = ", ".join(sorted(unknown_ids))
         raise ValueError(f"Unknown MatCont case ID(s): {unknown}")
 
+    if requested_ids is not None:
+        requested_ids = {lookup[name] for name in requested_ids}
     return [
         case
         for case in cases

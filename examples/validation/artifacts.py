@@ -25,8 +25,12 @@ from .compare import (
 )
 
 _REFERENCE_SYSTEMS = {
-    "MC-EQ-001": "cubic", "MC-EQ-002": "vanderpol", "MC-EQ-003": "adaptx",
-    "MC-LC-001": "radial", "MC-LC-002": "torbpc", "MC-PRC-001": "adaptx",
+    "MC-EQ-001": "cubic",
+    "MC-EQ-002": "vanderpol",
+    "MC-EQ-003": "adaptx",
+    "MC-LC-001": "radial",
+    "MC-LC-002": "torbpc",
+    "MC-PRC-001": "adaptx",
 }
 
 
@@ -261,7 +265,7 @@ def enrich_generated_metadata(
 
 
 def _column_atol(column: str, tolerances: dict[str, float]) -> float:
-    if column == "parameter":
+    if column == "parameter" or column.startswith("parameter_"):
         return float(tolerances.get("parameter_atol", 1e-9))
     if column == "period":
         return float(tolerances.get("period_atol", 1e-9))
@@ -312,9 +316,7 @@ def _unique_sorted(rows: list[dict[str, Any]], coordinate: str) -> tuple[np.ndar
     return unique, [ordered[int(index)] for index in indices]
 
 
-def _monotone_segments(
-    rows: list[dict[str, Any]], coordinate: str
-) -> list[list[dict[str, Any]]]:
+def _monotone_segments(rows: list[dict[str, Any]], coordinate: str) -> list[list[dict[str, Any]]]:
     """Split continuation order at coordinate turning points, retaining the turn."""
     if len(rows) < 2:
         return [rows]
@@ -425,14 +427,10 @@ def _compare_branch_rows(
         query = np.asarray([lower])
     else:
         candidates = (
-            np.unique(np.concatenate([actual_x, reference_x]))
-            if require_same_extent
-            else actual_x
+            np.unique(np.concatenate([actual_x, reference_x])) if require_same_extent else actual_x
         )
         if not require_same_extent and case["id"] == "MC-LC-001":
-            candidates = np.unique(
-                np.concatenate([candidates, [reference_x[0], reference_x[-1]]])
-            )
+            candidates = np.unique(np.concatenate([candidates, [reference_x[0], reference_x[-1]]]))
         query = candidates[(candidates >= lower) & (candidates <= upper)]
         if query.size > 201:
             query = np.linspace(lower, upper, 201)
@@ -471,14 +469,10 @@ def _compare_branch_rows(
         max_error = max(max_error, diagnostics["max_error"])
     for column in sorted(discrete_columns):
         actual_values = np.asarray([int(_as_float(row, column)) for row in actual_ordered])
-        reference_values = np.asarray(
-            [int(_as_float(row, column)) for row in reference_ordered]
-        )
+        reference_values = np.asarray([int(_as_float(row, column)) for row in reference_ordered])
         actual_nearest = np.abs(actual_x[:, None] - query[None, :]).argmin(axis=0)
         reference_nearest = np.abs(reference_x[:, None] - query[None, :]).argmin(axis=0)
-        if not np.array_equal(
-            actual_values[actual_nearest], reference_values[reference_nearest]
-        ):
+        if not np.array_equal(actual_values[actual_nearest], reference_values[reference_nearest]):
             raise ValidationMismatch(f"branch {column} labels differ")
     if case["id"] == "MC-LC-001":
         extrema_columns = sorted(
@@ -570,9 +564,7 @@ def _compare_event_rows(
 
 def _complex_values(rows: list[dict[str, Any]]) -> np.ndarray:
     ordered = sorted(rows, key=lambda row: int(float(row["multiplier_index"])))
-    return np.asarray(
-        [complex(_as_float(row, "real"), _as_float(row, "imag")) for row in ordered]
-    )
+    return np.asarray([complex(_as_float(row, "real"), _as_float(row, "imag")) for row in ordered])
 
 
 def _group_spectra(rows: list[dict[str, Any]]) -> dict[tuple[int, str], list[dict]]:
@@ -662,9 +654,7 @@ def _compare_spectrum_segments(
     actual_roots = _interpolate_spectrum_roots(actual_x, actual_values, query)
     reference_roots = _interpolate_spectrum_roots(reference_x, reference_values, query)
     tolerances = case.get("tolerances", {})
-    atol = float(
-        tolerances.get("spectrum_atol", tolerances.get("multiplier_atol", 1e-9))
-    )
+    atol = float(tolerances.get("spectrum_atol", tolerances.get("multiplier_atol", 1e-9)))
     max_error = 0.0
     for actual_at_point, reference_at_point in zip(actual_roots, reference_roots):
         diagnostics = match_spectrum(
@@ -701,9 +691,7 @@ def _compare_spectrum_rows(
     )
     max_error = 0.0
     actual_branch_rows = [row for row in actual_rows if int(float(row["event_index"])) == -1]
-    reference_branch_rows = [
-        row for row in reference_rows if int(float(row["event_index"])) == -1
-    ]
+    reference_branch_rows = [row for row in reference_rows if int(float(row["event_index"])) == -1]
     if bool(actual_branch_rows) != bool(reference_branch_rows):
         raise ValidationMismatch("branch spectrum availability differs")
     if actual_branch_rows:
@@ -711,9 +699,7 @@ def _compare_spectrum_rows(
             case["id"], set(actual_branch[0]) & set(reference_branch[0])
         )
         kind = str(reference_branch_rows[0]["spectrum_kind"]).strip().upper()
-        actual_curve = _branch_spectrum_curve(
-            actual_branch, actual_branch_rows, coordinate
-        )
+        actual_curve = _branch_spectrum_curve(actual_branch, actual_branch_rows, coordinate)
         reference_curve = _branch_spectrum_curve(
             reference_branch, reference_branch_rows, coordinate
         )
@@ -840,17 +826,13 @@ def verify_case_references(
         reference_event_fields, reference_events = _read_table(reviewed_dir / event_name)
         if set(actual_event_fields) != set(reference_event_fields):
             raise ValidationMismatch("generated and reviewed event columns differ")
-        event_diagnostics, assignments = _compare_event_rows(
-            case, actual_events, reference_events
-        )
+        event_diagnostics, assignments = _compare_event_rows(case, actual_events, reference_events)
         max_numeric_error = max(max_numeric_error, event_diagnostics["max_error"])
     else:
         assignments = []
     if spectrum_name:
         actual_spectrum_fields, actual_spectra = _read_table(generated_dir / spectrum_name)
-        reference_spectrum_fields, reference_spectra = _read_table(
-            reviewed_dir / spectrum_name
-        )
+        reference_spectrum_fields, reference_spectra = _read_table(reviewed_dir / spectrum_name)
         if set(actual_spectrum_fields) != set(reference_spectrum_fields):
             raise ValidationMismatch("generated and reviewed spectrum columns differ")
         spectrum_diagnostics = _compare_spectrum_rows(
@@ -866,9 +848,7 @@ def verify_case_references(
         )
         max_numeric_error = max(max_numeric_error, spectrum_diagnostics["max_error"])
     if metadata_name:
-        _verify_metadata(
-            generated_dir / metadata_name, reviewed_dir / metadata_name, case["id"]
-        )
+        _verify_metadata(generated_dir / metadata_name, reviewed_dir / metadata_name, case["id"])
     return {
         "artifact_count": len(references),
         "max_numeric_error": max_numeric_error,
@@ -905,9 +885,7 @@ def _case_result_rows(case: dict[str, Any], result: Any) -> tuple:
             "parameter",
             "stable",
             "unstable_dimension",
-        ] + [
-            f"state_{index}" for index in range(states.shape[1])
-        ]
+        ] + [f"state_{index}" for index in range(states.shape[1])]
         for point, (parameter, state, stable, unstable_dimension) in enumerate(
             zip(
                 parameters,
@@ -1030,9 +1008,7 @@ def compare_case_result_to_reference(
     branch_name, event_name, spectrum_name = _reference_names(case)
     reference_branch_fields, reference_branch = _read_table(Path(reference_dir) / branch_name)
     _reference_event_fields, reference_events = _read_table(Path(reference_dir) / event_name)
-    reference_spectrum_fields, reference_spectra = _read_table(
-        Path(reference_dir) / spectrum_name
-    )
+    reference_spectrum_fields, reference_spectra = _read_table(Path(reference_dir) / spectrum_name)
     if case["id"].startswith("MC-EQ-"):
         validate_equilibrium_artifacts(reference_dir, case["id"])
     else:
@@ -1095,3 +1071,365 @@ __all__ = [
     "validate_reference_metadata",
     "verify_case_references",
 ]
+
+# v2 is additive: legacy CSV validators above retain their original interface.
+_V2_METADATA_FIELDS = {
+    "schema_version",
+    "canonical_id",
+    "tool",
+    "runtime_version",
+    "package_versions",
+    "lock_hash",
+    "platform",
+    "precision",
+    "equation_hash",
+    "driver_hash",
+    "parameter_order",
+    "scaling",
+    "seeds",
+    "mesh",
+    "resolved_controls",
+    "solver_strategies",
+    "command",
+    "generated_utc",
+    "generator_revision",
+    "output_hashes",
+    "reviewed",
+    "reviewer",
+    "review_date",
+    "conversion_chain",
+}
+_V2_COLUMNS = {
+    "branch.csv": {
+        "segment_id",
+        "point_id",
+        "order",
+        "parameter",
+        "residual_norm",
+        "unstable_dimension",
+        "status",
+    },
+    "events.csv": {
+        "event_id",
+        "event_type",
+        "status",
+        "segment_id",
+        "point_id",
+        "parameter",
+        "bracket_lower",
+        "bracket_upper",
+    },
+    "spectra.csv": {
+        "segment_id",
+        "point_id",
+        "event_id",
+        "kind",
+        "mode_id",
+        "real",
+        "imag",
+        "logabs",
+        "phase",
+        "trivial_mode_method",
+    },
+}
+
+
+def file_hash(path):
+    """Hash artifact bytes, including their exact text encoding and newlines."""
+    return "sha256:" + hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def candidate_directory(output, *reference_roots):
+    """Reject reviewed roots, descendants, ancestors, and symlink aliases."""
+    output = Path(output).expanduser().resolve()
+    roots = (Path(__file__).parent / "reference", *reference_roots)
+    for root in roots:
+        root = Path(root).expanduser().resolve()
+        if output == root or root in output.parents or output in root.parents:
+            raise ValueError(f"candidate output overlaps reference directory: {output}")
+    return output
+
+
+def load_bundle(directory, *, case_id=None, tool=None, require_reviewed=False):
+    """Read v1 without inventing provenance, or validate a hashed v2 bundle."""
+    directory = Path(directory)
+    path = directory / "metadata.json"
+    if not path.exists():
+        if case_id is None:
+            raise ValueError("v1 reading requires case_id")
+        directory = reference_directory(directory, case_id)
+        metadata = validate_reference_metadata(
+            directory / f"{case_id}_metadata.json", case_id, require_reviewed=require_reviewed
+        )
+        metadata = {
+            **metadata,
+            "schema_version": 1,
+            "tool": "matcont",
+            "driver_hash": "unknown",
+            "parameter_order": "unknown",
+            "conversion_chain": [],
+            "trivial_mode_method": "nearest-to-+1",
+        }
+        tables = {}
+        for key, suffix in (
+            ("branch", "branch"),
+            ("events", "events"),
+            ("spectra", "multipliers"),
+            ("prc", "prc"),
+        ):
+            table = directory / f"{case_id}_{suffix}.csv"
+            if table.exists():
+                tables[key] = _read_table(table)[1]
+        return {"metadata": metadata, **tables}
+    metadata = json.loads(path.read_text(encoding="utf-8"))
+    missing = _V2_METADATA_FIELDS - metadata.keys()
+    if missing:
+        raise ValueError(f"missing v2 metadata: {', '.join(sorted(missing))}")
+    if metadata["schema_version"] != 2:
+        raise ValueError("unsupported schema_version")
+    if metadata["tool"] not in {"matcont", "bifurcationkit", "jaxcont"}:
+        raise ValueError("invalid tool")
+    if tool is not None and metadata["tool"] != tool:
+        raise ValueError(f"bundle tool {metadata['tool']} differs from required tool {tool}")
+    if not isinstance(metadata["conversion_chain"], list):
+        raise ValueError("invalid conversion_chain")
+    converted = bool(metadata["conversion_chain"])
+    if converted:
+        for entry in metadata["conversion_chain"]:
+            required = {
+                "source_hashes",
+                "output_hashes",
+                "source_schema",
+                "target_schema",
+                "canonical_id",
+            }
+            if (
+                not isinstance(entry, dict)
+                or not required <= entry.keys()
+                or entry["source_schema"] != 1
+                or entry["target_schema"] != 2
+                or entry["canonical_id"] != metadata["canonical_id"]
+                or not isinstance(entry["source_hashes"], dict)
+                or not entry["source_hashes"]
+                or entry["output_hashes"] != metadata["output_hashes"]
+            ):
+                raise ValueError("invalid conversion_chain manifest")
+            for name, digest in entry["source_hashes"].items():
+                legacy = (directory / "legacy" / name).resolve()
+                if (
+                    legacy.parent != (directory / "legacy").resolve()
+                    or not legacy.is_file()
+                    or file_hash(legacy) != digest
+                ):
+                    raise ValueError("invalid conversion_chain source hash")
+    if not isinstance(metadata["reviewed"], bool):
+        raise ValueError("invalid reviewed")
+    for field in (
+        "canonical_id",
+        "runtime_version",
+        "precision",
+        "generator_revision",
+        "reviewer",
+        "review_date",
+    ):
+        if not isinstance(metadata[field], str) or not metadata[field].strip():
+            raise ValueError(f"invalid {field}")
+    for field in (
+        "package_versions",
+        "platform",
+        "scaling",
+        "seeds",
+        "mesh",
+        "resolved_controls",
+        "solver_strategies",
+    ):
+        if converted and metadata[field] == "unknown":
+            continue
+        if not isinstance(metadata[field], dict) or not metadata[field]:
+            raise ValueError(f"invalid {field}")
+    if (
+        isinstance(metadata["platform"], dict)
+        and not {"os", "cpu", "blas"} <= metadata["platform"].keys()
+    ):
+        raise ValueError("invalid platform")
+    parameters = metadata["parameter_order"]
+    if not (converted and parameters == "unknown") and (
+        not isinstance(parameters, list)
+        or not parameters
+        or not all(isinstance(p, str) and p for p in parameters)
+        or len(set(parameters)) != len(parameters)
+    ):
+        raise ValueError("invalid parameter_order")
+    command = metadata["command"]
+    if not (converted and command == "unknown") and (
+        not isinstance(command, list) or not command or not all(isinstance(p, str) for p in command)
+    ):
+        raise ValueError("invalid command")
+    if not (converted and metadata["generated_utc"] == "unknown"):
+        from datetime import datetime
+
+        try:
+            stamp = datetime.fromisoformat(metadata["generated_utc"].replace("Z", "+00:00"))
+            if stamp.utcoffset() is None or stamp.utcoffset().total_seconds() != 0:
+                raise ValueError("timestamp must be UTC")
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise ValueError("invalid generated_utc") from exc
+    for field in ("equation_hash", "driver_hash", "lock_hash"):
+        value = metadata[field]
+        if value == "unknown" and (converted or field == "lock_hash"):
+            continue
+        if not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value):
+            raise ValueError(f"invalid {field}")
+    if case_id is not None and metadata["canonical_id"] != case_id:
+        raise ValueError("bundle canonical_id differs from requested run")
+    if require_reviewed and (
+        metadata["reviewed"] is not True
+        or metadata["reviewer"] == "unknown"
+        or metadata["review_date"] == "unknown"
+    ):
+        raise ValueError("v2 bundle is not reviewed")
+    hashes = metadata["output_hashes"]
+    if not isinstance(hashes, dict) or not _V2_COLUMNS.keys() <= hashes.keys():
+        raise ValueError("output_hashes must include branch, events, spectra")
+    tables = {}
+    if any(p.name not in hashes for p in directory.glob("*.csv")):
+        raise ValueError("unhashed CSV artifact")
+    for name, digest in hashes.items():
+        target = (directory / name).resolve()
+        if target.parent != directory.resolve() or not target.is_file():
+            raise ValueError(f"invalid bundle artifact path: {name}")
+        if file_hash(target) != digest:
+            raise ValueError(f"output hash mismatch: {name}")
+        if name.endswith(".csv"):
+            tables[Path(name).stem] = _read_rows(target, _V2_COLUMNS.get(name, ()))
+    if not tables["branch"] and not (
+        converted and tables.get("prc") and metadata.get("limitations")
+    ):
+        raise ValueError("empty branch")
+    identities = [(r["segment_id"], r["point_id"]) for r in tables["branch"]]
+    if len(set(identities)) != len(identities):
+        raise ValueError("duplicate branch point identity")
+    for row in tables["events"] + tables["spectra"]:
+        if (row["segment_id"], row["point_id"]) not in identities:
+            raise ValueError("invalid branch linkage")
+    return {"metadata": metadata, **tables}
+
+
+def convert_v1_bundle(source, output, *, case_id, canonical_id):
+    """Write an unreviewed v2 conversion plus byte identity manifest."""
+    import shutil
+
+    source = reference_directory(source, case_id)
+    output = candidate_directory(output, source)
+    if output.exists():
+        raise ValueError("conversion output already exists")
+    bundle = load_bundle(source, case_id=case_id)
+    output.mkdir(parents=True)
+    source_hashes = {p.name: file_hash(p) for p in source.iterdir() if p.is_file()}
+    # Preserve every original byte separately from the normalized tables.
+    shutil.copytree(source, output / "legacy")
+    tables = {}
+    if bundle.get("prc"):
+        shutil.copyfile(source / f"{case_id}_prc.csv", output / "prc.csv")
+        tables["prc.csv"] = file_hash(output / "prc.csv")
+    for key, rows in ((k, bundle.get(k, [])) for k in ("branch", "events", "spectra")):
+        normalized = []
+        for index, row in enumerate(rows):
+            point = row.get("point", "0")
+            record = {**row, "segment_id": "legacy-0", "point_id": point}
+            if key == "branch":
+                record.update(
+                    order=index,
+                    status="unknown",
+                    unstable_dimension=row.get("unstable_dimension", "unknown"),
+                )
+            elif key == "events":
+                record.update(
+                    event_id=row.get("event_index", str(index)),
+                    status="unknown",
+                    bracket_lower="unknown",
+                    bracket_upper="unknown",
+                )
+            else:
+                record.update(
+                    event_id="" if row.get("event_index") == "-1" else row.get("event_index", ""),
+                    kind=row.get("spectrum_kind", "unknown"),
+                    mode_id=row.get("multiplier_index", str(index)),
+                    logabs="unknown",
+                    phase="unknown",
+                    trivial_mode_method="nearest-to-+1",
+                )
+            normalized.append(record)
+        name = key + ".csv"
+        columns = sorted(set().union(*(r.keys() for r in normalized), _V2_COLUMNS[name]))
+        with (output / name).open("w", newline="", encoding="utf-8") as stream:
+            writer = csv.DictWriter(stream, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(normalized)
+        tables[name] = file_hash(output / name)
+    manifest = {
+        "source_hashes": source_hashes,
+        "output_hashes": tables,
+        "source_schema": 1,
+        "target_schema": 2,
+        "canonical_id": canonical_id,
+    }
+    (output / "conversion-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    metadata = {key: "unknown" for key in _V2_METADATA_FIELDS}
+    metadata.update(
+        schema_version=2,
+        canonical_id=canonical_id,
+        tool="matcont",
+        equation_hash=bundle["metadata"]["equation_hash"],
+        reviewed=False,
+        precision=bundle["metadata"]["precision"],
+        output_hashes=tables,
+        conversion_chain=[manifest],
+        legacy_metadata=bundle["metadata"],
+    )
+    if not bundle.get("branch"):
+        metadata["limitations"] = [
+            "Historical PRC-only data: branch, event and spectral evidence is absent."
+        ]
+        metadata["prc_conventions"] = {
+            "phase": "phase_fraction",
+            "dprc": "time derivative; not a parameter derivative",
+        }
+    (output / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    return output
+
+
+def verify_v2_bundles(candidate, reference, tolerances):
+    """Numerically verify normalized tables without requiring byte equality."""
+    left, right = load_bundle(candidate), load_bundle(reference)
+    if any(
+        left["metadata"][key] != right["metadata"][key]
+        for key in ("canonical_id", "tool", "parameter_order")
+    ):
+        raise ValidationMismatch("bundle identity or parameter order differs")
+    if left["metadata"]["equation_hash"] != right["metadata"]["equation_hash"]:
+        raise ValidationMismatch("equation_hash differs; equation identity requires review")
+    maximum = 0.0
+    count = 0
+    for name in sorted((set(left) | set(right)) - {"metadata"}):
+        if name == "metadata":
+            continue
+        a, b = left.get(name), right.get(name)
+        if a is None or b is None or len(a) != len(b):
+            raise ValidationMismatch(f"{name} row count differs")
+        for x, y in zip(a, b):
+            if x.keys() != y.keys():
+                raise ValidationMismatch(f"{name} columns differ")
+            for column in x:
+                try:
+                    av, bv = float(x[column]), float(y[column])
+                except (ValueError, TypeError):
+                    if x[column] != y[column]:
+                        raise ValidationMismatch(f"{name}.{column} differs")
+                    continue
+                diagnostics = scaled_close(
+                    av, bv, atol=_column_atol(column, tolerances), rtol=tolerances.get("rtol", 0)
+                )
+                maximum = max(maximum, diagnostics["max_error"])
+                count += 1
+    return {"artifact_count": len(left) - 1, "max_numeric_error": maximum, "sample_count": count}

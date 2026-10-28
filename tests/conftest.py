@@ -19,3 +19,5 @@ def pytest_configure(config):
     )
 
     config.addinivalue_line("markers", "matlab: opt-in tests requiring MATLAB and MatCont")
+
+    config.addinivalue_line("markers", "julia: opt-in tests requiring pinned Julia/BifurcationKit")

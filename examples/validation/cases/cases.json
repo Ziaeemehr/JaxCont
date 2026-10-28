@@ -4,7 +4,10 @@
       "id": "MC-EQ-001",
       "title": "Cubic S-curve equilibrium continuation",
       "support": "supported",
-      "features": ["equilibrium-continuation", "fold"],
+      "features": [
+        "equilibrium-continuation",
+        "fold"
+      ],
       "python": "examples.validation.cases.python_cases.equilibrium:run_cubic_fold",
       "matlab": "run_cubic_fold",
       "references": [
@@ -17,16 +20,51 @@
       "tolerances": {
         "parameter_atol": 0.0005,
         "state_atol": 0.0002,
-        "residual_atol": 0.00002,
+        "residual_atol": 2e-05,
         "fold_coefficient_atol": 0.0005,
         "spectrum_atol": 0.0005
-      }
+      },
+      "canonical_id": "cubic.eq-fold",
+      "aliases": [
+        "MC-EQ-001"
+      ],
+      "system": "cubic",
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "matcont": "PASS",
+        "bifurcationkit": "PENDING"
+      },
+      "evidence_status": "PASS",
+      "expected_domain": [
+        -1.0,
+        4.17408451642958
+      ],
+      "expected_events": [
+        "LP",
+        "LP"
+      ],
+      "metric_limits": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 2e-05,
+        "fold_coefficient_atol": 0.0005,
+        "spectrum_atol": 0.0005
+      },
+      "required_tools": [
+        "jaxcont",
+        "matcont",
+        "bifurcationkit"
+      ]
     },
     {
       "id": "MC-EQ-002",
       "title": "Van der Pol equilibrium Hopf",
       "support": "supported",
-      "features": ["equilibrium-continuation", "hopf", "stability"],
+      "features": [
+        "equilibrium-continuation",
+        "hopf",
+        "stability"
+      ],
       "python": "examples.validation.cases.python_cases.equilibrium:run_vanderpol_hopf",
       "matlab": "run_vanderpol_hopf",
       "references": [
@@ -39,17 +77,50 @@
       "tolerances": {
         "parameter_atol": 0.0005,
         "state_atol": 0.0002,
-        "residual_atol": 0.00002,
+        "residual_atol": 2e-05,
         "frequency_atol": 0.0005,
         "first_lyapunov_atol": 0.0001,
         "spectrum_atol": 0.0005
-      }
+      },
+      "canonical_id": "vanderpol.eq-degenerate-hopf",
+      "aliases": [
+        "MC-EQ-002"
+      ],
+      "system": "vanderpol",
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "matcont": "PASS"
+      },
+      "evidence_status": "PASS",
+      "expected_domain": [
+        -2.0,
+        12.8237400000001
+      ],
+      "expected_events": [
+        "H"
+      ],
+      "metric_limits": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 2e-05,
+        "frequency_atol": 0.0005,
+        "first_lyapunov_atol": 0.0001,
+        "spectrum_atol": 0.0005
+      },
+      "required_tools": [
+        "jaxcont",
+        "matcont"
+      ]
     },
     {
       "id": "MC-EQ-003",
       "title": "MatCont adaptive-control equilibrium Hopf",
       "support": "supported",
-      "features": ["equilibrium-continuation", "hopf", "normal-form"],
+      "features": [
+        "equilibrium-continuation",
+        "hopf",
+        "normal-form"
+      ],
       "python": "examples.validation.cases.python_cases.equilibrium:run_adaptive_control_hopf",
       "matlab": "run_adaptive_control",
       "references": [
@@ -62,39 +133,124 @@
       "tolerances": {
         "parameter_atol": 0.0005,
         "state_atol": 0.0002,
-        "residual_atol": 0.00002,
+        "residual_atol": 2e-05,
         "frequency_atol": 0.0005,
         "first_lyapunov_atol": 0.0005,
         "spectrum_atol": 0.0005
-      }
+      },
+      "canonical_id": "adaptx.eq-hopf",
+      "aliases": [
+        "MC-EQ-003"
+      ],
+      "system": "adaptx",
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "matcont": "PASS",
+        "bifurcationkit": "PENDING"
+      },
+      "evidence_status": "PASS",
+      "expected_domain": [
+        -2.0,
+        12.8237400000001
+      ],
+      "expected_events": [
+        "H"
+      ],
+      "metric_limits": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 2e-05,
+        "frequency_atol": 0.0005,
+        "first_lyapunov_atol": 0.0005,
+        "spectrum_atol": 0.0005
+      },
+      "required_tools": [
+        "jaxcont",
+        "matcont",
+        "bifurcationkit"
+      ]
     },
     {
       "id": "MC-JAX-001",
       "title": "JAX transformation and sensitivity checks",
       "support": "supported",
-      "features": ["vmap", "autodiff", "fold-normal-form", "hopf-normal-form"],
+      "features": [
+        "vmap",
+        "autodiff",
+        "fold-normal-form",
+        "hopf-normal-form"
+      ],
       "python": "examples.validation.cases.python_cases.transforms:run_transform_checks",
       "matlab": null,
       "references": [],
       "manual_source": "Analytic gradients and centered finite differences",
-      "tolerances": {"gradient_atol": 0.002}
+      "tolerances": {
+        "gradient_atol": 0.002
+      },
+      "canonical_id": "jax.transforms",
+      "aliases": [
+        "MC-JAX-001"
+      ],
+      "system": "jax",
+      "tool_coverage": {
+        "jaxcont": "PENDING"
+      },
+      "evidence_status": "PENDING",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "gradient_atol": 0.002
+      },
+      "required_tools": [
+        "jaxcont"
+      ]
     },
     {
       "id": "MC-C2-001",
       "title": "Shifted direct codimension-two point solvers",
       "support": "supported",
-      "features": ["cusp", "bogdanov-takens", "generalized-hopf", "zero-hopf", "double-hopf"],
+      "features": [
+        "cusp",
+        "bogdanov-takens",
+        "generalized-hopf",
+        "zero-hopf",
+        "double-hopf"
+      ],
       "python": "examples.validation.cases.python_cases.codim2:run_codim2_points",
       "matlab": null,
       "references": [],
       "manual_source": "Shifted analytic normal forms and BifurcationKit.jl v0.5.2 Lorenz-84 BT",
-      "tolerances": {"parameter_atol": 0.001}
+      "tolerances": {
+        "parameter_atol": 0.001
+      },
+      "canonical_id": "analytic.codim2",
+      "aliases": [
+        "MC-C2-001"
+      ],
+      "system": "analytic",
+      "tool_coverage": {
+        "jaxcont": "PENDING"
+      },
+      "evidence_status": "PENDING",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "parameter_atol": 0.001
+      },
+      "required_tools": [
+        "jaxcont"
+      ]
     },
     {
       "id": "MC-LC-001",
       "title": "Analytic radial periodic orbit",
       "support": "supported",
-      "features": ["periodic-orbit", "collocation", "floquet-multipliers", "stability"],
+      "features": [
+        "periodic-orbit",
+        "collocation",
+        "floquet-multipliers",
+        "stability"
+      ],
       "python": "examples.validation.cases.python_cases.periodic:run_radial_cycle",
       "matlab": "run_radial_cycle",
       "references": [
@@ -109,14 +265,48 @@
         "period_atol": 0.005,
         "radius_atol": 0.005,
         "multiplier_atol": 0.005,
-        "residual_atol": 0.00002
-      }
+        "residual_atol": 2e-05
+      },
+      "canonical_id": "radial.cycle-floquet",
+      "aliases": [
+        "MC-LC-001"
+      ],
+      "system": "radial",
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "matcont": "PASS",
+        "bifurcationkit": "PENDING"
+      },
+      "evidence_status": "PASS",
+      "expected_domain": [
+        1.00000000022127,
+        1.49927007255111
+      ],
+      "expected_events": [],
+      "metric_limits": {
+        "parameter_atol": 0.0005,
+        "period_atol": 0.005,
+        "radius_atol": 0.005,
+        "multiplier_atol": 0.005,
+        "residual_atol": 2e-05
+      },
+      "required_tools": [
+        "jaxcont",
+        "matcont",
+        "bifurcationkit"
+      ]
     },
     {
       "id": "MC-LC-002",
       "title": "MatCont torBPC1 limit-cycle bifurcations",
       "support": "supported",
-      "features": ["periodic-orbit", "fold-of-cycles", "neimark-sacker", "period-doubling", "floquet-multipliers"],
+      "features": [
+        "periodic-orbit",
+        "fold-of-cycles",
+        "neimark-sacker",
+        "period-doubling",
+        "floquet-multipliers"
+      ],
       "caveats": "The strict MatCont comparison (test_torbpc_jaxcont_matches_all_matcont_diagnostics) is a tracked xfail: JaxCont is missing LPC/PD event labels MatCont reports, and its maximum Floquet-multiplier error is approximately 1.13e-2. Treat fold-of-cycles/period-doubling/Neimark-Sacker support as experimental until this closes.",
       "python": "examples.validation.cases.python_cases.periodic:run_torbpc_cycle",
       "matlab": "run_torbpc_cycle",
@@ -132,14 +322,51 @@
         "period_atol": 0.005,
         "extrema_atol": 0.005,
         "multiplier_atol": 0.005,
-        "residual_atol": 0.0000001
-      }
+        "residual_atol": 1e-07
+      },
+      "canonical_id": "torbpc.cycle-lpc-pd-ns",
+      "aliases": [
+        "MC-LC-002"
+      ],
+      "system": "torbpc",
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "matcont": "PASS",
+        "bifurcationkit": "PENDING"
+      },
+      "evidence_status": "FAIL",
+      "expected_domain": [
+        -0.747263543778405,
+        -0.584492842421877
+      ],
+      "expected_events": [
+        "LPC",
+        "NS",
+        "PD"
+      ],
+      "metric_limits": {
+        "parameter_atol": 0.002,
+        "period_atol": 0.005,
+        "extrema_atol": 0.005,
+        "multiplier_atol": 0.005,
+        "residual_atol": 1e-07
+      },
+      "required_tools": [
+        "jaxcont",
+        "matcont",
+        "bifurcationkit"
+      ]
     },
     {
       "id": "MC-LC-003",
       "title": "MatCont adaptx period-doubling branch switch",
       "support": "supported",
-      "features": ["periodic-orbit", "period-doubling", "branch-switching", "floquet-multipliers"],
+      "features": [
+        "periodic-orbit",
+        "period-doubling",
+        "branch-switching",
+        "floquet-multipliers"
+      ],
       "python": "examples.validation.cases.python_cases.pd_switch:run_adaptx_pd_switch",
       "matlab": null,
       "references": [],
@@ -147,125 +374,961 @@
       "tolerances": {
         "parameter_atol": 0.002,
         "period_atol": 0.005,
-        "residual_atol": 0.00002
-      }
+        "residual_atol": 2e-05
+      },
+      "canonical_id": "adaptx.cycle-pd-switch",
+      "aliases": [
+        "MC-LC-003"
+      ],
+      "system": "adaptx",
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "bifurcationkit": "PENDING"
+      },
+      "evidence_status": "PENDING",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "parameter_atol": 0.002,
+        "period_atol": 0.005,
+        "residual_atol": 2e-05
+      },
+      "required_tools": [
+        "jaxcont",
+        "bifurcationkit"
+      ]
     },
     {
       "id": "US-BP-001",
       "title": "Bratu branch switching",
       "support": "unsupported",
       "unsupported_execution": "executable",
-      "features": ["boundary-value-problem", "branch-switching"],
+      "features": [
+        "boundary-value-problem",
+        "branch-switching"
+      ],
       "python": null,
       "matlab": "run_bratu_branch_switching",
       "references": [],
       "manual_source": "MatCont 7.6 branch-switching workflow",
-      "tolerances": {"parameter_atol": 0.001}
+      "tolerances": {
+        "parameter_atol": 0.001
+      },
+      "canonical_id": "US-BP-001",
+      "aliases": [],
+      "system": "capability-gap",
+      "tool_coverage": {
+        "matcont": "PENDING"
+      },
+      "evidence_status": "UNSUPPORTED",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "parameter_atol": 0.001
+      },
+      "required_tools": [
+        "matcont"
+      ]
     },
     {
       "id": "US-C2-LP-001",
       "title": "Two-parameter fold-curve continuation",
       "support": "supported",
-      "features": ["two-parameter-fold-curve"],
+      "features": [
+        "two-parameter-fold-curve"
+      ],
       "python": "examples.validation.cases.python_cases.codim2_curves:run_two_parameter_fold_curve",
       "matlab": "run_two_parameter_fold_curve",
       "references": [],
       "manual_source": "MatCont 7.6 Testruns/testLPcataloscill.m",
-      "tolerances": {"parameter_atol": 0.001}
+      "tolerances": {
+        "parameter_atol": 0.001
+      },
+      "canonical_id": "catalytic.fold-curve",
+      "aliases": [
+        "US-C2-LP-001"
+      ],
+      "system": "catalytic",
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "matcont": "PENDING"
+      },
+      "evidence_status": "PENDING",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "parameter_atol": 0.001
+      },
+      "required_tools": [
+        "jaxcont",
+        "matcont"
+      ]
     },
     {
       "id": "US-C2-H-001",
       "title": "Two-parameter Hopf-curve continuation",
       "support": "supported",
-      "features": ["two-parameter-hopf-curve"],
+      "features": [
+        "two-parameter-hopf-curve"
+      ],
       "python": "examples.validation.cases.python_cases.codim2_curves:run_two_parameter_hopf_curve",
       "matlab": "run_two_parameter_hopf_curve",
       "references": [],
       "manual_source": "MatCont 7.6 Testruns/testLPHopfcataloscill.m",
-      "tolerances": {"parameter_atol": 0.001}
+      "tolerances": {
+        "parameter_atol": 0.001
+      },
+      "canonical_id": "catalytic.hopf-curve",
+      "aliases": [
+        "US-C2-H-001"
+      ],
+      "system": "catalytic",
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "matcont": "PENDING"
+      },
+      "evidence_status": "PENDING",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "parameter_atol": 0.001
+      },
+      "required_tools": [
+        "jaxcont",
+        "matcont"
+      ]
     },
     {
       "id": "US-C2-PD-001",
       "title": "Two-parameter period-doubling curve continuation",
       "support": "unsupported",
       "unsupported_execution": "executable",
-      "features": ["two-parameter-pd-curve"],
+      "features": [
+        "two-parameter-pd-curve"
+      ],
       "python": null,
       "matlab": "run_two_parameter_pd_curve",
       "references": [],
       "manual_source": "MatCont 7.6 Testruns/testadapt3.m",
-      "tolerances": {"parameter_atol": 0.001}
+      "tolerances": {
+        "parameter_atol": 0.001
+      },
+      "canonical_id": "US-C2-PD-001",
+      "aliases": [],
+      "system": "capability-gap",
+      "tool_coverage": {
+        "matcont": "PENDING"
+      },
+      "evidence_status": "UNSUPPORTED",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "parameter_atol": 0.001
+      },
+      "required_tools": [
+        "matcont"
+      ]
     },
     {
       "id": "US-C2-LPC-001",
       "title": "Two-parameter limit-point-of-cycles continuation",
       "support": "unsupported",
       "unsupported_execution": "executable",
-      "features": ["two-parameter-lpc-curve"],
+      "features": [
+        "two-parameter-lpc-curve"
+      ],
       "python": null,
       "matlab": "run_two_parameter_lpc_curve",
       "references": [],
       "manual_source": "MatCont 7.6 Testruns/testLPCMLfast.m",
-      "tolerances": {"parameter_atol": 0.001}
+      "tolerances": {
+        "parameter_atol": 0.001
+      },
+      "canonical_id": "US-C2-LPC-001",
+      "aliases": [],
+      "system": "capability-gap",
+      "tool_coverage": {
+        "matcont": "PENDING"
+      },
+      "evidence_status": "UNSUPPORTED",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "parameter_atol": 0.001
+      },
+      "required_tools": [
+        "matcont"
+      ]
     },
     {
       "id": "US-C2-NS-001",
       "title": "Two-parameter Neimark-Sacker curve continuation",
       "support": "unsupported",
       "unsupported_execution": "executable",
-      "features": ["two-parameter-ns-curve"],
+      "features": [
+        "two-parameter-ns-curve"
+      ],
       "python": null,
       "matlab": "run_two_parameter_ns_curve",
       "references": [],
       "manual_source": "MatCont 7.6 Testruns/testtorBPC2.m",
-      "tolerances": {"parameter_atol": 0.001}
+      "tolerances": {
+        "parameter_atol": 0.001
+      },
+      "canonical_id": "US-C2-NS-001",
+      "aliases": [],
+      "system": "capability-gap",
+      "tool_coverage": {
+        "matcont": "PENDING"
+      },
+      "evidence_status": "UNSUPPORTED",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "parameter_atol": 0.001
+      },
+      "required_tools": [
+        "matcont"
+      ]
     },
     {
       "id": "US-BVP-001",
       "title": "General boundary-value-problem setup template",
       "support": "unsupported",
       "unsupported_execution": "template",
-      "features": ["general-bvp-continuation"],
+      "features": [
+        "general-bvp-continuation"
+      ],
       "python": null,
       "matlab": "run_general_bvp_continuation",
       "references": [],
       "manual_source": "MatCont periodic/general BVP collocation workflow",
-      "tolerances": {"residual_atol": 0.000001}
+      "tolerances": {
+        "residual_atol": 1e-06
+      },
+      "canonical_id": "US-BVP-001",
+      "aliases": [],
+      "system": "capability-gap",
+      "tool_coverage": {
+        "matcont": "PENDING"
+      },
+      "evidence_status": "UNSUPPORTED",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "residual_atol": 1e-06
+      },
+      "required_tools": [
+        "matcont"
+      ]
     },
     {
       "id": "US-HOM-001",
       "title": "Homoclinic continuation",
       "support": "unsupported",
       "unsupported_execution": "executable",
-      "features": ["homoclinic-continuation"],
+      "features": [
+        "homoclinic-continuation"
+      ],
       "python": null,
       "matlab": "run_connecting_orbits",
       "references": [],
       "manual_source": "MatCont 7.6 Testruns/homoc1.m",
-      "tolerances": {"residual_atol": 0.000001}
+      "tolerances": {
+        "residual_atol": 1e-06
+      },
+      "canonical_id": "US-HOM-001",
+      "aliases": [],
+      "system": "capability-gap",
+      "tool_coverage": {
+        "matcont": "PENDING"
+      },
+      "evidence_status": "UNSUPPORTED",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "residual_atol": 1e-06
+      },
+      "required_tools": [
+        "matcont"
+      ]
     },
     {
       "id": "US-HET-001",
       "title": "Heteroclinic continuation setup template",
       "support": "unsupported",
       "unsupported_execution": "template",
-      "features": ["heteroclinic-continuation"],
+      "features": [
+        "heteroclinic-continuation"
+      ],
       "python": null,
       "matlab": "run_heteroclinic_continuation",
       "references": [],
       "manual_source": "MatCont 7.6 heteroclinic and HomotopyHet workflows",
-      "tolerances": {"residual_atol": 0.000001}
+      "tolerances": {
+        "residual_atol": 1e-06
+      },
+      "canonical_id": "US-HET-001",
+      "aliases": [],
+      "system": "capability-gap",
+      "tool_coverage": {
+        "matcont": "PENDING"
+      },
+      "evidence_status": "UNSUPPORTED",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "residual_atol": 1e-06
+      },
+      "required_tools": [
+        "matcont"
+      ]
     },
     {
       "id": "MC-PRC-001",
       "title": "PRC calculation (adaptx Hopf limit cycle); dPRC computed but not MatCont-cross-checked",
       "support": "supported",
-      "features": ["prc"],
+      "features": [
+        "prc"
+      ],
       "python": "examples.validation.cases.python_cases.prc:run_adaptx_prc_dprc",
       "matlab": "run_prc_dprc",
-      "references": ["MC-PRC-001_prc.csv", "MC-PRC-001_metadata.json"],
+      "references": [
+        "MC-PRC-001_prc.csv",
+        "MC-PRC-001_metadata.json"
+      ],
       "manual_source": "MatCont 7.6 Testruns/testadaptPRC.m",
-      "tolerances": {"residual_atol": 0.01}
+      "tolerances": {
+        "residual_atol": 0.01
+      },
+      "canonical_id": "adaptx.prc",
+      "aliases": [
+        "MC-PRC-001"
+      ],
+      "system": "adaptx",
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "matcont": "PASS",
+        "bifurcationkit": "PENDING"
+      },
+      "evidence_status": "PASS",
+      "expected_domain": null,
+      "expected_events": [],
+      "metric_limits": {
+        "residual_atol": 0.01
+      },
+      "required_tools": [
+        "jaxcont",
+        "matcont",
+        "bifurcationkit"
+      ]
+    },
+    {
+      "id": "lorenz84.eq-f",
+      "canonical_id": "lorenz84.eq-f",
+      "aliases": [],
+      "system": "lorenz84",
+      "title": "Extended Lorenz-84 eq-f",
+      "support": "supported",
+      "features": [
+        "equilibrium-continuation"
+      ],
+      "python": null,
+      "matlab": null,
+      "references": [],
+      "manual_source": "Historical Julia 02 and 05; contract pending owner review",
+      "tolerances": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 1e-07,
+        "spectrum_atol": 0.0005,
+        "frequency_atol": 0.0005
+      },
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "matcont": "PENDING",
+        "bifurcationkit": "PENDING"
+      },
+      "required_tools": [
+        "jaxcont",
+        "matcont",
+        "bifurcationkit"
+      ],
+      "evidence_status": "PENDING",
+      "expected_domain": [
+        -1.5,
+        3.0
+      ],
+      "expected_events": [
+        "LP",
+        "H"
+      ],
+      "model_contract": {
+        "state_order": [
+          "X",
+          "Y",
+          "Z",
+          "U"
+        ],
+        "parameter_order": [
+          "F",
+          "T"
+        ],
+        "time": "original nondimensional time; no time rescaling",
+        "jacobian": "rows are RHS components; columns follow X,Y,Z,U",
+        "frequency": "angular frequency in radians per original time unit",
+        "fold_label": "LP (BK fold aliases normalized by the exporter)",
+        "hopf_label": "H (BK hopf aliases normalized by the exporter)",
+        "bt_label": "BT; two small eigenvalues and geometric nullity one",
+        "normal_forms": "record tool-native definition and eigenvector normalization; no implicit l1 conversion",
+        "arclength": "record physical metric and state/parameter weights per tool",
+        "chart_boundary": "Hopf chart termination near BT is a boundary, not a BT detection",
+        "symmetry": "(U,T) -> (-U,-T); select positive-T BT by window",
+        "review_status": "REVIEWED (Claude review 1, 2026-10-28)",
+        "constants": {
+          "alpha": 0.25,
+          "beta": 1.0,
+          "gamma": 0.987,
+          "delta": 1.04,
+          "G": 0.25
+        },
+        "f_sweep": {
+          "fixed_T": 0.04,
+          "bounds": [
+            -1.5,
+            3.0
+          ],
+          "seed_F": 3.0,
+          "seed_state": [
+            2.9787004394953343,
+            -0.03868302503393752,
+            0.058232737694740085,
+            -0.02105288273117459
+          ],
+          "seed_policy": "Newton-correct at F=3,T=0.04 before continuation",
+          "both_directions": true,
+          "ds": 0.002,
+          "ds_max": 0.05,
+          "max_steps_per_direction": 200,
+          "newton_atol": 1e-12,
+          "source": "historical lorenz84_equilibria.jl (Julia 02)"
+        },
+        "codim2": {
+          "parameter_order": [
+            "F",
+            "T"
+          ],
+          "free_parameter": "T",
+          "T_bounds": [
+            -0.1,
+            3.2
+          ],
+          "ds": -0.001,
+          "ds_min": 1e-05,
+          "ds_max": 0.015,
+          "max_steps": 30,
+          "expected_T_domain": [
+            -0.01,
+            0.04
+          ],
+          "source": "historical lorenz84_codim2.jl; shared positive-T BT chart"
+        },
+        "event_windows": {
+          "fold_seed": {
+            "F": [
+              1.5,
+              1.6
+            ],
+            "T": [
+              0.039,
+              0.041
+            ]
+          },
+          "hopf_seed": {
+            "F": [
+              1.5,
+              3.0
+            ],
+            "T": [
+              0.039,
+              0.041
+            ]
+          },
+          "bt_positive_T": {
+            "F": [
+              1.5,
+              2.0
+            ],
+            "T": [
+              0.01,
+              0.03
+            ]
+          }
+        },
+        "domain_coordinate": "F",
+        "coverage_note": "BT is a refined point selected in a window; Hopf may terminate at a chart boundary, which cannot pass full-domain publication"
+      },
+      "metric_limits": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 1e-07,
+        "spectrum_atol": 0.0005,
+        "frequency_atol": 0.0005
+      }
+    },
+    {
+      "id": "lorenz84.fold-ft",
+      "canonical_id": "lorenz84.fold-ft",
+      "aliases": [],
+      "system": "lorenz84",
+      "title": "Extended Lorenz-84 fold-ft",
+      "support": "supported",
+      "features": [
+        "codim2"
+      ],
+      "python": null,
+      "matlab": null,
+      "references": [],
+      "manual_source": "Historical Julia 02 and 05; contract pending owner review",
+      "tolerances": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 1e-07,
+        "spectrum_atol": 0.0005,
+        "frequency_atol": 0.0005
+      },
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "matcont": "PENDING",
+        "bifurcationkit": "PENDING"
+      },
+      "required_tools": [
+        "jaxcont",
+        "matcont",
+        "bifurcationkit"
+      ],
+      "evidence_status": "PENDING",
+      "expected_domain": [
+        -0.01,
+        0.04
+      ],
+      "expected_events": [
+        "BT"
+      ],
+      "model_contract": {
+        "state_order": [
+          "X",
+          "Y",
+          "Z",
+          "U"
+        ],
+        "parameter_order": [
+          "F",
+          "T"
+        ],
+        "time": "original nondimensional time; no time rescaling",
+        "jacobian": "rows are RHS components; columns follow X,Y,Z,U",
+        "frequency": "angular frequency in radians per original time unit",
+        "fold_label": "LP (BK fold aliases normalized by the exporter)",
+        "hopf_label": "H (BK hopf aliases normalized by the exporter)",
+        "bt_label": "BT; two small eigenvalues and geometric nullity one",
+        "normal_forms": "record tool-native definition and eigenvector normalization; no implicit l1 conversion",
+        "arclength": "record physical metric and state/parameter weights per tool",
+        "chart_boundary": "Hopf chart termination near BT is a boundary, not a BT detection",
+        "symmetry": "(U,T) -> (-U,-T); select positive-T BT by window",
+        "review_status": "REVIEWED (Claude review 1, 2026-10-28)",
+        "constants": {
+          "alpha": 0.25,
+          "beta": 1.0,
+          "gamma": 0.987,
+          "delta": 1.04,
+          "G": 0.25
+        },
+        "f_sweep": {
+          "fixed_T": 0.04,
+          "bounds": [
+            -1.5,
+            3.0
+          ],
+          "seed_F": 3.0,
+          "seed_state": [
+            2.9787004394953343,
+            -0.03868302503393752,
+            0.058232737694740085,
+            -0.02105288273117459
+          ],
+          "seed_policy": "Newton-correct at F=3,T=0.04 before continuation",
+          "both_directions": true,
+          "ds": 0.002,
+          "ds_max": 0.05,
+          "max_steps_per_direction": 200,
+          "newton_atol": 1e-12,
+          "source": "historical lorenz84_equilibria.jl (Julia 02)"
+        },
+        "codim2": {
+          "parameter_order": [
+            "F",
+            "T"
+          ],
+          "free_parameter": "T",
+          "T_bounds": [
+            -0.1,
+            3.2
+          ],
+          "ds": -0.001,
+          "ds_min": 1e-05,
+          "ds_max": 0.015,
+          "max_steps": 30,
+          "expected_T_domain": [
+            -0.01,
+            0.04
+          ],
+          "source": "historical lorenz84_codim2.jl; shared positive-T BT chart"
+        },
+        "event_windows": {
+          "fold_seed": {
+            "F": [
+              1.5,
+              1.6
+            ],
+            "T": [
+              0.039,
+              0.041
+            ]
+          },
+          "hopf_seed": {
+            "F": [
+              1.5,
+              3.0
+            ],
+            "T": [
+              0.039,
+              0.041
+            ]
+          },
+          "bt_positive_T": {
+            "F": [
+              1.5,
+              2.0
+            ],
+            "T": [
+              0.01,
+              0.03
+            ]
+          }
+        },
+        "domain_coordinate": "T",
+        "coverage_note": "BT is a refined point selected in a window; Hopf may terminate at a chart boundary, which cannot pass full-domain publication"
+      },
+      "metric_limits": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 1e-07,
+        "spectrum_atol": 0.0005,
+        "frequency_atol": 0.0005
+      }
+    },
+    {
+      "id": "lorenz84.hopf-ft",
+      "canonical_id": "lorenz84.hopf-ft",
+      "aliases": [],
+      "system": "lorenz84",
+      "title": "Extended Lorenz-84 hopf-ft",
+      "support": "supported",
+      "features": [
+        "codim2"
+      ],
+      "python": null,
+      "matlab": null,
+      "references": [],
+      "manual_source": "Historical Julia 02 and 05; contract pending owner review",
+      "tolerances": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 1e-07,
+        "spectrum_atol": 0.0005,
+        "frequency_atol": 0.0005
+      },
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "matcont": "PENDING",
+        "bifurcationkit": "PENDING"
+      },
+      "required_tools": [
+        "jaxcont",
+        "matcont",
+        "bifurcationkit"
+      ],
+      "evidence_status": "PENDING",
+      "expected_domain": [
+        -0.01,
+        0.04
+      ],
+      "expected_events": [],
+      "model_contract": {
+        "state_order": [
+          "X",
+          "Y",
+          "Z",
+          "U"
+        ],
+        "parameter_order": [
+          "F",
+          "T"
+        ],
+        "time": "original nondimensional time; no time rescaling",
+        "jacobian": "rows are RHS components; columns follow X,Y,Z,U",
+        "frequency": "angular frequency in radians per original time unit",
+        "fold_label": "LP (BK fold aliases normalized by the exporter)",
+        "hopf_label": "H (BK hopf aliases normalized by the exporter)",
+        "bt_label": "BT; two small eigenvalues and geometric nullity one",
+        "normal_forms": "record tool-native definition and eigenvector normalization; no implicit l1 conversion",
+        "arclength": "record physical metric and state/parameter weights per tool",
+        "chart_boundary": "Hopf chart termination near BT is a boundary, not a BT detection",
+        "symmetry": "(U,T) -> (-U,-T); select positive-T BT by window",
+        "review_status": "REVIEWED (Claude review 1, 2026-10-28)",
+        "constants": {
+          "alpha": 0.25,
+          "beta": 1.0,
+          "gamma": 0.987,
+          "delta": 1.04,
+          "G": 0.25
+        },
+        "f_sweep": {
+          "fixed_T": 0.04,
+          "bounds": [
+            -1.5,
+            3.0
+          ],
+          "seed_F": 3.0,
+          "seed_state": [
+            2.9787004394953343,
+            -0.03868302503393752,
+            0.058232737694740085,
+            -0.02105288273117459
+          ],
+          "seed_policy": "Newton-correct at F=3,T=0.04 before continuation",
+          "both_directions": true,
+          "ds": 0.002,
+          "ds_max": 0.05,
+          "max_steps_per_direction": 200,
+          "newton_atol": 1e-12,
+          "source": "historical lorenz84_equilibria.jl (Julia 02)"
+        },
+        "codim2": {
+          "parameter_order": [
+            "F",
+            "T"
+          ],
+          "free_parameter": "T",
+          "T_bounds": [
+            -0.1,
+            3.2
+          ],
+          "ds": -0.001,
+          "ds_min": 1e-05,
+          "ds_max": 0.015,
+          "max_steps": 30,
+          "expected_T_domain": [
+            -0.01,
+            0.04
+          ],
+          "source": "historical lorenz84_codim2.jl; shared positive-T BT chart"
+        },
+        "event_windows": {
+          "fold_seed": {
+            "F": [
+              1.5,
+              1.6
+            ],
+            "T": [
+              0.039,
+              0.041
+            ]
+          },
+          "hopf_seed": {
+            "F": [
+              1.5,
+              3.0
+            ],
+            "T": [
+              0.039,
+              0.041
+            ]
+          },
+          "bt_positive_T": {
+            "F": [
+              1.5,
+              2.0
+            ],
+            "T": [
+              0.01,
+              0.03
+            ]
+          }
+        },
+        "domain_coordinate": "T",
+        "coverage_note": "BT is a refined point selected in a window; Hopf may terminate at a chart boundary, which cannot pass full-domain publication"
+      },
+      "metric_limits": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 1e-07,
+        "spectrum_atol": 0.0005,
+        "frequency_atol": 0.0005
+      }
+    },
+    {
+      "id": "lorenz84.bt-ft",
+      "canonical_id": "lorenz84.bt-ft",
+      "aliases": [],
+      "system": "lorenz84",
+      "title": "Extended Lorenz-84 bt-ft",
+      "support": "supported",
+      "features": [
+        "codim2"
+      ],
+      "python": null,
+      "matlab": null,
+      "references": [],
+      "manual_source": "Historical Julia 02 and 05; contract pending owner review",
+      "tolerances": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 1e-07,
+        "spectrum_atol": 0.0005,
+        "frequency_atol": 0.0005
+      },
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "matcont": "PENDING",
+        "bifurcationkit": "PENDING"
+      },
+      "required_tools": [
+        "jaxcont",
+        "matcont",
+        "bifurcationkit"
+      ],
+      "evidence_status": "PENDING",
+      "expected_domain": [
+        0.01,
+        0.03
+      ],
+      "expected_events": [
+        "BT"
+      ],
+      "model_contract": {
+        "state_order": [
+          "X",
+          "Y",
+          "Z",
+          "U"
+        ],
+        "parameter_order": [
+          "F",
+          "T"
+        ],
+        "time": "original nondimensional time; no time rescaling",
+        "jacobian": "rows are RHS components; columns follow X,Y,Z,U",
+        "frequency": "angular frequency in radians per original time unit",
+        "fold_label": "LP (BK fold aliases normalized by the exporter)",
+        "hopf_label": "H (BK hopf aliases normalized by the exporter)",
+        "bt_label": "BT; two small eigenvalues and geometric nullity one",
+        "normal_forms": "record tool-native definition and eigenvector normalization; no implicit l1 conversion",
+        "arclength": "record physical metric and state/parameter weights per tool",
+        "chart_boundary": "Hopf chart termination near BT is a boundary, not a BT detection",
+        "symmetry": "(U,T) -> (-U,-T); select positive-T BT by window",
+        "review_status": "REVIEWED (Claude review 1, 2026-10-28)",
+        "constants": {
+          "alpha": 0.25,
+          "beta": 1.0,
+          "gamma": 0.987,
+          "delta": 1.04,
+          "G": 0.25
+        },
+        "f_sweep": {
+          "fixed_T": 0.04,
+          "bounds": [
+            -1.5,
+            3.0
+          ],
+          "seed_F": 3.0,
+          "seed_state": [
+            2.9787004394953343,
+            -0.03868302503393752,
+            0.058232737694740085,
+            -0.02105288273117459
+          ],
+          "seed_policy": "Newton-correct at F=3,T=0.04 before continuation",
+          "both_directions": true,
+          "ds": 0.002,
+          "ds_max": 0.05,
+          "max_steps_per_direction": 200,
+          "newton_atol": 1e-12,
+          "source": "historical lorenz84_equilibria.jl (Julia 02)"
+        },
+        "codim2": {
+          "parameter_order": [
+            "F",
+            "T"
+          ],
+          "free_parameter": "T",
+          "T_bounds": [
+            -0.1,
+            3.2
+          ],
+          "ds": -0.001,
+          "ds_min": 1e-05,
+          "ds_max": 0.015,
+          "max_steps": 30,
+          "expected_T_domain": [
+            -0.01,
+            0.04
+          ],
+          "source": "historical lorenz84_codim2.jl; shared positive-T BT chart"
+        },
+        "event_windows": {
+          "fold_seed": {
+            "F": [
+              1.5,
+              1.6
+            ],
+            "T": [
+              0.039,
+              0.041
+            ]
+          },
+          "hopf_seed": {
+            "F": [
+              1.5,
+              3.0
+            ],
+            "T": [
+              0.039,
+              0.041
+            ]
+          },
+          "bt_positive_T": {
+            "F": [
+              1.5,
+              2.0
+            ],
+            "T": [
+              0.01,
+              0.03
+            ]
+          }
+        },
+        "domain_coordinate": "T",
+        "coverage_note": "BT is a refined point selected in a window; Hopf may terminate at a chart boundary, which cannot pass full-domain publication"
+      },
+      "metric_limits": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 1e-07,
+        "spectrum_atol": 0.0005,
+        "frequency_atol": 0.0005
+      }
     }
   ]
 }

@@ -57,3 +57,16 @@ def test_unfinished_tutorials_are_not_reported_as_completed():
     result = check(MAP, '--completed')
     assert result.returncode == 1
     assert 'missing destination' in result.stderr
+
+
+def test_new_canonical_runs_need_no_legacy_alias_but_unknown_runs_are_rejected(tmp_path):
+    from scripts.check_examples_migration_map import audit
+    path = tmp_path / "examples/validation/cases/cases.json"
+    path.parent.mkdir(parents=True)
+    data = json.loads(MAP.read_text())
+    run = {"id": "lorenz84.eq-f", "canonical_id": "lorenz84.eq-f", "aliases": []}
+    path.write_text(json.dumps({"cases": [run]}))
+    assert audit(data, root=tmp_path) == []
+    run.update(id="unknown.new", canonical_id="unknown.new")
+    path.write_text(json.dumps({"cases": [run]}))
+    assert "unmapped case ID: unknown.new" in audit(data, root=tmp_path)

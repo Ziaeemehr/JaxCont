@@ -249,7 +249,15 @@ def audit(data: dict, *, completed: bool = False, root: Path = ROOT) -> list[str
         registry_path = root / 'examples/MatCont/cases.json'
     if registry_path.exists():
         for case in json.loads(registry_path.read_text())['cases']:
-            if case['id'] not in actual:
+            # New runs have no pre-migration ID; the approved canonical
+            # inventory already accounts for them. Legacy aliases still need
+            # their original mapping, and unknown new runs remain errors.
+            new_canonical = (
+                case['id'] in data['canonical_ids']
+                and case.get('canonical_id') == case['id']
+                and not case.get('aliases')
+            )
+            if case['id'] not in actual and not new_canonical:
                 errors.append(f'unmapped case ID: {case["id"]}')
     redirects = data['gallery_redirects']
     expected_urls = {'auto_examples/' + Path(s).stem + '.html' for s in SOURCES if s.startswith('examples/example_')}

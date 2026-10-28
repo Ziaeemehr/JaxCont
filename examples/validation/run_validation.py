@@ -14,6 +14,9 @@ from pathlib import Path
 
 from .artifacts import (
     enrich_generated_metadata,
+    candidate_directory,
+    load_bundle,
+    verify_v2_bundles,
     reference_directory,
     validate_equilibrium_artifacts,
     validate_periodic_artifacts,
@@ -21,7 +24,7 @@ from .artifacts import (
     verify_case_references,
 )
 from .registry import load_registry, select_cases
-from .validation import evaluate_case_result
+from .validation import build_validation_report, evaluate_case_result
 
 _SUITE_DIR = Path(__file__).resolve().parent
 _DEFAULT_REFERENCE_DIR = _SUITE_DIR / "reference"
@@ -42,16 +45,18 @@ def resolve_matlab_bin(override: str | None = None) -> str | None:
     return shutil.which("matlab")
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(*, runtime_defaults=True) -> argparse.ArgumentParser:
     """Build the validation CLI parser without running validation."""
-    parser = argparse.ArgumentParser(
-        description="Run JaxCont's MatCont validation suite."
-    )
+    parser = argparse.ArgumentParser(description="Run JaxCont's MatCont validation suite.")
     parser.add_argument(
         "--case",
         action="append",
         help="Validate only this case ID; may be repeated.",
     )
+    parser.add_argument("--regenerate", choices=["matcont", "bifurcationkit"])
+    parser.add_argument("--julia-bin")
+    parser.add_argument("--bifurcationkit-project", type=Path)
+    parser.add_argument("--julia-depot")
     parser.add_argument(
         "--regenerate-matcont",
         action="store_true",
@@ -69,12 +74,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--matlab-bin",
-        default=resolve_matlab_bin(),
+        default=(os.environ.get("MATLAB_BIN") or None) if runtime_defaults else None,
         help="Path to the MATLAB executable (default: %(default)s).",
     )
     parser.add_argument(
         "--matcont-root",
-        default=os.environ.get("MATCONT_ROOT") or None,
+        default=(os.environ.get("MATCONT_ROOT") or None) if runtime_defaults else None,
         help="Path to the MatCont installation (default: %(default)s).",
     )
     parser.add_argument(
@@ -85,6 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--generated-dir",
+        "--output-dir",
         type=Path,
         default=_DEFAULT_GENERATED_DIR,
         help="Regenerated MatCont artifact directory (default: %(default)s).",
@@ -92,10 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help=(
-            "Report case selection without running Python or MATLAB "
-            "producers."
-        ),
+        help=("Report case selection without running Python or MATLAB " "producers."),
     )
     return parser
 
@@ -105,21 +108,16 @@ def resolve_runtime_paths(args: argparse.Namespace) -> argparse.Namespace:
     args.reference_dir = Path(args.reference_dir).expanduser().resolve()
     args.generated_dir = Path(args.generated_dir).expanduser().resolve()
     args.matlab_bin = resolve_matlab_bin(args.matlab_bin)
+    args.matcont_root = args.matcont_root or os.environ.get("MATCONT_ROOT")
     if args.matcont_root:
         args.matcont_root = str(Path(args.matcont_root).expanduser().resolve())
     return args
 
 
-def validate_case_metadata(
-    metadata_path: Path, case_id: str, reference_dir: Path
-) -> dict:
+def validate_case_metadata(metadata_path: Path, case_id: str, reference_dir: Path) -> dict:
     """Require reviewed metadata only for the committed oracle."""
-    require_reviewed = (
-        Path(reference_dir).resolve() == _DEFAULT_REFERENCE_DIR.resolve()
-    )
-    return validate_reference_metadata(
-        metadata_path, case_id, require_reviewed=require_reviewed
-    )
+    require_reviewed = Path(reference_dir).resolve() == _DEFAULT_REFERENCE_DIR.resolve()
+    return validate_reference_metadata(metadata_path, case_id, require_reviewed=require_reviewed)
 
 
 def _matlab_quote(value: Path | str) -> str:
@@ -139,9 +137,7 @@ def _run_matlab_function(
         raise RuntimeError("set MATCONT_ROOT")
     matlab_dir = _SUITE_DIR / "regenerate" / "matcont"
     capability_dir = matlab_dir / "capability_gaps"
-    arguments = (
-        "" if output_dir is None else f"('{_matlab_quote(output_dir)}')"
-    )
+    arguments = "" if output_dir is None else f"('{_matlab_quote(output_dir)}')"
     expression = (
         f"addpath('{_matlab_quote(matlab_dir)}',"
         f"'{_matlab_quote(capability_dir)}'); "
@@ -149,16 +145,41 @@ def _run_matlab_function(
     )
     environment = os.environ.copy()
     environment["MATCONT_ROOT"] = matcont_root
-    completed = subprocess.run(
-        [matlab_bin, "-batch", expression],
-        cwd=matlab_dir,
-        env=environment,
-        text=True,
-    )
+    import tempfile
+
+    if output_dir is not None:
+        output_dir = candidate_directory(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="jaxcont-matlab-prefs-") as prefs:
+        environment["MATLAB_PREFDIR"] = prefs
+        try:
+            completed = subprocess.run(
+                [matlab_bin, "-batch", expression],
+                cwd=matlab_dir,
+                env=environment,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=300,
+            )
+        except subprocess.TimeoutExpired as exc:
+            _save_matlab_logs(output_dir, function_name, exc.stdout, exc.stderr)
+            raise RuntimeError(
+                f"MATLAB producer {function_name} timed out; logs: {output_dir}"
+            ) from exc
+    _save_matlab_logs(output_dir, function_name, completed.stdout, completed.stderr)
     if completed.returncode:
-        raise RuntimeError(
-            f"MATLAB producer {function_name} exited {completed.returncode}"
-        )
+        raise RuntimeError(f"MATLAB producer {function_name} exited {completed.returncode}")
+
+
+def _save_matlab_logs(directory, name, stdout, stderr):
+    if directory is None:
+        directory = _DEFAULT_GENERATED_DIR / "logs"
+    Path(directory).mkdir(parents=True, exist_ok=True)
+    for stream, value in (("stdout", stdout), ("stderr", stderr)):
+        if isinstance(value, bytes):
+            value = value.decode("utf-8", errors="replace")
+        (Path(directory) / f"{name}.{stream}.log").write_text(value or "", encoding="utf-8")
 
 
 def _equation_path(case: dict, matcont_root: str) -> Path:
@@ -170,11 +191,14 @@ def _equation_path(case: dict, matcont_root: str) -> Path:
 
 
 def _regenerate(cases: list[dict], args: argparse.Namespace) -> bool:
+    candidate_directory(args.generated_dir, args.reference_dir)
     args.generated_dir.mkdir(parents=True, exist_ok=True)
     ok = True
     for case in cases:
         function_name = case["matlab"]
         if not function_name:
+            print(f"PENDING {case['id']}: no MATLAB producer", file=sys.stderr)
+            ok = False
             continue
         try:
             if case["support"] == "unsupported":
@@ -186,10 +210,7 @@ def _regenerate(cases: list[dict], args: argparse.Namespace) -> bool:
                     matcont_root=args.matcont_root,
                     output_dir=None,
                 )
-                print(
-                    f"UNSUPPORTED_BY_JAXCONT {case['id']}: "
-                    "MatCont wrapper completed"
-                )
+                print(f"UNSUPPORTED_BY_JAXCONT {case['id']}: " "MatCont wrapper completed")
                 continue
             _run_matlab_function(
                 function_name,
@@ -198,14 +219,42 @@ def _regenerate(cases: list[dict], args: argparse.Namespace) -> bool:
                 output_dir=args.generated_dir,
             )
             metadata_path = args.generated_dir / f"{case['id']}_metadata.json"
-            enrich_generated_metadata(
-                metadata_path, case, _equation_path(case, args.matcont_root)
-            )
+            enrich_generated_metadata(metadata_path, case, _equation_path(case, args.matcont_root))
             print(f"REGENERATED {case['id']}")
         except Exception as exc:  # every producer failure must remain visible
             print(f"FAIL {case['id']}: {exc}", file=sys.stderr)
             ok = False
     return ok
+
+
+def _regenerate_julia(cases, args):
+    from .regenerate.bifurcationkit.runner import run_julia
+
+    candidate_directory(args.generated_dir, args.reference_dir)
+    success = True
+    for case in cases:
+        script = case.get("bifurcationkit")
+        if not script:
+            print(f"PENDING {case['canonical_id']}: no headless Julia producer", file=sys.stderr)
+            success = False
+            continue
+        output = args.generated_dir / case["system"] / "bifurcationkit" / case["canonical_id"]
+        try:
+            run_julia(
+                _SUITE_DIR / "regenerate" / "bifurcationkit" / script,
+                ["--case", case["canonical_id"], "--output-dir", str(output)],
+                300,
+                cli=args.julia_bin,
+                project=args.bifurcationkit_project,
+                depot=args.julia_depot,
+                log_dir=output,
+            )
+            load_bundle(output, case_id=case["canonical_id"], tool="bifurcationkit")
+            print(f"REGENERATED {case['canonical_id']}")
+        except Exception as exc:
+            print(f"FAIL {case['canonical_id']}: {exc}", file=sys.stderr)
+            success = False
+    return success
 
 
 def _load_case_callable(specification: str):
@@ -216,15 +265,42 @@ def _load_case_callable(specification: str):
 
 
 def _validate_case(case: dict, reference_dir: Path) -> tuple[bool, dict]:
+    if case.get("evidence_status") == "PENDING" and not case.get("python"):
+        return False, {"status": "PENDING", "reason": "producer and reviewed evidence pending"}
+    v2_paths = {
+        tool: Path(reference_dir) / case["system"] / tool / case["canonical_id"]
+        for tool in case.get("tool_coverage", {})
+        if tool != "jaxcont"
+    }
+    if any((path / "metadata.json").is_file() for path in v2_paths.values()):
+        results = {
+            tool: load_bundle(
+                path,
+                case_id=case["canonical_id"],
+                tool=tool,
+                require_reviewed=Path(reference_dir).resolve() == _DEFAULT_REFERENCE_DIR.resolve(),
+            )
+            for tool, path in v2_paths.items()
+            if (path / "metadata.json").is_file()
+        }
+        if case.get("python"):
+            fresh = _load_case_callable(case["python"])()
+            results["jaxcont"] = fresh if isinstance(fresh, dict) else fresh.artifacts["bundle"]
+        report = build_validation_report(case, results)
+        return report.status == "PASS", {
+            "status": report.status,
+            "validation_report": report.to_dict(),
+            "reason": (
+                "required evidence incomplete" if report.status == "PENDING" else report.status
+            ),
+        }
     bundle_dir = reference_directory(reference_dir, case["id"])
     for filename in case["references"]:
         path = bundle_dir / filename
         if filename.endswith("_metadata.json"):
             validate_case_metadata(path, case["id"], reference_dir)
         elif not path.is_file():
-            raise FileNotFoundError(
-                f"missing MatCont reference artifact: {path}"
-            )
+            raise FileNotFoundError(f"missing MatCont reference artifact: {path}")
     if case["id"].startswith("MC-EQ-"):
         validate_equilibrium_artifacts(reference_dir, case["id"])
     elif case["id"] in {"MC-LC-001", "MC-LC-002"}:
@@ -241,14 +317,29 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Reviewed references are read-only; regeneration targets ``generated``.
     """
-    args = resolve_runtime_paths(build_parser().parse_args(argv))
+    args = build_parser(runtime_defaults=False).parse_args(argv)
+    if args.regenerate_matcont:
+        if args.regenerate and args.regenerate != "matcont":
+            print("conflicting regeneration flags", file=sys.stderr)
+            return 2
+        args.regenerate = "matcont"
+    args.regenerate_matcont = args.regenerate == "matcont"
+    if args.regenerate:
+        try:
+            candidate_directory(args.generated_dir, args.reference_dir)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+    args.reference_dir = args.reference_dir.expanduser().resolve()
+    args.generated_dir = args.generated_dir.expanduser().resolve()
+    if args.regenerate_matcont or args.include_unsupported:
+        args = resolve_runtime_paths(args)
     registry = load_registry()
     if args.case and not args.include_unsupported:
         unsupported_requested = sorted(
             case["id"]
             for case in registry["cases"]
-            if case["id"] in set(args.case)
-            and case["support"] == "unsupported"
+            if case["id"] in set(args.case) and case["support"] == "unsupported"
         )
         if unsupported_requested:
             print(
@@ -258,9 +349,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 2
-    cases = select_cases(
-        registry, ids=args.case, include_unsupported=args.include_unsupported
-    )
+    cases = select_cases(registry, ids=args.case, include_unsupported=args.include_unsupported)
     if args.dry_run:
         for case in cases:
             if case["support"] == "unsupported":
@@ -269,24 +358,40 @@ def main(argv: Sequence[str] | None = None) -> int:
                     if case.get("unsupported_execution") == "template"
                     else ""
                 )
-                print(
-                    f"UNSUPPORTED_BY_JAXCONT {case['id']}: "
-                    f"{case['title']}{suffix}"
-                )
+                print(f"UNSUPPORTED_BY_JAXCONT {case['id']}: " f"{case['title']}{suffix}")
             else:
                 print(f"WOULD_RUN {case['id']}: {case['title']}")
         return 0
 
     success = True
-    if args.regenerate_matcont:
-        success = _regenerate(cases, args) and success
+    if args.regenerate:
+        if args.regenerate == "matcont":
+            success = _regenerate(cases, args) and success
+        else:
+            success = _regenerate_julia(cases, args) and success
     if args.verify_references:
         for case in cases:
-            if case["support"] == "unsupported" or not case["references"]:
+            if case["support"] == "unsupported":
                 continue
             try:
-                diagnostics = verify_case_references(
-                    case, args.generated_dir, args.reference_dir
+                candidate = (
+                    args.generated_dir
+                    / case["system"]
+                    / (args.regenerate or "matcont")
+                    / case["canonical_id"]
+                )
+                reference = (
+                    args.reference_dir
+                    / case["system"]
+                    / (args.regenerate or "matcont")
+                    / case["canonical_id"]
+                )
+                if not (candidate / "metadata.json").exists() and not case["references"]:
+                    raise ValueError("no candidate or reviewed bundle is available")
+                diagnostics = (
+                    verify_v2_bundles(candidate, reference, case["tolerances"])
+                    if (candidate / "metadata.json").exists()
+                    else verify_case_references(case, args.generated_dir, args.reference_dir)
                 )
                 print(
                     f"REFERENCE_OK {case['id']}: "
@@ -298,7 +403,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 success = False
         return int(not success)
 
-    if args.regenerate_matcont:
+    if args.regenerate:
         return int(not success)
 
     for case in cases:
@@ -317,18 +422,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                     matcont_root=args.matcont_root,
                     output_dir=None,
                 )
-                print(
-                    f"UNSUPPORTED_BY_JAXCONT {case['id']}: "
-                    "MatCont wrapper completed"
-                )
+                print(f"UNSUPPORTED_BY_JAXCONT {case['id']}: " "MatCont wrapper completed")
             except Exception as exc:
                 print(f"FAIL {case['id']}: {exc}", file=sys.stderr)
                 success = False
             continue
         try:
             passed, checks = _validate_case(case, args.reference_dir)
-            if passed:
+            if checks.get("status") == "PENDING":
+                print(f"PENDING {case['id']}: {checks['reason']}")
+                success = False
+            elif passed:
                 print(f"PASS {case['id']}: {case['title']}")
+                report = checks.get("validation_report", {})
+                if report.get("status") == "PENDING":
+                    print(
+                        f"PENDING {case.get('canonical_id', case['id'])}: full tool coverage; legacy case checks above passed"
+                    )
             else:
                 print(f"FAIL {case['id']}: {checks}", file=sys.stderr)
                 success = False

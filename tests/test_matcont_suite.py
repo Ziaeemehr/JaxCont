@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -307,9 +308,9 @@ def test_equilibrium_reference_schema_requires_spectra_and_normal_forms(tmp_path
 def matlab_runtime():
     args = resolve_runtime_paths(build_parser().parse_args([]))
     if not args.matlab_bin or not shutil.which(args.matlab_bin):
-        pytest.skip("MATLAB is unavailable (set MATLAB_BIN)")
+        pytest.fail("MATLAB is unavailable (set MATLAB_BIN)")
     if not args.matcont_root:
-        pytest.skip("set MATCONT_ROOT")
+        pytest.fail("set MATCONT_ROOT")
     return args
 
 
@@ -324,6 +325,8 @@ def matcont_generated_dir(tmp_path_factory, matlab_runtime):
         capture_output=True,
         # Cold MATLAB startup and shutdown can dominate the five real runs.
         timeout=300,
+        stdin=subprocess.DEVNULL,
+        env={**os.environ, "MATLAB_PREFDIR": str(tmp_path_factory.mktemp("matlab-prefs"))},
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     return output
@@ -1162,6 +1165,7 @@ def test_unsupported_template_is_never_reported_as_executed():
 
 
 @pytest.mark.slow
+@pytest.mark.matlab
 def test_executable_unsupported_wrapper_runs_only_after_opt_in(matlab_runtime):
     """Executable MatCont-only cases must run and remain labeled unsupported."""
     matlab = matlab_runtime.matlab_bin
