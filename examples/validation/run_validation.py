@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json
 import inspect
 import os
 import shutil
@@ -170,6 +171,7 @@ def _run_matlab_function(
     _save_matlab_logs(output_dir, function_name, completed.stdout, completed.stderr)
     if completed.returncode:
         raise RuntimeError(f"MATLAB producer {function_name} exited {completed.returncode}")
+    return completed
 
 
 def _save_matlab_logs(directory, name, stdout, stderr):
@@ -200,6 +202,13 @@ def _regenerate(cases: list[dict], args: argparse.Namespace) -> bool:
             print(f"PENDING {case['id']}: no MATLAB producer", file=sys.stderr)
             ok = False
             continue
+        output = None
+        if case["canonical_id"].startswith("lorenz84."):
+            output = args.generated_dir / case["canonical_id"] / "matcont"
+            output.mkdir(parents=True, exist_ok=True)
+            # A failure-only driver invocation must never refresh old evidence.
+            for stale in ("raw.json", "metadata.json"):
+                (output / stale).unlink(missing_ok=True)
         try:
             if case["support"] == "unsupported":
                 if case.get("unsupported_execution") == "template":
@@ -212,18 +221,39 @@ def _regenerate(cases: list[dict], args: argparse.Namespace) -> bool:
                 )
                 print(f"UNSUPPORTED_BY_JAXCONT {case['id']}: " "MatCont wrapper completed")
                 continue
-            _run_matlab_function(
+            completed = _run_matlab_function(
                 function_name,
                 matlab_bin=args.matlab_bin,
                 matcont_root=args.matcont_root,
                 output_dir=args.generated_dir,
             )
+            if case["canonical_id"].startswith("lorenz84."):
+                from .candidates import write_candidate
+                output = args.generated_dir / case["canonical_id"] / "matcont"
+                raw = output / "raw.json"
+                if not raw.exists():
+                    failure = output / "failure.json"
+                    raise RuntimeError(f"No complete native candidate; see {failure}")
+                native = json.loads(raw.read_text())
+                if completed is not None:
+                    native["metadata"]["command"] = completed.args
+                write_candidate(native, output, tool="matcont",
+                    driver=_SUITE_DIR / "regenerate" / "matcont" / (function_name + ".m"),
+                    equation=_SUITE_DIR / "regenerate" / "matcont" / "systems" / "lorenz84.m")
+                print(f"REGENERATED {case['canonical_id']}")
+                continue
             metadata_path = args.generated_dir / f"{case['id']}_metadata.json"
             enrich_generated_metadata(metadata_path, case, _equation_path(case, args.matcont_root))
             print(f"REGENERATED {case['id']}")
         except Exception as exc:  # every producer failure must remain visible
             print(f"FAIL {case['id']}: {exc}", file=sys.stderr)
             ok = False
+        finally:
+            if output is not None:
+                for stream in ("stdout", "stderr"):
+                    log = args.generated_dir / f"{function_name}.{stream}.log"
+                    if log.exists():
+                        shutil.copy2(log, output / log.name)
     return ok
 
 
@@ -238,7 +268,7 @@ def _regenerate_julia(cases, args):
             print(f"PENDING {case['canonical_id']}: no headless Julia producer", file=sys.stderr)
             success = False
             continue
-        output = args.generated_dir / case["system"] / "bifurcationkit" / case["canonical_id"]
+        output = args.generated_dir / case["canonical_id"] / "bifurcationkit"
         try:
             run_julia(
                 _SUITE_DIR / "regenerate" / "bifurcationkit" / script,
@@ -265,8 +295,11 @@ def _load_case_callable(specification: str):
 
 
 def _validate_case(case: dict, reference_dir: Path) -> tuple[bool, dict]:
-    if case.get("evidence_status") == "PENDING" and not case.get("python"):
-        return False, {"status": "PENDING", "reason": "producer and reviewed evidence pending"}
+    if case.get("evidence_status") == "PENDING" and not any(
+        (Path(reference_dir) / case["system"] / tool / case["canonical_id"] / "metadata.json").is_file()
+        for tool in case.get("tool_coverage", {}) if tool != "jaxcont"
+    ):
+        return False, {"status": "PENDING", "reason": "reviewed evidence pending Task 2.12"}
     v2_paths = {
         tool: Path(reference_dir) / case["system"] / tool / case["canonical_id"]
         for tool in case.get("tool_coverage", {})
@@ -376,9 +409,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             try:
                 candidate = (
                     args.generated_dir
-                    / case["system"]
-                    / (args.regenerate or "matcont")
                     / case["canonical_id"]
+                    / (args.regenerate or "matcont")
                 )
                 reference = (
                     args.reference_dir

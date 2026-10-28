@@ -33,6 +33,10 @@ def run_julia(script, args, timeout, *, cli=None, project=None, depot=None, log_
         raise RuntimeError("Julia is unavailable (set JULIA_BIN)")
     if not (runtime.project / "Manifest.toml").is_file():
         raise RuntimeError(f"Julia manifest is missing: {runtime.project}")
+    if "--output-dir" in args:
+        from ...artifacts import candidate_directory
+        output = candidate_directory(args[args.index("--output-dir") + 1])
+        (output / "metadata.json").unlink(missing_ok=True)
     script = Path(script).expanduser().resolve()
     logs = Path(log_dir or script.parent).expanduser().resolve()
     logs.mkdir(parents=True, exist_ok=True)

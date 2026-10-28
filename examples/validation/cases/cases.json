@@ -54,7 +54,8 @@
         "jaxcont",
         "matcont",
         "bifurcationkit"
-      ]
+      ],
+      "bifurcationkit": "cubic_fold.jl"
     },
     {
       "id": "MC-EQ-002",
@@ -294,7 +295,8 @@
         "jaxcont",
         "matcont",
         "bifurcationkit"
-      ]
+      ],
+      "bifurcationkit": "radial_cycle.jl"
     },
     {
       "id": "MC-LC-002",
@@ -733,10 +735,10 @@
       "features": [
         "equilibrium-continuation"
       ],
-      "python": null,
-      "matlab": null,
+      "python": "examples.validation.cases.python_cases.lorenz84:run_equilibria",
+      "matlab": "run_lorenz84_equilibria",
       "references": [],
-      "manual_source": "Historical Julia 02 and 05; contract pending owner review",
+      "manual_source": "Reviewed Lorenz-84 contract; candidates awaiting Task 2.12 review",
       "tolerances": {
         "parameter_atol": 0.0005,
         "state_atol": 0.0002,
@@ -761,6 +763,8 @@
       ],
       "expected_events": [
         "LP",
+        "H",
+        "H",
         "H"
       ],
       "model_contract": {
@@ -811,7 +815,46 @@
           "ds_max": 0.05,
           "max_steps_per_direction": 200,
           "newton_atol": 1e-12,
-          "source": "historical lorenz84_equilibria.jl (Julia 02)"
+          "source": "historical lorenz84_equilibria.jl (Julia 02)",
+          "comparison_domain": "clip each sheet to bounds before matching",
+          "expected_events": [
+            {
+              "kind": "LP",
+              "window": {
+                "F": [
+                  1.5,
+                  1.58
+                ]
+              }
+            },
+            {
+              "kind": "H",
+              "window": {
+                "F": [
+                  1.59,
+                  1.65
+                ]
+              }
+            },
+            {
+              "kind": "H",
+              "window": {
+                "F": [
+                  2.4,
+                  2.55
+                ]
+              }
+            },
+            {
+              "kind": "H",
+              "window": {
+                "F": [
+                  2.8,
+                  2.95
+                ]
+              }
+            }
+          ]
         },
         "codim2": {
           "parameter_order": [
@@ -837,7 +880,7 @@
           "fold_seed": {
             "F": [
               1.5,
-              1.6
+              1.58
             ],
             "T": [
               0.039,
@@ -846,8 +889,8 @@
           },
           "hopf_seed": {
             "F": [
-              1.5,
-              3.0
+              1.59,
+              1.65
             ],
             "T": [
               0.039,
@@ -874,7 +917,8 @@
         "residual_atol": 1e-07,
         "spectrum_atol": 0.0005,
         "frequency_atol": 0.0005
-      }
+      },
+      "bifurcationkit": "lorenz84_equilibria.jl"
     },
     {
       "id": "lorenz84.fold-ft",
@@ -886,10 +930,10 @@
       "features": [
         "codim2"
       ],
-      "python": null,
-      "matlab": null,
+      "python": "examples.validation.cases.python_cases.lorenz84:run_fold",
+      "matlab": "run_lorenz84_codim2",
       "references": [],
-      "manual_source": "Historical Julia 02 and 05; contract pending owner review",
+      "manual_source": "Reviewed Lorenz-84 contract; candidates awaiting Task 2.12 review",
       "tolerances": {
         "parameter_atol": 0.0005,
         "state_atol": 0.0002,
@@ -963,7 +1007,46 @@
           "ds_max": 0.05,
           "max_steps_per_direction": 200,
           "newton_atol": 1e-12,
-          "source": "historical lorenz84_equilibria.jl (Julia 02)"
+          "source": "historical lorenz84_equilibria.jl (Julia 02)",
+          "comparison_domain": "clip each sheet to bounds before matching",
+          "expected_events": [
+            {
+              "kind": "LP",
+              "window": {
+                "F": [
+                  1.5,
+                  1.58
+                ]
+              }
+            },
+            {
+              "kind": "H",
+              "window": {
+                "F": [
+                  1.59,
+                  1.65
+                ]
+              }
+            },
+            {
+              "kind": "H",
+              "window": {
+                "F": [
+                  2.4,
+                  2.55
+                ]
+              }
+            },
+            {
+              "kind": "H",
+              "window": {
+                "F": [
+                  2.8,
+                  2.95
+                ]
+              }
+            }
+          ]
         },
         "codim2": {
           "parameter_order": [
@@ -989,7 +1072,7 @@
           "fold_seed": {
             "F": [
               1.5,
-              1.6
+              1.58
             ],
             "T": [
               0.039,
@@ -998,8 +1081,8 @@
           },
           "hopf_seed": {
             "F": [
-              1.5,
-              3.0
+              1.59,
+              1.65
             ],
             "T": [
               0.039,
@@ -1026,7 +1109,8 @@
         "residual_atol": 1e-07,
         "spectrum_atol": 0.0005,
         "frequency_atol": 0.0005
-      }
+      },
+      "bifurcationkit": "lorenz84_codim2.jl"
     },
     {
       "id": "lorenz84.hopf-ft",
@@ -1038,10 +1122,10 @@
       "features": [
         "codim2"
       ],
-      "python": null,
-      "matlab": null,
+      "python": "examples.validation.cases.python_cases.lorenz84:run_hopf",
+      "matlab": "run_lorenz84_codim2",
       "references": [],
-      "manual_source": "Historical Julia 02 and 05; contract pending owner review",
+      "manual_source": "Reviewed Lorenz-84 contract; candidates awaiting Task 2.12 review",
       "tolerances": {
         "parameter_atol": 0.0005,
         "state_atol": 0.0002,
@@ -1113,7 +1197,46 @@
           "ds_max": 0.05,
           "max_steps_per_direction": 200,
           "newton_atol": 1e-12,
-          "source": "historical lorenz84_equilibria.jl (Julia 02)"
+          "source": "historical lorenz84_equilibria.jl (Julia 02)",
+          "comparison_domain": "clip each sheet to bounds before matching",
+          "expected_events": [
+            {
+              "kind": "LP",
+              "window": {
+                "F": [
+                  1.5,
+                  1.58
+                ]
+              }
+            },
+            {
+              "kind": "H",
+              "window": {
+                "F": [
+                  1.59,
+                  1.65
+                ]
+              }
+            },
+            {
+              "kind": "H",
+              "window": {
+                "F": [
+                  2.4,
+                  2.55
+                ]
+              }
+            },
+            {
+              "kind": "H",
+              "window": {
+                "F": [
+                  2.8,
+                  2.95
+                ]
+              }
+            }
+          ]
         },
         "codim2": {
           "parameter_order": [
@@ -1139,7 +1262,7 @@
           "fold_seed": {
             "F": [
               1.5,
-              1.6
+              1.58
             ],
             "T": [
               0.039,
@@ -1148,8 +1271,8 @@
           },
           "hopf_seed": {
             "F": [
-              1.5,
-              3.0
+              1.59,
+              1.65
             ],
             "T": [
               0.039,
@@ -1176,7 +1299,8 @@
         "residual_atol": 1e-07,
         "spectrum_atol": 0.0005,
         "frequency_atol": 0.0005
-      }
+      },
+      "bifurcationkit": "lorenz84_codim2.jl"
     },
     {
       "id": "lorenz84.bt-ft",
@@ -1188,10 +1312,10 @@
       "features": [
         "codim2"
       ],
-      "python": null,
-      "matlab": null,
+      "python": "examples.validation.cases.python_cases.lorenz84:run_bt",
+      "matlab": "run_lorenz84_codim2",
       "references": [],
-      "manual_source": "Historical Julia 02 and 05; contract pending owner review",
+      "manual_source": "Reviewed Lorenz-84 contract; candidates awaiting Task 2.12 review",
       "tolerances": {
         "parameter_atol": 0.0005,
         "state_atol": 0.0002,
@@ -1265,7 +1389,46 @@
           "ds_max": 0.05,
           "max_steps_per_direction": 200,
           "newton_atol": 1e-12,
-          "source": "historical lorenz84_equilibria.jl (Julia 02)"
+          "source": "historical lorenz84_equilibria.jl (Julia 02)",
+          "comparison_domain": "clip each sheet to bounds before matching",
+          "expected_events": [
+            {
+              "kind": "LP",
+              "window": {
+                "F": [
+                  1.5,
+                  1.58
+                ]
+              }
+            },
+            {
+              "kind": "H",
+              "window": {
+                "F": [
+                  1.59,
+                  1.65
+                ]
+              }
+            },
+            {
+              "kind": "H",
+              "window": {
+                "F": [
+                  2.4,
+                  2.55
+                ]
+              }
+            },
+            {
+              "kind": "H",
+              "window": {
+                "F": [
+                  2.8,
+                  2.95
+                ]
+              }
+            }
+          ]
         },
         "codim2": {
           "parameter_order": [
@@ -1291,7 +1454,7 @@
           "fold_seed": {
             "F": [
               1.5,
-              1.6
+              1.58
             ],
             "T": [
               0.039,
@@ -1300,8 +1463,8 @@
           },
           "hopf_seed": {
             "F": [
-              1.5,
-              3.0
+              1.59,
+              1.65
             ],
             "T": [
               0.039,
@@ -1328,7 +1491,44 @@
         "residual_atol": 1e-07,
         "spectrum_atol": 0.0005,
         "frequency_atol": 0.0005
-      }
+      },
+      "bifurcationkit": "lorenz84_codim2.jl"
+    },
+    {
+      "id": "hopf-normal-form.l1",
+      "canonical_id": "hopf-normal-form.l1",
+      "aliases": [],
+      "system": "hopf-normal-form",
+      "title": "Asymmetric Hopf native cubic coefficient",
+      "support": "supported",
+      "features": [
+        "hopf-normal-form"
+      ],
+      "python": null,
+      "matlab": null,
+      "bifurcationkit": "hopf_normal_form.jl",
+      "references": [],
+      "manual_source": "Independent asymmetric Hopf polynomial; native BK b without conversion",
+      "tolerances": {
+        "parameter_atol": 0.0005,
+        "residual_atol": 1e-07
+      },
+      "tool_coverage": {
+        "jaxcont": "PENDING",
+        "bifurcationkit": "PENDING"
+      },
+      "required_tools": [
+        "jaxcont",
+        "bifurcationkit"
+      ],
+      "evidence_status": "PENDING",
+      "expected_domain": [
+        -2,
+        2
+      ],
+      "expected_events": [
+        "H"
+      ]
     }
   ]
 }

@@ -626,7 +626,8 @@ def _run_matcont_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
         cwd=Path(__file__).resolve().parents[1],
         text=True,
         capture_output=True,
-        timeout=60,
+        timeout=300 if "--matlab-bin" in arguments else 60,
+        stdin=subprocess.DEVNULL,
     )
 
 
