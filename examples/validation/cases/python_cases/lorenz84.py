@@ -96,8 +96,10 @@ def _fold(x64):
     u = jnp.array([seed[f"state_{i}"] for i in range(4)])
     prob = jc.fold_curve_problem(model.lorenz84_ft_rhs, u, jnp.array([seed["F"], .04]), free=1, formulation="extended", tol=1e-12, args=model.CONSTANTS)
     result = jc.continuation(prob, p_span=(.04, -.01),
-        settings=jc.ContinuationPar(ds=.001, ds_min=1e-5, ds_max=.015, max_steps=30, theta=1., newton_tol=1e-12, compute_stability=False),
-        events=[jc.BogdanovTakens(raw_f=model.lorenz84_ft_rhs, free=1, curve="fold", args=model.CONSTANTS)])
+        settings=jc.ContinuationPar(ds=.001, ds_min=1e-5, ds_max=.015, max_steps=model.CODIM2_CONTROLS["max_steps"], theta=1., newton_tol=1e-12, compute_stability=False),
+        events=[jc.BogdanovTakens(raw_f=model.lorenz84_ft_rhs, free=1, curve="fold", args=model.CONSTANTS),
+                jc.ZeroHopf(raw_f=model.lorenz84_ft_rhs, free=1, curve="fold", args=model.CONSTANTS),
+                jc.Cusp(raw_f=model.lorenz84_ft_rhs, free=1, curve="fold", args=model.CONSTANTS)])
     rows=[]
     for i, (state, T) in enumerate(zip(result.branch.states, result.branch.params)):
         u, F, *_ = unpack_fold_curve(state, 4)
@@ -117,24 +119,37 @@ def produce(case_id):
     elif case_id == "lorenz84.fold-ft":
         result, rows = _fold(x64)
         events=[]
+        labels = {"bogdanov_takens": "BT", "zero_hopf": "ZH", "cusp": "CP"}
         for e in result.events:
-            if e.kind == "bogdanov_takens":
+            if e.kind in labels:
                 p = e.info["p"]
                 nearest=min(rows, key=lambda r: abs(r["T"]-float(p[1])))
-                events.append(_event(_row(e.u, *p, "fold", int(nearest["point_id"]), p[1]), "BT", f"bt{len(events)}"))
+                label = labels[e.kind]
+                events.append(_event(_row(e.u, *p, "fold", int(nearest["point_id"]), p[1]), label, f"{label.lower()}{len(events)}"))
     elif case_id == "lorenz84.hopf-ft":
         _, eq_events = _equilibrium(x64)
         seed = model.select_event(eq_events, "H", model.EVENT_WINDOWS["hopf_seed"])
         u = jnp.array([seed[f"state_{i}"] for i in range(4)])
         prob = jc.hopf_curve_problem(model.lorenz84_ft_rhs, u, jnp.array([seed["F"], .04]), free=1, formulation="extended", tol=1e-12, args=model.CONSTANTS)
         result = jc.continuation(prob, p_span=(.04, -.01), settings=jc.ContinuationPar(ds=.001, ds_min=1e-5, ds_max=.015,
-            max_steps=30, theta=1., newton_tol=1e-12, compute_stability=False))
+            max_steps=model.CODIM2_CONTROLS["max_steps"], theta=1., newton_tol=1e-12, compute_stability=False),
+            events=[jc.BogdanovTakens(raw_f=model.lorenz84_ft_rhs, free=1, curve="hopf", args=model.CONSTANTS)])
+        bts = [e for e in result.events if e.kind == "bogdanov_takens"]
+        # The extended chart passes the BT and continues as a neutral-saddle
+        # curve (omega^2 < 0), which is not a Hopf curve. MatCont and
+        # BifurcationKit end the Hopf curve at the BT, so the chart is cut there.
+        # ``index`` is the bracket (i, i+1) around the BT; keep the Hopf side.
+        stop = int(bts[0].index[0]) if bts else len(result.branch.params) - 1
         rows=[]
-        for i, (state, T) in enumerate(zip(result.branch.states, result.branch.params)):
+        for i, (state, T) in enumerate(zip(result.branch.states[:stop + 1], result.branch.params[:stop + 1])):
             u, F, *_ = unpack_hopf_curve(state, 4)
             rows.append(_row(u, F, T, "hopf", i, T))
         events=[]
-        metadata["chart_status"] = "Hopf chart boundary near BT" if rows[-1]["T"] > -.01 else "completed"
+        if bts:
+            p = bts[0].info["p"]
+            events.append(_event(_row(bts[0].u if bts[0].u.shape[0] == 4 else unpack_hopf_curve(bts[0].u, 4)[0], *p, "hopf", stop, p[1]), "BT", "bt0"))
+        metadata["chart_status"] = ("Hopf chart ends at the detected BT; the neutral-saddle continuation beyond it is cut"
+                                    if bts else "no BT detected on the Hopf chart")
     elif case_id == "lorenz84.bt-ft":
         result, curve = _fold(x64)
         candidates=[e for e in result.events if e.kind == "bogdanov_takens" and .01 <= float(e.info["p"][1]) <= .03]
@@ -159,8 +174,8 @@ def produce(case_id):
         raise ValueError(case_id)
     if case_id in ("lorenz84.fold-ft", "lorenz84.hopf-ft"):
         domain = [min(r["T"] for r in rows), max(r["T"] for r in rows)]
-        metadata.update(observed_domain=domain, expected_domain=model.CODIM2_CONTROLS["expected_T_domain"],
-                        coverage_status="COMPLETE" if domain[0] <= -.01 and domain[1] >= .04 else "PARTIAL")
+        expected, status = model.chart_coverage(case_id, [r["T"] for r in rows])
+        metadata.update(observed_domain=domain, expected_domain=expected, coverage_status=status)
         if metadata["coverage_status"] == "PARTIAL":
             metadata["chart_status"] = "Hopf chart boundary or configured step budget reached" if case_id.endswith("hopf-ft") else "Configured step budget reached before expected T domain"
     spectra=[s for row in rows for s in _spectra(row)] + [s for e in events for s in _spectra(e,e["event_id"])]

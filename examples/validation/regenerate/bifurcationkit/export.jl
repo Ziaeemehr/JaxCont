@@ -46,8 +46,12 @@ function export_bundle(case,output,branch,events,spectra; driver, equation=drive
     metadata["source_hashes"]=Dict(basename(p)=>hashfile(p) for p in [joinpath(@__DIR__,"export.jl"),equation,driver])
     if case in ("lorenz84.fold-ft","lorenz84.hopf-ft")
         domain=[minimum(r["T"] for r in branch),maximum(r["T"] for r in branch)]
-        metadata["observed_domain"]=domain;metadata["expected_domain"]=[-.01,.04]
-        metadata["coverage_status"]=(domain[1]<=-.01 && domain[2]>=.04) ? "COMPLETE" : "PARTIAL"
+        # Same rule as chart_coverage in cases/systems/lorenz84.py: the Hopf
+        # chart ends at the BT (T~0.02094, tolerance 1e-3); the fold chart spans [-0.01, 0.04].
+        ishopf=case=="lorenz84.hopf-ft"
+        expected=ishopf ? [.02094,.04] : [-.01,.04]
+        metadata["observed_domain"]=domain;metadata["expected_domain"]=expected
+        metadata["coverage_status"]=(domain[1]<=expected[1]+(ishopf ? 1e-3 : 0.) && domain[2]>=expected[2]) ? "COMPLETE" : "PARTIAL"
         metadata["coverage_status"]=="PARTIAL" && (metadata["chart_status"]="Chart boundary or configured step budget reached before expected T domain")
     end
     open(joinpath(output,"metadata.json"),"w") do io; JSON.print(io,metadata,2); end

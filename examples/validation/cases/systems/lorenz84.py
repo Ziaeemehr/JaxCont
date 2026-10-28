@@ -81,8 +81,13 @@ CODIM2_CONTROLS = {
     "ds": -0.001,
     "ds_min": 1e-5,
     "ds_max": 0.015,
-    "max_steps": 30,
+    # 30 steps (historical) left the fold and Hopf charts short of their
+    # domains in JaxCont and MatCont; 400 lets every tool cover them.
+    "max_steps": 400,
     "expected_T_domain": [-0.01, 0.04],
+    # A Hopf curve ends at the BT (T~0.02094), so its chart covers [T_BT, 0.04].
+    "expected_T_domain_hopf": [0.02094, 0.04],
+    "hopf_bt_tolerance": 1e-3,
     "source": "historical lorenz84_codim2.jl; shared positive-T BT chart",
 }
 CONVENTIONS = {
@@ -145,3 +150,19 @@ def select_event(events, kind, window):
     if len(matches) != 1:
         raise ValueError(f"expected exactly one {kind} event in {window}, found {len(matches)}")
     return matches[0]
+
+
+def chart_coverage(case_id, T_values):
+    """Return (expected T domain, "COMPLETE"/"PARTIAL") for a codim-2 chart.
+
+    The fold chart must span ``expected_T_domain``. The Hopf chart ends at the
+    BT, so it must reach within ``hopf_bt_tolerance`` of the BT and T=0.04.
+    """
+    low, high = min(T_values), max(T_values)
+    if case_id == "lorenz84.hopf-ft":
+        expected = CODIM2_CONTROLS["expected_T_domain_hopf"]
+        complete = low <= expected[0] + CODIM2_CONTROLS["hopf_bt_tolerance"] and high >= expected[1]
+    else:
+        expected = CODIM2_CONTROLS["expected_T_domain"]
+        complete = low <= expected[0] and high >= expected[1]
+    return expected, "COMPLETE" if complete else "PARTIAL"

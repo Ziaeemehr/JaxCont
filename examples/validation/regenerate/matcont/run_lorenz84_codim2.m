@@ -8,7 +8,7 @@ for kind={'LP','H'}
  e=s(matches);p=[x(5,e.index);.04];u=x(1:4,e.index);
  if strcmp(label,'LP'),[seed,v]=init_LP_LP(@lorenz84,u,p,[1 2]);curve=@limitpoint;else,[seed,v]=init_H_H(@lorenz84,u,p,[1 2]);curve=@hopf;end
  if strcmp(label,'LP'),backward=1;else,backward=0;end
- opt=contset(opt,'Backward',backward);opt=contset(opt,'InitStepsize',.001);opt=contset(opt,'MinStepsize',1e-5);opt=contset(opt,'MaxStepsize',.015);opt=contset(opt,'MaxNumPoints',31);
+ opt=contset(opt,'Backward',backward);opt=contset(opt,'InitStepsize',.001);opt=contset(opt,'MinStepsize',1e-5);opt=contset(opt,'MaxStepsize',.015);opt=contset(opt,'MaxNumPoints',401); % contract max_steps=400
  [c,~,special]=cont(curve,seed,v,opt);
  if strcmp(label,'H')
   % MatCont's squared-frequency Hopf chart can continue into a neutral saddle.

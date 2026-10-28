@@ -5,7 +5,7 @@ ishopf=case=="lorenz84.hopf-ft"
 kind=ishopf ? "H" : "LP"
 seedidx=select_special(br,kind;F=ishopf ? (1.59,1.65) : (1.50,1.58),T=(.039,.041))
 curveopts=ContinuationPar(opts;p_max=3.2,p_min=-.1,detect_bifurcation=1,dsmin=1e-5,ds=-.001,dsmax=.015,
-    n_inversion=10,save_sol_every_step=1,max_steps=30,max_bisection_steps=55)
+    n_inversion=10,save_sol_every_step=1,max_steps=400,max_bisection_steps=55)
 curve=continuation((@set br.alg.tangent=Secant()),seedidx,(@optic _.T),curveopts;
     verbosity=0,normC=norminf,detect_codim2_bifurcation=1,update_minaug_every_step=1,
     start_with_eigen=true,bdlinsolver=MatrixBLS(),
@@ -47,6 +47,6 @@ if case=="lorenz84.bt-ft"
 end
 chart=ishopf && minimum(r["T"] for r in rows)>-.01 ? "Hopf chart boundary near BT; not a BT detection" : "completed configured steps"
 export_bundle(case,output,rows,events,spectra;driver=@__FILE__,equation=joinpath(@__DIR__,"lorenz84_equilibria.jl"),
-    controls=Dict("parameter_order"=>["F","T"],"free_parameter"=>"T","ds"=>-.001,"ds_min"=>1e-5,"ds_max"=>.015,"max_steps"=>30,"newton_atol"=>1e-12,"T_bounds"=>[-.1,3.2]),
+    controls=Dict("parameter_order"=>["F","T"],"free_parameter"=>"T","ds"=>-.001,"ds_min"=>1e-5,"ds_max"=>.015,"max_steps"=>400,"newton_atol"=>1e-12,"T_bounds"=>[-.1,3.2]),
     seeds=Dict("state"=>LOR_SEED,"F"=>3.,"T"=>.04,"curve_seed"=>kind,"window"=>ishopf ? [1.59,1.65] : [1.5,1.58]),
     conventions=Dict("time"=>"original","chart_boundary"=>"Hopf termination near BT is not a BT detection","parameter_order"=>"F,T"),chart=chart)

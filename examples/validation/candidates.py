@@ -33,8 +33,10 @@ def write_candidate(bundle, output_dir, *, tool, driver, equation, lock=None):
                               capture_output=True, text=True, check=True).stdout.strip()
     metadata["source_hashes"] = {str(Path(p).name): file_hash(p) for p in Path(driver).parent.glob("lorenz84*.m")} if tool == "matcont" else {}
     if bundle["canonical_id"] in ("lorenz84.fold-ft", "lorenz84.hopf-ft"):
-        domain = [min(float(r["T"]) for r in bundle["branch"]), max(float(r["T"]) for r in bundle["branch"])]
-        metadata.update(observed_domain=domain, expected_domain=[-.01,.04], coverage_status="COMPLETE" if domain[0] <= -.01 and domain[1] >= .04 else "PARTIAL")
+        from .cases.systems.lorenz84 import chart_coverage
+        T_values = [float(r["T"]) for r in bundle["branch"]]
+        expected, status = chart_coverage(bundle["canonical_id"], T_values)
+        metadata.update(observed_domain=[min(T_values), max(T_values)], expected_domain=expected, coverage_status=status)
         if metadata["coverage_status"] == "PARTIAL":
             metadata["chart_status"] = "Native Hopf boundary or step budget reached" if bundle["canonical_id"].endswith("hopf-ft") else "Configured step budget reached before expected T domain"
     metadata.update(schema_version=2, canonical_id=bundle["canonical_id"], tool=tool,
