@@ -108,6 +108,9 @@ def _fold(x64):
 def produce(case_id):
     """Return v2 tables; failures raise and never masquerade as complete data."""
     x64 = jax.config.x64_enabled
+    if not x64:
+        # The contract's Newton tolerance (1e-12) is below float32 resolution.
+        raise RuntimeError("Lorenz-84 reference producers run in float64; set jax_enable_x64")
     metadata = _metadata()
     if case_id == "lorenz84.eq-f":
         rows, events = _equilibrium(x64)

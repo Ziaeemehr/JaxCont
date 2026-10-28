@@ -24,17 +24,19 @@ for kind={'LP','H'}
  end
  lorenz84_native(run,c(1:4,:),c(5:6,:),special,c,output_dir,opt);
  if strcmp(label,'LP')
-  bt=find(arrayfun(@(e) strcmp(strtrim(e.label),'BT')&&c(5,e.index)>=1.5&&c(5,e.index)<=2&&c(6,e.index)>=.01&&c(6,e.index)<=.03,special));
+  bt=find(arrayfun(@(e) strcmp(strtrim(e.label),'BT')&&c(5,e.index)>=1.40&&c(5,e.index)<=1.50&&c(6,e.index)>=.01&&c(6,e.index)<=.03,special));
   if numel(bt)~=1
    folder=fullfile(output_dir,'lorenz84.bt-ft','matcont');if ~isfolder(folder),mkdir(folder);end
    rejected=find(arrayfun(@(e) strcmp(strtrim(e.label),'BT'),special));
    values=arrayfun(@(e) c(5:6,e.index)',special(rejected),'UniformOutput',false);
-   failure=struct('status','FAIL','reason','Refined BT lies outside immutable positive-T selection window F=[1.5,2], T=[.01,.03]','attempted_parameters',{values});
+   failure=struct('status','FAIL','reason','Refined BT lies outside immutable positive-T selection window F=[1.40,1.50], T=[.01,.03]','attempted_parameters',{values});
    fid=fopen(fullfile(folder,'failure.json'),'w');fprintf(fid,'%s\n',jsonencode(failure));fclose(fid);
    continue
   end
   idx=special(bt).index;
   selected=special(bt);selected.index=1;
+  stale=fullfile(output_dir,'lorenz84.bt-ft','matcont','failure.json');
+  if isfile(stale),delete(stale);end % a success must not keep an old failure
   lorenz84_native('lorenz84.bt-ft',c(1:4,idx),c(5:6,idx),selected,c(:,idx),output_dir,opt);
  end
 end

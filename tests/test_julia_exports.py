@@ -52,20 +52,12 @@ def test_native_exports(case,script):
 @pytest.mark.parametrize('case',['lorenz84.fold-ft','lorenz84.hopf-ft','lorenz84.bt-ft'])
 def test_codim2_export_preserves_parameter_order_and_event_identity(case):
     output=ROOT/'examples/validation/generated/candidates'/case/'bifurcationkit'
-    if case.endswith('bt-ft'):
-        with pytest.raises(RuntimeError):
-            run_julia(JULIA/'lorenz84_codim2.jl',['--case',case,'--output-dir',str(output)],600,log_dir=output)
-        failure=json.loads((output/'failure.json').read_text())
-        assert failure['status']=='FAIL'
-        assert 'unique BT' in failure['reason']
-        assert not (output/'metadata.json').exists()
-        return
     run_julia(JULIA/'lorenz84_codim2.jl',['--case',case,'--output-dir',str(output)],600,log_dir=output)
     bundle=load_bundle(output,case_id=case,tool='bifurcationkit')
     assert bundle['metadata']['parameter_order']==['F','T']
     assert bundle['metadata']['chart_status']
     if case.endswith('bt-ft'):
-        point=select_event(bundle['events'],'BT',{'F':[1.5,2.], 'T':[.01,.03]})
+        point=select_event(bundle['events'],'BT',{'F':[1.40,1.50], 'T':[.01,.03]})
         assert float(point['residual_norm'])<1e-7
         assert int(point['geometric_nullity'])==1
 

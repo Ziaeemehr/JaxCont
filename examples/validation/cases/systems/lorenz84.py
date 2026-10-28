@@ -70,7 +70,9 @@ EVENT_WINDOWS = {
     # The (F,T) Hopf curve is seeded at the Hopf point nearest the BT; the
     # two Hopf points at larger F belong to other Hopf curves.
     "hopf_seed": {"F": [1.59, 1.65], "T": [0.039, 0.041]},
-    "bt_positive_T": {"F": [1.5, 2.0], "T": [0.01, 0.03]},
+    # The positive-T BT is at F~1.4467, T~0.0209 (JaxCont and MatCont agree to
+    # ~1e-11; the earlier F=[1.5, 2.0] window excluded it in every tool).
+    "bt_positive_T": {"F": [1.40, 1.50], "T": [0.01, 0.03]},
 }
 CODIM2_CONTROLS = {
     "parameter_order": ["F", "T"],

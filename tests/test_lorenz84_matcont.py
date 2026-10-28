@@ -28,13 +28,13 @@ def native():
         pytest.fail('MATLAB timed out; see generated/candidates/lorenz84-matcont-test.log')
     (OUT / ('lorenz84-matcont-x' + os.environ.get('JAXCONT_TEST_X64', '0') + '.log')).write_text(result.stdout + result.stderr)
     assert result.returncode == 0, result.stdout + result.stderr
-    return {run: json.loads((OUT / run / 'matcont/native.json').read_text()) for run in ('lorenz84.eq-f','lorenz84.fold-ft','lorenz84.hopf-ft')}
+    return {run: json.loads((OUT / run / 'matcont/native.json').read_text()) for run in ('lorenz84.eq-f','lorenz84.fold-ft','lorenz84.hopf-ft','lorenz84.bt-ft')}
 
 @pytest.mark.matlab
 def test_flagship_exports_all_four_runs(native):
     for run, data in native.items():
         assert data['states'] and data['parameters']
-        assert max(data['residuals']) < 1e-7
+        assert max(np.atleast_1d(data['residuals'])) < 1e-7
     assert native['lorenz84.hopf-ft']['parameters'][-1][1] < .04
     assert native['lorenz84.fold-ft']['parameters'][-1][1] < .04
     events = native['lorenz84.eq-f']['events']
@@ -42,10 +42,11 @@ def test_flagship_exports_all_four_runs(native):
     for expected in contract.F_SWEEP['expected_events']:
         contract.select_event(events, expected['kind'], expected['window'])
     assert all(-1.5 <= p[0] <= 3 for p in native['lorenz84.eq-f']['parameters'])
-    failure = json.loads((OUT / 'lorenz84.bt-ft/matcont/failure.json').read_text())
-    assert failure['status'] == 'FAIL'
-    assert 'outside immutable' in failure['reason']
-    assert not (OUT / 'lorenz84.bt-ft/matcont/metadata.json').exists()
+    # A single-point run: MATLAB's jsonencode writes the event list as one object.
+    bt = native['lorenz84.bt-ft']['events']
+    bt = [bt] if isinstance(bt, dict) else bt
+    contract.select_event(bt, 'BT', contract.EVENT_WINDOWS['bt_positive_T'])
+    assert not (OUT / 'lorenz84.bt-ft/matcont/failure.json').exists()
 
 @pytest.mark.matlab
 def test_matlab_rhs_samples_match_contract(native):

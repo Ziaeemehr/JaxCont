@@ -235,6 +235,11 @@ def _regenerate(cases: list[dict], args: argparse.Namespace) -> bool:
                     failure = output / "failure.json"
                     raise RuntimeError(f"No complete native candidate; see {failure}")
                 native = json.loads(raw.read_text())
+                # MATLAB's jsonencode writes a one-element struct array (the
+                # single-point lorenz84.bt-ft branch) as an object, not a list.
+                for table in ("branch", "events", "spectra"):
+                    if isinstance(native.get(table), dict):
+                        native[table] = [native[table]]
                 if completed is not None:
                     native["metadata"]["command"] = completed.args
                 write_candidate(native, output, tool="matcont",

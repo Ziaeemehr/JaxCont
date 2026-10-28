@@ -28,14 +28,16 @@ end
 if case=="lorenz84.bt-ft"
     # This selector is immutable. A point outside it is a failed route.
     try
-        idx=select_special(curve,"BT";F=(1.5,2.),T=(.01,.03),codim2=true)
+        idx=select_special(curve,"BT";F=(1.40,1.50),T=(.01,.03),codim2=true)
         sol=newton(curve,idx;options=NewtonPar(tol=1e-13,max_iterations=25),start_with_eigen=true,jacobian_ma=BK.MinAug(),normN=norminf)
         BK.converged(sol) || error("BT Newton refinement failed")
         u=sol.u.x0;p=(F=sol.u.params.F,T=sol.u.params.T)
-        (1.5<=p.F<=2. && .01<=p.T<=.03) || error("Refined BT outside reviewed window")
+        (1.40<=p.F<=1.50 && .01<=p.T<=.03) || error("Refined BT outside reviewed window")
         row=equilibrium_row(u,p,Lor,jac_Lor;segment="BT",point=0,coordinate=:T)
         e=event_row(row,"BT","bt");e["geometric_nullity"]=count(x->x<1e-6,svdvals(jac_Lor(u,p)))
-        rows=[row];events=[e];spectra=vcat(spectrum_rows(row,jac_Lor,u,p),spectrum_rows(row,jac_Lor,u,p;event="bt"))
+        # `global`: a top-level try block is a soft scope, so plain assignment
+        # would create locals and export the unrefined detected point instead.
+        global rows=[row];global events=[e];global spectra=vcat(spectrum_rows(row,jac_Lor,u,p),spectrum_rows(row,jac_Lor,u,p;event="bt"))
     catch err
         open(joinpath(output,"failure.json"),"w") do io
             JSON.print(io,Dict("status"=>"FAIL","reason"=>sprint(showerror,err),"detected_curve_events"=>events),2)

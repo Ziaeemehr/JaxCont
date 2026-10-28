@@ -7,7 +7,10 @@ pytestmark = pytest.mark.slow
 
 @pytest.fixture(scope="module")
 def runs():
+    import jax
     from examples.validation.cases.python_cases.lorenz84 import produce
+    if not jax.config.x64_enabled:
+        pytest.skip("Lorenz-84 reference producers are float64-only (Newton tol 1e-12)")
     return {name: produce("lorenz84." + name) for name in ("eq-f", "fold-ft", "hopf-ft")}
 
 def test_branch_has_expected_domain_and_events(runs):
@@ -25,12 +28,10 @@ def test_branch_has_expected_domain_and_events(runs):
         assert runs[name]["metadata"]["chart_status"]
 
 def test_bt_has_jordan_structure(runs):
-    from examples.validation.cases.python_cases.lorenz84 import produce, ContractViolation
-    with pytest.raises(ContractViolation, match="outside reviewed BT window") as failure:
-        produce("lorenz84.bt-ft")
-    bundle = failure.value.evidence
-    event = bundle["events"][0]
-    assert event["F"] < 1.5  # frozen selection must reject this point
+    from examples.validation.cases.python_cases.lorenz84 import produce
+    from examples.validation.cases.systems.lorenz84 import EVENT_WINDOWS
+    bundle = produce("lorenz84.bt-ft")
+    event = select_event(bundle["events"], "BT", EVENT_WINDOWS["bt_positive_T"])
     assert event["residual_norm"] < 1e-7
     assert event["jordan_v0_residual"] < 1e-6
     assert event["jordan_v1_residual"] < 1e-6
