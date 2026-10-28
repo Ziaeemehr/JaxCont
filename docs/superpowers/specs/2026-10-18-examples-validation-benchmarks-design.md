@@ -91,7 +91,7 @@ examples/
 examples/validation/             # repo tooling inside examples/
   README.md registry.py artifacts.py compare.py validation.py
   visualize.py run_validation.py
-  gallery/  GALLERY_HEADER.rst  plot_<run>.py   # 10–30 line evidence pages
+  gallery/  GALLERY_HEADER.rst  plot_<system>.py   # one self-contained comparison page per system
   cases/
     cases.json
     systems/                     # named equations, parameter order, seeds
@@ -187,14 +187,25 @@ to its new path.
 | `example_09_neimark_sacker.py` | move | `tutorials/plot_15_neimark_sacker.py`; analytic control |
 | `example_23_periodic_vmap_grad.py` | move | `tutorials/plot_16_periodic_transforms.py` |
 | `example_14_prc_shooting_validation.py` | split | `examples/validation/cases/python_cases/shooting.py` + `examples/validation/gallery/plot_prc_shooting.py` |
-| `example_16`–`example_20` overlays | merge | `examples/validation/gallery/plot_{cubic_fold,vanderpol_hopf,adaptx_hopf,radial_cycle,torbpc_ns}.py`, all failures kept |
+| `example_16`–`example_20` overlays | merge | the per-system comparison pages below, all failures kept |
 | `demo_jit_speedup.py` | drop | its hard-coded 10–50x claim and toy tangent are not continuation evidence; replaced by benchmarks |
 | `profile_continuation.py` | move | `scripts/profile_continuation.py`; public results only, synchronized timing, host-cProfile label |
 | `check_installation.py` | move | `scripts/check_installation.py` |
 | `GALLERY_HEADER.rst`, `__init__.py` | rewrite | one header per gallery root; package docstring updated |
 
-New evidence pages: `plot_lorenz84_equilibria.py`, `plot_lorenz84_codim2.py`,
-`plot_adaptx_pd.py`.
+Comparison pages (one per reference system, see "Comparison-page standard"):
+
+| Page | Runs it presents |
+|---|---|
+| `plot_cubic.py` | `cubic.eq-fold` (calibration control) |
+| `plot_lorenz84.py` | `lorenz84.eq-f`, `lorenz84.fold-ft`, `lorenz84.hopf-ft`, `lorenz84.bt-ft` |
+| `plot_adaptx.py` | `adaptx.eq-hopf`, `adaptx.cycle-pd-switch`, `adaptx.prc` |
+| `plot_radial.py` | `radial.cycle-floquet` (exact Floquet control) |
+| `plot_torbpc.py` | `torbpc.cycle-lpc-pd-ns` (known FAIL, shown as FAIL) |
+| `plot_vanderpol.py` | `vanderpol.eq-degenerate-hopf` |
+| `plot_hopf_normal_form.py` | `hopf-normal-form.l1` |
+| `plot_catalytic.py` | `catalytic.fold-curve`, `catalytic.hopf-curve` |
+| `plot_prc_shooting.py` | `shooting.prc-check` (independent IVP check) |
 
 ### Tooling, external scripts, and references (rules)
 
@@ -260,6 +271,47 @@ Alias collisions are rejected.
 
 If the owner chooses a different flagship, it needs a new feasibility record.
 The model is never substituted partway through a report.
+
+## Comparison-page standard
+
+The purpose of the validation gallery is to show, convincingly and honestly,
+that JaxCont reproduces MatCont and BifurcationKit on the same systems. A
+table alone is not enough: the primary evidence is a well-designed plot, with
+the table as support. Each page in `examples/validation/gallery/` is a
+Sphinx-Gallery script (`# %%` text cells) that reads as a short, self-contained
+tutorial. All text is in English.
+
+Each page has, in order:
+
+1. **The system.** The equations (LaTeX), state variables, fixed parameters,
+   the continuation parameter(s), and where the model comes from (one or two
+   sentences with a citation where one exists).
+2. **What to look for.** A short explanation of the bifurcation diagram for
+   this system: which branches exist, what the special points (fold, Hopf,
+   BT, PD, NS, ...) mean here, and how stability is drawn. A reader who has
+   not seen the system should be able to read the figure after this section.
+3. **The JaxCont computation.** The visible public-API calls that produce the
+   fresh JaxCont result (system, seed, `ContinuationPar`, continuation). Any
+   export or matching logic stays in `examples/validation/` tooling.
+4. **Comparison figures.** Overlays of JaxCont (fresh), MatCont, and
+   BifurcationKit (committed bundles) with distinct markers/line styles, the
+   special points labelled, and a zoom or error panel where curves overlap so
+   closely that differences are invisible (for example the pointwise
+   difference versus arclength or parameter on a log scale). Each figure
+   carries its status banner (PASS / FAIL / PENDING / UNSUPPORTED).
+5. **Quantitative summary.** A compact table rendered from the
+   `ValidationReport`: per metric, the pairwise differences, the limit, and the
+   verdict. Text claims are generated from the report, never hand-written
+   numbers.
+6. **Takeaway.** Two or three sentences: what agrees, what does not, and any
+   known limitation (for example torBPC's missing labels, Van der Pol's
+   degenerate Hopf, or a chart boundary near BT).
+
+Pages are as short as possible without giving up accuracy or readability;
+roughly 80–200 lines including text cells is the expected range. Plotting
+helpers live in `examples/validation/visualize.py` so pages stay readable, but
+a page must not hide what is being compared. Pages run offline (rule 6), and
+captions say which series is fresh and which is committed.
 
 ## Validation-figure standard
 
@@ -408,9 +460,10 @@ failures stay visible.
 
 ## Work split
 
-Codex owns contracts, JaxCont producers, integration, reports, and docs fixes.
-Copilot owns the Julia/MATLAB setup and producers in separate files, and
-independently re-reviews each loop ledger. Claude gets three narrow reviews of
+Codex owns all implementation: contracts, JaxCont producers, the
+Julia/MATLAB setup and producers, integration, reports, and docs fixes.
+Copilot is not available. Claude reviews every Codex diff, runs the gates, and
+independently re-reviews each loop ledger (the role Copilot had). Claude gets three narrow reviews of
 ≤2,000 output tokens each: (1) the Lorenz-84 model contract, (2) the resolved
 benchmark controls, and (3) the final high-risk docs claims. Each review sees
 only the relevant excerpts. Only Codex edits the registry and report files.
@@ -433,3 +486,4 @@ only the relevant excerpts. Only Codex edits the registry and report files.
 ## Review history
 
 - Owner decision (2026-10-18): move all validation tooling, evidence pages, cases, references, and regeneration under `examples/validation/`; scan only the tutorials and validation gallery roots.
+- Owner decisions (2026-10-28): one self-contained comparison page per reference system, plots first with the table as support, all files in English (see "Comparison-page standard"); Sphinx-Gallery `.py` format; execute the whole plan; install Julia user-local with juliaup; MATLAB R2024a is at `~/programms/Matlab/R2024a/bin/matlab` and MatCont 7.6 at `~/programms/MatCont/MatCont7p6` on the owner's machine; Copilot is unavailable, so Codex takes its tasks and Claude takes its reviews.

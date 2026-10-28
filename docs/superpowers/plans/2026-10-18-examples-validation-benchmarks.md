@@ -38,12 +38,22 @@ Status: proposed, not yet executed. Test names below are new unless marked
 - **Tests.** New schema and report tests use small synthetic fixtures. Only the
   scientific tests run expensive continuation. Never edit generated gallery
   copies.
-- **Ownership.** Codex owns contracts, JaxCont code, integration, reports, and
-  docs fixes. Copilot owns the Julia/MATLAB setup and producers, plus the
-  ledger re-reviews. Claude gets three reviews of ≤2,000 tokens each, in
-  Tasks 2.3, 3.1, and 5.2. Only Codex edits `examples/validation/cases/cases.json` and the
-  report modules. When an agent is unavailable, record the blocked task
-  rather than reassigning it silently.
+- **Ownership.** Copilot is not available (owner, 2026-10-28). Codex
+  implements every task, including the Julia/MATLAB setup and producers that
+  were Copilot's. Claude reviews each Codex diff, runs the tests and gates,
+  does the three focused reviews in Tasks 2.3, 3.1, and 5.2, and takes over
+  the ledger re-reviews. Only Codex edits `examples/validation/cases/cases.json`
+  and the report modules.
+- **Language and pages.** All files are in English. Each validation gallery
+  page is one self-contained comparison page per reference system, built to
+  the spec's "Comparison-page standard": system, what to look for, the
+  JaxCont computation, comparison figures (primary), a report-driven table
+  (supporting), and a short takeaway.
+- **Runtimes on the owner's machine.** `MATLAB_BIN=~/programms/Matlab/R2024a/bin/matlab`,
+  `MATCONT_ROOT=~/programms/MatCont/MatCont7p6`. Julia is installed user-local
+  with juliaup in Task 0.1.
+- **Usage quota.** Keep about 10% of each model's usage quota in reserve. When
+  it is reached, record where work stopped, wait for the reset, and resume.
 
 ## Execution structure: three run → debug → fix loops
 
@@ -70,7 +80,7 @@ with the best scorecard; ties go to the later loop.
 
 ## Phase 0: External environments (early)
 
-### Task 0.1: Verify MATLAB and pin the Julia environment — Copilot
+### Task 0.1: Verify MATLAB and pin the Julia environment — Codex
 
 **Files:** Create `examples/validation/regenerate/bifurcationkit/{Project.toml,Manifest.toml,setup.jl,README.md}`.
 
@@ -89,7 +99,7 @@ report: Julia, packages, and the manifest hash.
   Acceptance: both runtimes report their versions; nothing in pytest or docs
   installs packages.
 
-### Task 0.2: Opt-in runners and markers — Copilot
+### Task 0.2: Opt-in runners and markers — Codex
 
 **Files:** Create `examples/validation/__init__.py` (merged in Task 1.2),
 `examples/validation/regenerate/bifurcationkit/runner.py`, and `tests/test_external_runners.py`.
@@ -153,12 +163,11 @@ signatures do not change. The CLI becomes `python3 -m examples.validation.run_va
   in both precisions. Acceptance: hashes and verdicts are unchanged, and no
   `examples.MatCont` import remains.
 
-### Task 1.3: Move external adapters — Copilot
+### Task 1.3: Move external adapters — Codex
 
 **Files:** Move `examples/MatCont/matlab/**` to `examples/validation/regenerate/matcont/`
 following the spec's folder rules. Move `examples/BifurcationKit/*.jl` to their
-spec names. Update the producer paths in `examples/validation/cases/cases.json` (handing them
-to Codex) and the MATLAB directory in `tests/test_matcont_suite.py`.
+spec names. Update the producer paths in `examples/validation/cases/cases.json`  and the MATLAB directory in `tests/test_matcont_suite.py`.
 
 **Interfaces:** MATLAB resolution and CLI precedence do not change. The
 catalytic curve drivers leave `unsupported/`. Capability gaps and templates
@@ -207,8 +216,13 @@ curve unpackers, and `CurveLayout`. A tutorial runs as
 overlays 16–20 and the PRC shooting page. Move `check_installation.py` and
 `profile_continuation.py` to `scripts/`. Update `examples/__init__.py`.
 
-**Interfaces:** Each evidence entry is 10–30 lines and calls
-`render_case_overlay(case_id, output_dir=...)`. The shooting checker is a
+**Interfaces:** Each comparison page follows the spec's "Comparison-page
+standard" and renders its figures through `examples/validation/visualize.py`
+(`render_case_overlay(case_id, output_dir=...)` and the new per-family
+panels). In this task the pages for cubic, Van der Pol, adaptx Hopf, radial,
+torBPC, and PRC shooting are written with the system and "what to look for"
+text and the existing MatCont overlays. Task 2.13 adds the BifurcationKit
+series, the report tables, and the new pages. The shooting checker is a
 producer and keeps its numerical method unchanged.
 
 - [ ] **Step 1:** Port the periodic lessons (≤90 lines). Keep the analytic
@@ -328,7 +342,7 @@ residual and BT structure checks.
   and `tests/test_curves.py::test_lorenz84_bt_matches_bifurcationkit` with `-m slow`.
 - [ ] **Step 3:** Run `JAXCONT_TEST_X64=1 python3 -m pytest tests/test_lorenz84_producer.py -m slow -q`.
 
-### Task 2.5: MatCont Lorenz-84 producer — Copilot
+### Task 2.5: MatCont Lorenz-84 producer — Codex
 
 **Files:** Create `examples/validation/regenerate/matcont/systems/lorenz84.m`,
 `run_lorenz84_equilibria.m`, `run_lorenz84_codim2.m`, and `tests/test_lorenz84_matcont.py`.
@@ -347,7 +361,7 @@ raw logs.
   local run with the full domain and events. License or path errors are
   blockers, never skips.
 
-### Task 2.6: Julia controls and Lorenz-84 equilibria — Copilot
+### Task 2.6: Julia controls and Lorenz-84 equilibria — Codex
 
 **Files:** Rewrite `cubic_fold.jl`, `lorenz84_equilibria.jl`, and
 `hopf_normal_form.jl`. Create `export.jl` and `radial_cycle.jl` in
@@ -364,7 +378,7 @@ candidates, and exit nonzero on failure. They do not read JaxCont solutions.
 - [ ] **Step 3:** Run `--regenerate bifurcationkit` for these cases, then
   `pytest -m julia tests/test_julia_exports.py`.
 
-### Task 2.7: Julia Lorenz-84 codim-2 — Copilot
+### Task 2.7: Julia Lorenz-84 codim-2 — Codex
 
 **Files:** Rewrite `examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl`.
 Extend `export.jl` and `tests/test_julia_exports.py`.
@@ -398,7 +412,7 @@ collocation residual).
   `::test_torbpc_known_disagreements_are_explicit_failures` with `-m slow`.
   Acceptance: the strict xfail is still in place and no limit is widened.
 
-### Task 2.9: MatCont adaptx PD export — Copilot
+### Task 2.9: MatCont adaptx PD export — Codex
 
 **Files:** Create `examples/validation/regenerate/matcont/run_adaptx_pd.m`. Extend
 `export_cycle_run.m` for orbits and flow-mode data.
@@ -411,7 +425,7 @@ doubled branch, orbits, spectra) from a real R2024a run.
 - [ ] **Step 3:** Hand the candidate and logs to Task 2.12. Acceptance: the
   period ratio, PD multiplier, and doubled shape are present.
 
-### Task 2.10: Julia adaptx PD — Copilot
+### Task 2.10: Julia adaptx PD — Codex
 
 **Files:** Create `examples/validation/regenerate/bifurcationkit/adaptx_pd.jl`. Extend
 `tests/test_julia_exports.py`.
@@ -427,7 +441,7 @@ and refinement.
 - [ ] **Step 3:** Run with `-m julia`. Acceptance: a complete candidate, or a
   recorded failed route, which then stays PENDING.
 
-### Task 2.11: Julia torBPC — Copilot
+### Task 2.11: Julia torBPC — Codex
 
 **Files:** Create `examples/validation/regenerate/bifurcationkit/torbpc_ns.jl`. Extend
 `tests/test_julia_exports.py`.
@@ -462,10 +476,11 @@ date (Decision 6).
 - [ ] **Step 3:** Run G1 and G3. Acceptance: every claimed three-tool run has
   committed, reviewed bundles, and the offline tests pass without runtimes.
 
-### Task 2.13: Evidence gallery and publication gate — Codex
+### Task 2.13: Comparison pages and publication gate — Codex
 
-**Files:** Modify `examples/validation/visualize.py`. Create
-`examples/validation/gallery/plot_{lorenz84_equilibria,lorenz84_codim2,adaptx_pd}.py`,
+**Files:** Modify `examples/validation/visualize.py` and the Phase 1 pages.
+Create `examples/validation/gallery/plot_{lorenz84,adaptx,hopf_normal_form,catalytic}.py`
+(adaptx absorbs the Hopf, PD, and PRC runs into one page),
 `scripts/build_validation_figures.py`, and `tests/test_validation_figures.py`.
 Rebuild `docs/images/matcont_cubic_overlay.png`.
 
@@ -477,9 +492,15 @@ External series come only from committed bundles.
   `::test_failed_report_cannot_render_pass_banner`, `::test_pending_tool_is_visibly_pending`,
   and `::test_publication_requires_complete_domain`.
 - [ ] **Step 2:** Add the spec's panels per family, with versions, thresholds,
-  and a fresh/committed caption.
+  and a fresh/committed caption. Complete every page to the
+  Comparison-page standard: three-tool overlays with labelled special points,
+  an error or zoom panel where curves coincide, and a report-driven table.
+  Add `::test_every_page_has_the_six_sections` (system, what to look for,
+  computation, figures, table, takeaway) and
+  `::test_page_numbers_come_from_the_report` (no hand-written numeric claims).
 - [ ] **Step 3:** Run the tests and G4. Acceptance: every validation figure has
-  a sidecar, and torBPC renders FAIL.
+  a sidecar, torBPC renders FAIL, and each page reads as a self-contained
+  tutorial (Claude reads every rendered page once).
 
 ## Phase 3: Fair benchmarks
 
@@ -502,10 +523,10 @@ normalized decimals and records the field, tool, and value when they differ.
 - [ ] **Step 3:** Claude review 2: this contract and its tests only. Resolve
   its findings before any measurement.
 
-### Task 3.2: First-call and warm harness — Codex, with Copilot workers
+### Task 3.2: First-call and warm harness — Codex
 
 **Files:** Create `benchmarks/run_benchmarks.py`,
-`benchmarks/adapters/{jaxcont,matcont,bifurcationkit}.py` (Copilot owns the
+`benchmarks/adapters/{jaxcont,matcont,bifurcationkit}.py` (including the
 MATLAB and Julia workers), and `tests/test_benchmark_harness.py`.
 
 **Interfaces:** An external supervisor times startup. A resident worker does a
@@ -573,7 +594,7 @@ accepted.
   `validation.md` snapshot and the MatCont README claims.
 - [ ] **Step 3:** Run `python3 scripts/check_docs.py --changelog 0.5.0`.
 
-### Task 4.2: Loop 1 docs fixes — Codex, re-reviewed by Copilot
+### Task 4.2: Loop 1 docs fixes — Codex, re-reviewed by Claude
 
 **Files:** Modify `README.md`, `docs/source/{quickstart.rst,transformations.rst,api/*.rst,index.rst,validation.md,installation.rst}`,
 and the other pages the audit identifies. Update the Loop 1 ledger.
@@ -584,7 +605,7 @@ generated from the registry and reports, covering every case and status.
 - [ ] **Step 1:** Fix every finding. Breaking changes get before/after examples.
 - [ ] **Step 2:** Run the existing `tests/test_loop6_regressions.py::test_api_reference_lists_the_0_5_0_surface`,
   `::test_changelog_0_5_0_has_one_section_per_kind`, and `tests/test_legacy_surface.py`, then G6.
-- [ ] **Step 3:** Copilot re-reviews the ledger. Then run G1–G8 and record the
+- [ ] **Step 3:** Claude re-reviews the ledger. Then run G1–G8 and record the
   Loop 1 scorecard and snapshot.
 
 ## Phase 5: Loops 2 and 3
@@ -601,7 +622,7 @@ directory, precision, required runtime, and expected status.
   G1–G7 with MATLAB/Julia hidden. Run G8 once with the runtimes present.
 - [ ] **Step 2:** *Debug:* record each failure in the ledger with its root
   cause before fixing. Check the gallery downloads, links, and images.
-- [ ] **Step 3:** *Fix:* apply the fixes and re-run the failed gates. Copilot
+- [ ] **Step 3:** *Fix:* apply the fixes and re-run the failed gates. Claude
   re-reviews. Record the scorecard and snapshot.
 
 ### Task 5.2: Loop 3 — fresh-reader review and final selection
@@ -617,7 +638,7 @@ and changelog. The final handoff names the selected snapshot.
   covers the high-risk 0.5.0, evidence, and performance claims.
 - [ ] **Step 2:** *Debug:* record the findings, including any speed
   exaggeration or capability over-claim.
-- [ ] **Step 3:** *Fix,* re-run the gates, and have Copilot re-review. Compare
+- [ ] **Step 3:** *Fix,* re-run the gates, and have Claude re-review. Compare
   the three scorecards and return the best snapshot (ties go to the later
   loop). The handoff lists the gate results, which external runs were real,
   open PENDING/FAIL rows, and limitation IDs.
@@ -632,9 +653,12 @@ and changelog. The final handoff names the selected snapshot.
 6. **Reference promotion:** the owner reviews and approves each promoted bundle from Codex's diff manifest; committed bundles are capped at ≤10 MiB per run, with larger raw data hashed and stored externally. *Recommended: approve, with the owner as reviewer.*
 7. **Julia install:** user-local juliaup with the default depot, a Julia version chosen from the current BifurcationKit compatibility notes, and exact versions pinned in the committed `Manifest.toml`. *Recommended: approve.*
 
+8. **Answered 2026-10-28:** comparison pages are one self-contained page per system (plots first, table as support, English); Sphinx-Gallery `.py`; the whole plan is executed; Julia is installed user-local; MATLAB/MatCont paths as in Ground rules; Codex replaces Copilot.
+
 ## Review history
 
 - v0 (Codex): first draft of the spec and plan.
 - Review 1 (Copilot): Julia was deferred too late, there was no work split, tolerance equality was untested, MATLAB was optional, and canonical IDs were missing. Codex fixed these in v1.
 - Review 2 (Claude): enforced rule 6 (offline committed bundles, a guard gate, and hand-copied constants removed), restructured execution into three run → debug → fix loops with gates G1–G8, renumbered and split the Phase 2 tasks, fixed the `MC-PRC-001` system (adaptx, not radial), unified the external markers, required benchmark accuracy against committed bundles, consolidated helper scripts, and trimmed both documents.
 - Owner decision (2026-10-18): move the whole validation tree inside `examples/validation/`, alongside `examples/tutorials/`; Sphinx scans exactly those tutorials and `examples/validation/gallery/`.
+- Owner decisions (2026-10-28): per-system comparison pages as self-contained tutorials, English only, Copilot replaced by Codex (implementation) and Claude (reviews), MATLAB/MatCont paths recorded, whole plan approved for execution.
