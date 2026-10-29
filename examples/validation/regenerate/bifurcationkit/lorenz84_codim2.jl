@@ -23,7 +23,6 @@ for (i,s) in enumerate(curve.specialpoint)
     row=equilibrium_row(u,p,Lor,jac_Lor;segment=kind,point=argmin([abs(r["T"]-s.param) for r in rows])-1,coordinate=:T)
     event=event_row(row,eventkind,"e$i";bracket=s.interval)
     event["native_status"]=string(s.status);event["status"]=uppercase(string(s.status));event["native_label"]=string(s.type)
-    event["refinement_status"]=startswith(lowercase(string(s.status)),"guess") ? "UNREFINED_DETECTION" : "REFINED"
     push!(events,event);append!(spectra,spectrum_rows(row,jac_Lor,u,p;event="e$i"))
 end
 if case=="lorenz84.bt-ft"

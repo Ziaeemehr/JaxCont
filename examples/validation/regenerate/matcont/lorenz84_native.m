@@ -9,6 +9,7 @@ for k=1:numel(s)
  label=strtrim(s(k).label);i=s(k).index;
  if ismember(label,{'00','99'}),continue;end
  F=raw(5,i);if size(raw,1)>=6,T=raw(6,i);else,T=.04;end
+ if strcmp(run,'lorenz84.eq-f')&&(F < -1.5||F>3),continue;end
  events(end+1)=struct('kind',label,'parameters',struct('F',F,'T',T),'state',raw(1:4,i)','data',struct('native_label',label));
 end
 samples=struct('state',{},'parameters',{},'rhs',{},'jacobian',{});
@@ -18,7 +19,7 @@ end
 out=struct('canonical_id',run,'states',states','parameters',parameters','residuals',r,'spectra',spectra,'events',{num2cell(events)},'samples',samples,'runtime_version',version,'matcont_version','7.6','resolved_controls',opt);
 branch=struct([]); modes=struct([]); mapped=struct([]);segment=0;
 for k=1:n
- % Preserve the native traversal; the reader splits at the active-coordinate turns.
+ if k>2 && sign(parameters(1,k)-parameters(1,k-1))~=sign(parameters(1,k-1)-parameters(1,k-2)),segment=segment+1;end
  if strcmp(run,'lorenz84.eq-f'),parameter=parameters(1,k);else,parameter=parameters(2,k);end
  row=struct('segment_id',segment,'point_id',k-1,'order',k-1,'parameter',parameter,'F',parameters(1,k),'T',parameters(2,k),'residual_norm',r(k),'unstable_dimension',sum(spectra(k,:,1)>0),'status','CONVERGED');
  for j=1:4,row.(sprintf('state_%d',j-1))=states(j,k);end

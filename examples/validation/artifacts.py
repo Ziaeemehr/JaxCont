@@ -6,6 +6,7 @@ import csv
 import hashlib
 import importlib.metadata
 import json
+import math
 import platform
 import re
 from collections.abc import Iterable
@@ -1397,6 +1398,39 @@ def convert_v1_bundle(source, output, *, case_id, canonical_id):
     return output
 
 
+def _match_spectrum_rows(a, b):
+    """Reorder ``b`` so each point's eigenvalues face their nearest counterparts in ``a``.
+
+    eig's order within a point (e.g. the two members of a conjugate pair) is
+    arbitrary; the values must still agree. ``mode_id`` follows ``a``.
+    """
+    def point(row):
+        return (str(row.get("segment_id")), str(row.get("point_id")), str(row.get("event_id", "")))
+
+    def value(row):
+        try:
+            return complex(float(row.get("real", "nan")), float(row.get("imag", "nan")))
+        except ValueError:
+            return complex(float("nan"), float("nan"))
+
+    pool = {}
+    for row in b:
+        pool.setdefault(point(row), []).append(row)
+    matched = []
+    for row in a:
+        candidates = pool.get(point(row), [])
+        if not candidates:
+            return a, b  # different point sets; the row-wise comparison reports it
+        best = min(range(len(candidates)), key=lambda i: abs(value(candidates[i]) - value(row)))
+        partner = candidates.pop(best)
+        matched.append({**partner, "mode_id": row["mode_id"]} if "mode_id" in row and "mode_id" in partner else partner)
+    return a, matched
+
+
+def _with_event_kind(rows):
+    return [{**row, "kind": row.get("kind") or row.get("event_type")} for row in rows]
+
+
 def verify_v2_bundles(candidate, reference, tolerances):
     """Numerically verify normalized tables without requiring byte equality."""
     left, right = load_bundle(candidate), load_bundle(reference)
@@ -1415,6 +1449,12 @@ def verify_v2_bundles(candidate, reference, tolerances):
         a, b = left.get(name), right.get(name)
         if a is None or b is None or len(a) != len(b):
             raise ValidationMismatch(f"{name} row count differs")
+        if name.endswith("events"):
+            # write_candidate derives `kind` from `event_type`; bundles written
+            # before that normalization lack the derived column only.
+            a, b = _with_event_kind(a), _with_event_kind(b)
+        if name.endswith(("spectra", "multipliers")):
+            a, b = _match_spectrum_rows(a, b)
         for x, y in zip(a, b):
             if x.keys() != y.keys():
                 raise ValidationMismatch(f"{name} columns differ")
@@ -1424,6 +1464,11 @@ def verify_v2_bundles(candidate, reference, tolerances):
                 except (ValueError, TypeError):
                     if x[column] != y[column]:
                         raise ValidationMismatch(f"{name}.{column} differs")
+                    continue
+                if math.isnan(av) or math.isnan(bv):
+                    # NaN in both marks a quantity that does not apply (e.g. l1 at a fold).
+                    if not (math.isnan(av) and math.isnan(bv)):
+                        raise ValidationMismatch(f"{name}.{column}: NaN on one side only")
                     continue
                 diagnostics = scaled_close(
                     av, bv, atol=_column_atol(column, tolerances), rtol=tolerances.get("rtol", 0)

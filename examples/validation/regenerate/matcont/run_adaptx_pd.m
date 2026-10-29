@@ -8,7 +8,7 @@ clear global cds eds lds
 opt=contset;opt=contset(opt,'Singularities',1);opt=contset(opt,'Multipliers',1);
 opt=contset(opt,'Adapt',0);opt=contset(opt,'MaxNumPoints',c.matcont_max_steps);
 opt=contset(opt,'InitStepsize',c.ds);opt=contset(opt,'MinStepsize',c.ds_min);opt=contset(opt,'MaxStepsize',c.ds_max);
-opt=contset(opt,'FunTolerance',1e-11);opt=contset(opt,'VarTolerance',1e-11);opt=contset(opt,'TestTolerance',1e-9);opt=contset(opt,'MaxCorrIters',25);
+opt=contset(opt,'FunTolerance',1e-9);opt=contset(opt,'VarTolerance',1e-9);opt=contset(opt,'TestTolerance',1e-7);opt=contset(opt,'MaxCorrIters',25);
 % Equilibrium Hopf is independently found rather than supplied as a scalar.
 [xe,~]=init_EP_EP(@adaptx,[0;0;0],[1.1;1],1);
 eo=contset(opt,'Backward',1);eo=contset(eo,'MaxNumPoints',40);
@@ -22,7 +22,7 @@ pd=select(s,x,'PD',c.pd_window); pd_alpha=x(end,s(pd).index);
 % candidate whose step budget stops before the frozen comparison window.
 meta=struct('segment','base','solver_settings',opt,'precision','float64');
 base=export_cycle_run('adaptx-base',x,s,f,folder,meta);
-[x0,v0]=init_PD_LC(@adaptx,x,s(pd),2*c.ntst,c.ncol,1e-4);
+[x0,v0]=init_PD_LC(@adaptx,x,s(pd),2*c.ntst,c.ncol,1e-6);
 [x2,~,s2,~,f2]=cont(@limitcycle,x0,v0,opt);
 [x2,s2,f2]=through_domain(x2,s2,f2,c.doubled_domain(1));
 dpi=select(s2,x2,'PD',c.doubled_pd_window);
