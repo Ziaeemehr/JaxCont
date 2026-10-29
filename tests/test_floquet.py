@@ -83,13 +83,11 @@ def test_floquet_multipliers_matches_closed_form_at_rho_1():
     multipliers, trivial_idx = floquet_multipliers(_rhs, mesh, prob.u0, prob.p0)
     got = jnp.sort(jnp.abs(multipliers))
     expected = jnp.sort(jnp.array([np.exp(-4 * np.pi), 1.0]))
-    if got.dtype == jnp.float64:
-        assert float(jnp.max(jnp.abs(jnp.log(got) - jnp.log(expected)))) < 1e-3
-    else:
-        # A multiplier of size ~3.5e-6 carries ~eps*||Phi||/|mu| relative error in float32.
-        assert jnp.max(jnp.abs(got - expected)) < (
-            1e3 * jnp.finfo(jnp.float32).eps * jnp.max(jnp.abs(expected))
-        )
+    # Measured: trivial |mu - 1| = 4e-15 (float64) / 5e-6 (float32); the small
+    # multiplier's relative error is 4e-6, the ntst=10 discretization error.
+    trivial_atol = 1e-12 if got.dtype == jnp.float64 else 1e-5
+    assert abs(float(got[1]) - 1.0) < trivial_atol
+    assert abs(float(got[0]) / float(expected[0]) - 1.0) < 1e-5
 
 
 def test_floquet_stable_true_at_rho_1_with_correct_trivial_multiplier():
