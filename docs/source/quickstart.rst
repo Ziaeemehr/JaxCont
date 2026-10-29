@@ -96,10 +96,12 @@ differentiation, so its output supports reverse-mode AD:
    print(fold_p(theta))             # 0.25
    print(jax.grad(fold_p)(theta))   # 0.5
 
-Use ``jax.jacfwd`` for sensitivities through the whole-loop scan itself;
-reverse-mode differentiation through JAX's dynamic ``lax.while_loop`` is not
-supported. :doc:`auto_tutorials/plot_08_differentiable` demonstrates both
-paths and a gradient-based inverse-design loop.
+Forward mode (``jax.jacfwd``, ``jax.jvp``) works through a whole
+continuation with either loop option. Reverse mode (``jax.grad``) needs
+``ContinuationPar(loop="scan")``, a bounded ``lax.scan``; through the default
+``loop="while"`` it raises ``ValueError``. See :doc:`migration` and
+:doc:`transformations`; :doc:`auto_tutorials/plot_08_differentiable`
+demonstrates both paths and a gradient-based inverse-design loop.
 
 Precision
 ---------

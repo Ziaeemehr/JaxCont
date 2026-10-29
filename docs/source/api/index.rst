@@ -130,8 +130,15 @@ Codim-2 events
 --------------
 
 ``Event`` implementations usable via ``continuation(..., events=[...])`` on a
-fold or Hopf curve (see "Two-parameter continuation" below): each is a test
-function built on the matching direct solver above.
+fold or Hopf curve (see "Two-parameter continuation" below), each refined
+with the matching direct solver above. ``Cusp`` and ``GeneralizedHopf`` detect
+a sign change of a scalar test function (the fold or Lyapunov coefficient).
+``BogdanovTakens``, ``ZeroHopf`` and ``DoubleHopf`` are spectral: they follow
+continuously tracked modes (``scan(points)``), report a bracket only where one
+mode meets its condition at both ends, refine along that mode
+(``refine(..., mode=mode)``) and re-check the refined point's spectrum. Their
+``tolerance`` separates real from complex eigenvalues and defaults to the
+square root of the dtype's default tolerance.
 
 .. autoclass:: jaxcont.Cusp
 

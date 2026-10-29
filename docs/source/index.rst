@@ -37,6 +37,7 @@ differentiable fold locations.
 
    installation
    quickstart
+   migration
    presentation
    auto_tutorials/index
    auto_validation/index
