@@ -1,0 +1,133 @@
+{
+  "benchmark_id": "cubic.eq-fold/adaptive",
+  "canonical_id": "cubic.eq-fold",
+  "tool": "bifurcationkit",
+  "generated_utc": "2026-10-29T11:29:51.738603+00:00",
+  "platform": "Linux-6.17.0-1033-oem-x86_64-with-glibc2.39",
+  "cpu": {
+    "model": "Intel(R) Xeon(R) w5-3525",
+    "logical_cores": 32
+  },
+  "python": "3.12.3",
+  "timer": "time.perf_counter",
+  "accuracy_limits": {
+    "parameter_atol": 0.0005,
+    "state_atol": 0.0002,
+    "residual_atol": 2e-05,
+    "fold_coefficient_atol": 0.0005,
+    "spectrum_atol": 0.0005
+  },
+  "status": "MEASURED",
+  "points": {
+    "first_call": 337,
+    "warm": [
+      337
+    ]
+  },
+  "resolved_controls": {
+    "newton_atol": 1e-09,
+    "newton_rtol": 0.0,
+    "newton_max_iter": 25,
+    "event_atol": null,
+    "ds": 0.01,
+    "ds_min": 1e-05,
+    "ds_max": 0.02,
+    "adaptive": true,
+    "max_steps": 1000,
+    "direction": 1,
+    "bounds": [
+      -1.0,
+      1.0
+    ],
+    "state_weight": 1.0,
+    "parameter_weight": 1.0,
+    "stability_every_step": true,
+    "ntst": null,
+    "ncol": null,
+    "newton_criterion": "augmented-residual-max(2norm-equations,abs-constraint)"
+  },
+  "accuracy": {
+    "parameter_atol": 2.2526993603833034e-08,
+    "state_atol": 0.0001500937067029362,
+    "residual_atol": 9.51250783871871e-10,
+    "fold_coefficient_atol": null,
+    "spectrum_atol": 0.00030016488528505914
+  },
+  "versions": {
+    "bifurcationkit": "0.8.8",
+    "julia": "1.13.3"
+  },
+  "sampling": {
+    "first_calls": 5,
+    "warm_repetitions": 20,
+    "untimed_warmups": 3,
+    "timeout_seconds": 1800.0
+  },
+  "timer_resolution": 1e-09,
+  "eligible_for_cross_tool": false,
+  "startup": {
+    "n": 5,
+    "median": 1.684686201857403,
+    "iqr": 0.01692302047740668,
+    "p95": 1.6921192579902709,
+    "samples": [
+      1.6705244700424373,
+      1.67924382397905,
+      1.684686201857403,
+      1.6914950769860297,
+      1.6921192579902709
+    ]
+  },
+  "first_call": {
+    "n": 5,
+    "median": 4.03096066,
+    "iqr": 0.027794540000000367,
+    "p95": 4.047146391,
+    "samples": [
+      4.016198955,
+      4.020958079,
+      4.03096066,
+      4.045599723,
+      4.047146391
+    ]
+  },
+  "warm": {
+    "n": 20,
+    "median": 0.0007136995,
+    "iqr": 2.9834250000000044e-05,
+    "p95": 0.000746018,
+    "samples": [
+      0.000667181,
+      0.000682953,
+      0.00069114,
+      0.00069226,
+      0.000699104,
+      0.000701035,
+      0.000701696,
+      0.000702365,
+      0.000707281,
+      0.000712991,
+      0.000714408,
+      0.000720226,
+      0.000723816,
+      0.000724912,
+      0.000729199,
+      0.000729495,
+      0.000737504,
+      0.00073799,
+      0.000746018,
+      0.000752418
+    ]
+  },
+  "compile_overhead_estimate": {
+    "seconds": 4.0302469604999995,
+    "estimate": true
+  },
+  "tool_order": [
+    "bifurcationkit",
+    "matcont",
+    "jaxcont"
+  ],
+  "order_seed": 20261029,
+  "order_position": 0
+}

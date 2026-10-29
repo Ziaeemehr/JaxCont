@@ -14,4 +14,182 @@ every row meets every accuracy limit. Otherwise each tool is shown on its own
 with the reasons, and the numbers must not be compared across tools. There
 are no rankings. The method is described in `benchmarks/README.md`.
 
-No reviewed benchmark records have been committed yet.
+## `cubic.eq-fold/adaptive`
+
+No cross-tool table: the rows are not comparable.
+
+- event_atol: bifurcationkit=None, matcont=1e-07
+- bounds: bifurcationkit=(-1.0, 1.0), matcont=None
+- newton_criterion: bifurcationkit='augmented-residual-max(2norm-equations,abs-constraint)', jaxcont='augmented-residual-2norm'
+- newton_criterion: bifurcationkit='augmented-residual-max(2norm-equations,abs-constraint)', matcont='residual-2norm-and-step-2norm'
+- bifurcationkit: fold_coefficient_atol not measured
+- jaxcont: fold_coefficient_atol not measured
+- matcont: fold_coefficient_atol not measured
+
+### bifurcationkit: MEASURED
+
+bifurcationkit 0.8.8, julia 1.13.3; Intel(R) Xeon(R) w5-3525; timer time.perf_counter.
+
+| category | n | median (s) | IQR (s) | p95 (s) | median 95% CI (s) |
+|---|---|---|---|---|---|
+| startup | 5 | 1.685 | 0.01692 | 1.692 | [1.671, 1.692] |
+| first_call | 5 | 4.031 | 0.02779 | 4.047 | [4.016, 4.047] |
+| warm | 20 | 0.0007137 | 2.983e-05 | 0.000746 | [0.000701, 0.0007271] |
+
+Compile overhead estimate (first call minus warm median): 4.03 s.
+
+| accuracy metric | measured | limit |
+|---|---|---|
+| parameter_atol | 2.253e-08 | 0.0005 |
+| state_atol | 0.0001501 | 0.0002 |
+| residual_atol | 9.513e-10 | 2e-05 |
+| fold_coefficient_atol | not measured | 0.0005 |
+| spectrum_atol | 0.0003002 | 0.0005 |
+
+### jaxcont: MEASURED
+
+jaxcont 0.4.1.dev98+g7e902bca3, jax 0.11.2, x64 True; Intel(R) Xeon(R) w5-3525; timer time.perf_counter.
+
+| category | n | median (s) | IQR (s) | p95 (s) | median 95% CI (s) |
+|---|---|---|---|---|---|
+| startup | 5 | 0.9509 | 0.01183 | 0.9561 | [0.9376, 0.9561] |
+| first_call | 5 | 1.915 | 0.07861 | 1.947 | [1.835, 1.947] |
+| warm | 20 | 0.2237 | 0.0068 | 0.2308 | [0.2202, 0.2265] |
+
+Compile overhead estimate (first call minus warm median): 1.692 s.
+
+| accuracy metric | measured | limit |
+|---|---|---|
+| parameter_atol | 2.715e-10 | 0.0005 |
+| state_atol | 1.358e-10 | 0.0002 |
+| residual_atol | 9.77e-10 | 2e-05 |
+| fold_coefficient_atol | not measured | 0.0005 |
+| spectrum_atol | 2.715e-10 | 0.0005 |
+
+### matcont: MEASURED
+
+matlab 24.1.0.2537033 (R2024a), matcont MatCont7p6; Intel(R) Xeon(R) w5-3525; timer time.perf_counter.
+
+| category | n | median (s) | IQR (s) | p95 (s) | median 95% CI (s) |
+|---|---|---|---|---|---|
+| startup | 5 | 10.37 | 0.2675 | 10.63 | [10.28, 10.63] |
+| first_call | 5 | 0.2938 | 0.03834 | 0.3361 | [0.2749, 0.3361] |
+| warm | 20 | 0.0999 | 0.01164 | 0.1121 | [0.09447, 0.1037] |
+
+Compile overhead estimate (first call minus warm median): 0.1939 s.
+
+| accuracy metric | measured | limit |
+|---|---|---|
+| parameter_atol | 1.11e-16 | 0.0005 |
+| state_atol | 8.418e-09 | 0.0002 |
+| residual_atol | 2.576e-14 | 2e-05 |
+| fold_coefficient_atol | not measured | 0.0005 |
+| spectrum_atol | 1.684e-08 | 0.0005 |
+
+## `cubic.eq-fold/fixed`
+
+No cross-tool table: the rows are not comparable.
+
+- event_atol: bifurcationkit=None, matcont=1e-07
+- bounds: bifurcationkit=(-1.0, 1.0), matcont=None
+- newton_criterion: bifurcationkit='augmented-residual-max(2norm-equations,abs-constraint)', jaxcont='augmented-residual-2norm'
+- newton_criterion: bifurcationkit='augmented-residual-max(2norm-equations,abs-constraint)', matcont='residual-2norm-and-step-2norm'
+- bifurcationkit: fold_coefficient_atol not measured
+- jaxcont: fold_coefficient_atol not measured
+- matcont: fold_coefficient_atol not measured
+
+### bifurcationkit: MEASURED
+
+bifurcationkit 0.8.8, julia 1.13.3; Intel(R) Xeon(R) w5-3525; timer time.perf_counter.
+
+| category | n | median (s) | IQR (s) | p95 (s) | median 95% CI (s) |
+|---|---|---|---|---|---|
+| startup | 5 | 1.717 | 0.03867 | 1.765 | [1.703, 1.765] |
+| first_call | 5 | 4.075 | 0.05547 | 4.128 | [4.027, 4.128] |
+| warm | 20 | 0.001156 | 7.8e-05 | 0.001229 | [0.001124, 0.00118] |
+
+Compile overhead estimate (first call minus warm median): 4.074 s.
+
+| accuracy metric | measured | limit |
+|---|---|---|
+| parameter_atol | 1.425e-08 | 0.0005 |
+| state_atol | 0.0001194 | 0.0002 |
+| residual_atol | 9.965e-10 | 2e-05 |
+| fold_coefficient_atol | not measured | 0.0005 |
+| spectrum_atol | 0.0002387 | 0.0005 |
+
+### jaxcont: MEASURED
+
+jaxcont 0.4.1.dev98+g7e902bca3, jax 0.11.2, x64 True; Intel(R) Xeon(R) w5-3525; timer time.perf_counter.
+
+| category | n | median (s) | IQR (s) | p95 (s) | median 95% CI (s) |
+|---|---|---|---|---|---|
+| startup | 5 | 0.9523 | 0.01699 | 0.9667 | [0.9383, 0.9667] |
+| first_call | 5 | 1.881 | 0.0493 | 1.923 | [1.854, 1.923] |
+| warm | 20 | 0.2238 | 0.005796 | 0.2841 | [0.2223, 0.2263] |
+
+Compile overhead estimate (first call minus warm median): 1.657 s.
+
+| accuracy metric | measured | limit |
+|---|---|---|
+| parameter_atol | 1.136e-10 | 0.0005 |
+| state_atol | 5.68e-11 | 0.0002 |
+| residual_atol | 9.952e-10 | 2e-05 |
+| fold_coefficient_atol | not measured | 0.0005 |
+| spectrum_atol | 1.136e-10 | 0.0005 |
+
+### matcont: MEASURED
+
+matlab 24.1.0.2537033 (R2024a), matcont MatCont7p6; Intel(R) Xeon(R) w5-3525; timer time.perf_counter.
+
+| category | n | median (s) | IQR (s) | p95 (s) | median 95% CI (s) |
+|---|---|---|---|---|---|
+| startup | 5 | 10.28 | 0.2308 | 10.47 | [10.16, 10.47] |
+| first_call | 5 | 0.2791 | 0.02789 | 0.3067 | [0.2692, 0.3067] |
+| warm | 20 | 0.09321 | 0.006319 | 0.1135 | [0.09199, 0.09572] |
+
+Compile overhead estimate (first call minus warm median): 0.1858 s.
+
+| accuracy metric | measured | limit |
+|---|---|---|
+| parameter_atol | 1.11e-16 | 0.0005 |
+| state_atol | 6.085e-09 | 0.0002 |
+| residual_atol | 3.753e-14 | 2e-05 |
+| fold_coefficient_atol | not measured | 0.0005 |
+| spectrum_atol | 1.217e-08 | 0.0005 |
+
+## `lorenz84.eq-f/fixed`
+
+No cross-tool table: the rows are not comparable.
+
+- bifurcationkit: PENDING (NotImplementedError: lorenz84.eq-f: BifurcationKit benchmark worker covers cubic.eq-fold only)
+- matcont: PENDING (NotImplementedError: lorenz84.eq-f: MatCont benchmark worker covers cubic.eq-fold only)
+- fewer than two measured tools
+
+### bifurcationkit: PENDING
+
+NotImplementedError: lorenz84.eq-f: BifurcationKit benchmark worker covers cubic.eq-fold only
+
+### jaxcont: MEASURED
+
+jaxcont 0.4.1.dev98+g7e902bca3, jax 0.11.2, x64 True; Intel(R) Xeon(R) w5-3525; timer time.perf_counter.
+
+| category | n | median (s) | IQR (s) | p95 (s) | median 95% CI (s) |
+|---|---|---|---|---|---|
+| startup | 5 | 0.9703 | 0.03384 | 0.9922 | [0.95, 0.9922] |
+| first_call | 5 | 6.106 | 0.1564 | 6.159 | [5.947, 6.159] |
+| warm | 20 | 1.928 | 0.08266 | 2.068 | [1.9, 1.941] |
+
+Compile overhead estimate (first call minus warm median): 4.178 s.
+
+| accuracy metric | measured | limit |
+|---|---|---|
+| parameter_atol | 2.994e-10 | 0.0005 |
+| state_atol | not measured | 0.0002 |
+| residual_atol | 6.921e-10 | 1e-07 |
+| spectrum_atol | not measured | 0.0005 |
+| frequency_atol | not measured | 0.0005 |
+
+### matcont: PENDING
+
+NotImplementedError: lorenz84.eq-f: MatCont benchmark worker covers cubic.eq-fold only

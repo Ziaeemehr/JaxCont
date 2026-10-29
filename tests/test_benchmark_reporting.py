@@ -53,7 +53,10 @@ def test_ineligible_accuracy_blocks_the_cross_tool_table():
     failing["accuracy"]["parameter_atol"] = 1.0
     failing["eligible_for_cross_tool"] = False
     verdict = reporting.comparison([_record("jaxcont"), failing])
-    assert not verdict["comparable"] and any("accuracy" in reason for reason in verdict["reasons"])
+    assert not verdict["comparable"] and "matcont: parameter_atol = 1 exceeds 0.0005" in verdict["reasons"]
+    unmeasured = _record("matcont")
+    unmeasured["accuracy"]["state_atol"] = None
+    assert "matcont: state_atol not measured" in reporting.comparison([_record("jaxcont"), unmeasured])["reasons"]
 
 
 def test_check_accepts_a_complete_record_and_flags_tampering():

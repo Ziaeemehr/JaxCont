@@ -80,3 +80,22 @@ only converged lanes contribute valid points per warm median second. These
 records describe throughput; not a single-branch speedup. Event candidates
 remain fixed buffers, without eager event refinement; these rows are not
 eligible for cross-tool comparisons.
+
+## Reviewed records
+
+`results/reviewed/` holds the cubic (fixed and adaptive) and Lorenz-84
+`eq-f` (fixed) rows measured on 2026-10-29 in float64 on one machine (CPU
+model in each record), tools in randomized order with seed 20261029. A light
+read-only review job was running at the same time. Reviewed by Claude: every
+record passes `--check`, every tool does the same work in each warm
+repetition, and accuracy is measured for every tool except the fold
+coefficient, so no cross-tool table is drawn.
+
+What the numbers show: on the scalar cubic, JaxCont's continuation itself
+takes about 5 ms warm (8 ms with stability), but its warm total is about
+0.22 s because eager refinement of the two folds re-traces `fold_point`
+(about 0.14 s per call; profile in the Loop 2 ledger). MatCont needs about
+10 s to start MATLAB; BifurcationKit's first call includes about 4 s of Julia
+compilation. MatCont and BifurcationKit Lorenz-84 rows are PENDING (no
+worker for that workload).
+

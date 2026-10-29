@@ -118,7 +118,14 @@ def comparison(records: list[dict]) -> dict:
         return {"comparable": False, "reasons": reasons}
     result = compare_controls({r["tool"]: _controls(r) for r in measured})
     reasons += [f"{m.field}: {m.baseline_tool}={m.baseline_value!r}, {m.tool}={m.value!r}" for m in result.mismatches]
-    reasons += [f"{r['tool']}: fails or lacks an accuracy metric" for r in measured if not r.get("eligible_for_cross_tool")]
+    limits = {case.benchmark_id: case.accuracy_limits for case in load_cases()}
+    for record in measured:
+        accuracy = record.get("accuracy") or {}
+        for metric, limit in limits[record["benchmark_id"]].items():
+            if accuracy.get(metric) is None:
+                reasons.append(f"{record['tool']}: {metric} not measured")
+            elif accuracy[metric] > limit:
+                reasons.append(f"{record['tool']}: {metric} = {accuracy[metric]:.3g} exceeds {limit:g}")
     return {"comparable": not reasons, "reasons": reasons}
 
 

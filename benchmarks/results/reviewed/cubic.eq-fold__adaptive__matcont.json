@@ -1,0 +1,130 @@
+{
+  "benchmark_id": "cubic.eq-fold/adaptive",
+  "canonical_id": "cubic.eq-fold",
+  "tool": "matcont",
+  "generated_utc": "2026-10-29T11:30:31.404802+00:00",
+  "platform": "Linux-6.17.0-1033-oem-x86_64-with-glibc2.39",
+  "cpu": {
+    "model": "Intel(R) Xeon(R) w5-3525",
+    "logical_cores": 32
+  },
+  "python": "3.12.3",
+  "timer": "time.perf_counter",
+  "accuracy_limits": {
+    "parameter_atol": 0.0005,
+    "state_atol": 0.0002,
+    "residual_atol": 2e-05,
+    "fold_coefficient_atol": 0.0005,
+    "spectrum_atol": 0.0005
+  },
+  "status": "MEASURED",
+  "points": {
+    "first_call": 1000,
+    "warm": [
+      1000
+    ]
+  },
+  "resolved_controls": {
+    "newton_atol": 1e-09,
+    "newton_rtol": 0.0,
+    "newton_max_iter": 25,
+    "event_atol": 1e-07,
+    "ds": 0.01,
+    "ds_min": 1e-05,
+    "ds_max": 0.02,
+    "adaptive": true,
+    "max_steps": 1000,
+    "direction": 1,
+    "bounds": null,
+    "state_weight": 1.0,
+    "parameter_weight": 1.0,
+    "stability_every_step": true,
+    "ntst": null,
+    "ncol": null,
+    "newton_criterion": "residual-2norm-and-step-2norm"
+  },
+  "accuracy": {
+    "parameter_atol": 1.1102230246251565e-16,
+    "state_atol": 8.417594177245746e-09,
+    "residual_atol": 2.5757174171303632e-14,
+    "fold_coefficient_atol": null,
+    "spectrum_atol": 1.6835188354491493e-08
+  },
+  "versions": {
+    "matlab": "24.1.0.2537033 (R2024a)",
+    "matcont": "MatCont7p6"
+  },
+  "sampling": {
+    "first_calls": 5,
+    "warm_repetitions": 20,
+    "untimed_warmups": 3,
+    "timeout_seconds": 1800.0
+  },
+  "timer_resolution": 1e-09,
+  "eligible_for_cross_tool": false,
+  "startup": {
+    "n": 5,
+    "median": 10.370564503828064,
+    "iqr": 0.2675384519388899,
+    "p95": 10.63231509597972,
+    "samples": [
+      10.283007494872436,
+      10.326562502188608,
+      10.370564503828064,
+      10.512331804959103,
+      10.63231509597972
+    ]
+  },
+  "first_call": {
+    "n": 5,
+    "median": 0.293761,
+    "iqr": 0.0383425,
+    "p95": 0.336077,
+    "samples": [
+      0.274912,
+      0.287182,
+      0.293761,
+      0.302702,
+      0.336077
+    ]
+  },
+  "warm": {
+    "n": 20,
+    "median": 0.099897,
+    "iqr": 0.011643,
+    "p95": 0.112082,
+    "samples": [
+      0.090156,
+      0.091755,
+      0.091782,
+      0.091878,
+      0.093564,
+      0.09387,
+      0.095069,
+      0.095547,
+      0.098407,
+      0.099521,
+      0.100273,
+      0.102608,
+      0.10332,
+      0.103343,
+      0.104064,
+      0.10569,
+      0.106599,
+      0.107257,
+      0.112082,
+      0.133886
+    ]
+  },
+  "compile_overhead_estimate": {
+    "seconds": 0.19386399999999998,
+    "estimate": true
+  },
+  "tool_order": [
+    "bifurcationkit",
+    "matcont",
+    "jaxcont"
+  ],
+  "order_seed": 20261029,
+  "order_position": 1
+}
