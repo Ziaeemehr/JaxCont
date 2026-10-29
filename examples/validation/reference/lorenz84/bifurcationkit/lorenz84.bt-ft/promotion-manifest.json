@@ -2,12 +2,13 @@
   "schema_version": 1,
   "canonical_id": "lorenz84.bt-ft",
   "system": "lorenz84",
-  "reviewer": "Claude (review delegated by owner, 2026-10-28)",
-  "review_date": "2026-10-29",
-  "expected_status": "PENDING",
+  "reviewer": "Claude (review delegated by owner, 2026-10-30)",
+  "review_date": "2026-10-30",
+  "expected_status": "PASS",
   "registry_case": {
     "id": "lorenz84.bt-ft",
     "canonical_id": "lorenz84.bt-ft",
+    "state_dimension": 4,
     "aliases": [],
     "system": "lorenz84",
     "title": "Extended Lorenz-84 bt-ft",
@@ -27,16 +28,16 @@
       "frequency_atol": 0.0005
     },
     "tool_coverage": {
-      "jaxcont": "PENDING",
-      "matcont": "PENDING",
-      "bifurcationkit": "PENDING"
+      "jaxcont": "PASS",
+      "matcont": "PASS",
+      "bifurcationkit": "PASS"
     },
     "required_tools": [
       "jaxcont",
       "matcont",
       "bifurcationkit"
     ],
-    "evidence_status": "PENDING",
+    "evidence_status": "PASS",
     "expected_domain": [
       0.01,
       0.03
@@ -203,78 +204,78 @@
   },
   "candidates": {
     "jaxcont": {
-      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/lorenz84/jaxcont/lorenz84.bt-ft",
+      "path": "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/lorenz84/jaxcont/lorenz84.bt-ft",
       "hashes": {
         "branch.csv": "sha256:f2e10a593b9d90b2a900b6962ca6b17aacefbba726f176d2f6ed25990162f5d6",
         "events.csv": "sha256:60e39adb0f7243ba2eaf18ef73dd6754efc0e404c319a1e588c9ec007a277279",
-        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0",
-        "metadata.json": "sha256:eb1ae9c476c30628f3178dd77f3c660097468f07f1c4e068aa71cd285befb1c1",
-        "regenerate_jaxcont.py": "sha256:265c05f933b81bc3263922f04104b173d5facf71447f8296cdc297dbd8e297d2",
+        "jaxcont.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "jaxcont.stdout.log": "sha256:b6fb08e6986da0d9a3a3dc43a0d449d23d7cca8937ca3b512e4301c2ec30f9a6",
+        "metadata.json": "sha256:5ac63b4fd9018c2e9461b1f9186c531c9ee1c51517250107a809eb4d5e984a01",
         "spectra.csv": "sha256:14fb5479598a2367f5bde4c0ce0b4d65349347b60f642e410136c4104d7a24bb"
       },
       "promotable": true,
       "command": [
-        "/home/ziaee/envs/jaxcont/bin/python3",
-        "-"
+        "/home/ziaee/envs/jaxcont/bin/python",
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/jax_one.py",
+        "lorenz84.bt-ft",
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/lorenz84/jaxcont/lorenz84.bt-ft",
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt"
       ],
       "logs": {
-        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0"
+        "jaxcont.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "jaxcont.stdout.log": "sha256:b6fb08e6986da0d9a3a3dc43a0d449d23d7cca8937ca3b512e4301c2ec30f9a6"
       },
       "coverage": "unspecified"
     },
     "matcont": {
-      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/lorenz84/matcont/lorenz84.bt-ft",
+      "path": "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/lorenz84/matcont/lorenz84.bt-ft",
       "hashes": {
         "branch.csv": "sha256:746671ef78a0228af938482873ca11a0f106700b6b8a3277d2147e62f031832c",
-        "events.csv": "sha256:4d059a8fda92de5e1734026e8a468193aec469eb37ac39d8850f329d5d747578",
-        "invocation.json": "sha256:c984c2bf5d5caf4060a27f1b469f56d7cbbf41e3158fb9aa41c3c02129637105",
-        "metadata.json": "sha256:e4ef236545fec11c947fdef60628517e04d01e2bde47ad628b3ca7b8e9e3b082",
+        "events.csv": "sha256:74706b16bade15d0f8fd1614a2afaed0f8e508b96d63cccf2de60c81b8cfeb01",
+        "invocation.json": "sha256:92f200feb3ca3138ddfd46807235a8e38bf879bb2ae53873efaa5f56172a4db0",
+        "metadata.json": "sha256:05a9e0025d52d03724964262f8806a8b0354ade0b13d586a801396af127406ee",
         "native.json": "sha256:cc5c4be141c571072174ca4be8821a9a590742b60b90d41c39314ba8d41fab80",
-        "raw.json": "sha256:959c420fd33088b48379457c1c1a8269c5f35ba10cc94084ac120b99618d0b0c",
-        "regeneration.log": "sha256:bc6ed850ff0406189389047fd04eb96ba980bb06b8852ae26da1c1dab2330b8f",
-        "run_lorenz84_codim2.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
-        "run_lorenz84_codim2.stdout.log": "sha256:f1908cd88d080f60a111be61c35b1588b6683d021fe0adec5fc5834c3164605d",
+        "raw.json": "sha256:117b98547a280afc7f6945015cf2cbb2c78999dc42922d632be89b82ab587134",
+        "run_lorenz84_codim2.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "run_lorenz84_codim2.stdout.log": "sha256:d18f3463b4d4732f342c9cb4d80e6bc5c2cafbb6baeee012e54de596a4d074ed",
         "spectra.csv": "sha256:782eff81aeaeb6c37b78c0a424d3c4826aedc66b14d5524f5dcbf5d3da4aacdc"
       },
       "promotable": true,
       "command": [
         "/home/ziaee/programms/Matlab/R2024a/bin/matlab",
         "-batch",
-        "addpath('/home/ziaee/git/JaxCont/examples/validation/regenerate/matcont','/home/ziaee/git/JaxCont/examples/validation/regenerate/matcont/capability_gaps'); run_lorenz84_codim2('/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/matcont/lorenz84.bt-ft')"
+        "addpath('/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/matcont','/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/matcont/capability_gaps'); run_lorenz84_codim2('/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/staging/matcont/lorenz84.bt-ft')"
       ],
       "logs": {
-        "regeneration.log": "sha256:bc6ed850ff0406189389047fd04eb96ba980bb06b8852ae26da1c1dab2330b8f",
-        "run_lorenz84_codim2.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
-        "run_lorenz84_codim2.stdout.log": "sha256:f1908cd88d080f60a111be61c35b1588b6683d021fe0adec5fc5834c3164605d"
+        "run_lorenz84_codim2.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "run_lorenz84_codim2.stdout.log": "sha256:d18f3463b4d4732f342c9cb4d80e6bc5c2cafbb6baeee012e54de596a4d074ed"
       },
       "coverage": "unspecified"
     },
     "bifurcationkit": {
-      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/lorenz84/bifurcationkit/lorenz84.bt-ft",
+      "path": "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/lorenz84/bifurcationkit/lorenz84.bt-ft",
       "hashes": {
-        "branch.csv": "sha256:08dd1123772f3321aa0f982c9ae077f7cd2e84fbda52ebc4182f10c5313097be",
-        "events.csv": "sha256:7797548298d76b8dd5fe975edef828d9282da80925e4ba6188d9e93145c74e95",
-        "invocation.json": "sha256:090a703b4551fb6e85884819eff6d4147119bd837902189e89bde3e44b905099",
+        "branch.csv": "sha256:575e4e7ded63b85768391d0300e5b1450db6a226f893a194531b2d7d58cfc1ac",
+        "events.csv": "sha256:103e77857c1463091189c2d7692381439dd83514003acdca89a114e4b8893a2d",
+        "invocation.json": "sha256:66478e6f648f3888c4a76daa21bd00f5cf14cc189ef5294a23b9fea495c40e69",
         "lorenz84_codim2.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "lorenz84_codim2.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "metadata.json": "sha256:ab632afe2049fb561ede00018f4768280e61bb1c42bc555286cf78076ae1faf2",
-        "regeneration.log": "sha256:bc6ed850ff0406189389047fd04eb96ba980bb06b8852ae26da1c1dab2330b8f",
-        "spectra.csv": "sha256:6cd6fad7d792f645f58a8f618fe2919c0a585870e5c77fed1f1e92782d08ad26"
+        "metadata.json": "sha256:df5d266ae0c338ab7a76dc366960c252824f411148f068099fb63a99ac2e5598",
+        "spectra.csv": "sha256:0b124ec92c4a1e0a3c851e2fe2087266245d89acd46510380c91ea666a47a36e"
       },
       "promotable": true,
       "command": [
         "julia",
-        "--project=/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit",
-        "/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl",
+        "--project=/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/bifurcationkit",
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl",
         "--case",
         "lorenz84.bt-ft",
         "--output-dir",
-        "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/bifurcationkit/lorenz84.bt-ft/lorenz84.bt-ft/bifurcationkit"
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/staging/bk/lorenz84.bt-ft/lorenz84.bt-ft/bifurcationkit"
       ],
       "logs": {
         "lorenz84_codim2.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "lorenz84_codim2.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "regeneration.log": "sha256:bc6ed850ff0406189389047fd04eb96ba980bb06b8852ae26da1c1dab2330b8f"
+        "lorenz84_codim2.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       },
       "coverage": "unspecified"
     }
@@ -299,8 +300,14 @@
         "verdict": "PASS",
         "reason": null
       },
+      "event_residual": {
+        "value": 7.632783294297951e-17,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      },
       "two_small_eigenvalues": {
-        "value": 4.051819632877596e-05,
+        "value": 5.593545611706708e-09,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": null
@@ -331,8 +338,14 @@
         "verdict": "PASS",
         "reason": null
       },
+      "event_residual": {
+        "value": 1.3877787807814457e-17,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      },
       "two_small_eigenvalues": {
-        "value": 4.051819632877596e-05,
+        "value": 1.8960131101834074e-09,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": null
@@ -358,13 +371,19 @@
         "reason": null
       },
       "residual": {
-        "value": 5.551115123125783e-17,
+        "value": 2.7755575615628914e-17,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "event_residual": {
+        "value": 2.7755575615628914e-17,
         "limit": 1e-07,
         "verdict": "PASS",
         "reason": null
       },
       "two_small_eigenvalues": {
-        "value": 4.051819632877596e-05,
+        "value": 2.903043212183762e-09,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": null
@@ -398,6 +417,12 @@
         "reason": null
       },
       "sheet_0.T": {
+        "value": 1.820456979606533e-12,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.parameter": {
         "value": 1.820456979606533e-12,
         "limit": 0.0005,
         "verdict": "PASS",
@@ -496,7 +521,7 @@
         "reason": null
       },
       "sheet_0.endpoint_difference": {
-        "value": 9.575673587391975e-16,
+        "value": 9.679756995950584e-16,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": null
@@ -508,7 +533,13 @@
         "reason": null
       },
       "sheet_0.T": {
-        "value": 9.575673587391975e-16,
+        "value": 9.679756995950584e-16,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.parameter": {
+        "value": 9.679756995950584e-16,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": null
@@ -526,19 +557,19 @@
         "reason": null
       },
       "sheet_0.state_2": {
-        "value": 1.0269562977782698e-15,
+        "value": 1.0547118733938987e-15,
         "limit": 0.0002,
         "verdict": "PASS",
         "reason": null
       },
       "sheet_0.state_3": {
-        "value": 1.970645868709653e-15,
+        "value": 1.9984014443252818e-15,
         "limit": 0.0002,
         "verdict": "PASS",
         "reason": null
       },
       "sheet_0.spectrum": {
-        "value": 9.285017002636761e-09,
+        "value": 7.815493185055908e-09,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": "all native modes; no failed modes omitted"
@@ -556,13 +587,13 @@
         "reason": null
       },
       "BT_0.T": {
-        "value": 9.575673587391975e-16,
+        "value": 9.679756995950584e-16,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": null
       },
       "BT_0.parameter": {
-        "value": 9.575673587391975e-16,
+        "value": 9.679756995950584e-16,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": null
@@ -580,19 +611,19 @@
         "reason": null
       },
       "BT_0.state_2": {
-        "value": 1.0269562977782698e-15,
+        "value": 1.0547118733938987e-15,
         "limit": 0.0002,
         "verdict": "PASS",
         "reason": null
       },
       "BT_0.state_3": {
-        "value": 1.970645868709653e-15,
+        "value": 1.9984014443252818e-15,
         "limit": 0.0002,
         "verdict": "PASS",
         "reason": null
       },
       "BT_0.spectrum": {
-        "value": 9.285017002636761e-09,
+        "value": 7.81549318505591e-09,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": "all modes, including flow mode"
@@ -606,7 +637,7 @@
         "reason": null
       },
       "sheet_0.endpoint_difference": {
-        "value": 1.8194994122477937e-12,
+        "value": 1.8194890039069378e-12,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": null
@@ -618,7 +649,13 @@
         "reason": null
       },
       "sheet_0.T": {
-        "value": 1.8194994122477937e-12,
+        "value": 1.8194890039069378e-12,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.parameter": {
+        "value": 1.8194890039069378e-12,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": null
@@ -636,19 +673,19 @@
         "reason": null
       },
       "sheet_0.state_2": {
-        "value": 1.9553247909698257e-12,
+        "value": 1.95529703539421e-12,
         "limit": 0.0002,
         "verdict": "PASS",
         "reason": null
       },
       "sheet_0.state_3": {
-        "value": 3.966840744773492e-12,
+        "value": 3.9668129891978765e-12,
         "limit": 0.0002,
         "verdict": "PASS",
         "reason": null
       },
       "sheet_0.spectrum": {
-        "value": 2.9516367374286837e-09,
+        "value": 9.989874721084166e-10,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": "all native modes; no failed modes omitted"
@@ -666,13 +703,13 @@
         "reason": null
       },
       "BT_0.T": {
-        "value": 1.8194994122477937e-12,
+        "value": 1.8194890039069378e-12,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": null
       },
       "BT_0.parameter": {
-        "value": 1.8194994122477937e-12,
+        "value": 1.8194890039069378e-12,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": null
@@ -690,19 +727,19 @@
         "reason": null
       },
       "BT_0.state_2": {
-        "value": 1.9553247909698257e-12,
+        "value": 1.95529703539421e-12,
         "limit": 0.0002,
         "verdict": "PASS",
         "reason": null
       },
       "BT_0.state_3": {
-        "value": 3.966840744773492e-12,
+        "value": 3.9668129891978765e-12,
         "limit": 0.0002,
         "verdict": "PASS",
         "reason": null
       },
       "BT_0.spectrum": {
-        "value": 2.951636737429784e-09,
+        "value": 9.989874721095182e-10,
         "limit": 0.0005,
         "verdict": "PASS",
         "reason": "all modes, including flow mode"
@@ -721,6 +758,31 @@
     "bifurcationkit": {
       "outside_window": [],
       "unrefined_detections": []
+    }
+  },
+  "comparison_coordinates": {
+    "jaxcont--matcont": {
+      "sheet_0": "arclength"
+    },
+    "jaxcont--bifurcationkit": {
+      "sheet_0": "arclength"
+    },
+    "matcont--bifurcationkit": {
+      "sheet_0": "arclength"
+    }
+  },
+  "passage_information": {
+    "jaxcont": {
+      "policy": "all",
+      "later_reentries": []
+    },
+    "matcont": {
+      "policy": "all",
+      "later_reentries": []
+    },
+    "bifurcationkit": {
+      "policy": "all",
+      "later_reentries": []
     }
   },
   "validation_report": {
@@ -751,6 +813,12 @@
           "reason": null
         },
         "sheet_0.T": {
+          "value": 1.820456979606533e-12,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.parameter": {
           "value": 1.820456979606533e-12,
           "limit": 0.0005,
           "verdict": "PASS",
@@ -849,7 +917,7 @@
           "reason": null
         },
         "sheet_0.endpoint_difference": {
-          "value": 9.575673587391975e-16,
+          "value": 9.679756995950584e-16,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": null
@@ -861,7 +929,13 @@
           "reason": null
         },
         "sheet_0.T": {
-          "value": 9.575673587391975e-16,
+          "value": 9.679756995950584e-16,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.parameter": {
+          "value": 9.679756995950584e-16,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": null
@@ -879,19 +953,19 @@
           "reason": null
         },
         "sheet_0.state_2": {
-          "value": 1.0269562977782698e-15,
+          "value": 1.0547118733938987e-15,
           "limit": 0.0002,
           "verdict": "PASS",
           "reason": null
         },
         "sheet_0.state_3": {
-          "value": 1.970645868709653e-15,
+          "value": 1.9984014443252818e-15,
           "limit": 0.0002,
           "verdict": "PASS",
           "reason": null
         },
         "sheet_0.spectrum": {
-          "value": 9.285017002636761e-09,
+          "value": 7.815493185055908e-09,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": "all native modes; no failed modes omitted"
@@ -909,13 +983,13 @@
           "reason": null
         },
         "BT_0.T": {
-          "value": 9.575673587391975e-16,
+          "value": 9.679756995950584e-16,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": null
         },
         "BT_0.parameter": {
-          "value": 9.575673587391975e-16,
+          "value": 9.679756995950584e-16,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": null
@@ -933,19 +1007,19 @@
           "reason": null
         },
         "BT_0.state_2": {
-          "value": 1.0269562977782698e-15,
+          "value": 1.0547118733938987e-15,
           "limit": 0.0002,
           "verdict": "PASS",
           "reason": null
         },
         "BT_0.state_3": {
-          "value": 1.970645868709653e-15,
+          "value": 1.9984014443252818e-15,
           "limit": 0.0002,
           "verdict": "PASS",
           "reason": null
         },
         "BT_0.spectrum": {
-          "value": 9.285017002636761e-09,
+          "value": 7.81549318505591e-09,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": "all modes, including flow mode"
@@ -959,7 +1033,7 @@
           "reason": null
         },
         "sheet_0.endpoint_difference": {
-          "value": 1.8194994122477937e-12,
+          "value": 1.8194890039069378e-12,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": null
@@ -971,7 +1045,13 @@
           "reason": null
         },
         "sheet_0.T": {
-          "value": 1.8194994122477937e-12,
+          "value": 1.8194890039069378e-12,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.parameter": {
+          "value": 1.8194890039069378e-12,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": null
@@ -989,19 +1069,19 @@
           "reason": null
         },
         "sheet_0.state_2": {
-          "value": 1.9553247909698257e-12,
+          "value": 1.95529703539421e-12,
           "limit": 0.0002,
           "verdict": "PASS",
           "reason": null
         },
         "sheet_0.state_3": {
-          "value": 3.966840744773492e-12,
+          "value": 3.9668129891978765e-12,
           "limit": 0.0002,
           "verdict": "PASS",
           "reason": null
         },
         "sheet_0.spectrum": {
-          "value": 2.9516367374286837e-09,
+          "value": 9.989874721084166e-10,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": "all native modes; no failed modes omitted"
@@ -1019,13 +1099,13 @@
           "reason": null
         },
         "BT_0.T": {
-          "value": 1.8194994122477937e-12,
+          "value": 1.8194890039069378e-12,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": null
         },
         "BT_0.parameter": {
-          "value": 1.8194994122477937e-12,
+          "value": 1.8194890039069378e-12,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": null
@@ -1043,19 +1123,19 @@
           "reason": null
         },
         "BT_0.state_2": {
-          "value": 1.9553247909698257e-12,
+          "value": 1.95529703539421e-12,
           "limit": 0.0002,
           "verdict": "PASS",
           "reason": null
         },
         "BT_0.state_3": {
-          "value": 3.966840744773492e-12,
+          "value": 3.9668129891978765e-12,
           "limit": 0.0002,
           "verdict": "PASS",
           "reason": null
         },
         "BT_0.spectrum": {
-          "value": 2.951636737429784e-09,
+          "value": 9.989874721095182e-10,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": "all modes, including flow mode"
@@ -1082,8 +1162,14 @@
           "verdict": "PASS",
           "reason": null
         },
+        "event_residual": {
+          "value": 7.632783294297951e-17,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        },
         "two_small_eigenvalues": {
-          "value": 4.051819632877596e-05,
+          "value": 5.593545611706708e-09,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": null
@@ -1114,8 +1200,14 @@
           "verdict": "PASS",
           "reason": null
         },
+        "event_residual": {
+          "value": 1.3877787807814457e-17,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        },
         "two_small_eigenvalues": {
-          "value": 4.051819632877596e-05,
+          "value": 1.8960131101834074e-09,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": null
@@ -1141,13 +1233,19 @@
           "reason": null
         },
         "residual": {
-          "value": 5.551115123125783e-17,
+          "value": 2.7755575615628914e-17,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "event_residual": {
+          "value": 2.7755575615628914e-17,
           "limit": 1e-07,
           "verdict": "PASS",
           "reason": null
         },
         "two_small_eigenvalues": {
-          "value": 4.051819632877596e-05,
+          "value": 2.903043212183762e-09,
           "limit": 0.0005,
           "verdict": "PASS",
           "reason": null
@@ -1168,17 +1266,44 @@
       },
       "matcont": {
         "branch.csv": "sha256:746671ef78a0228af938482873ca11a0f106700b6b8a3277d2147e62f031832c",
-        "events.csv": "sha256:4d059a8fda92de5e1734026e8a468193aec469eb37ac39d8850f329d5d747578",
+        "events.csv": "sha256:74706b16bade15d0f8fd1614a2afaed0f8e508b96d63cccf2de60c81b8cfeb01",
         "spectra.csv": "sha256:782eff81aeaeb6c37b78c0a424d3c4826aedc66b14d5524f5dcbf5d3da4aacdc"
       },
       "bifurcationkit": {
-        "branch.csv": "sha256:08dd1123772f3321aa0f982c9ae077f7cd2e84fbda52ebc4182f10c5313097be",
-        "events.csv": "sha256:7797548298d76b8dd5fe975edef828d9282da80925e4ba6188d9e93145c74e95",
-        "spectra.csv": "sha256:6cd6fad7d792f645f58a8f618fe2919c0a585870e5c77fed1f1e92782d08ad26"
+        "branch.csv": "sha256:575e4e7ded63b85768391d0300e5b1450db6a226f893a194531b2d7d58cfc1ac",
+        "events.csv": "sha256:103e77857c1463091189c2d7692381439dd83514003acdca89a114e4b8893a2d",
+        "spectra.csv": "sha256:0b124ec92c4a1e0a3c851e2fe2087266245d89acd46510380c91ea666a47a36e"
       }
     },
     "status": "PASS",
-    "report_hash": "sha256:2f52fe89936572a4e507d0c116a1e6e6dfff18ac3b455cd6d260256b49f5579b"
+    "information": {
+      "passages": {
+        "jaxcont": {
+          "policy": "all",
+          "later_reentries": []
+        },
+        "matcont": {
+          "policy": "all",
+          "later_reentries": []
+        },
+        "bifurcationkit": {
+          "policy": "all",
+          "later_reentries": []
+        }
+      },
+      "coordinates": {
+        "jaxcont--matcont": {
+          "sheet_0": "arclength"
+        },
+        "jaxcont--bifurcationkit": {
+          "sheet_0": "arclength"
+        },
+        "matcont--bifurcationkit": {
+          "sheet_0": "arclength"
+        }
+      }
+    },
+    "report_hash": "sha256:cc045dae803da5e2fa7744e4e90ebad1ed0dbf718db9df02933cf0e8ea206eb5"
   },
   "verdict": "PASS"
 }

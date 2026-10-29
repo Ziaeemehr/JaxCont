@@ -1,7 +1,7 @@
 {
   "case_id": "MC-EQ-001",
   "equation_hash": "sha256:0dd9430a2bc585d9503a587fded709c2d3a56ccaf18dfcd14bb56787d5781723",
-  "generated_utc": "2026-10-29T00:47:29Z",
+  "generated_utc": "2026-10-29T22:37:50Z",
   "jax_version": "0.11.2",
   "jaxcont_version": "0.4.1.dev98+g7e902bca3",
   "matcont_version": "7.6",

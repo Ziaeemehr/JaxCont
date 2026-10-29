@@ -27,7 +27,6 @@ http://www.fieldtriptoolbox.org/faq/tracking]
  In '/home/ziaee/programms/toolboxes/fieldtrip/utilities/ft_trackusage.m' at line 97
  In '/home/ziaee/programms/toolboxes/fieldtrip/ft_defaults.m' at line 407
 
-[Warning: could not send tracker information for "startup"] 
 first point found
 tangent vector to first point found
 label = LP, x = ( -1.000001 0.666667 )

@@ -1,3 +1,3 @@
-bracket_lower,bracket_upper,case_id,event_id,event_index,event_type,first_lyapunov,fold_coefficient,frequency,parameter,point,point_id,segment_id,status,kind
-unknown,unknown,MC-EQ-001,0,0,LP,NaN,1.0000007634566,NaN,0.666666666666084,107,107,legacy-0,REFINED,LP
-unknown,unknown,MC-EQ-001,1,1,LP,NaN,-0.999999898460718,NaN,-0.666666666666656,231,231,legacy-0,REFINED,LP
+bracket_lower,bracket_upper,case_id,event_id,event_index,event_type,first_lyapunov,fold_coefficient,frequency,parameter,point,point_id,residual_norm,segment_id,state_0,status,kind
+unknown,unknown,MC-EQ-001,0,0,LP,NaN,1.0000007634566,NaN,0.666666666666084,107,107,5.55111512312578e-17,legacy-0,-1.0000007634566,REFINED,LP
+unknown,unknown,MC-EQ-001,1,1,LP,NaN,-0.999999898460718,NaN,-0.666666666666656,231,231,5.55111512312578e-17,legacy-0,0.999999898460718,REFINED,LP

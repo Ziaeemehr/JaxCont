@@ -661,18 +661,11 @@ def test_offline_cli_validates_supported_reference_case():
     reference_dir = Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference"
 
     completed = _run_matcont_cli(
-        "--case", "MC-LC-001", "--reference-dir", str(reference_dir)
+        "--case", "MC-EQ-001", "--reference-dir", str(reference_dir)
     )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert "PASS MC-LC-001" in completed.stdout
-    # MC-EQ-001 executes too; its evidence is incomplete (review B-02: event
-    # values one tool does not export), which is reported, not a selection stop.
-    completed = _run_matcont_cli(
-        "--case", "MC-EQ-001", "--reference-dir", str(reference_dir)
-    )
-    assert completed.returncode == 1
-    assert "PENDING MC-EQ-001: required evidence incomplete" in completed.stdout
+    assert "PASS MC-EQ-001" in completed.stdout
 
 
 def test_unsupported_case_is_explicitly_reported():

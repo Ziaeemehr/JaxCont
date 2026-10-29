@@ -3,12 +3,12 @@
   "chart_status": "completed",
   "command": [
     "julia",
-    "--project=/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit",
-    "/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit/lorenz84_equilibria.jl",
+    "--project=/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/bifurcationkit",
+    "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/bifurcationkit/lorenz84_equilibria.jl",
     "--case",
     "lorenz84.eq-f",
     "--output-dir",
-    "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/bifurcationkit/lorenz84.eq-f/lorenz84.eq-f/bifurcationkit"
+    "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/staging/bk/lorenz84.eq-f/lorenz84.eq-f/bifurcationkit"
   ],
   "conventions": {
     "comparison_domain": "clip each sheet to F bounds before matching",
@@ -16,19 +16,19 @@
     "time": "original"
   },
   "conversion_chain": [],
-  "driver_hash": "sha256:c38a6285db5e8a523077d3d4fe3771dfc14dd5da19779fa9ba2716a5695bee55",
-  "equation_hash": "sha256:c38a6285db5e8a523077d3d4fe3771dfc14dd5da19779fa9ba2716a5695bee55",
-  "generated_utc": "2026-10-29T01:07:35Z",
-  "generator_revision": "3dd787c13a76e00e0e5552614ba1772d0259a84d",
+  "driver_hash": "sha256:5093603ed5a801d8505c9a1f82797dcece04c691307a256fd66c26a492ea8651",
+  "equation_hash": "sha256:5093603ed5a801d8505c9a1f82797dcece04c691307a256fd66c26a492ea8651",
+  "generated_utc": "2026-10-29T22:38:05Z",
+  "generator_revision": "5c92ca020b4ca47700a698399740bb6649dbc88f",
   "lock_hash": "sha256:134daaa75d8b8f9905b1c7afc9b4ae1fa3602dd6d03e4ec1600000bdddb3bb29",
   "mesh": {
     "kind": "equilibrium"
   },
   "output_hashes": {
-    "branch.csv": "sha256:fcada8a8c358087e3894389ca633bd2c2bff5bb7c63f6bdf840104b24d412665",
-    "events.csv": "sha256:2fd022a65ccf32c97f5e5c207b7504246ba5baa7c1a3d0be356e9d2406afb69a",
+    "branch.csv": "sha256:a6edea6686b0068113d6ac41f24610c84f465654742faa10fa15e623fd11d7ea",
+    "events.csv": "sha256:98e1370883bb94dd7619acb7bef24f2935b11deae023c1b50a6b3a18648c9c8a",
     "samples.json": "sha256:f220e5e798d634cdfa7b0aeec13145428e7212fa2ffa1abb925448b0ca58dec0",
-    "spectra.csv": "sha256:549ddd894906fdc17c1b829feba204a396a69e4662eb81b6b904ab63262729c5"
+    "spectra.csv": "sha256:717eb8d4fdbbcf1bfc0c2c3e853f118708b6296999cec21f5d4820f713ce3f22"
   },
   "package_versions": {
     "BifurcationKit": "0.8.8",
@@ -52,13 +52,13 @@
       3.0
     ],
     "ds": 0.002,
-    "ds_max": 0.05,
-    "max_steps_per_direction": 200,
+    "ds_max": 0.01,
+    "max_steps_per_direction": 1000,
     "newton_atol": 1e-12
   },
-  "review_date": "2026-10-29",
+  "review_date": "2026-10-30",
   "reviewed": true,
-  "reviewer": "Claude (review delegated by owner, 2026-10-28)",
+  "reviewer": "Claude (review delegated by owner, 2026-10-30)",
   "runtime_version": "1.13.3",
   "scaling": {
     "arclength": "BK PALC theta=0.5: state weight 0.5/n; parameter weight 0.5",
@@ -81,7 +81,7 @@
   },
   "source_hashes": {
     "export.jl": "sha256:c9d7f64f7e16e4829b8af9894b4449e56fbbb0c02403f028d749cdde77fe27b3",
-    "lorenz84_equilibria.jl": "sha256:c38a6285db5e8a523077d3d4fe3771dfc14dd5da19779fa9ba2716a5695bee55"
+    "lorenz84_equilibria.jl": "sha256:5093603ed5a801d8505c9a1f82797dcece04c691307a256fd66c26a492ea8651"
   },
   "tool": "bifurcationkit"
 }

@@ -3,12 +3,12 @@
   "chart_status": "completed configured steps",
   "command": [
     "julia",
-    "--project=/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit",
-    "/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl",
+    "--project=/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/bifurcationkit",
+    "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl",
     "--case",
     "lorenz84.bt-ft",
     "--output-dir",
-    "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/bifurcationkit/lorenz84.bt-ft/lorenz84.bt-ft/bifurcationkit"
+    "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/staging/bk/lorenz84.bt-ft/lorenz84.bt-ft/bifurcationkit"
   ],
   "conventions": {
     "chart_boundary": "Hopf termination near BT is not a BT detection",
@@ -17,17 +17,17 @@
   },
   "conversion_chain": [],
   "driver_hash": "sha256:9493ba8412fd27aab49f5dec2e95dcb830640c1d1cf9ffadf57a379d5f013c49",
-  "equation_hash": "sha256:c38a6285db5e8a523077d3d4fe3771dfc14dd5da19779fa9ba2716a5695bee55",
-  "generated_utc": "2026-10-29T01:15:00Z",
-  "generator_revision": "3dd787c13a76e00e0e5552614ba1772d0259a84d",
+  "equation_hash": "sha256:5093603ed5a801d8505c9a1f82797dcece04c691307a256fd66c26a492ea8651",
+  "generated_utc": "2026-10-29T22:39:35Z",
+  "generator_revision": "5c92ca020b4ca47700a698399740bb6649dbc88f",
   "lock_hash": "sha256:134daaa75d8b8f9905b1c7afc9b4ae1fa3602dd6d03e4ec1600000bdddb3bb29",
   "mesh": {
     "kind": "equilibrium"
   },
   "output_hashes": {
-    "branch.csv": "sha256:08dd1123772f3321aa0f982c9ae077f7cd2e84fbda52ebc4182f10c5313097be",
-    "events.csv": "sha256:7797548298d76b8dd5fe975edef828d9282da80925e4ba6188d9e93145c74e95",
-    "spectra.csv": "sha256:6cd6fad7d792f645f58a8f618fe2919c0a585870e5c77fed1f1e92782d08ad26"
+    "branch.csv": "sha256:575e4e7ded63b85768391d0300e5b1450db6a226f893a194531b2d7d58cfc1ac",
+    "events.csv": "sha256:103e77857c1463091189c2d7692381439dd83514003acdca89a114e4b8893a2d",
+    "spectra.csv": "sha256:0b124ec92c4a1e0a3c851e2fe2087266245d89acd46510380c91ea666a47a36e"
   },
   "package_versions": {
     "BifurcationKit": "0.8.8",
@@ -60,9 +60,9 @@
       "T"
     ]
   },
-  "review_date": "2026-10-29",
+  "review_date": "2026-10-30",
   "reviewed": true,
-  "reviewer": "Claude (review delegated by owner, 2026-10-28)",
+  "reviewer": "Claude (review delegated by owner, 2026-10-30)",
   "runtime_version": "1.13.3",
   "scaling": {
     "arclength": "BK PALC theta=0.5: state weight 0.5/n; parameter weight 0.5",
@@ -91,7 +91,7 @@
   "source_hashes": {
     "export.jl": "sha256:c9d7f64f7e16e4829b8af9894b4449e56fbbb0c02403f028d749cdde77fe27b3",
     "lorenz84_codim2.jl": "sha256:9493ba8412fd27aab49f5dec2e95dcb830640c1d1cf9ffadf57a379d5f013c49",
-    "lorenz84_equilibria.jl": "sha256:c38a6285db5e8a523077d3d4fe3771dfc14dd5da19779fa9ba2716a5695bee55"
+    "lorenz84_equilibria.jl": "sha256:5093603ed5a801d8505c9a1f82797dcece04c691307a256fd66c26a492ea8651"
   },
   "tool": "bifurcationkit"
 }

@@ -2,9 +2,9 @@
   "schema_version": 1,
   "canonical_id": "adaptx.cycle-pd-switch",
   "system": "adaptx",
-  "reviewer": "Claude (review delegated by owner, 2026-10-28)",
-  "review_date": "2026-10-29",
-  "expected_status": "PENDING",
+  "reviewer": "Claude (review delegated by owner, 2026-10-30)",
+  "review_date": "2026-10-30",
+  "expected_status": "PASS",
   "registry_case": {
     "id": "MC-LC-003",
     "title": "MatCont adaptx period-doubling branch switch",
@@ -22,6 +22,7 @@
     "tolerances": {
       "parameter_atol": 0.002,
       "period_atol": 0.005,
+      "multiplier_atol": 0.005,
       "residual_atol": 2e-05
     },
     "canonical_id": "adaptx.cycle-pd-switch",
@@ -30,11 +31,11 @@
     ],
     "system": "adaptx",
     "tool_coverage": {
-      "jaxcont": "PENDING",
-      "bifurcationkit": "PENDING",
-      "matcont": "PENDING"
+      "jaxcont": "PASS",
+      "bifurcationkit": "PASS",
+      "matcont": "PASS"
     },
-    "evidence_status": "PENDING",
+    "evidence_status": "PASS",
     "expected_domain": [
       0.55,
       0.9
@@ -45,6 +46,7 @@
     "metric_limits": {
       "parameter_atol": 0.002,
       "period_atol": 0.005,
+      "multiplier_atol": 0.005,
       "residual_atol": 2e-05
     },
     "required_tools": [
@@ -65,39 +67,52 @@
         0.63
       ]
     },
-    "comparison_window_comment": "Frozen base and doubled branch contract windows in periodic.json."
+    "comparison_window_comment": "Frozen base and doubled branch contract windows in periodic.json.",
+    "multiplier_atol_comment": "Review B-03 (2026-10-29): the same Floquet budget as the other periodic cases, so branch and PD spectra are compared at all.",
+    "comparison_coordinate": "parameter",
+    "comparison_coordinate_comment": "Neither sheet has a fold in its window, so nu is monotone and exact in every tool. Measured 2026-10-29: the default envelope coordinate (state_0_max, ~1e-4 sampling error) gives spectrum differences up to 2.0e-2; the period, nearly flat on the doubled sheet, 1.0e-2; nu at most 1.4e-4.",
+    "doubled_shape": {
+      "segment": "doubled",
+      "min_half_period_difference": 0.001
+    },
+    "independent_defect_atol": 2e-05,
+    "independent_defect_comment": "Review R2-04 (2026-10-29): independent integration/closure diagnostics must not exceed the case's residual budget; measured maxima: JaxCont 1.1e-6, BifurcationKit 5.6e-7, MatCont 2.0e-9.",
+    "doubled_shape_comment": "A base orbit traversed twice has half-period difference ~0; the legacy MatCont test uses the same 1e-3 floor (measured maxima: MatCont 0.564, BifurcationKit 0.633)."
   },
   "candidates": {
     "jaxcont": {
-      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/adaptx/jaxcont/adaptx.cycle-pd-switch",
+      "path": "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/adaptx/jaxcont/adaptx.cycle-pd-switch",
       "hashes": {
-        "branch.csv": "sha256:3f7f9d221c78df0818653e8e1a9ac2ad17b7216cff70f7e95851a435d924b26c",
-        "events.csv": "sha256:206cb765eb12caf98f4e039b927309b2d7e3137a5b97d445c7f976db36eaf8c8",
-        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0",
-        "metadata.json": "sha256:84ce06554cb2ee33d9d7b97a5ac7774c01aa9340a37ac6f51a705ff8740c0676",
-        "orbits.csv": "sha256:dd2a5bca4b611dfd56640ee8f618e0cbfe0a2b059aac5f1a97ee683132058662",
-        "regenerate_jaxcont.py": "sha256:265c05f933b81bc3263922f04104b173d5facf71447f8296cdc297dbd8e297d2",
-        "spectra.csv": "sha256:03c8009f37ad2adbb47b09151ae9dee8b0fbda4f9c3d3f42eb3effe72ee4c8c8"
+        "branch.csv": "sha256:528f430c1de7e2ff98a9a579e3b16b5710130127a831d386c6ca5190649ebb52",
+        "events.csv": "sha256:07b26fb9e56cbee081ca851fa055b45cc95b7722ea254eba28be1574158486e5",
+        "jaxcont.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "jaxcont.stdout.log": "sha256:786c3f1ee7e5d03688824ad38aa476aeb2a9b5d3a59ced811d14b005ec253958",
+        "metadata.json": "sha256:6fb764d1ef7f4d78832bc307c365adbba67377fe3809991a6ec3ab272c4700f3",
+        "orbits.csv": "sha256:649fdf37ccaf787f4681236d641d603bb25825e5fea221a96170f0edf4373cde",
+        "spectra.csv": "sha256:48982b8887f473d309560794fb5a3152f522de6bd60a15dedb99a3e4eb649542"
       },
       "promotable": true,
       "command": [
-        "/home/ziaee/envs/jaxcont/bin/python3",
-        "-"
+        "/home/ziaee/envs/jaxcont/bin/python",
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/jax_adaptx.py",
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/adaptx/jaxcont/adaptx.cycle-pd-switch",
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt"
       ],
       "logs": {
-        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0"
+        "jaxcont.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "jaxcont.stdout.log": "sha256:786c3f1ee7e5d03688824ad38aa476aeb2a9b5d3a59ced811d14b005ec253958"
       },
       "coverage": "unspecified"
     },
     "bifurcationkit": {
-      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/adaptx/bifurcationkit/adaptx.cycle-pd-switch",
+      "path": "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/adaptx/bifurcationkit/adaptx.cycle-pd-switch",
       "hashes": {
         "adaptx_pd.stderr.log": "sha256:f601afc1514c1843aa0e5e53a4cbc786f825026af5ee6e3f2c6bf5abe189092f",
         "adaptx_pd.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "branch.csv": "sha256:17e670648f960e4cadd2b70bb569e03d3776befb1df5911a7350b047873adcc2",
         "events.csv": "sha256:d2f8ef62d69217b01c07a254161e9a0bb8cdf458e220a86c5b18364cfaa37e35",
         "invocation.json": "sha256:b8ef9ef9f79655944050f0b8c2651df53e4f79a2b81c95603d8f3acbe87eb854",
-        "metadata.json": "sha256:199f97aeb09ca0f37f0b6f2a037c6a8d354eb2bbe67807f99482c24e44b77847",
+        "metadata.json": "sha256:88fb4cbf2ecbc7b024adf3f93ee6a98291aed33770fcdcb96d5a604bce99bcf3",
         "orbits.csv": "sha256:5f61e3483f05aab045d0316335b80b6320ae127f8aa45ee1044aec8f9358cae7",
         "regeneration.log": "sha256:bb8ca90fc68972d148bbbd592ef50c1b1387b1053758915e50e736c125213ece",
         "spectra.csv": "sha256:55f8caa14c75442587864b704933851622cbaeef92a9789d2b353ed6df029bc5"
@@ -120,37 +135,35 @@
       "coverage": "COMPLETE"
     },
     "matcont": {
-      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/packaged/adaptx/matcont/adaptx.cycle-pd-switch",
+      "path": "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/adaptx/matcont/adaptx.cycle-pd-switch",
       "hashes": {
         "adaptx-base_branch.csv": "sha256:ac75aa7c03df58e553d2be220bf288bd8445c4c13ed9421276f64b9ce84154d1",
         "adaptx-base_events.csv": "sha256:d884676e0ba407288e557d59c62e57467d3bf84490458044ceed77daaa7ab067",
-        "adaptx-base_metadata.json": "sha256:cd5e9a1beab8474dadffcec56c4fd549637ab22be35e7e26c7a268147c35be3f",
+        "adaptx-base_metadata.json": "sha256:854b81fd624d50518a045db2b9964536db2d08b2dfc242f0c3c8776b569800b6",
         "adaptx-base_multipliers.csv": "sha256:a3afd80144ce39f5d396f59e204f15c59b511576dc5b82791e8ee7f3a26c77f7",
         "adaptx-doubled_branch.csv": "sha256:c7c6fb780b1c44f3b6793f56f745c51b88b229a4379185842d31fee627395fc6",
         "adaptx-doubled_events.csv": "sha256:c3d91a2598a4f9f31bd77b580de7ba8ef5a493e88ba7c57c36fddbd7229436c0",
-        "adaptx-doubled_metadata.json": "sha256:675206af7b2dc06941233121763ea554d6b908cca7fb58264e1dd9a168aff288",
+        "adaptx-doubled_metadata.json": "sha256:5763085e5577c26e3b051e1a12010513d46472a52e0b447f687becf1960814f2",
         "adaptx-doubled_multipliers.csv": "sha256:ded6ed2e3e47dfc2eca66f1a52b3fc1acd1d7dd19c63ab41f94c56418d973716",
         "branch.csv": "sha256:2511545437fb9fa28bc970ae82e85334bf008f3303c8fd461160db67d018b12e",
-        "events.csv": "sha256:a53de1b17b97ccd7b8c860f2729a872c8720b8318b0f8884aa0422e40e319a1d",
-        "invocation.json": "sha256:74fe930e66492d484a970bc94b17f7460606fab01af50a05c04cabbe027fb41b",
-        "metadata.json": "sha256:8aba7608e4325b190ad43ff64755988536de7d34e42c7861e4bdad73107d31dd",
+        "events.csv": "sha256:43158d0db1ec11628c1bcd0c60d9bca095f53ea7400e4766a604b9a47533ee64",
+        "invocation.json": "sha256:813b6de8370b60738ebd402c9afa681d2714c7343be2560a4eff7b064d3caac2",
+        "metadata.json": "sha256:05de05fb34d087c2b0a6c7ae8e3f9b68009a4f9456c51644ff233e6420b57076",
         "orbits.csv": "sha256:b2a3e96274ae7150013ce25c64f05c3142549e364afa02c5adff6f039873fda4",
-        "packaging-provenance.json": "sha256:addbc27120c15ec976e1766ecd293a50df047c4488e06037d28e3de46a0b97f1",
-        "regeneration.log": "sha256:bb8ca90fc68972d148bbbd592ef50c1b1387b1053758915e50e736c125213ece",
-        "run_adaptx_pd.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
-        "run_adaptx_pd.stdout.log": "sha256:2845cda2530e4f0aeaa5b0d3dd4e5494ec8ec59774ea28482843b026164f884d",
+        "packaging-provenance.json": "sha256:b4bd7ee97ddf496d988be5f29e8fb5bda8953611763777778ae06ca82ef16908",
+        "run_adaptx_pd.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "run_adaptx_pd.stdout.log": "sha256:b12be27563fdd2c3ad6a2896cb9bea832dce2d96d8c38d54c65c749f790068a3",
         "spectra.csv": "sha256:40ba59dda791a23f6937e23dc623a771a380cca3e6101d26240f3cd90fd237bf"
       },
       "promotable": true,
       "command": [
         "/home/ziaee/programms/Matlab/R2024a/bin/matlab",
         "-batch",
-        "addpath('/home/ziaee/git/JaxCont/examples/validation/regenerate/matcont','/home/ziaee/git/JaxCont/examples/validation/regenerate/matcont/capability_gaps'); run_adaptx_pd('/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/matcont/adaptx.cycle-pd-switch')"
+        "addpath('/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/matcont','/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/matcont/capability_gaps'); run_adaptx_pd('/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/staging/matcont/adaptx.cycle-pd-switch')"
       ],
       "logs": {
-        "regeneration.log": "sha256:bb8ca90fc68972d148bbbd592ef50c1b1387b1053758915e50e736c125213ece",
-        "run_adaptx_pd.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
-        "run_adaptx_pd.stdout.log": "sha256:2845cda2530e4f0aeaa5b0d3dd4e5494ec8ec59774ea28482843b026164f884d"
+        "run_adaptx_pd.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "run_adaptx_pd.stdout.log": "sha256:b12be27563fdd2c3ad6a2896cb9bea832dce2d96d8c38d54c65c749f790068a3"
       },
       "coverage": "unspecified"
     }
@@ -182,10 +195,28 @@
         "reason": null
       },
       "residual": {
-        "value": 1.7036829654502872e-06,
+        "value": 1.7036829654155927e-06,
         "limit": 2e-05,
         "verdict": "PASS",
         "reason": null
+      },
+      "event_residual": {
+        "value": 6.05019506716431e-11,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "independent_defect": {
+        "value": 5.154359959992638e-07,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "doubled_shape": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": "max half-period difference on the doubled branch"
       }
     },
     "bifurcationkit": {
@@ -218,6 +249,24 @@
         "limit": 2e-05,
         "verdict": "PASS",
         "reason": null
+      },
+      "event_residual": {
+        "value": 2.515446184681025e-12,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "independent_defect": {
+        "value": 5.181932674069856e-07,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "doubled_shape": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": "max half-period difference on the doubled branch"
       }
     },
     "matcont": {
@@ -250,6 +299,24 @@
         "limit": 2e-05,
         "verdict": "PASS",
         "reason": null
+      },
+      "event_residual": {
+        "value": 9.947598300641403e-14,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "independent_defect": {
+        "value": 3.535656281639099e-10,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "doubled_shape": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": "max half-period difference on the doubled branch"
       }
     }
   },
@@ -268,10 +335,22 @@
         "reason": null
       },
       "sheet_0.period": {
-        "value": 4.940861755287074e-07,
+        "value": 7.444077230189805e-07,
         "limit": 0.005,
         "verdict": "PASS",
         "reason": null
+      },
+      "sheet_0.period.dense_nodes": {
+        "value": 7.618414166188359e-07,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "period at native nodes between the query nodes; interpolation allowance up to 4.11e-08"
+      },
+      "sheet_0.spectrum": {
+        "value": 4.402588240903782e-05,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
       },
       "sheet_1.endpoint_difference": {
         "value": 0.0,
@@ -280,10 +359,22 @@
         "reason": null
       },
       "sheet_1.period": {
-        "value": 3.3197137483398365e-07,
+        "value": 5.299463268215732e-07,
         "limit": 0.005,
         "verdict": "PASS",
         "reason": null
+      },
+      "sheet_1.period.dense_nodes": {
+        "value": 1.5326321598507775e-06,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "period at native nodes between the query nodes; interpolation allowance up to 1.89e-06"
+      },
+      "sheet_1.spectrum": {
+        "value": 0.00010256695960197959,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
       },
       "PD.count_difference": {
         "value": 0.0,
@@ -292,7 +383,7 @@
         "reason": null
       },
       "PD_0.parameter": {
-        "value": 2.993424397246258e-10,
+        "value": 2.9934199563541597e-10,
         "limit": 0.002,
         "verdict": "PASS",
         "reason": null
@@ -303,8 +394,14 @@
         "verdict": "PASS",
         "reason": null
       },
+      "PD_0.spectrum": {
+        "value": 1.6498937771558574e-09,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      },
       "PD_1.parameter": {
-        "value": 3.1248181153742394e-08,
+        "value": 3.1248180709653184e-08,
         "limit": 0.002,
         "verdict": "PASS",
         "reason": null
@@ -314,6 +411,12 @@
         "limit": 0.005,
         "verdict": "PASS",
         "reason": null
+      },
+      "PD_1.spectrum": {
+        "value": 1.3668855900483834e-06,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
       }
     },
     "jaxcont--matcont": {
@@ -330,10 +433,22 @@
         "reason": null
       },
       "sheet_0.period": {
-        "value": 6.264544056833188e-07,
+        "value": 7.686153002950391e-07,
         "limit": 0.005,
         "verdict": "PASS",
         "reason": null
+      },
+      "sheet_0.period.dense_nodes": {
+        "value": 7.618499076045282e-07,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "period at native nodes between the query nodes; interpolation allowance up to 4.38e-12"
+      },
+      "sheet_0.spectrum": {
+        "value": 0.00013539084907568388,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
       },
       "sheet_1.endpoint_difference": {
         "value": 0.0,
@@ -342,10 +457,22 @@
         "reason": null
       },
       "sheet_1.period": {
-        "value": 1.1301607081293241e-06,
+        "value": 1.3024385925319848e-06,
         "limit": 0.005,
         "verdict": "PASS",
         "reason": null
+      },
+      "sheet_1.period.dense_nodes": {
+        "value": 1.3640330678299506e-06,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "period at native nodes between the query nodes; interpolation allowance up to 1.47e-11"
+      },
+      "sheet_1.spectrum": {
+        "value": 0.00014263338980335938,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
       },
       "PD.count_difference": {
         "value": 0.0,
@@ -354,7 +481,7 @@
         "reason": null
       },
       "PD_0.parameter": {
-        "value": 7.394647116854003e-10,
+        "value": 7.394642675961904e-10,
         "limit": 0.002,
         "verdict": "PASS",
         "reason": null
@@ -365,8 +492,14 @@
         "verdict": "PASS",
         "reason": null
       },
+      "PD_0.spectrum": {
+        "value": 5.663775226594225e-09,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      },
       "PD_1.parameter": {
-        "value": 3.120057279204502e-08,
+        "value": 3.120057234795581e-08,
         "limit": 0.002,
         "verdict": "PASS",
         "reason": null
@@ -376,6 +509,12 @@
         "limit": 0.005,
         "verdict": "PASS",
         "reason": null
+      },
+      "PD_1.spectrum": {
+        "value": 1.365750217363626e-06,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
       }
     },
     "bifurcationkit--matcont": {
@@ -392,10 +531,22 @@
         "reason": null
       },
       "sheet_0.period": {
-        "value": 1.6226185373113822e-07,
+        "value": 1.8598456108520622e-12,
         "limit": 0.005,
         "verdict": "PASS",
         "reason": null
+      },
+      "sheet_0.period.dense_nodes": {
+        "value": 2.294755496734524e-09,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "period at native nodes between the query nodes; interpolation allowance up to 4.11e-08"
+      },
+      "sheet_0.spectrum": {
+        "value": 1.2629319812168913e-10,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
       },
       "sheet_1.endpoint_difference": {
         "value": 0.0,
@@ -404,10 +555,22 @@
         "reason": null
       },
       "sheet_1.period": {
-        "value": 1.1000293298479846e-07,
+        "value": 6.871836433219869e-11,
         "limit": 0.005,
         "verdict": "PASS",
         "reason": null
+      },
+      "sheet_1.period.dense_nodes": {
+        "value": 1.5719007606662672e-07,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "period at native nodes between the query nodes; interpolation allowance up to 1.89e-06"
+      },
+      "sheet_1.spectrum": {
+        "value": 1.6772770949913252e-09,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
       },
       "PD.count_difference": {
         "value": 0.0,
@@ -427,6 +590,12 @@
         "verdict": "PASS",
         "reason": null
       },
+      "PD_0.spectrum": {
+        "value": 4.013881449438374e-09,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      },
       "PD_1.parameter": {
         "value": 4.760836169737104e-11,
         "limit": 0.002,
@@ -438,6 +607,12 @@
         "limit": 0.005,
         "verdict": "PASS",
         "reason": null
+      },
+      "PD_1.spectrum": {
+        "value": 1.135372684757392e-09,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
       }
     }
   },
@@ -453,6 +628,34 @@
     "matcont": {
       "outside_window": [],
       "unrefined_detections": []
+    }
+  },
+  "comparison_coordinates": {
+    "jaxcont--bifurcationkit": {
+      "sheet_0": "parameter",
+      "sheet_1": "parameter"
+    },
+    "jaxcont--matcont": {
+      "sheet_0": "parameter",
+      "sheet_1": "parameter"
+    },
+    "bifurcationkit--matcont": {
+      "sheet_0": "parameter",
+      "sheet_1": "parameter"
+    }
+  },
+  "passage_information": {
+    "jaxcont": {
+      "policy": "all",
+      "later_reentries": []
+    },
+    "bifurcationkit": {
+      "policy": "all",
+      "later_reentries": []
+    },
+    "matcont": {
+      "policy": "all",
+      "later_reentries": []
     }
   },
   "validation_report": {
@@ -477,10 +680,22 @@
           "reason": null
         },
         "sheet_0.period": {
-          "value": 4.940861755287074e-07,
+          "value": 7.444077230189805e-07,
           "limit": 0.005,
           "verdict": "PASS",
           "reason": null
+        },
+        "sheet_0.period.dense_nodes": {
+          "value": 7.618414166188359e-07,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "period at native nodes between the query nodes; interpolation allowance up to 4.11e-08"
+        },
+        "sheet_0.spectrum": {
+          "value": 4.402588240903782e-05,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
         },
         "sheet_1.endpoint_difference": {
           "value": 0.0,
@@ -489,10 +704,22 @@
           "reason": null
         },
         "sheet_1.period": {
-          "value": 3.3197137483398365e-07,
+          "value": 5.299463268215732e-07,
           "limit": 0.005,
           "verdict": "PASS",
           "reason": null
+        },
+        "sheet_1.period.dense_nodes": {
+          "value": 1.5326321598507775e-06,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "period at native nodes between the query nodes; interpolation allowance up to 1.89e-06"
+        },
+        "sheet_1.spectrum": {
+          "value": 0.00010256695960197959,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
         },
         "PD.count_difference": {
           "value": 0.0,
@@ -501,7 +728,7 @@
           "reason": null
         },
         "PD_0.parameter": {
-          "value": 2.993424397246258e-10,
+          "value": 2.9934199563541597e-10,
           "limit": 0.002,
           "verdict": "PASS",
           "reason": null
@@ -512,8 +739,14 @@
           "verdict": "PASS",
           "reason": null
         },
+        "PD_0.spectrum": {
+          "value": 1.6498937771558574e-09,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        },
         "PD_1.parameter": {
-          "value": 3.1248181153742394e-08,
+          "value": 3.1248180709653184e-08,
           "limit": 0.002,
           "verdict": "PASS",
           "reason": null
@@ -523,6 +756,12 @@
           "limit": 0.005,
           "verdict": "PASS",
           "reason": null
+        },
+        "PD_1.spectrum": {
+          "value": 1.3668855900483834e-06,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
         }
       },
       "jaxcont--matcont": {
@@ -539,10 +778,22 @@
           "reason": null
         },
         "sheet_0.period": {
-          "value": 6.264544056833188e-07,
+          "value": 7.686153002950391e-07,
           "limit": 0.005,
           "verdict": "PASS",
           "reason": null
+        },
+        "sheet_0.period.dense_nodes": {
+          "value": 7.618499076045282e-07,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "period at native nodes between the query nodes; interpolation allowance up to 4.38e-12"
+        },
+        "sheet_0.spectrum": {
+          "value": 0.00013539084907568388,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
         },
         "sheet_1.endpoint_difference": {
           "value": 0.0,
@@ -551,10 +802,22 @@
           "reason": null
         },
         "sheet_1.period": {
-          "value": 1.1301607081293241e-06,
+          "value": 1.3024385925319848e-06,
           "limit": 0.005,
           "verdict": "PASS",
           "reason": null
+        },
+        "sheet_1.period.dense_nodes": {
+          "value": 1.3640330678299506e-06,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "period at native nodes between the query nodes; interpolation allowance up to 1.47e-11"
+        },
+        "sheet_1.spectrum": {
+          "value": 0.00014263338980335938,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
         },
         "PD.count_difference": {
           "value": 0.0,
@@ -563,7 +826,7 @@
           "reason": null
         },
         "PD_0.parameter": {
-          "value": 7.394647116854003e-10,
+          "value": 7.394642675961904e-10,
           "limit": 0.002,
           "verdict": "PASS",
           "reason": null
@@ -574,8 +837,14 @@
           "verdict": "PASS",
           "reason": null
         },
+        "PD_0.spectrum": {
+          "value": 5.663775226594225e-09,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        },
         "PD_1.parameter": {
-          "value": 3.120057279204502e-08,
+          "value": 3.120057234795581e-08,
           "limit": 0.002,
           "verdict": "PASS",
           "reason": null
@@ -585,6 +854,12 @@
           "limit": 0.005,
           "verdict": "PASS",
           "reason": null
+        },
+        "PD_1.spectrum": {
+          "value": 1.365750217363626e-06,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
         }
       },
       "bifurcationkit--matcont": {
@@ -601,10 +876,22 @@
           "reason": null
         },
         "sheet_0.period": {
-          "value": 1.6226185373113822e-07,
+          "value": 1.8598456108520622e-12,
           "limit": 0.005,
           "verdict": "PASS",
           "reason": null
+        },
+        "sheet_0.period.dense_nodes": {
+          "value": 2.294755496734524e-09,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "period at native nodes between the query nodes; interpolation allowance up to 4.11e-08"
+        },
+        "sheet_0.spectrum": {
+          "value": 1.2629319812168913e-10,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
         },
         "sheet_1.endpoint_difference": {
           "value": 0.0,
@@ -613,10 +900,22 @@
           "reason": null
         },
         "sheet_1.period": {
-          "value": 1.1000293298479846e-07,
+          "value": 6.871836433219869e-11,
           "limit": 0.005,
           "verdict": "PASS",
           "reason": null
+        },
+        "sheet_1.period.dense_nodes": {
+          "value": 1.5719007606662672e-07,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "period at native nodes between the query nodes; interpolation allowance up to 1.89e-06"
+        },
+        "sheet_1.spectrum": {
+          "value": 1.6772770949913252e-09,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
         },
         "PD.count_difference": {
           "value": 0.0,
@@ -636,6 +935,12 @@
           "verdict": "PASS",
           "reason": null
         },
+        "PD_0.spectrum": {
+          "value": 4.013881449438374e-09,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        },
         "PD_1.parameter": {
           "value": 4.760836169737104e-11,
           "limit": 0.002,
@@ -647,6 +952,12 @@
           "limit": 0.005,
           "verdict": "PASS",
           "reason": null
+        },
+        "PD_1.spectrum": {
+          "value": 1.135372684757392e-09,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
         }
       }
     },
@@ -677,10 +988,28 @@
           "reason": null
         },
         "residual": {
-          "value": 1.7036829654502872e-06,
+          "value": 1.7036829654155927e-06,
           "limit": 2e-05,
           "verdict": "PASS",
           "reason": null
+        },
+        "event_residual": {
+          "value": 6.05019506716431e-11,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "independent_defect": {
+          "value": 5.154359959992638e-07,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "doubled_shape": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": "max half-period difference on the doubled branch"
         }
       },
       "bifurcationkit": {
@@ -713,6 +1042,24 @@
           "limit": 2e-05,
           "verdict": "PASS",
           "reason": null
+        },
+        "event_residual": {
+          "value": 2.515446184681025e-12,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "independent_defect": {
+          "value": 5.181932674069856e-07,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "doubled_shape": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": "max half-period difference on the doubled branch"
         }
       },
       "matcont": {
@@ -745,15 +1092,33 @@
           "limit": 2e-05,
           "verdict": "PASS",
           "reason": null
+        },
+        "event_residual": {
+          "value": 9.947598300641403e-14,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "independent_defect": {
+          "value": 3.535656281639099e-10,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "doubled_shape": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": "max half-period difference on the doubled branch"
         }
       }
     },
     "source_hashes": {
       "jaxcont": {
-        "branch.csv": "sha256:3f7f9d221c78df0818653e8e1a9ac2ad17b7216cff70f7e95851a435d924b26c",
-        "events.csv": "sha256:206cb765eb12caf98f4e039b927309b2d7e3137a5b97d445c7f976db36eaf8c8",
-        "spectra.csv": "sha256:03c8009f37ad2adbb47b09151ae9dee8b0fbda4f9c3d3f42eb3effe72ee4c8c8",
-        "orbits.csv": "sha256:dd2a5bca4b611dfd56640ee8f618e0cbfe0a2b059aac5f1a97ee683132058662"
+        "branch.csv": "sha256:528f430c1de7e2ff98a9a579e3b16b5710130127a831d386c6ca5190649ebb52",
+        "events.csv": "sha256:07b26fb9e56cbee081ca851fa055b45cc95b7722ea254eba28be1574158486e5",
+        "spectra.csv": "sha256:48982b8887f473d309560794fb5a3152f522de6bd60a15dedb99a3e4eb649542",
+        "orbits.csv": "sha256:649fdf37ccaf787f4681236d641d603bb25825e5fea221a96170f0edf4373cde"
       },
       "bifurcationkit": {
         "branch.csv": "sha256:17e670648f960e4cadd2b70bb569e03d3776befb1df5911a7350b047873adcc2",
@@ -763,19 +1128,49 @@
       },
       "matcont": {
         "branch.csv": "sha256:2511545437fb9fa28bc970ae82e85334bf008f3303c8fd461160db67d018b12e",
-        "events.csv": "sha256:a53de1b17b97ccd7b8c860f2729a872c8720b8318b0f8884aa0422e40e319a1d",
+        "events.csv": "sha256:43158d0db1ec11628c1bcd0c60d9bca095f53ea7400e4766a604b9a47533ee64",
         "spectra.csv": "sha256:40ba59dda791a23f6937e23dc623a771a380cca3e6101d26240f3cd90fd237bf",
         "orbits.csv": "sha256:b2a3e96274ae7150013ce25c64f05c3142549e364afa02c5adff6f039873fda4",
-        "adaptx-doubled_events.csv": "sha256:c3d91a2598a4f9f31bd77b580de7ba8ef5a493e88ba7c57c36fddbd7229436c0",
-        "adaptx-base_multipliers.csv": "sha256:a3afd80144ce39f5d396f59e204f15c59b511576dc5b82791e8ee7f3a26c77f7",
         "adaptx-doubled_multipliers.csv": "sha256:ded6ed2e3e47dfc2eca66f1a52b3fc1acd1d7dd19c63ab41f94c56418d973716",
-        "adaptx-base_events.csv": "sha256:d884676e0ba407288e557d59c62e57467d3bf84490458044ceed77daaa7ab067",
         "adaptx-doubled_branch.csv": "sha256:c7c6fb780b1c44f3b6793f56f745c51b88b229a4379185842d31fee627395fc6",
-        "adaptx-base_branch.csv": "sha256:ac75aa7c03df58e553d2be220bf288bd8445c4c13ed9421276f64b9ce84154d1"
+        "adaptx-doubled_events.csv": "sha256:c3d91a2598a4f9f31bd77b580de7ba8ef5a493e88ba7c57c36fddbd7229436c0",
+        "adaptx-base_events.csv": "sha256:d884676e0ba407288e557d59c62e57467d3bf84490458044ceed77daaa7ab067",
+        "adaptx-base_branch.csv": "sha256:ac75aa7c03df58e553d2be220bf288bd8445c4c13ed9421276f64b9ce84154d1",
+        "adaptx-base_multipliers.csv": "sha256:a3afd80144ce39f5d396f59e204f15c59b511576dc5b82791e8ee7f3a26c77f7"
       }
     },
     "status": "PASS",
-    "report_hash": "sha256:3fd7b332b7f74761177bfcee9953028629fea4e60cbc4eaa5f84acc39a849978"
+    "information": {
+      "passages": {
+        "jaxcont": {
+          "policy": "all",
+          "later_reentries": []
+        },
+        "bifurcationkit": {
+          "policy": "all",
+          "later_reentries": []
+        },
+        "matcont": {
+          "policy": "all",
+          "later_reentries": []
+        }
+      },
+      "coordinates": {
+        "jaxcont--bifurcationkit": {
+          "sheet_0": "parameter",
+          "sheet_1": "parameter"
+        },
+        "jaxcont--matcont": {
+          "sheet_0": "parameter",
+          "sheet_1": "parameter"
+        },
+        "bifurcationkit--matcont": {
+          "sheet_0": "parameter",
+          "sheet_1": "parameter"
+        }
+      }
+    },
+    "report_hash": "sha256:93406135413dbfab137357ccf91af2fad8e7ca647afd753576bd8b536b929866"
   },
   "verdict": "PASS"
 }

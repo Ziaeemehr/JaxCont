@@ -11,11 +11,11 @@ limit. The status column is the registry's `evidence_status`; each bundle
 also records the verdict of its reviewed promotion. The comparison pages
 under "Validation gallery" show the figures and tables for each system.
 
-**23 registered cases: 7 PASS, 9 PENDING, 7 UNSUPPORTED.**
+**23 registered cases: 9 PASS, 7 PENDING, 7 UNSUPPORTED.**
 
 | Case | What is checked | Status | Reference bundles | Comparison page |
 | --- | --- | --- | --- | --- |
-| `cubic.eq-fold` | Cubic S-curve equilibrium continuation | PENDING | MatCont 7.6: PASS; MatCont: legacy (v1) bundle; BifurcationKit 0.8.8: PASS | {doc}`auto_validation/plot_cubic` |
+| `cubic.eq-fold` | Cubic S-curve equilibrium continuation | PASS | MatCont 7.6: PASS; MatCont: legacy (v1) bundle; BifurcationKit 0.8.8: PASS | {doc}`auto_validation/plot_cubic` |
 | `vanderpol.eq-degenerate-hopf` | Van der Pol equilibrium Hopf | PASS | MatCont: legacy (v1) bundle | {doc}`auto_validation/plot_vanderpol` |
 | `adaptx.eq-hopf` | MatCont adaptive-control equilibrium Hopf | PENDING | MatCont: legacy (v1) bundle | {doc}`auto_validation/plot_adaptx` |
 | `jax.transforms` | JAX transformation and sensitivity checks | PENDING | — | — |
@@ -33,7 +33,7 @@ under "Validation gallery" show the figures and tables for each system.
 | `US-HOM-001` | Homoclinic continuation | UNSUPPORTED | — | — |
 | `US-HET-001` | Heteroclinic continuation setup template | UNSUPPORTED | — | — |
 | `adaptx.prc` | PRC calculation (adaptx Hopf limit cycle); dPRC computed but not MatCont-cross-checked | PENDING | MatCont: legacy (v1) bundle | {doc}`auto_validation/plot_adaptx` |
-| `lorenz84.eq-f` | Extended Lorenz-84 eq-f | PENDING | MatCont 7.6: PASS; BifurcationKit 0.8.8: PASS | {doc}`auto_validation/plot_lorenz84` |
+| `lorenz84.eq-f` | Extended Lorenz-84 eq-f | PASS | MatCont 7.6: PASS; BifurcationKit 0.8.8: PASS | {doc}`auto_validation/plot_lorenz84` |
 | `lorenz84.fold-ft` | Extended Lorenz-84 fold-ft | PASS | MatCont 7.6: PASS; BifurcationKit 0.8.8: PASS | {doc}`auto_validation/plot_lorenz84` |
 | `lorenz84.hopf-ft` | Extended Lorenz-84 hopf-ft | PASS | MatCont 7.6: PASS; BifurcationKit 0.8.8: PASS | {doc}`auto_validation/plot_lorenz84` |
 | `lorenz84.bt-ft` | Extended Lorenz-84 bt-ft | PASS | MatCont 7.6: PASS; BifurcationKit 0.8.8: PASS | {doc}`auto_validation/plot_lorenz84` |

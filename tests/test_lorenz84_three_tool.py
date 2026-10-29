@@ -24,7 +24,8 @@ def test_flagship_requires_all_three_bundles(canonical_id):
         assert len(manifest['pairwise']) == 3
         assert all(metric['verdict'] == 'PASS' for group in manifest['pairwise'].values()
                    for metric in group.values())
-        assert data['metadata']['reviewer'] == 'Claude (review delegated by owner, 2026-10-28)'
+        # Re-reviewed 2026-10-30 after the exporters gained the gate's evidence.
+        assert data['metadata']['reviewer'] == 'Claude (review delegated by owner, 2026-10-30)'
     missing = deepcopy(bundles)
     del missing['bifurcationkit']
     assert build_validation_report(case, missing).status != 'PASS'

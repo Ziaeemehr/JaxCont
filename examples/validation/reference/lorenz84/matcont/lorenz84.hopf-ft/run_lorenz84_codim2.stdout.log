@@ -27,7 +27,6 @@ http://www.fieldtriptoolbox.org/faq/tracking]
  In '/home/ziaee/programms/toolboxes/fieldtrip/utilities/ft_trackusage.m' at line 97
  In '/home/ziaee/programms/toolboxes/fieldtrip/ft_defaults.m' at line 407
 
-[Warning: could not send tracker information for "startup"] 
 first point found
 tangent vector to first point found
 
@@ -44,7 +43,7 @@ First Lyapunov coefficient = -1.348746e-01
 label = H , x = ( 1.118508 -0.023419 0.221031 -0.625318 2.859875 )
 First Lyapunov coefficient = 3.038456e-01
 
-elapsed time  = 0.2 secs
+elapsed time  = 0.1 secs
 npoints curve = 201
 first point found
 tangent vector to first point found
@@ -59,7 +58,7 @@ label = ZH, x = ( 1.059844 -0.013277 0.235134 0.020861 1.283419 -0.000127 )
 label = BT, x = ( 1.225640 -0.036321 0.197288 0.123390 1.446717 -0.020940 )
 (a,b)=(2.144234e-01, 6.065146e-01)
 
-elapsed time  = 0.4 secs
+elapsed time  = 0.3 secs
 npoints curve = 401
 first point found
 tangent vector to first point found
