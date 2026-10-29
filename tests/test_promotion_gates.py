@@ -155,3 +155,18 @@ def test_a_pending_item_delegated_to_a_passing_run_does_not_leave_the_tool_pendi
     report = build_validation_report(case, tools)
     assert report.coverage["bifurcationkit"] == "PASS"
     assert report.status == "PASS"
+
+
+def test_the_verdict_does_not_depend_on_the_tool_order():
+    """Round 2: with equally many in-window nodes the sparse grid was the first
+    argument's, and a disagreement visible only at the other tool's nodes
+    passed in one order and failed in the other. Both tools' nodes count."""
+    case = dict(id="synthetic", canonical_id="synthetic.eq", comparison_window=[.2, .8],
+                expected_events=[], tool_coverage={"a": "PASS", "b": "PASS"},
+                tolerances=dict(parameter_atol=1e-4, state_atol=1e-4, spectrum_atol=1e-4,
+                                residual_atol=1e-7))
+    # b's state_1 vanishes at a's nodes (.25, .5, .75) but not at its own (.2, .8).
+    a = _synthetic([0, .25, .5, .75, 1])
+    b = _synthetic([.1, .2, .5, .8, .9], value=lambda p: 100 * (p - .25) * (p - .5) * (p - .75))
+    statuses = {build_validation_report(case, dict(zip("ab", order))).status for order in ((a, b), (b, a))}
+    assert statuses == {"FAIL"}

@@ -333,19 +333,20 @@ def _dense_spectrum_metric(a, b, x, y, lo, hi, query, coordinate, limit, relativ
     curves = [_spectral_curve(d, sheet, coordinate) for d, sheet in ((a, x), (b, y))]
     if any(c is None for c in curves):
         return None  # the sparse-node spectrum metric already reports this
-    (dc, dv), (sc, sv) = sorted(curves, key=lambda c: -len(c[0]))
-    dc = np.asarray(dc)
-    nodes = (dc >= lo) & (dc <= hi) & ~np.isin(dc, query)
-    if not np.any(nodes) or len(sc) < 2:
-        return None  # no node of the denser tool lies between sparse nodes
-    sc = np.asarray(sc)
-    full = _spectral_roots(sc, sv, dc[nodes])
-    half_c, half_v = _half_grid(sc, np.arange(len(sc)))
-    half = _spectral_roots(half_c, [sv[k] for k in half_v], dc[nodes])
-    dense = [np.asarray(v) for v, keep in zip(dv, nodes) if keep]
-    differences = [_mode_error(f, d, relative) if len(f) == len(d) else np.inf for f, d in zip(full, dense)]
-    change = [_mode_error(f, h, relative) if len(f) == len(h) else np.inf for f, h in zip(full, half)]
-    return _dense_node_metric(differences, limit, _interval_allowance(sc, dc[nodes], change), "spectrum")
+    differences, allowances = [], []
+    for (dc, dv), (sc, sv) in ((curves[0], curves[1]), (curves[1], curves[0])):
+        dc, sc = np.asarray(dc), np.asarray(sc)
+        nodes = (dc >= lo) & (dc <= hi) & ~np.isin(dc, query)
+        if not np.any(nodes) or len(sc) < 2:
+            continue  # no node of this tool lies between the query nodes
+        full = _spectral_roots(sc, sv, dc[nodes])
+        half_c, half_v = _half_grid(sc, np.arange(len(sc)))
+        half = _spectral_roots(half_c, [sv[k] for k in half_v], dc[nodes])
+        dense = [np.asarray(v) for v, keep in zip(dv, nodes) if keep]
+        differences += [_mode_error(f, d, relative) if len(f) == len(d) else np.inf for f, d in zip(full, dense)]
+        change = [_mode_error(f, h, relative) if len(f) == len(h) else np.inf for f, h in zip(full, half)]
+        allowances += list(_interval_allowance(sc, dc[nodes], change))
+    return _dense_node_metric(differences, limit, allowances, "spectrum") if differences else None
 
 
 def _spectrum_error(a, b, x, y, query, coordinate="parameter", relative=False):
@@ -400,7 +401,7 @@ def _interval_allowance(sparse, nodes, change):
 
 
 def _dense_node_metric(differences, limit, allowance, what):
-    """Compare at the denser tool's own nodes (review B-04).
+    """Compare at each tool's own nodes between the query nodes (review B-04).
 
     ``allowance`` estimates the sparser series' interpolation error at each
     node: the change of its cubic interpolant when every other node is
@@ -421,7 +422,7 @@ def _dense_node_metric(differences, limit, allowance, what):
     else:
         verdict = "FAIL"
     return dict(value=worst if np.isfinite(worst) else None, limit=limit, verdict=verdict,
-                reason=f"{what} at the denser tool's nodes; sparse interpolation allowance up to "
+                reason=f"{what} at native nodes between the query nodes; interpolation allowance up to "
                        f"{float(np.max(allowance)) if np.all(np.isfinite(allowance)) else float('inf'):.3g}")
 
 
@@ -498,16 +499,20 @@ def _pairwise(case, a, b, *, coordinates=None, samples=None):
                     # Registry's existing mixed absolute/relative rule.
                     error = np.max(np.maximum(abs(av-bv) - tol.get("rtol", 0.)*np.maximum(abs(av),abs(bv)), 0.))
                     metrics[column] = _metric(error, _limit(column, tol))
-                    # The sparse-node comparison cannot see a disagreement
-                    # between sparse nodes; compare at the dense nodes too.
-                    (dp, dv), (sp, sv) = sorted(((xp, xa), (yp, ya)), key=lambda c: -len(c[0]))
-                    nodes = (dp >= lo) & (dp <= hi) & ~np.isin(dp, query)
-                    if np.any(nodes) and len(sp) > 1:
-                        full = _cubic(sp, sv, dp[nodes])
-                        half = _cubic(*_half_grid(sp, sv), dp[nodes])
-                        difference = np.maximum(abs(full - dv[nodes]) - tol.get("rtol", 0.) * np.maximum(abs(full), abs(dv[nodes])), 0.)
-                        dense = _dense_node_metric(difference, _limit(column, tol),
-                                                   _interval_allowance(sp, dp[nodes], full - half), column)
+                    # The query nodes cannot see a disagreement between them;
+                    # compare at every other native node of either tool,
+                    # against the other tool's interpolant (order-free).
+                    differences, allowances = [], []
+                    for (dp, dv), (sp, sv) in (((xp, xa), (yp, ya)), ((yp, ya), (xp, xa))):
+                        nodes = (dp >= lo) & (dp <= hi) & ~np.isin(dp, query)
+                        if np.any(nodes) and len(sp) > 1:
+                            full = _cubic(sp, sv, dp[nodes])
+                            half = _cubic(*_half_grid(sp, sv), dp[nodes])
+                            differences.append(np.maximum(abs(full - dv[nodes]) - tol.get("rtol", 0.) * np.maximum(abs(full), abs(dv[nodes])), 0.))
+                            allowances.append(_interval_allowance(sp, dp[nodes], full - half))
+                    if differences:
+                        dense = _dense_node_metric(np.concatenate(differences), _limit(column, tol),
+                                                   np.concatenate(allowances), column)
                         if dense is not None:
                             metrics[f"{column}.dense_nodes"] = dense
                     curves[column] = dict(coordinate=coordinate, x=query.tolist(),
