@@ -5,15 +5,22 @@ from scipy.interpolate import BarycentricInterpolator
 
 
 def doubled_shape(states):
-    """Dimensionless half-period difference after removing the orbit mean."""
+    """Dimensionless half-period difference after removing the orbit mean.
+
+    ``states`` sample one period on a uniform phase grid. The half-period
+    shift is the trigonometric one (a phase factor per Fourier mode): on an
+    even grid it equals rolling by half the samples, and on an odd grid
+    (e.g. ``ntst=25``), which has no sample at half the period, it is the
+    spectrally accurate interpolant of the smooth orbit.
+    """
     states = np.asarray(states, dtype=float)
-    if len(states) % 2:
-        raise ValueError('Half-period diagnostic requires an even phase grid')
     centered = states - states.mean(axis=0)
     scale = np.max(np.linalg.norm(centered, axis=1))
     if not np.isfinite(scale) or scale <= np.finfo(float).eps:
         return 0.0
-    return float(np.max(np.linalg.norm(centered - np.roll(centered, len(states)//2, axis=0), axis=1)) / scale)
+    modes = np.fft.fftfreq(len(states), 1 / len(states))
+    shifted = np.real(np.fft.ifft(np.fft.fft(centered, axis=0) * np.exp(-1j * np.pi * modes)[:, None], axis=0))
+    return float(np.max(np.linalg.norm(centered - shifted, axis=1)) / scale)
 
 
 def require_events(events, expected):

@@ -16,6 +16,25 @@ def test_pd_switch_requires_genuine_doubled_shape():
     assert doubled_shape(base+100) < 1e-12
 
 
+def test_doubled_shape_on_an_odd_phase_grid():
+    """torBPC uses ntst=25: no grid point sits at half the period, so the
+    half-period shift is the trigonometric one; an even grid stays a roll."""
+    for size in (25, 125):
+        t = np.linspace(0, 2*np.pi, size, endpoint=False)
+        base = np.c_[np.cos(2*t), np.sin(2*t)]
+        # Measured |error| x32/x64: <2e-15; host FFT roundoff at unit scale.
+        assert doubled_shape(base) < 64 * np.finfo(float).eps
+        # A doubled orbit: the first harmonic flips sign under the shift, so
+        # the difference is exactly 2*0.1 over the max centred radius 1.1.
+        doubled = base + np.c_[.1*np.cos(t), .1*np.sin(t)]
+        assert doubled_shape(doubled) == pytest.approx(.2 / 1.1, abs=64 * np.finfo(float).eps)
+    t = np.linspace(0, 2*np.pi, 80, endpoint=False)
+    signal = np.c_[np.cos(t) + .3*np.sin(3*t), np.sin(2*t)]
+    centred = signal - signal.mean(axis=0)
+    rolled = np.max(np.linalg.norm(centred - np.roll(centred, 40, axis=0), axis=1)) / np.max(np.linalg.norm(centred, axis=1))
+    assert doubled_shape(signal) == pytest.approx(rolled, abs=64 * np.finfo(float).eps)
+
+
 def test_periodic_reference_requires_complete_event_set():
     events = [dict(event_type=k) for k in ('LPC','PD','NS')]
     require_events(events, ('LPC','PD','NS'))
