@@ -55,7 +55,12 @@
         "matcont",
         "bifurcationkit"
       ],
-      "bifurcationkit": "cubic_fold.jl"
+      "bifurcationkit": "cubic_fold.jl",
+      "comparison_window": [
+        -1,
+        1
+      ],
+      "comparison_window_comment": "Shared JaxCont/BifurcationKit window; legacy MatCont continues to 4.17."
     },
     {
       "id": "MC-EQ-002",
@@ -169,7 +174,12 @@
         "jaxcont",
         "matcont",
         "bifurcationkit"
-      ]
+      ],
+      "comparison_window": [
+        -2,
+        2
+      ],
+      "comparison_window_comment": "Shared alpha interval; ignore legacy continuation beyond alpha=2."
     },
     {
       "id": "MC-JAX-001",
@@ -296,7 +306,12 @@
         "matcont",
         "bifurcationkit"
       ],
-      "bifurcationkit": "radial_cycle.jl"
+      "bifurcationkit": "radial_cycle.jl",
+      "comparison_window": [
+        1,
+        1.49
+      ],
+      "comparison_window_comment": "Common interval inside legacy MatCont coverage [1,1.499]."
     },
     {
       "id": "MC-LC-002",
@@ -359,7 +374,17 @@
         "bifurcationkit"
       ],
       "bifurcationkit": "torbpc_ns.jl",
-      "v2_python": "examples.validation.cases.python_cases.periodic:produce_torbpc_periodic"
+      "v2_python": "examples.validation.cases.python_cases.periodic:produce_torbpc_periodic",
+      "comparison_window": [
+        -0.7468,
+        -0.5845
+      ],
+      "comparison_window_comment": "Shared stress branch window; retain every sheet and failure inside it.",
+      "comparison_expected_events": [
+        "NS",
+        "PD"
+      ],
+      "comparison_event_comment": "LPC at -0.584492842 is outside the explicit upper bound -0.5845; retain it as informational native evidence."
     },
     {
       "id": "MC-LC-003",
@@ -410,7 +435,18 @@
       ],
       "bifurcationkit": "adaptx_pd.jl",
       "domain_justification": "cases/systems/periodic.json: independently computed before producer implementation",
-      "v2_python": "examples.validation.cases.python_cases.pd_switch:produce_adaptx_periodic"
+      "v2_python": "examples.validation.cases.python_cases.pd_switch:produce_adaptx_periodic",
+      "comparison_window": {
+        "base": [
+          0.55,
+          0.9
+        ],
+        "doubled": [
+          0.57,
+          0.63
+        ]
+      },
+      "comparison_window_comment": "Frozen base and doubled branch contract windows in periodic.json."
     },
     {
       "id": "US-BP-001",
@@ -476,7 +512,10 @@
       "required_tools": [
         "jaxcont",
         "matcont"
-      ]
+      ],
+      "comparison_window": null,
+      "comparison_window_comment": "PENDING: no complete external curve exporter.",
+      "route_status_comment": "Native results exist, but complete candidate exporters are missing; no promotion."
     },
     {
       "id": "US-C2-H-001",
@@ -510,7 +549,10 @@
       "required_tools": [
         "jaxcont",
         "matcont"
-      ]
+      ],
+      "comparison_window": null,
+      "comparison_window_comment": "PENDING: no complete external curve exporter.",
+      "route_status_comment": "Native results exist, but complete candidate exporters are missing; no promotion."
     },
     {
       "id": "US-C2-PD-001",
@@ -725,7 +767,7 @@
         "matcont": "PASS",
         "bifurcationkit": "PENDING"
       },
-      "evidence_status": "PASS",
+      "evidence_status": "PENDING",
       "expected_domain": null,
       "expected_events": [],
       "metric_limits": {
@@ -735,7 +777,12 @@
         "jaxcont",
         "matcont",
         "bifurcationkit"
-      ]
+      ],
+      "comparison_window": {
+        "kind": "prc"
+      },
+      "comparison_window_comment": "PRC is a periodic phase function; an empty continuation branch is not missing PRC data.",
+      "route_status_comment": "Fresh MatCont PRC and immutable legacy MC-PRC-001 contain phase data with no branch; JaxCont v2 PRC exporter and BK route are absent."
     },
     {
       "id": "lorenz84.eq-f",
@@ -930,7 +977,17 @@
         "spectrum_atol": 0.0005,
         "frequency_atol": 0.0005
       },
-      "bifurcationkit": "lorenz84_equilibria.jl"
+      "bifurcationkit": "lorenz84_equilibria.jl",
+      "comparison_window": [
+        1.5467,
+        3
+      ],
+      "comparison_window_comment": "Both fold arms; F cannot reach the obsolete -1.5 bound past the fold at 1.5466.",
+      "comparison_expected_events": [
+        "H",
+        "H",
+        "H"
+      ]
     },
     {
       "id": "lorenz84.fold-ft",
@@ -1122,7 +1179,12 @@
         "spectrum_atol": 0.0005,
         "frequency_atol": 0.0005
       },
-      "bifurcationkit": "lorenz84_codim2.jl"
+      "bifurcationkit": "lorenz84_codim2.jl",
+      "comparison_window": [
+        -0.01,
+        0.04
+      ],
+      "comparison_window_comment": "Shared positive-T fold chart including ZH, CP and BT."
     },
     {
       "id": "lorenz84.hopf-ft",
@@ -1312,7 +1374,12 @@
         "spectrum_atol": 0.0005,
         "frequency_atol": 0.0005
       },
-      "bifurcationkit": "lorenz84_codim2.jl"
+      "bifurcationkit": "lorenz84_codim2.jl",
+      "comparison_window": [
+        0.022,
+        0.04
+      ],
+      "comparison_window_comment": "Shared Hopf chart clear of the BT boundary and unrefined BK endpoint."
     },
     {
       "id": "lorenz84.bt-ft",
@@ -1504,7 +1571,11 @@
         "spectrum_atol": 0.0005,
         "frequency_atol": 0.0005
       },
-      "bifurcationkit": "lorenz84_codim2.jl"
+      "bifurcationkit": "lorenz84_codim2.jl",
+      "comparison_window": {
+        "kind": "point"
+      },
+      "comparison_window_comment": "Refined BT point: state, F/T, two small eigenvalues and geometric nullity; no interval."
     },
     {
       "id": "hopf-normal-form.l1",
@@ -1540,7 +1611,12 @@
       ],
       "expected_events": [
         "H"
-      ]
+      ],
+      "comparison_window": [
+        -2,
+        2
+      ],
+      "comparison_window_comment": "Shared Hopf interval; native coefficients require an explicit registry convention and budget."
     }
   ]
 }

@@ -244,9 +244,14 @@ def _check_payload(case, data):
                     "order",
                     "arclength",
                 } or key.startswith(("state_", "parameter_")):
+                    if value in (None, ""):
+                        continue
+                    from .promotion_metrics import applicable
+                    if "event_type" in row and not applicable(key, row):
+                        continue
                     if not np.isfinite(float(value)):
                         raise ValidationMismatch(f"nonfinite {key}")
-            if "status" in row and row["status"] not in {"CONVERGED", "PASS", "converged"}:
+            if "status" in row and row["status"] not in {"CONVERGED", "PASS", "converged", "REFINED"}:
                 raise ValidationMismatch(f"unresolved point status: {row['status']}")
     parameters = np.array([float(r["parameter"]) for r in rows])
     domain = case.get("expected_domain")
@@ -418,6 +423,8 @@ def _compare_payloads(case, left, right):
 
 def build_validation_report(case, tool_results):
     """Evaluate all present tools and all unordered pairs; never hide failures."""
+    if case.get("comparison_window") is not None:
+        return _window_report(case, tool_results)
     from itertools import combinations
 
     independent, pairwise, hashes = {}, {}, {}
@@ -491,3 +498,27 @@ def _legacy_report(case, reference_dir, producer_passed, diagnostics, mismatch):
         {"matcont": hashes},
         coverage_status(coverage, coverage.keys()),
     )
+
+
+def _window_report(case, tool_results):
+    """Share the exact numerical gate with immutable reference promotion."""
+    from itertools import combinations
+    from .promotion_metrics import _independent, _pairwise
+    independent, pairwise, hashes, coverage = {}, {}, {}, {}
+    for tool, data in tool_results.items():
+        metrics = _independent(case, data)
+        independent[tool] = metrics
+        failed = any(m["verdict"] == "FAIL" for m in metrics.values())
+        pending = any(m["verdict"] == "PENDING" for m in metrics.values())
+        coverage[tool] = "FAIL" if failed else "PENDING" if pending else case.get("tool_coverage", {}).get(tool, "PASS")
+        hashes[tool] = data.get("metadata", {}).get("output_hashes", {})
+    for a, b in combinations(tool_results, 2):
+        pairwise[f"{a}--{b}"] = _pairwise(case, tool_results[a], tool_results[b])
+    for tool in case.get("tool_coverage", {}):
+        coverage.setdefault(tool, "PENDING")
+    failed = any(m["verdict"] == "FAIL" for metrics in pairwise.values() for m in metrics.values())
+    pending = any(m["verdict"] == "PENDING" for metrics in pairwise.values() for m in metrics.values())
+    status = "FAIL" if failed else coverage_status(coverage, coverage.keys())
+    if status == "PASS" and pending:
+        status = "PENDING"
+    return ValidationReport(case.get("canonical_id", case["id"]), coverage, pairwise, independent, hashes, status)

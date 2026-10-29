@@ -236,13 +236,14 @@ def run_adaptx_pd_switch(reference_dir=None) -> CaseResult:
 __all__ = ["run_adaptx_pd_switch"]
 
 
-def _refined_pd_event(result, problem):
+def _refined_pd_event(result, problem, window=None):
     """Public event refinement on the computed branch, using its flow modes."""
     from jaxcont.bifurcations.events import BranchPoint
     branch=result.branch
+    window = _CONTRACT['pd_window'] if window is None else window
     points=[BranchPoint(p=float(p),u=u,eigenvalues=ev,trivial_index=triv) for p,u,ev,triv in zip(branch.params,branch.states,branch.eigenvalues,branch.trivial_index)]
     detector=jc.PeriodDoubling(corrector_tol=1e-9 if problem.u0.dtype==jnp.float64 else 1e-5)
-    brackets=[(i,j,mode) for i,j,mode in detector.scan(points) if _CONTRACT['pd_window'][0] <= (points[i].p+points[j].p)/2 <= _CONTRACT['pd_window'][1]]
+    brackets=[(i,j,mode) for i,j,mode in detector.scan(points) if window[0] <= (points[i].p+points[j].p)/2 <= window[1]]
     if len(brackets)!=1:
         raise RuntimeError('Expected one native adaptx PD bracket in frozen window')
     i,j,mode=brackets[0]
@@ -274,6 +275,7 @@ def produce_adaptx_periodic(reference_dir=None):
     states=jnp.concatenate([up.branch.states[:nu][::-1],down.branch.states[1:nd]])
     params=jnp.concatenate([up.branch.params[:nu][::-1],down.branch.params[1:nd]])
     doubled=SimpleNamespace(branch=SimpleNamespace(states=states,params=params,n_valid=len(params),eigenvalues=jnp.concatenate([up.branch.eigenvalues[:nu][::-1],down.branch.eigenvalues[1:nd]]),trivial_index=jnp.concatenate([up.branch.trivial_index[:nu][::-1],down.branch.trivial_index[1:nd]]),floquet_logabs=jnp.concatenate([up.branch.floquet_logabs[:nu][::-1],down.branch.floquet_logabs[1:nd]])),events=[])
+    doubled.events = [_refined_pd_event(doubled, switched, _CONTRACT['doubled_pd_window'])]
     second=periodic_records(doubled,doubled_mesh,_adaptx_rhs,segment='doubled')
     for key in tables:
         tables[key].extend(second[key])

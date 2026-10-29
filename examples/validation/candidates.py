@@ -21,6 +21,11 @@ def write_candidate(bundle, output_dir, *, tool, driver, equation, lock=None):
     hashes = {}
     for table in ("branch", "events", "spectra"):
         rows = bundle[table]
+        if table == "events":
+            rows = [{**r, "kind": r.get("event_type") or r.get("kind"),
+                     "event_type": r.get("event_type") or r.get("kind")} for r in rows]
+            if any(not r["kind"] for r in rows):
+                raise ValueError("event row has no kind")
         name = table + ".csv"
         columns = sorted(set(_V2_COLUMNS[name]).union(*(row.keys() for row in rows)))
         with (output / name).open("w", newline="", encoding="utf-8") as stream:

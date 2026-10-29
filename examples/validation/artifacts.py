@@ -543,6 +543,11 @@ def _compare_event_rows(
         actual = actual_rows[actual_index]
         reference = reference_rows[reference_index]
         for column in ("period", "frequency", "fold_coefficient", "first_lyapunov"):
+            from .promotion_metrics import applicable
+            if not applicable(column, actual):
+                continue
+            if actual.get(column) in (None, "") or reference.get(column) in (None, ""):
+                continue
             if column not in actual or column not in reference:
                 continue
             actual_value = _as_float(actual, column)

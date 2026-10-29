@@ -103,7 +103,7 @@ def periodic_records(result, mesh, rhs, *, segment='cycle', allow_failed=False):
             continue
         nearest = int(np.argmin(np.linalg.norm(np.asarray(states)-np.asarray(e.u),axis=1)))
         row = dict(rows[nearest])
-        row.update(point_id=f'event-{i}',order=float(np.mean(e.index)) if isinstance(e.index,tuple) else nearest+.5,event_id=f'{segment}-{i}',event_type=labels[e.kind],parameter=float(e.p),period=float(e.u[-1]),status='CONVERGED',refinement_status='REFINED',bracket_lower=None,bracket_upper=None,bracket_status='unknown')
+        row.update(point_id=f'event-{i}',order=float(np.mean(e.index)) if isinstance(e.index,tuple) else nearest+.5,event_id=f'{segment}-{i}',event_type=labels[e.kind],kind=labels[e.kind],parameter=float(e.p),period=float(e.u[-1]),status='CONVERGED',refinement_status='REFINED',bracket_lower=None,bracket_upper=None,bracket_status='unknown')
         eu=np.asarray(e.u);left=eu[:mesh.ntst*n].reshape(mesh.ntst,n);all_states=eu[:-1].reshape(-1,n)
         for j in range(n):
             row[f'state_{j}_min']=float(all_states[:,j].min());row[f'state_{j}_max']=float(all_states[:,j].max())

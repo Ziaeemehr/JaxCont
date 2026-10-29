@@ -64,8 +64,7 @@ def _equilibrium(x64):
         result = jc.continuation(jc.bif_problem(model.lorenz84_rhs, u0=seed, p0=3., args=model.FIXED_ARGS),
             p_span=(3., endpoint), settings=jc.ContinuationPar(ds=.002, ds_max=.05,
             max_steps=200, newton_tol=1e-12, theta=1.), events=[jc.Fold(), jc.Hopf()])
-        rows = [_row(u, p, .04, label, i, p) for i, (u, p) in enumerate(zip(result.branch.states, result.branch.params))
-                if -1.5 <= float(p) <= 3.]
+        rows = [_row(u, p, .04, label, i, p) for i, (u, p) in enumerate(zip(result.branch.states, result.branch.params))]
         branches.extend(rows)
         for e in result.events:
             if not (-1.5 <= float(e.p) <= 3):
