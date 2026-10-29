@@ -8,25 +8,37 @@
   ],
   "defaults": {
     "controls": {
-      "newton_atol": 1e-9,
+      "newton_atol": 1e-09,
       "newton_rtol": 0.0,
       "newton_max_iter": 25,
-      "event_atol": 1e-7,
+      "event_atol": 1e-07,
       "ds": 0.01,
-      "ds_min": 1e-5,
+      "ds_min": 1e-05,
       "ds_max": 0.02,
       "adaptive": true,
       "max_steps": 1000,
       "state_weight": "1/n_state",
       "parameter_weight": 1.0,
-      "stability_every_step": true
+      "stability_every_step": true,
+      "newton_criterion": "augmented-residual-2norm"
     },
-    "stages": ["startup", "first_call", "compile", "warm", "end_to_end"],
+    "stages": [
+      "startup",
+      "first_call",
+      "compile",
+      "warm",
+      "end_to_end"
+    ],
     "sampling": {
       "first_calls": 5,
       "warm_repetitions": 20,
       "untimed_warmups": 3,
-      "batch_sizes": [1, 8, 32, 128],
+      "batch_sizes": [
+        1,
+        8,
+        32,
+        128
+      ],
       "timeout_seconds": 1800.0
     }
   },
@@ -35,73 +47,236 @@
       "benchmark_id": "cubic.eq-fold/fixed",
       "canonical_id": "cubic.eq-fold",
       "step_mode": "fixed",
-      "controls": {"ds": 0.01, "ds_min": 0.01, "ds_max": 0.01, "adaptive": false, "direction": 1, "bounds": [-1.0, 1.0]},
-      "stages": ["startup", "first_call", "compile", "warm", "end_to_end", "batched"],
-      "accuracy_limits": {"parameter_atol": 0.0005, "state_atol": 0.0002, "residual_atol": 2e-05, "fold_coefficient_atol": 0.0005, "spectrum_atol": 0.0005}
+      "controls": {
+        "ds": 0.01,
+        "ds_min": 0.01,
+        "ds_max": 0.01,
+        "adaptive": false,
+        "direction": 1,
+        "bounds": [
+          -1.0,
+          1.0
+        ]
+      },
+      "stages": [
+        "startup",
+        "first_call",
+        "compile",
+        "warm",
+        "end_to_end",
+        "batched"
+      ],
+      "accuracy_limits": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 2e-05,
+        "fold_coefficient_atol": 0.0005,
+        "spectrum_atol": 0.0005
+      }
     },
     {
       "benchmark_id": "cubic.eq-fold/adaptive",
       "canonical_id": "cubic.eq-fold",
       "step_mode": "adaptive",
-      "controls": {"direction": 1, "bounds": [-1.0, 1.0]},
-      "accuracy_limits": {"parameter_atol": 0.0005, "state_atol": 0.0002, "residual_atol": 2e-05, "fold_coefficient_atol": 0.0005, "spectrum_atol": 0.0005}
+      "controls": {
+        "direction": 1,
+        "bounds": [
+          -1.0,
+          1.0
+        ]
+      },
+      "accuracy_limits": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 2e-05,
+        "fold_coefficient_atol": 0.0005,
+        "spectrum_atol": 0.0005
+      }
     },
     {
       "benchmark_id": "radial.cycle-floquet/fixed",
       "canonical_id": "radial.cycle-floquet",
       "step_mode": "fixed",
-      "controls": {"ds": 0.01, "ds_min": 0.01, "ds_max": 0.01, "adaptive": false, "direction": 1, "bounds": [0.5, 1.5], "ntst": 10, "ncol": 4},
-      "accuracy_limits": {"parameter_atol": 0.0005, "period_atol": 0.005, "radius_atol": 0.005, "multiplier_atol": 0.005, "residual_atol": 2e-05}
+      "controls": {
+        "ds": 0.01,
+        "ds_min": 0.01,
+        "ds_max": 0.01,
+        "adaptive": false,
+        "direction": 1,
+        "bounds": [
+          0.5,
+          1.5
+        ],
+        "ntst": 10,
+        "ncol": 4
+      },
+      "accuracy_limits": {
+        "parameter_atol": 0.0005,
+        "period_atol": 0.005,
+        "radius_atol": 0.005,
+        "multiplier_atol": 0.005,
+        "residual_atol": 2e-05
+      }
     },
     {
       "benchmark_id": "radial.cycle-floquet/adaptive",
       "canonical_id": "radial.cycle-floquet",
       "step_mode": "adaptive",
-      "controls": {"direction": 1, "bounds": [0.5, 1.5], "ntst": 10, "ncol": 4},
-      "accuracy_limits": {"parameter_atol": 0.0005, "period_atol": 0.005, "radius_atol": 0.005, "multiplier_atol": 0.005, "residual_atol": 2e-05}
+      "controls": {
+        "direction": 1,
+        "bounds": [
+          0.5,
+          1.5
+        ],
+        "ntst": 10,
+        "ncol": 4
+      },
+      "accuracy_limits": {
+        "parameter_atol": 0.0005,
+        "period_atol": 0.005,
+        "radius_atol": 0.005,
+        "multiplier_atol": 0.005,
+        "residual_atol": 2e-05
+      }
     },
     {
       "benchmark_id": "lorenz84.eq-f/fixed",
       "canonical_id": "lorenz84.eq-f",
       "step_mode": "fixed",
-      "controls": {"ds": 0.01, "ds_min": 0.01, "ds_max": 0.01, "adaptive": false, "direction": -1, "bounds": [-1.5, 3.0]},
-      "stages": ["startup", "first_call", "compile", "warm", "end_to_end", "batched"],
-      "accuracy_limits": {"parameter_atol": 0.0005, "state_atol": 0.0002, "residual_atol": 1e-07, "spectrum_atol": 0.0005, "frequency_atol": 0.0005}
+      "controls": {
+        "ds": 0.01,
+        "ds_min": 0.01,
+        "ds_max": 0.01,
+        "adaptive": false,
+        "direction": -1,
+        "bounds": [
+          -1.5,
+          3.0
+        ]
+      },
+      "stages": [
+        "startup",
+        "first_call",
+        "compile",
+        "warm",
+        "end_to_end",
+        "batched"
+      ],
+      "accuracy_limits": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 1e-07,
+        "spectrum_atol": 0.0005,
+        "frequency_atol": 0.0005
+      }
     },
     {
       "benchmark_id": "lorenz84.eq-f/adaptive",
       "canonical_id": "lorenz84.eq-f",
       "step_mode": "adaptive",
-      "controls": {"direction": -1, "bounds": [-1.5, 3.0]},
-      "accuracy_limits": {"parameter_atol": 0.0005, "state_atol": 0.0002, "residual_atol": 1e-07, "spectrum_atol": 0.0005, "frequency_atol": 0.0005}
+      "controls": {
+        "direction": -1,
+        "bounds": [
+          -1.5,
+          3.0
+        ]
+      },
+      "accuracy_limits": {
+        "parameter_atol": 0.0005,
+        "state_atol": 0.0002,
+        "residual_atol": 1e-07,
+        "spectrum_atol": 0.0005,
+        "frequency_atol": 0.0005
+      }
     },
     {
       "benchmark_id": "adaptx.cycle-pd-switch/fixed",
       "canonical_id": "adaptx.cycle-pd-switch",
       "step_mode": "fixed",
-      "controls": {"ds": 0.01, "ds_min": 0.01, "ds_max": 0.01, "adaptive": false, "direction": -1, "bounds": [0.55, 0.9], "ntst": 20, "ncol": 4},
-      "accuracy_limits": {"parameter_atol": 0.002, "period_atol": 0.005, "residual_atol": 2e-05}
+      "controls": {
+        "ds": 0.01,
+        "ds_min": 0.01,
+        "ds_max": 0.01,
+        "adaptive": false,
+        "direction": -1,
+        "bounds": [
+          0.55,
+          0.9
+        ],
+        "ntst": 20,
+        "ncol": 4
+      },
+      "accuracy_limits": {
+        "parameter_atol": 0.002,
+        "period_atol": 0.005,
+        "residual_atol": 2e-05
+      }
     },
     {
       "benchmark_id": "adaptx.cycle-pd-switch/adaptive",
       "canonical_id": "adaptx.cycle-pd-switch",
       "step_mode": "adaptive",
-      "controls": {"direction": -1, "bounds": [0.55, 0.9], "ntst": 20, "ncol": 4},
-      "accuracy_limits": {"parameter_atol": 0.002, "period_atol": 0.005, "residual_atol": 2e-05}
+      "controls": {
+        "direction": -1,
+        "bounds": [
+          0.55,
+          0.9
+        ],
+        "ntst": 20,
+        "ncol": 4
+      },
+      "accuracy_limits": {
+        "parameter_atol": 0.002,
+        "period_atol": 0.005,
+        "residual_atol": 2e-05
+      }
     },
     {
       "benchmark_id": "torbpc.cycle-lpc-pd-ns/fixed",
       "canonical_id": "torbpc.cycle-lpc-pd-ns",
       "step_mode": "fixed",
-      "controls": {"ds": 0.005, "ds_min": 0.005, "ds_max": 0.005, "adaptive": false, "direction": -1, "bounds": [-0.75, -0.57], "ntst": 25, "ncol": 4},
-      "accuracy_limits": {"parameter_atol": 0.002, "period_atol": 0.005, "extrema_atol": 0.005, "multiplier_atol": 0.005, "residual_atol": 1e-07}
+      "controls": {
+        "ds": 0.005,
+        "ds_min": 0.005,
+        "ds_max": 0.005,
+        "adaptive": false,
+        "direction": -1,
+        "bounds": [
+          -0.75,
+          -0.57
+        ],
+        "ntst": 25,
+        "ncol": 4
+      },
+      "accuracy_limits": {
+        "parameter_atol": 0.002,
+        "period_atol": 0.005,
+        "extrema_atol": 0.005,
+        "multiplier_atol": 0.005,
+        "residual_atol": 1e-07
+      }
     },
     {
       "benchmark_id": "torbpc.cycle-lpc-pd-ns/adaptive",
       "canonical_id": "torbpc.cycle-lpc-pd-ns",
       "step_mode": "adaptive",
-      "controls": {"ds": 0.005, "direction": -1, "bounds": [-0.75, -0.57], "ntst": 25, "ncol": 4},
-      "accuracy_limits": {"parameter_atol": 0.002, "period_atol": 0.005, "extrema_atol": 0.005, "multiplier_atol": 0.005, "residual_atol": 1e-07}
+      "controls": {
+        "ds": 0.005,
+        "direction": -1,
+        "bounds": [
+          -0.75,
+          -0.57
+        ],
+        "ntst": 25,
+        "ncol": 4
+      },
+      "accuracy_limits": {
+        "parameter_atol": 0.002,
+        "period_atol": 0.005,
+        "extrema_atol": 0.005,
+        "multiplier_atol": 0.005,
+        "residual_atol": 1e-07
+      }
     }
   ]
 }

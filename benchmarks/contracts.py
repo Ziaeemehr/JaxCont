@@ -52,6 +52,10 @@ class ResolvedControls:
     stability_every_step: bool
     ntst: Optional[int] = None
     ncol: Optional[int] = None
+    # What the Newton tolerance bounds. JaxCont: the 2-norm of the augmented
+    # residual (equations plus arclength constraint); MatCont also bounds the
+    # step (VarTolerance). An equal number under another criterion differs.
+    newton_criterion: Optional[str] = None
 
 
 def _normalized(value: Any) -> Any:
