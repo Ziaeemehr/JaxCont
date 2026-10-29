@@ -26,7 +26,7 @@ TOOLS = {"matcont": "MatCont", "bifurcationkit": "BifurcationKit"}
 # Comparison page per system (prefix of the canonical ID).
 GALLERY = {"cubic": "plot_cubic", "vanderpol": "plot_vanderpol", "adaptx": "plot_adaptx",
            "radial": "plot_radial", "torbpc": "plot_torbpc", "lorenz84": "plot_lorenz84"}
-GALLERY_BY_ID = {"adaptx.prc": "plot_prc_shooting"}
+GALLERY_BY_ID: dict[str, str] = {}
 
 
 def bundles(case: dict) -> list[str]:
@@ -114,8 +114,11 @@ The default test suite and the docs never call MATLAB or Julia; they read
 the committed bundles. To re-run the comparisons:
 
 ```bash
-JAX_PLATFORMS=cpu python3 -m examples.validation.run_validation
+JAX_ENABLE_X64=1 JAX_PLATFORMS=cpu python3 -m examples.validation.run_validation
 ```
+
+Float64 is required for the Lorenz-84 cases. The command exits with status 1
+while `torbpc.cycle-lpc-pd-ns` fails.
 
 Regenerating a reference bundle is opt-in and needs `MATLAB_BIN` and
 `MATCONT_ROOT` (MatCont) or `JULIA_BIN` (BifurcationKit); see

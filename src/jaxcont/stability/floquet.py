@@ -38,7 +38,9 @@ class ProductFloquet:
 
     ``eigen_solver`` (a matrix ``EigenSolver``) fixes the multiplier order and
     the derivative path. Forming ``Phi`` loses multipliers much smaller than
-    the largest one to roundoff. Status is false only for non-finite values.
+    the largest one to roundoff. Status is false for non-finite values and when
+    no eigenvector resolves the flow direction (the trivial multiplier cannot
+    be identified); eager public calls then raise ``RuntimeError``.
     """
 
     eigen_solver: EigenSolver = DenseEigen()

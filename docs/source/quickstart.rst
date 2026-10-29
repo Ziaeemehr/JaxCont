@@ -100,8 +100,9 @@ Forward mode (``jax.jacfwd``, ``jax.jvp``) works through a whole
 continuation with either loop option. Reverse mode (``jax.grad``) needs
 ``ContinuationPar(loop="scan")``, a bounded ``lax.scan``; through the default
 ``loop="while"`` it raises ``ValueError``. See :doc:`migration` and
-:doc:`transformations`; :doc:`auto_tutorials/plot_08_differentiable`
-demonstrates both paths and a gradient-based inverse-design loop.
+:doc:`transformations`. :doc:`auto_tutorials/plot_08_differentiable`
+differentiates an isolated fold solve (``jc.fold_parameter``); the
+reverse-mode example through a whole continuation is in :doc:`migration`.
 
 Precision
 ---------
@@ -114,8 +115,9 @@ from JAX or ``jaxcont``:
    import jax
    jax.config.update("jax_enable_x64", True)
 
-Single precision (``float32``, the JAX default) is faster and uses less
-memory, but its roundoff limits how tightly Newton's method can converge,
+Single precision (``float32``, the JAX default) uses half the memory and is
+usually faster on GPUs; JaxCont has no reviewed float32-versus-float64 timing,
+so measure your own workload. Its roundoff limits how tightly Newton's method can converge,
 so residuals stall around ``1e-6`` and bifurcation points are located less
 accurately. JaxCont never changes this setting itself; the choice is yours.
 

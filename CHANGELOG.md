@@ -149,9 +149,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (the `|Im|` threshold between real and complex) defaults to `None`, resolved to
   `sqrt(default_tol)` of the spectrum's dtype. PD/NS refinement re-corrects the final
   bracket midpoint onto the collocation residual and stores the critical multiplier in
-  `info["multiplier"]`. A Hopf curve that ends with `|omega| < 10 * default_tol` and no
-  sign change records a `BogdanovTakens` entry with `reason="curve_terminated"` in
-  `rejected_events`.
+  `info["multiplier"]`. A Hopf curve that stops early (not `reached_end`) with
+  `|omega|` below the chart's termination threshold and no sign change records a
+  `BogdanovTakens` entry with `reason="curve_terminated"` in `rejected_events` (threshold
+  in the Fixed entry below).
 - Event deduplication no longer merges on parameter distance alone. Two validated hits of
   one kind merge only when their brackets are adjacent and their joint `(u, p)` distance is
   at most `sqrt(default_tol(dtype)) * (1 + max(norm(x_i), norm(x_j)))`,

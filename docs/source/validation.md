@@ -32,7 +32,7 @@ under "Validation gallery" show the figures and tables for each system.
 | `US-BVP-001` | General boundary-value-problem setup template | UNSUPPORTED | — | — |
 | `US-HOM-001` | Homoclinic continuation | UNSUPPORTED | — | — |
 | `US-HET-001` | Heteroclinic continuation setup template | UNSUPPORTED | — | — |
-| `adaptx.prc` | PRC calculation (adaptx Hopf limit cycle); dPRC computed but not MatCont-cross-checked | PENDING | MatCont: legacy (v1) bundle | {doc}`auto_validation/plot_prc_shooting` |
+| `adaptx.prc` | PRC calculation (adaptx Hopf limit cycle); dPRC computed but not MatCont-cross-checked | PENDING | MatCont: legacy (v1) bundle | {doc}`auto_validation/plot_adaptx` |
 | `lorenz84.eq-f` | Extended Lorenz-84 eq-f | PASS | MatCont 7.6: PASS; BifurcationKit 0.8.8: PASS | {doc}`auto_validation/plot_lorenz84` |
 | `lorenz84.fold-ft` | Extended Lorenz-84 fold-ft | PASS | MatCont 7.6: PASS; BifurcationKit 0.8.8: PASS | {doc}`auto_validation/plot_lorenz84` |
 | `lorenz84.hopf-ft` | Extended Lorenz-84 hopf-ft | PASS | MatCont 7.6: PASS; BifurcationKit 0.8.8: PASS | {doc}`auto_validation/plot_lorenz84` |
@@ -85,8 +85,11 @@ The default test suite and the docs never call MATLAB or Julia; they read
 the committed bundles. To re-run the comparisons:
 
 ```bash
-JAX_PLATFORMS=cpu python3 -m examples.validation.run_validation
+JAX_ENABLE_X64=1 JAX_PLATFORMS=cpu python3 -m examples.validation.run_validation
 ```
+
+Float64 is required for the Lorenz-84 cases. The command exits with status 1
+while `torbpc.cycle-lpc-pd-ns` fails.
 
 Regenerating a reference bundle is opt-in and needs `MATLAB_BIN` and
 `MATCONT_ROOT` (MatCont) or `JULIA_BIN` (BifurcationKit); see
