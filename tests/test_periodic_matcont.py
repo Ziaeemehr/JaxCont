@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import numpy as np
 import pytest
 from examples.validation.artifacts import load_bundle
 from examples.validation.run_validation import main
@@ -16,11 +17,13 @@ def test_adaptx_pd_candidate_has_base_and_doubled_branches():
     path=output/'adaptx.cycle-pd-switch/matcont'
     bundle=load_bundle(path,case_id='adaptx.cycle-pd-switch',tool='matcont')
     assert {r['segment_id'] for r in bundle['branch']}=={'base','doubled'}
-    assert abs(bundle['metadata']['period_ratio']-2)<.005
+    # Measured |error| x32/x64: 0 / 0; native float64 seed copies exactly twice the period.
+    assert abs(bundle['metadata']['period_ratio']-2)<32 * np.finfo(float).eps
     assert max(float(r['half_period_difference']) for r in bundle['branch'] if r['segment_id']=='doubled')>1e-3
     event=next(e for e in bundle['events'] if e['event_type']=='PD' and e['segment_id']=='base')
     modes=[complex(float(m['real']),float(m['imag'])) for m in bundle['spectra'] if m['event_id']==event['event_id']]
-    assert min(abs(m+1) for m in modes)<1e-5
+    # Measured |error| x32/x64: 6.00e-9 / 6.00e-9; native MatCont TestTolerance=1e-7.
+    assert min(abs(m+1) for m in modes)<1e-7
     assert (path/'orbits.csv').is_file()
 
 

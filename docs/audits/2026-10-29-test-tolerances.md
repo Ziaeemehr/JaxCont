@@ -192,27 +192,66 @@ Codex continued with the files listed below until its quota guard stopped it at 
 
 Total: 356 assertions in 39 files.
 
+## Part 3
+
+Continued through the 20 files in the previous **Not yet audited** list, in its recorded order. Read every assertion, including marked tests and helpers. CPU measurements used `~/envs/jaxcont` and separate `JAX_ENABLE_X64=0` / `=1` processes. Scratch scripts, operand logs and pytest logs are in `/tmp/jaxcont-tol-part3/`; no instrumentation was added to the repository. Maximum absolute errors below include all three analytic sample inputs, with host float64 subtraction against the supplied decimal references. `eps_J`, `eps_Py` and `_POINT_ATOL` retain the definitions above. No references, inputs, assertions, skips or xfails were changed.
+
+### Findings
+
+| ID | Severity | File/line | Evidence | Fix | Status |
+|---|---|---|---|---|---|
+| T01 | Minor | [tests/test_solver_wiring.py:140](../../tests/test_solver_wiring.py#L140) | SUSPECT reference: the comment explicitly says these parameters were captured from engine output and re-captured after seed correction. Measured error against the snapshot is `0 / 1.43e-7` (x32/x64); `atol=1e-6` also implicitly includes `rtol=1e-5`. This verifies reproduction of an old output, rather than independently deriving the step schedule. | Derive the parameter schedule from the pinned step adaptation rules and roundoff budget; keep this assertion unchanged during the audit. No solver defect established. | open |
+| T02 | Minor | [tests/test_solver_wiring.py:141](../../tests/test_solver_wiring.py#L141) | SUSPECT reference: the expected states are explicitly captured solver outputs, errors `0 / 1.74e-11`. Analytically the followed branch is `u=0`; observed maximum state magnitude is `3.08e-7` in both runs, consistent with Newton `1e-6` and slope `p>=0.5`. The snapshot comparison does not independently establish equilibrium correctness. | Add an analytic branch or defining-residual check with the Newton/conditioning budget in a follow-up; preserve the existing assertion here. No solver defect established. | open |
+| T03 | Minor | [tests/test_solver_wiring.py:190](../../tests/test_solver_wiring.py#L190) | SUSPECT reference: public continuation repeats the same output-captured float32 parameter snapshot as T01; measured error `0 / 1.43e-7`, with `atol=1e-6` plus implicit `rtol=1e-5`. | Independently derive the pinned schedule, or compare the public entry point with the lower-level solver for the intended wiring contract; preserve this assertion here. | open |
+
+### Tightened
+
+| File/line | Old | New | Measured x32 | Measured x64 |
+|---|---|---|---|---|
+| [tests/test_periodic_matcont.py:21](../../tests/test_periodic_matcont.py#L21) | `.005` | `32 * eps_Py` (`7.11e-15`) | 0 | 0 |
+| [tests/test_periodic_matcont.py:26](../../tests/test_periodic_matcont.py#L26) | `1e-5` | `1e-7` | 6.00e-9 | 6.00e-9 |
+
+Both bounds are LOOSE in the original test. MatCont always computes in native float64, independently of the JAX precision flag. The period comparison concerns the **first seed**, not a later independently corrected orbit: MatCont 7.6 `init_PD_LC` sets `lds.T = 2*s.data.T`, `new_mesh` retains the period, and `cont` stores this seed without correction when the supplied tangent is nonempty. Thus the analytic ratio is two with only a roundoff budget, not an `h^p` collocation error. The PD multiplier is compared with the defining multiplier `-1`; `1e-7` is the producer's actual `TestTolerance`, and is more than 16 times the measured error. The mesh is 20 intervals, degree four, doubled to 40 intervals. Fresh native candidates were generated separately under both JAX precision settings with the recorded MATLAB R2024a / MatCont 7.6 installation; outputs stayed under `/tmp`. The final test function, including all its assertions, was evaluated against each fresh candidate with only regeneration/output routing replaced in the scratch harness. Both tightened sites passed in both environments; no numeric assertion required reverting.
+
+### Checked OK
+
+- `tests/test_reference_systems.py::test_lorenz84_rhs_matches_independent_samples` — four unchanged assertion sites, each measured over all three parametrizations. The RHS and `(F,T)` RHS each have maximum error `1.22e-7 / 2.78e-17`, versus absolute bound `4e-7`. The analytic Jacobian and AD Jacobian each have error `3.81e-8 / 5.55e-17`, versus bound `2e-7`. These references follow by hand substitution into the polynomial model and its analytic derivatives; no mesh or Newton budget is involved. The bounds are about 3.3 and 5.2 times the float32 errors, respectively, and consistent with arithmetic roundoff on states of scale 0–5. They are **OK**, even though the x64 errors are much smaller; the LOOSE criterion requires more than 100 times the error in **both** precisions. The existing bounds are smaller than 10 times the errors, so no change could simultaneously tighten them and introduce a 10-times margin.
+- `tests/test_periodic_matcont.py::test_adaptx_pd_candidate_has_base_and_doubled_branches` — retained half-period difference lower bound `>1e-3`, measured maximum normalized difference `0.5636861328952407 / 0.5636861328952407` along the doubled branch. This is a nondegeneracy check: a repeated base orbit has zero difference, and the threshold separates the doubled orbit from numerical noise. It is a required minimum signal, not an upper bound on approximation error; decreasing it would weaken the test. Counted as one OK numeric threshold site. The two accuracy bounds in the same test were tightened above.
+
+**Part 3 verdict counts (assertion sites): 10 audited; 2 LOOSE tightened; 5 OK; 3 SUSPECT. All 20 listed files inspected; none left.**
+
+The following files, in their original inventory order, contain no numeric-tolerance assertion sites: `tests/test_examples_migration_map.py`, `tests/test_external_runners.py`, `tests/test_gallery_sources.py`, `tests/test_gpu_smoke.py`, `tests/test_legacy_surface.py`, `tests/test_lorenz84_cli.py`, `tests/test_lorenz84_three_tool.py`, `tests/test_offline_examples.py`, `tests/test_validation_figures.py`, `tests/test_validation_reports.py`, `tests/test_validation_schema.py`, `tests/__init__.py`, `tests/test_benchmark_reporting.py`, `tests/test_installation.py`, `tests/test_solver_protocols.py`, `tests/test_taxonomy.py`, `tests/test_viz_prc.py`. Their count/shape/type, exact identity, finite-value, schema, metadata, status and string assertions were inspected. Fixture tolerances passed into report builders are contract inputs, rather than assertions comparing a computed error against an expected value. In particular, schema verification's `max_numeric_error > 0` checks detection of an intentionally nonzero perturbation; the bootstrap test checks interval containment and nonzero width against the sample median, without a numeric tolerance. Neither is a hidden accuracy assertion. GPU tests have no numeric-tolerance assertions; no GPU was used.
+
+### Verification
+
+The requested commands used `source ~/envs/jaxcont/bin/activate`, `JAX_PLATFORMS=cpu`, and `python -m pytest -q -n 4 tests` in each precision. A reporting-only plugin outside the repository supplied totals despite double-quiet output; it did not change selection or assertions. Repository defaults exclude slow/GPU/MATLAB/Julia tests, so the separately measured real MatCont candidates also verify the tightened assertions that the default gate deselects.
+
+Intermediate full-suite results before another concurrent production fix:
+
+| Precision | Final pytest summary |
+|---|---|
+| `JAX_ENABLE_X64=0` (full retry) | **943 passed, 3 failed, 1 skipped**; exit 1 |
+| `JAX_ENABLE_X64=1` | **945 passed, 2 failed**; exit 1 |
+
+The final float32 retry also timed out in `tests/test_matcont_visualization.py::test_gallery_example_runs_from_outside_repository_root[plot_torbpc.py]`: the gallery subprocess exceeded its existing 900-second timeout under high observed host load. No timeout was extended and no assertion was changed. The two gate runs overlapped while checking the transient first-run CLI failure. Final runs collected 947 tests versus 945 in the first float32 run, another indication that the workspace changed concurrently. Logs: `/tmp/jaxcont-tol-part3/full-0.log`, `full-retry-0.log`, and `full-1.log`.
+
+The first float32 run reported **943 passed, 1 failed, 1 skipped**. Its failure was `tests/test_matcont_suite.py::test_offline_cli_validates_supported_reference_case` at line 685: the subprocess returned `FAIL MC-EQ-001: 'NoneType' object is not callable`. Direct validation then passed, and the identical test passed in isolated `-n 4` runs in both precisions. This transient failure did not involve a tolerance.
+
+A concurrent production edit to `src/jaxcont/bifurcations/events.py` was observed with modification time `2026-10-29 16:15:15 +0100` during this audit; the audit made no source edits. A full float32 retry exposed `test_bifurcations.py::test_failed_refine_not_in_events` (the compiled path bypasses the patched `fold_point`) and `test_refine_outside_bracket_rejected` (a three-argument mock is called with four positional arguments at `events.py:148`). These are nonnumeric gate failures outside the requested audit inventory. Neither those tests nor production code was edited to make verification pass. They are separate from the three numeric-reference SUSPECT findings above.
+
+A subsequent concurrent edit to `events.py` at `16:57:48 +0100` changed the solver dispatch and passed `args` by keyword. Both wiring tests then passed in isolated checks in both precisions. The full gates were repeated serially against that revision to avoid overlap between the audit's suites.
+
+**Final verification:**
+
+| Precision | Final pytest summary |
+|---|---|
+| `JAX_ENABLE_X64=0` | **946 passed, 1 skipped**; exit 0 |
+| `JAX_ENABLE_X64=1` | **947 passed**; exit 0 |
+
+Logs: `/tmp/jaxcont-tol-part3/final-0.log` and `final-1.log`. Both commands exited **0**. **All two tightened assertion sites passed in both precision environments; none required reverting.** The native MatCont checks were verified separately because the full-suite marker defaults deselect them. Final review confirmed eight assertions retained in the edited periodic file, with exactly two changed assertion sites; the Python file parses, and both edited files have no trailing whitespace. The observed `events.py` SHA-256 remained `49cf0dde0e3f82ce282287826b6e63b7e39244298b6a62acbaf84435d581ff47` through the final serial verification.
+
+The audit edited only this report and `tests/test_periodic_matcont.py`; git, `src/`, `tests/test_loop1_audit_gaps.py`, `/tmp/jaxcont-loop2`, and `docs/audits/2026-10-18-loop-2.md` were left untouched by this work. No scratch code was placed in the repository.
+
 ## Not yet audited
 
-Not reached before the quota stop (some may hold no numeric tolerances):
-
-- `tests/test_examples_migration_map.py`
-- `tests/test_external_runners.py`
-- `tests/test_gallery_sources.py`
-- `tests/test_gpu_smoke.py`
-- `tests/test_legacy_surface.py`
-- `tests/test_lorenz84_cli.py`
-- `tests/test_lorenz84_three_tool.py`
-- `tests/test_offline_examples.py`
-- `tests/test_periodic_matcont.py`
-- `tests/test_reference_systems.py`
-- `tests/test_solver_wiring.py`
-- `tests/test_validation_figures.py`
-- `tests/test_validation_reports.py`
-- `tests/test_validation_schema.py`
-- `tests/__init__.py`
-- `tests/test_benchmark_reporting.py`
-- `tests/test_installation.py`
-- `tests/test_solver_protocols.py`
-- `tests/test_taxonomy.py`
-- `tests/test_viz_prc.py`
+None.
