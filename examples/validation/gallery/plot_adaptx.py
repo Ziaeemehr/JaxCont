@@ -1,6 +1,6 @@
 r"""
-adaptx: Hopf and phase response
-===============================
+adaptx: Hopf, phase response and period doubling
+=================================================
 
 The system
 ----------
@@ -13,7 +13,10 @@ MatCont's adaptive-control test system (``TestSystems/adaptx.m``) has state
    \dot z=-\alpha z-\beta y-x+x^2.
 
 The equilibrium computation starts at the origin. The PRC uses the
-converged alpha and period recorded by the committed MatCont bundle.
+converged alpha and period recorded by the committed MatCont bundle. The
+last section follows the cycle born at the Hopf point down to its first
+period doubling and switches onto the doubled branch, against MatCont and
+BifurcationKit.
 """
 
 # %%
@@ -43,6 +46,7 @@ import jaxcont as jc
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 from examples.validation.reporting import make_report, save_checked_figure
+from examples.validation.cases.python_cases.pd_switch import run_adaptx_pd_three_tool
 from examples.validation.visualize import ReportTable, render_comparison, summarize_report
 import examples.validation as validation_package
 reference_dir = Path(validation_package.__file__).resolve().parent / "reference"
@@ -140,6 +144,28 @@ for label, case_result in [("hopf", hopf_result), ("prc", prc_result)]:
         save_checked_figure(figure, report, options.output_dir / f"plot_adaptx_{label}_{index}.png")
 
 # %%
+# Period doubling and branch switching
+# ------------------------------------
+# What to look for: the limit cycle born at the Hopf point (alpha = 1) grows
+# as alpha decreases. Near alpha = 0.63 one real Floquet multiplier passes
+# through -1 (PD): the cycle loses stability and a cycle of twice the period
+# appears. JaxCont locates the PD point, switches onto the doubled branch
+# (period about 12.7, twice the base period) and continues it to its own PD
+# near alpha = 0.58, the next step of the cascade. The overlay shows
+# amplitude, period and the nontrivial multipliers (drawn as points, since
+# modes are not tracked across samples in the bundles); the error panels
+# compare each pair of tools sheet by sheet on the sparser tool's samples.
+# The base and doubled branches are computed by ``run_adaptx_pd_switch`` in
+# ``examples/validation/cases/python_cases/pd_switch.py``: collocation
+# continuation of the cycle, the ``PeriodDoubling`` event, and
+# ``jc.branch_switch_pd``.
+
+pd_case = run_adaptx_pd_three_tool()  # reads the reviewed MatCont PD bundle
+pd_report = make_report(pd_case, reference_dir)
+for index, figure in enumerate(render_comparison(pd_case, pd_report, reference_dir)):
+    save_checked_figure(figure, pd_report, options.output_dir / f"plot_adaptx_pd_{index}.png")
+
+# %%
 # Quantitative summary
 # --------------------
 # Both tables read measured values and unchanged limits from the reports.
@@ -153,13 +179,21 @@ ReportTable(hopf_report)
 ReportTable(prc_report)
 
 # %%
+# The period-doubling report:
+
+ReportTable(pd_report)
+
+# %%
 # Takeaway
 # --------
 
 print(summarize_report(hopf_report))
 print(summarize_report(prc_report))
+print(summarize_report(pd_report))
 
 # %%
 # The Hopf and iPRC reports quantify agreement separately, preserving phase
 # alignment and unit conversion. JaxCont's dPRC is a parameter sensitivity;
-# this page makes no MatCont cross-validation claim for that quantity.
+# this page makes no MatCont cross-validation claim for that quantity. The
+# period-doubling report compares both branches and both PD points across all
+# three tools, so the switch is checked to land on the same doubled cycle.

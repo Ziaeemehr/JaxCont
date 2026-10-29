@@ -148,6 +148,11 @@ def make_report(result, reference_dir):
             ref_parameters = [float(r['parameter']) for r in csv.DictReader(handle)]
         domain = {'jaxcont_parameter': [float(parameters.min()), float(parameters.max())],
                   'matcont_parameter': [min(ref_parameters), max(ref_parameters)]}
+        # Same rule as the three-tool path: a declared window clips each range.
+        bounds = next((c.get("comparison_window") for c in load_registry()["cases"]
+                       if c["id"] == result.case_id), None)
+        if isinstance(bounds, list):
+            domain = {k: [max(lo, bounds[0]), min(hi, bounds[1])] for k, (lo, hi) in domain.items()}
     return ValidationReport(
         result.case_id,
         "PASS" if validation.passed else "FAIL",

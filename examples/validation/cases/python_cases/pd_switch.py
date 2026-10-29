@@ -255,10 +255,10 @@ def _refined_pd_event(result, problem, window=None):
     return hit
 
 
-def produce_adaptx_periodic(reference_dir=None):
+def produce_adaptx_periodic(reference_dir=None, result=None):
     """Fresh base, PD and doubled-branch tables; external evidence is optional."""
     from .periodic_checks import periodic_records, mesh_refinement
-    result=run_adaptx_pd_switch(reference_dir)
+    result=run_adaptx_pd_switch(reference_dir) if result is None else result
     a=result.artifacts; mesh=a['mesh']; switched=a['switched_problem']
     from types import SimpleNamespace
     refined=_refined_pd_event(a['base_result'],a['base_problem'])
@@ -288,3 +288,12 @@ def produce_adaptx_periodic(reference_dir=None):
     tables['metadata'].update(runtime_version=platform.python_version(),package_versions={'JaxCont':jc.__version__,'JAX':jax.__version__},parameter_order=['alpha','beta'],scaling={'time':'original','metric':'theta=1 Euclidean collocation coordinates'},seeds={'alpha':float(a['base_problem'].p0),'beta':1,'method':'Hopf direction harmonic balance'},mesh={'ntst':mesh.ntst,'ncol':mesh.ncol,'doubled_ntst':doubled_mesh.ntst},resolved_controls={k:_CONTRACT[k] for k in ('ds','ds_min','ds_max','max_steps')},solver_strategies={'method':'JaxCont PseudoArclength','event_selection':'real Floquet -1 crossing and frozen window'})
     tables['metadata']['resolved_controls'].update(newton_atol=1e-5,event_atol=1e-7,event_corrector_atol=1e-9 if a['base_problem'].u0.dtype==jnp.float64 else 1e-5,event_bisection_iterations=40)
     return tables
+
+
+def run_adaptx_pd_three_tool(reference_dir=None) -> CaseResult:
+    """The PD switch with its legacy checks and the fresh v2 bundle, for the three-tool report."""
+    result = run_adaptx_pd_switch(reference_dir)
+    bundle = produce_adaptx_periodic(reference_dir, result=result)
+    return CaseResult("adaptx.cycle-pd-switch", result.checks, {**result.observations, "v2": bundle},
+                      {**result.artifacts, "bundle": bundle, "events": bundle["events"],
+                       "parameters": [r["parameter"] for r in bundle["branch"]]})

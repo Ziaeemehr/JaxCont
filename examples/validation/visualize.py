@@ -1154,18 +1154,25 @@ TOOL_STYLES = {
 }
 
 
-def _plot_bundle(axis, data, tool, x, y, *, suffix=''):
-    """Draw native continuation order and type-labelled special points."""
+def _plot_bundle(axis, data, tool, x, y, *, suffix='', lines=True):
+    """Draw native continuation order and type-labelled special points.
+
+    ``lines=False`` draws every sample as a marker only: for spectra whose
+    modes are not tracked across points, a line would join different modes.
+    """
     from .promotion_metrics import unrefined
     style = dict(TOOL_STYLES[tool])
     style['label'] += suffix
+    if not lines:
+        style.update(linestyle='none', marker=style.get('marker') or 'o')
     groups = {}
     for row in data['branch']:
         groups.setdefault(row.get('segment_id', 'branch'), []).append(row)
     for i, rows in enumerate(groups.values()):
         axis.plot([float(r[x]) for r in rows], [float(r[y]) for r in rows],
                   **{**style, 'label': style['label'] if i == 0 else '_nolegend_'},
-                  markersize=3, markevery=max(1, len(rows)//35), markerfacecolor='none')
+                  markersize=3 if lines else 2.5,
+                  markevery=max(1, len(rows)//35) if lines else 1, markerfacecolor='none')
     for i, row in enumerate(data.get('events', [])):
         if x not in row or y not in row:
             continue
@@ -1221,7 +1228,7 @@ def render_three_tool_comparison(result, report, reference_dir):
             axes[1].set(xlabel='parameter', ylabel='period')
             observable = _periodic_spectrum_observables(data)
             for axis, column, label in ((axes[2], 'log_modulus', 'nontrivial log |multiplier|'), (axes[3], 'angle', 'nontrivial multiplier phase (radians)')):
-                _plot_bundle(axis, observable, tool, 'parameter', column)
+                _plot_bundle(axis, observable, tool, 'parameter', column, lines=False)
                 axis.set(xlabel='parameter', ylabel=label)
             axes[2].axhline(0, color='#64748b', linewidth=.8)
         elif codim:
