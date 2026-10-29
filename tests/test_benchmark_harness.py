@@ -1,10 +1,15 @@
 """Benchmark harness mechanics with fakes (no real timing assertions)."""
 
 import io
+import threading
+import types
+
+import jax.numpy as jnp
 
 import pytest
 
 import benchmarks.run_benchmarks as harness
+import benchmarks.adapters.jaxcont as adapter
 from benchmarks.adapters.jaxcont import synchronize
 
 
@@ -28,22 +33,46 @@ class _FakeProcess:
     def __init__(self, command, **kwargs):
         type(self).launched += 1
         self.stdout = io.StringIO('READY\n{"seconds": 0.5, "accuracy": {}, "controls": {}}\n')
-        self.stderr = io.StringIO("")
 
     def wait(self):
         return 0
+
+    def kill(self):
+        pass
+
+
+def _clock(*ticks):
+    """Return the given ticks in order, then repeat the last one."""
+    values = iter(ticks)
+    last = [ticks[-1]]
+    return lambda: next(values, last[0])
 
 
 def test_first_call_uses_fresh_process(monkeypatch):
     monkeypatch.setattr(harness.subprocess, "Popen", _FakeProcess)
     _FakeProcess.launched = 0
-    # Per run: launch, READY, then one deadline check per output line.
-    ticks = iter([0.0, 0.4, 0.5, 0.6] * 2)
     for _ in range(2):
-        startup, records = harness.run_worker("jaxcont", "x", "first_call", 60, clock=lambda: next(ticks))
+        # launch at 0.0, a queue wait at 0.1, READY seen at 0.4.
+        startup, records = harness.run_worker("jaxcont", "x", "first_call", 60, clock=_clock(0.0, 0.1, 0.4, 0.5))
         assert records == [{"seconds": 0.5, "accuracy": {}, "controls": {}}]
     assert _FakeProcess.launched == 2
     assert startup == pytest.approx(0.4)  # launch -> READY, timed outside the worker
+
+
+def test_silent_hung_worker_times_out(monkeypatch):
+    released = threading.Event()
+
+    class Hung(_FakeProcess):
+        def __init__(self, command, **kwargs):
+            self.stdout = iter(lambda: released.wait() and None, None)
+
+        def kill(self):
+            released.set()
+
+    monkeypatch.setattr(harness.subprocess, "Popen", Hung)
+    with pytest.raises(TimeoutError):
+        harness.run_worker("jaxcont", "x", "first_call", 0.2)
+    assert released.is_set()
 
 
 def test_worker_failure_is_an_error_not_a_timing(monkeypatch):
@@ -53,6 +82,29 @@ def test_worker_failure_is_an_error_not_a_timing(monkeypatch):
     monkeypatch.setattr(harness.subprocess, "Popen", Failing)
     with pytest.raises(RuntimeError, match="failed"):
         harness.run_worker("jaxcont", "x", "first_call", 60)
+
+
+def test_warm_keeps_callable_identity_and_resets_seed(monkeypatch, capsys):
+    """One build per worker; every repetition calls the same callable from the same seed."""
+    builds, seeds = [], []
+
+    def fake_build(case):
+        problem = types.SimpleNamespace(u0=jnp.array([0.25]))
+
+        def solve():
+            seeds.append((id(solve), float(problem.u0[0])))
+            return {"branch": jnp.zeros(3)}
+
+        builds.append(solve)
+        return problem, None, solve
+
+    monkeypatch.setattr(adapter, "_case", lambda benchmark_id: None)
+    monkeypatch.setattr(adapter, "build", fake_build)
+    adapter.worker("x", "warm", repetitions=4, warmups=2)
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "READY" and len(lines) == 1 + 4
+    assert len(builds) == 1
+    assert len(seeds) == 6 and len(set(seeds)) == 1
 
 
 def test_failed_accuracy_row_is_ineligible():
@@ -71,3 +123,11 @@ def test_external_tools_without_workers_are_pending_not_timed():
 def test_summary_keeps_every_sample():
     summary = harness.summarize([3.0, 1.0, 2.0, 4.0])
     assert summary["samples"] == [1.0, 2.0, 3.0, 4.0] and summary["median"] == 2.5 and summary["n"] == 4
+
+
+def test_failed_run_is_recorded_not_raised(monkeypatch):
+    def boom(*args, **kwargs):
+        raise TimeoutError("jaxcont cubic.eq-fold/fixed first_call exceeded 1 s")
+    monkeypatch.setattr(harness, "run_worker", boom)
+    record = harness.benchmark("cubic.eq-fold/fixed", "jaxcont")
+    assert record["status"] == "FAILED" and "exceeded" in record["reason"] and "warm" not in record

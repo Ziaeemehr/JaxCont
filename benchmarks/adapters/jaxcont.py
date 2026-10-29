@@ -102,7 +102,8 @@ def accuracy(case, result) -> dict:
     ``None`` (not measured), which keeps the row out of cross-tool tables.
     """
     system, bundle = EQUILIBRIUM[case.canonical_id]
-    rows = list(csv.DictReader(open(REFERENCE / system / bundle / "events.csv")))
+    with open(REFERENCE / system / bundle / "events.csv", newline="") as handle:
+        rows = list(csv.DictReader(handle))
     reference = {}
     for row in rows:
         reference.setdefault(row.get("event_type") or row.get("kind"), []).append(float(row["parameter"]))

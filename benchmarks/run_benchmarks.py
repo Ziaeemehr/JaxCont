@@ -15,9 +15,12 @@ import argparse
 import json
 import os
 import platform
+import queue
 import statistics
 import subprocess
 import sys
+import tempfile
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,23 +44,38 @@ def _environment():
 
 
 def run_worker(tool, benchmark_id, mode, timeout, extra=(), clock=time.perf_counter):
-    """Launch one worker; return (startup_seconds, records)."""
+    """Launch one worker; return (startup_seconds, records).
+
+    Stdout is read on a thread so a silent, hung worker still hits the
+    deadline; stderr goes to a temporary file so it can never fill a pipe.
+    """
     command = [sys.executable, "-m", WORKERS[tool], "--case", benchmark_id, "--mode", mode, *extra]
-    launched = clock()
-    process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, text=True, env=_environment(), cwd=ROOT)
-    startup, records = None, []
-    deadline = launched + timeout
-    for line in process.stdout:
-        if line.strip() == "READY":
-            startup = clock() - launched
-        elif line.startswith("{"):
-            records.append(json.loads(line))
-        if clock() > deadline:
-            process.kill()
-            raise TimeoutError(f"{tool} {benchmark_id} {mode} exceeded {timeout} s")
-    if process.wait() != 0 or startup is None:
-        raise RuntimeError(f"{tool} {benchmark_id} {mode} failed: {process.stderr.read()[-2000:]}")
+    with tempfile.TemporaryFile("w+") as stderr:
+        launched = clock()
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                   stderr=stderr, text=True, env=_environment(), cwd=ROOT)
+        lines = queue.Queue()
+        threading.Thread(target=lambda: [*map(lines.put, process.stdout), lines.put(None)], daemon=True).start()
+        startup, records = None, []
+        deadline = launched + timeout
+        while True:
+            try:
+                line = lines.get(timeout=max(0.0, deadline - clock()))
+            except queue.Empty:
+                line = ""
+            if line is None:
+                break
+            if line.strip() == "READY":
+                startup = clock() - launched
+            elif line.startswith("{"):
+                records.append(json.loads(line))
+            if clock() > deadline:
+                process.kill()
+                process.wait()
+                raise TimeoutError(f"{tool} {benchmark_id} {mode} exceeded {timeout} s")
+        if process.wait() != 0 or startup is None:
+            stderr.seek(0)
+            raise RuntimeError(f"{tool} {benchmark_id} {mode} failed: {stderr.read()[-2000:]}")
     return startup, records
 
 
@@ -96,7 +114,10 @@ def benchmark(benchmark_id, tool):
     except RuntimeError as exc:
         if "NotImplementedError" in str(exc):
             return record | {"status": "PENDING", "reason": str(exc).splitlines()[-1]}
-        raise
+        return record | {"status": "FAILED", "reason": str(exc)}
+    except TimeoutError as exc:
+        # A failure is a recorded outcome, never a timing and never a crash of the sweep.
+        return record | {"status": "FAILED", "reason": str(exc)}
     warm_seconds = [row["seconds"] for row in warm]
     record |= {
         "status": "MEASURED", "resolved_controls": controls, "accuracy": accuracy,
