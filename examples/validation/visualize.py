@@ -9,7 +9,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.interpolate import CubicSpline
+from scipy.interpolate import PchipInterpolator
 
 from .artifacts import (
     reference_directory,
@@ -163,6 +163,26 @@ def _annotate_summary(
     if passed:
         text.set_bbox(None)
     figure.subplots_adjust(bottom=0.16)
+
+
+def _fit_y_to_visible_x(axis, margin: float = 0.08) -> None:
+    """Scale y to the data inside the x limits, so a committed series that runs
+    far beyond the shared domain cannot flatten the visible comparison."""
+    low, high = axis.get_xlim()
+    values = []
+    for line in axis.get_lines():
+        x, y = (np.asarray(v, dtype=float) for v in line.get_data())
+        values.append(y[(x >= low) & (x <= high)])
+    for collection in axis.collections:
+        offsets = np.asarray(collection.get_offsets(), dtype=float)
+        if offsets.size:
+            values.append(offsets[(offsets[:, 0] >= low) & (offsets[:, 0] <= high), 1])
+    values = np.concatenate(values) if values else np.array([])
+    values = values[np.isfinite(values)]
+    if values.size:
+        # A constant series (e.g. an equilibrium at the origin) gets a readable span.
+        span = max(float(values.max() - values.min()), 1e-2 * max(1.0, float(np.abs(values).max())))
+        axis.set_ylim(values.min() - margin * span, values.max() + margin * span)
 
 
 def _nontrivial_floquet_multipliers(values: np.ndarray) -> np.ndarray:
@@ -781,10 +801,12 @@ def plot_equilibrium_overlay(
         spectral_axis.set_xlabel(parameter_name)
         spectral_axis.set_ylabel("Largest Re(eigenvalue)")
         spectral_axis.set_xlim(shared_min, shared_max)
+        _fit_y_to_visible_x(spectral_axis)
         spectral_axis.grid(alpha=0.2)
         spectral_axis.legend()
     else:
         axis.set_xlabel(parameter_name)
+    _fit_y_to_visible_x(axis)
 
     figure.tight_layout()
     return figure
@@ -968,22 +990,22 @@ class ReportTable:
     """
 
     def __init__(self, report):
-        self.rows = [(r['metric'], r['measured'], r['limit'], 'PASS' if r['passed'] else 'FAIL')
+        self.rows = [(r['metric'], r['measured'], r['limit'], r.get('verdict', 'PASS' if r['passed'] else 'FAIL'))
                      for r in report.metrics]
         self.status = report.status
 
     def __repr__(self):
         width = max(len(row[0]) for row in self.rows)
         lines = [f"{'Metric':<{width}}  {'Measured':>10}  {'Limit':>10}  Verdict"]
-        lines += [f"{m:<{width}}  {v:>10.3g}  {l:>10.3g}  {ok}" for m, v, l, ok in self.rows]
-        return "\n".join(lines)
+        lines += [f"{m:<{width}}  {_format_metric(v):>10}  {_format_metric(l):>10}  {ok}" for m, v, l, ok in self.rows]
+        return f"Status {self.status}\n" + "\n".join(lines)
 
     def _repr_html_(self):
         def row(cells, tag):
             return "<tr>" + "".join(f"<{tag} style='{style}'>{cell}</{tag}>"
                                     for cell, style in zip(cells, self._styles)) + "</tr>"
-        body = "".join(row((m, f"{v:.3g}", f"{l:.3g}", ok), "td") for m, v, l, ok in self.rows)
-        return ("<table class='validation-report'>" + row(("Metric", "Measured", "Limit", "Verdict"), "th")
+        body = "".join(row((m, _format_metric(v), _format_metric(l), ok), "td") for m, v, l, ok in self.rows)
+        return (f"<table class='validation-report'><caption>Validation status: {self.status}</caption>" + row(("Metric", "Measured", "Limit", "Verdict"), "th")
                 + body + "</table>")
 
     _styles = ("text-align:left", "text-align:right", "text-align:right", "text-align:center")
@@ -991,13 +1013,23 @@ class ReportTable:
 
 def summarize_report(report):
     """A one-paragraph takeaway generated from the report, never hand-typed."""
-    worst = max(report.metrics, key=lambda r: r['measured'] / r['limit'] if r['limit'] else 0.0)
-    failed = [r['metric'] for r in report.metrics if not r['passed']]
-    text = (f"Status {report.status}: {len(report.metrics) - len(failed)} of {len(report.metrics)} "
-            f"checks pass. The tightest is {worst['metric']}, measured {worst['measured']:.2g} "
-            f"against a limit of {worst['limit']:.2g} ({worst['measured'] / worst['limit']:.0%} of the budget).")
+    from .promotion_metrics import covered_elsewhere
+    delegated = [r for r in report.metrics if r.get('verdict') == 'PENDING' and covered_elsewhere(r)]
+    failed = [r['metric'] for r in report.metrics if not r['passed'] and r not in delegated]
+    text = (f"Status {report.status}: {len(report.metrics) - len(failed) - len(delegated)} of "
+            f"{len(report.metrics)} checks pass")
+    text += f"; {len(delegated)} are compared in another run." if delegated else "."
+    # Rank accuracy metrics only: coverage, endpoints and event counts are
+    # completeness checks, not measures of agreement.
+    completeness = ("count", "endpoint", "coverage", "missing", "unresolved", "predicates", "present")
+    comparable = [r for r in report.metrics if r['measured'] is not None and r['limit'] is not None
+                  and r['limit'] > 0 and not any(word in r['metric'] for word in completeness)]
+    if comparable:
+        worst = max(comparable, key=lambda r: r['measured'] / r['limit'])
+        text += (f" The tightest accuracy check is {worst['metric']}, measured {worst['measured']:.2g}"
+                 f" against a limit of {worst['limit']:.2g} ({worst['measured'] / worst['limit']:.0%} of the budget).")
     if failed:
-        text += " Failing: " + ", ".join(failed) + "."
+        text += " Incomplete or failing: " + ", ".join(failed) + "."
     return text
 
 
@@ -1005,8 +1037,8 @@ def render_report_table(report):
     """Render measured values, unchanged limits, and verdicts from one report."""
     figure, axis = plt.subplots(figsize=(11, max(2, len(report.metrics) * 0.38)))
     axis.axis('off')
-    values = [[r['metric'], f"{r['measured']:.3g}", f"{r['limit']:.3g}",
-               'PASS' if r['passed'] else 'FAIL'] for r in report.metrics]
+    values = [[r['metric'], _format_metric(r['measured']), _format_metric(r['limit']),
+               r.get('verdict', 'PASS' if r['passed'] else 'FAIL')] for r in report.metrics]
     table = axis.table(cellText=values, colLabels=['Metric', 'Measured', 'Limit', 'Verdict'],
                        colWidths=[0.61, 0.13, 0.13, 0.13], loc='center')
     table.auto_set_font_size(False)
@@ -1021,6 +1053,8 @@ def render_comparison(result, report, reference_dir):
     Error interpolation follows a monotone physical coordinate (x for cubic),
     avoiding interpolation across duplicate parameter arms at a fold.
     """
+    if report.evidence:
+        return render_three_tool_comparison(result, report, reference_dir)
     case_id = result.case_id
     reference_dir = reference_directory(reference_dir, case_id)
     if case_id.startswith('MC-EQ-'):
@@ -1085,17 +1119,212 @@ def render_comparison(result, report, reference_dir):
                 dense_x, dense_y, x, y = x, y, rx, ry
             else:
                 dense_x, dense_y = rx, ry
-            # A cubic spline: linear interpolation on a curved branch shows
-            # its own O(h^2) error (~1e-4 on the cubic S-curve), not disagreement.
+            # Local cubic (PCHIP): linear interpolation on a curved branch shows
+            # its own O(h^2) error (~1e-4 on the cubic S-curve), and a global
+            # spline rings across kinks such as an eigenvalue collision.
             knots, first = np.unique(dense_x, return_index=True)
             mask = (x >= knots.min()) & (x <= knots.max())
             x, y = x[mask], y[mask]
-            errors = np.abs(y - CubicSpline(knots, dense_y[first])(x))
+            errors = np.abs(y - PchipInterpolator(knots, dense_y[first])(x))
             order = np.argsort(x)
             x, errors = x[order], errors[order]
-    floor = np.finfo(float).tiny
-    axis.semilogy(x, np.maximum(errors, floor), 'o-', markersize=3)
+    # Differences at round-off level are drawn on a floor (hollow markers),
+    # so exact agreement does not stretch the log axis to 1e-300.
+    scale_values = a['jaxcont_prc'] if case_id == 'MC-PRC-001' else y if case_id != 'MC-LC-002' else [1.]
+    scale = max(1.0, float(np.nanmax(np.abs(scale_values))))
+    floor = 1e-16 * scale
+    shown = np.maximum(errors, floor)
+    axis.semilogy(x, shown, '-', color='C0', linewidth=1)
+    above = errors > floor
+    axis.semilogy(x[above], shown[above], 'o', color='C0', markersize=3)
+    if (~above).any():
+        axis.semilogy(x[~above], shown[~above], 'o', markerfacecolor='none', color='C0', markersize=4,
+                      label='at or below round-off (1e-16 × scale)')
+        axis.legend(loc='best', fontsize=8)
     axis.set(xlabel=xlabel, ylabel=label, title=f'{report.status}: |JaxCont fresh − MatCont committed|')
     axis.grid(alpha=0.2)
     error_figure.tight_layout()
     return figure, error_figure
+
+
+TOOL_STYLES = {
+    'jaxcont': dict(color='#2563eb', linestyle='-', marker=None, label='JaxCont (fresh)'),
+    'matcont': dict(color='#f97316', linestyle='--', marker='o', label='MatCont (committed)'),
+    'bifurcationkit': dict(color='#16a34a', linestyle=':', marker='^', label='BifurcationKit (committed)'),
+}
+
+
+def _plot_bundle(axis, data, tool, x, y, *, suffix=''):
+    """Draw native continuation order and type-labelled special points."""
+    from .promotion_metrics import unrefined
+    style = dict(TOOL_STYLES[tool])
+    style['label'] += suffix
+    groups = {}
+    for row in data['branch']:
+        groups.setdefault(row.get('segment_id', 'branch'), []).append(row)
+    for i, rows in enumerate(groups.values()):
+        axis.plot([float(r[x]) for r in rows], [float(r[y]) for r in rows],
+                  **{**style, 'label': style['label'] if i == 0 else '_nolegend_'},
+                  markersize=3, markevery=max(1, len(rows)//35), markerfacecolor='none')
+    for i, row in enumerate(data.get('events', [])):
+        if x not in row or y not in row:
+            continue
+        kind = row.get('event_type', row.get('kind', ''))
+        label = kind + (' (guess)' if unrefined(row) else '')
+        axis.scatter(float(row[x]), float(row[y]), color=style['color'],
+                     marker=style['marker'] or 's', s=40, facecolors='none', zorder=5)
+        axis.annotate(label, (float(row[x]), float(row[y])),
+                      xytext=(5, 8 + 12 * list(TOOL_STYLES).index(tool)),
+                      textcoords='offset points', fontsize=8, color=style['color'])
+
+
+def render_sampled_errors(report):
+    """Plot exactly the promotion comparator's matched, sparse native samples."""
+    groups = report.evidence['samples']
+    sheets = sorted({name.split('.')[0] for curves in groups.values() for name in curves})
+    figure, axes = plt.subplots(max(1,len(groups)), max(1,len(sheets)),
+        figsize=(11, 2.8*max(1,len(groups))), squeeze=False)
+    for row_axes, (pair, curves) in zip(axes, groups.items()):
+        for axis, sheet in zip(row_axes, sheets):
+            selected = [curve for name,curve in curves.items()
+                        if name.startswith(sheet+'.') and curve['limit'] and curve['x']]
+            if selected:
+                curve = selected[0]
+                errors = np.max([np.asarray(c['error']) / np.asarray(c['budget']) for c in selected], axis=0)
+                axis.semilogy(curve['x'], np.maximum(errors, 1e-16), color='#2563eb',
+                              marker='.', label='maximum across branch observables')
+                axis.set_xlabel(curve['coordinate'])
+            axis.axhline(1, color='#991b1b', linestyle='--', label='registry limit')
+            axis.set(title=f'{pair}: {sheet}', ylabel='absolute error / budget')
+            axis.grid(alpha=.2)
+            axis.legend(fontsize=7)
+    _annotate_summary(figure, status=report.status, passed=report.status == 'PASS',
+                      details=['Sparse native samples; shared promotion interpolation and sheet matching.'])
+    return figure
+
+
+def render_three_tool_comparison(result, report, reference_dir):
+    """Reviewed three-tool branches, stability and log-scale differences."""
+    case, tools = _checked_comparison_inputs(result, report, reference_dir)
+    codim = case['canonical_id'].startswith('lorenz84.') and not case['canonical_id'].endswith('eq-f')
+    periodic = 'period' in tools['jaxcont']['branch'][0]
+    figure, axes = plt.subplots(4 if periodic else 2, 1, figsize=(10, 12 if periodic else 8))
+    x, y = ('F', 'T') if codim else ('parameter', 'state_0')
+    if periodic:
+        y = 'amplitude'
+    for tool, data in tools.items():
+        if periodic:
+            data = {**data, 'branch': [{**r, 'amplitude': max(abs(float(v)) for k,v in r.items() if k.startswith('state_'))} for r in data['branch']]}
+        _plot_bundle(axes[0], data, tool, x, y)
+        if periodic:
+            _plot_bundle(axes[1], data, tool, 'parameter', 'period')
+            axes[1].set(xlabel='parameter', ylabel='period')
+            observable = _periodic_spectrum_observables(data)
+            for axis, column, label in ((axes[2], 'log_modulus', 'nontrivial log |multiplier|'), (axes[3], 'angle', 'nontrivial multiplier phase (radians)')):
+                _plot_bundle(axis, observable, tool, 'parameter', column)
+                axis.set(xlabel='parameter', ylabel=label)
+            axes[2].axhline(0, color='#64748b', linewidth=.8)
+        elif codim:
+            spectra = data.get('spectra', [])
+            if case['canonical_id'].endswith('bt-ft'):
+                values = sorted([complex(float(r['real']), float(r['imag'])) for r in spectra if not r.get('event_id')], key=abs)[:2]
+                style = TOOL_STYLES[tool]
+                axes[1].scatter([z.real for z in values], [z.imag for z in values],
+                                color=style['color'], marker=style['marker'] or 's', label=style['label'])
+                axes[1].set(xlabel='Re eigenvalue', ylabel='Im eigenvalue', title='Two smallest eigenvalues (refined BT)')
+            else:
+                axes[1].plot([float(r['T']) for r in data['branch']],
+                             [float(r['state_3']) for r in data['branch']], **TOOL_STYLES[tool], markersize=3)
+                axes[1].set(xlabel='T', ylabel='U')
+        else:
+            values=[]
+            for row in data['branch']:
+                linked=[complex(float(s['real']),float(s['imag'])) for s in data.get('spectra', [])
+                        if str(s.get('point_id')) == str(row.get('point_id'))
+                        and s.get('segment_id') == row.get('segment_id') and not s.get('event_id')]
+                values.append(max((z.real for z in linked), default=np.nan))
+            groups = {}
+            for row, value in zip(data['branch'], values):
+                groups.setdefault(row.get('segment_id'), []).append((float(row['parameter']), value))
+            for i, points in enumerate(groups.values()):
+                axes[1].plot(*np.asarray(points).T, **{**TOOL_STYLES[tool], 'label': TOOL_STYLES[tool]['label'] if i == 0 else '_nolegend_'}, markersize=3)
+            axes[1].axhline(0, color='#64748b', linewidth=.8)
+            axes[1].set(xlabel='F' if case['system']=='lorenz84' else 'parameter', ylabel='largest Re eigenvalue')
+            axes[1].set_yscale('symlog', linthresh=1e-4)
+    axes[0].set(xlabel=x, ylabel=y, title=case['canonical_id'])
+    if case['canonical_id'] == 'lorenz84.eq-f':
+        for axis in axes:
+            axis.set_xlim(1.5, 3.02)
+        axes[0].set(xlabel='F', ylabel='X')
+    if case['canonical_id'] == 'lorenz84.bt-ft':
+        point = tools['jaxcont']['branch'][0]
+        budget = case['tolerances']['parameter_atol']
+        axes[0].set(xlim=(float(point['F'])-budget, float(point['F'])+budget),
+                    ylim=(float(point['T'])-budget, float(point['T'])+budget))
+        axes[0].ticklabel_format(useOffset=False)
+    for axis in axes:
+        axis.grid(alpha=.2)
+        axis.legend(fontsize=8)
+    missing = set(TOOL_STYLES)-tools.keys()
+    _annotate_summary(figure, status=report.status, passed=report.status=='PASS',
+                      details=[f'{tool}: PENDING (missing committed bundle)' for tool in sorted(missing)]
+                      or ['Blue solid: fresh; orange circles/dashed and green triangles/dotted: committed.'])
+    return figure, render_sampled_errors(report)
+
+
+def _format_metric(value):
+    return '—' if value is None else f'{value:.3g}'
+
+
+def render_lorenz_plane(results, report, reference_dir):
+    """Both codimension-two curves and refined BT in the same parameter plane."""
+    figure, axes = plt.subplots(1, 3, figsize=(16, 6))
+    for result in results:
+        _, tools = _checked_comparison_inputs(result, report, reference_dir)
+        suffix = ' ' + result.case_id.split('.')[-1]
+        for tool, data in tools.items():
+            for axis in axes:
+                _plot_bundle(axis, data, tool, 'F', 'T', suffix=suffix)
+    axes[0].set(title='Fold and Hopf curves', xlabel='F', ylabel='T', xlim=(1.27,1.65), ylim=(-.011,.042))
+    axes[1].set(title='Cusp and zero-Hopf points (zoom)', xlabel='F', ylabel='T', xlim=(1.276,1.287), ylim=(-.0003,.0004))
+    axes[2].set(title='Meeting at BT (zoom)', xlabel='F', ylabel='T', xlim=(1.43, 1.47), ylim=(.018, .024))
+    for axis in axes:
+        axis.grid(alpha=.2)
+    axes[0].legend(fontsize=7)
+    _annotate_summary(figure, status=report.status, passed=report.status=='PASS',
+                      details=['BK curve BT is a guess; refined BT is compared separately.'])
+    return figure
+
+
+def _checked_comparison_inputs(result, report, reference_dir):
+    """Reject series changed since the authoritative report was evaluated."""
+    from .reporting import comparison_inputs
+    case, tools = comparison_inputs(result, reference_dir)
+    expected = report.reference_hashes
+    if 'reports' in report.evidence:
+        expected = next(r['reference_hashes'] for r in report.evidence['reports']
+                        if r['case_id'] == result.case_id)
+    observed = {tool: data['metadata']['output_hashes'] for tool,data in tools.items()}
+    if observed != expected:
+        raise ValueError('rendered series hashes differ from the validation report')
+    return case, tools
+
+
+def _periodic_spectrum_observables(data):
+    """Honor native flow-mode flags, retaining the documented v1 fallback."""
+    rows = []
+    for row in data['branch']:
+        linked = [s for s in data.get('spectra', []) if not s.get('event_id')
+                  and str(s.get('point_id')) == str(row.get('point_id'))
+                  and s.get('segment_id') == row.get('segment_id')]
+        values = np.array([complex(float(s['real']), float(s['imag'])) for s in linked])
+        if any('is_trivial' in s and str(s['is_trivial']) in ('1', 'True', 'true') for s in linked):
+            keep = [i for i,s in enumerate(linked) if str(s.get('is_trivial')) not in ('1', 'True', 'true')]
+        else:
+            keep = [i for i in range(len(values)) if i != np.argmin(abs(values-1))] if len(values) else []
+        for mode in keep:
+            z = values[mode]
+            rows.append({**row, 'segment_id': f"{row.get('segment_id')}/{linked[mode].get('mode_id', mode)}",
+                         'log_modulus': float(linked[mode].get('logabs', np.log(max(abs(z), np.finfo(float).tiny)))),
+                         'angle': float(np.angle(z))})
+    return {'branch': rows, 'events': []}

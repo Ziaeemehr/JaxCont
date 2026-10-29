@@ -19,28 +19,27 @@ as its seed; orbit finding itself is outside this independent check.
 # Parameter differentiation of the whole shooting calculation supplies an
 # independent dPRC estimate; the difference panel reveals its finite-step error.
 
+# sphinx_gallery_start_ignore
 import argparse
+import sys
 import tempfile
 from pathlib import Path
-import sys
 
 if "__file__" in globals():
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+parser = argparse.ArgumentParser()
+parser.add_argument("--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated")
+options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+# sphinx_gallery_end_ignore
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
-import jaxcont as jc
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 from examples.validation.reporting import make_report, save_checked_figure
-from examples.validation.visualize import render_comparison, render_report_table
-
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated"
-)
-options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+from examples.validation.visualize import ReportTable, render_comparison, summarize_report
 import examples.validation as validation_package
 reference_dir = Path(validation_package.__file__).resolve().parent / "reference"
 
@@ -132,12 +131,15 @@ save_checked_figure(error_figure, report, options.output_dir / "plot_prc_shootin
 # --------------------
 # The measured differences and predicates are taken from the report.
 
-summary = render_report_table(report)
-save_checked_figure(summary, report, options.output_dir / "plot_prc_shooting_table.png")
+ReportTable(report)
 
 # %%
 # Takeaway
 # --------
+
+print(summarize_report(report))
+
+# %%
 # The report distinguishes PRC agreement from the finite-difference dPRC
 # check. This validates adjoint response on a shared orbit, and does not
 # establish an independent orbit-finding result.

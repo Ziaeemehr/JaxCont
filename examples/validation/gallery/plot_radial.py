@@ -24,27 +24,26 @@ radius sqrt(rho), period two pi and nontrivial multiplier exp(-4 pi rho).
 # trivial multiplier at one represents time translation. The error panel
 # magnifies period differences hidden by the overlapping curves.
 
+# sphinx_gallery_start_ignore
 import argparse
+import sys
 import tempfile
 from pathlib import Path
-import sys
+
 if "__file__" in globals():
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-import jax
+parser = argparse.ArgumentParser()
+parser.add_argument("--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated")
+options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+# sphinx_gallery_end_ignore
+
 import jax.numpy as jnp
 import numpy as np
-import matplotlib.pyplot as plt
 import jaxcont as jc
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 from examples.validation.reporting import make_report, save_checked_figure
-from examples.validation.visualize import render_comparison, render_report_table
-
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated"
-)
-options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+from examples.validation.visualize import ReportTable, render_comparison, summarize_report
 import examples.validation as validation_package
 reference_dir = Path(validation_package.__file__).resolve().parent / "reference"
 
@@ -98,12 +97,15 @@ for index, figure in enumerate(figures):
 # --------------------
 # This table is generated from the same report as the figures and sidecars.
 
-summary = render_report_table(report)
-save_checked_figure(summary, report, options.output_dir / "plot_radial_table.png")
+ReportTable(report)
 
 # %%
 # Takeaway
 # --------
+
+print(summarize_report(report))
+
+# %%
 # The report compares the fresh cycle with the committed series and the
 # exact solution. This is an analytic Floquet control, so it does not test
 # nonlinear torus or doubled-cycle switching.

@@ -48,7 +48,7 @@ def test_only_examples_tutorials_and_examples_validation_gallery_plot_sources_be
         "../../examples/validation/gallery",
     ]
     assert conf["gallery_dirs"] == ["auto_tutorials", "auto_validation"]
-    assert len(ENTRIES) == 22
+    assert len(ENTRIES) == 16 + len(list((ROOT / "examples/validation/gallery").glob("plot_*.py")))
     for entry in ENTRIES:
         assert re.search(conf["filename_pattern"], entry.as_posix())
         assert not re.search(conf["ignore_pattern"], entry.as_posix())
@@ -114,6 +114,7 @@ def test_sphinx_build_executes_and_lists_only_the_two_examples_roots(tmp_path):
             ],
             cwd=ROOT,
             env=env,
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=2400,
@@ -152,9 +153,9 @@ def test_sphinx_build_executes_and_lists_only_the_two_examples_roots(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "entry", [p for p in ENTRIES if "gallery" in p.parts], ids=lambda p: p.stem
+    "entry", sorted((ROOT / "examples/validation/gallery").glob("plot_*.py")), ids=lambda p: p.stem
 )
-def test_comparison_page_has_the_six_sections_and_report_table(entry):
+def test_every_page_has_the_six_sections(entry):
     text = entry.read_text()
     sections = [
         "The system",
@@ -166,7 +167,12 @@ def test_comparison_page_has_the_six_sections_and_report_table(entry):
     ]
     positions = [text.index(section) for section in sections]
     assert positions == sorted(positions)
-    assert "render_report_table(report)" in text or "ReportTable(report)" in text
+    # A page may hold several reports (adaptx: Hopf and PRC).
+    assert re.search(r"^ReportTable\(\w*report\)$", text, re.M)
+    summary = text[text.index("# Quantitative summary"):text.index("# Takeaway")]
+    final_expression = ast.parse(summary).body[-1]
+    assert isinstance(final_expression, ast.Expr)
+    assert re.fullmatch(r"ReportTable\(\w*report\)", ast.unparse(final_expression.value))
     assert "save_checked_figure" in text
 
 
@@ -194,3 +200,14 @@ def test_failed_report_figure_and_sidecar_share_status_and_hash(tmp_path):
     assert "FAIL" in " ".join(t.get_text() for t in figure.texts)
     assert record["report_hash"][:12] in " ".join(t.get_text() for t in figure.texts)
     plt.close(figure)
+
+
+@pytest.mark.parametrize("entry", sorted((ROOT / "examples/validation/gallery").glob("plot_*.py")), ids=lambda p: p.stem)
+def test_page_numbers_come_from_the_report(entry):
+    text = entry.read_text()
+    takeaway = text[text.index("# Takeaway"):]
+    # Only prose cells are checked: the generated summary is executable code.
+    prose = "\n".join(line[1:] for line in takeaway.splitlines()
+                      if line.startswith("#") and not line.startswith("# %%"))
+    assert not re.search(r"\d", prose), "numeric takeaway claims must be generated from the report"
+    assert re.search(r"print\(summarize_report\(\w*report\)\)", takeaway)

@@ -25,10 +25,30 @@ class ValidationReport:
     reference_hashes: dict
     compared_domain: dict = field(default_factory=dict)
 
+    evidence: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        if any(r.get("verdict", "PASS" if r["passed"] else "FAIL") == "FAIL" for r in self.metrics):
+            object.__setattr__(self, "status", "FAIL")
+        else:
+            from .promotion_metrics import covered_elsewhere
+            pending = [m for m in self.metrics if m.get("verdict") == "PENDING"]
+            open_items = [m for m in pending if not covered_elsewhere(m)]
+            coverage = (self.evidence or {}).get("gate", {}).get("coverage", {})
+            if self.status == "PASS" and open_items:
+                object.__setattr__(self, "status", "PENDING")
+            elif (self.status == "PENDING" and pending and not open_items
+                  and "PENDING" not in coverage.values()):
+                # PENDING only because of items another PASS run compares
+                # (never because a tool's bundle is missing).
+                object.__setattr__(self, "status", "PASS")
+
     def record(self):
         record = asdict(self)
         record['tool_versions'] = {'jaxcont_fresh': jc.__version__, 'jax': jax.__version__}
-        if self.reference_hashes:
+        if self.evidence:
+            record['tool_versions'] = self.evidence['tool_versions']
+        elif self.reference_hashes:
             record['tool_versions']['matcont_committed'] = '7.6'
         else:
             import scipy
@@ -40,7 +60,11 @@ class ValidationReport:
 
 def make_report(result, reference_dir):
     """Retain the authoritative gate; table rows use its existing limits."""
-    case = next(c for c in load_registry()["cases"] if c["id"] == result.case_id)
+    case = next(c for c in load_registry()["cases"]
+                if result.case_id in (c["id"], c.get("canonical_id")))
+    if any((Path(reference_dir) / case["system"] / tool / case["canonical_id"] / "metadata.json").is_file()
+           for tool in ("matcont", "bifurcationkit")) or "bundle" in result.artifacts:
+        return _make_three_tool_report(case, result, reference_dir)
     reference_dir = reference_directory(reference_dir, result.case_id)
     validation = evaluate_case_result(case, result, reference_dir)
     c = result.checks
@@ -137,8 +161,14 @@ def make_report(result, reference_dir):
     )
 
 
-def save_checked_figure(figure, report, path):
+def save_checked_figure(figure, report, path, *, publication=False):
     """A figure and its sidecar carry exactly the same report identity."""
+    if publication:
+        require_publication(report)
+    # The report is authoritative even if a caller supplied a stale banner.
+    for artist in figure.texts:
+        if "PASS" in artist.get_text() and report.status != "PASS":
+            artist.set_text(artist.get_text().replace("PASS", report.status))
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     record = report.record()
@@ -149,12 +179,13 @@ def save_checked_figure(figure, report, path):
         ha="center",
         va="top",
         fontsize=8,
-        color="darkred" if report.status == "FAIL" else "darkgreen",
+        color={"FAIL": "darkred", "PASS": "darkgreen"}.get(report.status, "#92400e"),
     )
     bundle = hashlib.sha256(
         json.dumps(report.reference_hashes, sort_keys=True).encode()
     ).hexdigest()
-    domain = '; '.join(f"{key}: [{lo:.4g}, {hi:.4g}]" for key, (lo, hi) in report.compared_domain.items())
+    import textwrap
+    domain = textwrap.fill('; '.join(f"{key}: [{lo:.4g}, {hi:.4g}]" for key, (lo, hi) in report.compared_domain.items()), width=145)
     # Reserve a strip below the axes so the footer never overlaps tick labels;
     # a figure with a comparison summary needs room for both texts.
     figure.tight_layout(rect=(0, 0.14 if getattr(figure, "_validation_summary", False) else 0.07, 1, 0.97))
@@ -163,15 +194,22 @@ def save_checked_figure(figure, report, path):
         0.005,
         f"JaxCont {jc.__version__} fresh | "
         + (
-            f"MatCont 7.6 committed | bundle {bundle[:12]}"
+            (" | ".join(f"{tool}: {version} committed" for tool, version in record["tool_versions"].items()
+                         if tool not in ("jaxcont_fresh", "jax")) + f" | bundle {bundle[:12]}")
             if report.reference_hashes
             else "independent IVP shooting fresh"
         )
-        + (f"\ndata ranges {domain}" if domain else ""),
+        + (f"\ncompared domain {domain}" if domain else ""),
         ha="center",
         va="bottom",
         fontsize=7,
     )
+    footer = figure.texts[-1]
+    footer_top = (footer.get_text().count("\n") + 1) * 9 / (figure.get_figheight() * 72)
+    for artist in figure.texts:
+        if artist.get_text().startswith("Systematic comparison:"):
+            artist.set_y(footer_top + .025)
+    figure.tight_layout(rect=(0, footer_top + (.10 if getattr(figure, "_validation_summary", False) else .035), 1, .97))
     figure.savefig(
         path,
         dpi=150,
@@ -179,3 +217,105 @@ def save_checked_figure(figure, report, path):
         metadata={"Description": json.dumps(record, default=str)},
     )
     path.with_suffix(".checks.json").write_text(json.dumps(record, indent=2, default=str) + "\n")
+
+
+def comparison_inputs(result, reference_dir):
+    """Load only reviewed v2 references, alongside the supplied fresh series."""
+    from .artifacts import load_bundle, case_result_payload
+    case = next(c for c in load_registry()["cases"]
+                if result.case_id in (c["id"], c.get("canonical_id")))
+    fresh = result.artifacts.get("bundle") or case_result_payload(case, result)
+    fresh = {**fresh, "metadata": dict(fresh.get("metadata", {}))}
+    fresh["metadata"]["output_hashes"] = {
+        name: hashlib.sha256(json.dumps(fresh.get(name, []), sort_keys=True, default=str).encode()).hexdigest()
+        for name in ("branch", "events", "spectra")}
+    tools = {"jaxcont": fresh}
+    for tool in ("matcont", "bifurcationkit"):
+        path = Path(reference_dir) / case["system"] / tool / case["canonical_id"]
+        if (path / "metadata.json").exists():
+            tools[tool] = load_bundle(path, case_id=case["canonical_id"], tool=tool, require_reviewed=True)
+    return case, tools
+
+
+def _make_three_tool_report(case, result, reference_dir):
+    from .validation import build_validation_report
+    from .promotion_metrics import _pairwise, _sheets, window
+    from itertools import combinations
+    case, tools = comparison_inputs(result, reference_dir)
+    gate = build_validation_report(case, tools)
+    rows, samples = [], {}
+    for group, metrics in {**gate.pairwise, **gate.independent}.items():
+        for name, metric in metrics.items():
+            rows.append(dict(metric=f"{group}: {name}", measured=metric["value"],
+                             limit=metric["limit"], passed=metric["verdict"] == "PASS",
+                             verdict=metric["verdict"], sample_count=len(tools.get(group, {}).get("branch", [])),
+                             coverage_fraction=0.0 if metric["verdict"] == "FAIL" and "coverage" in name else 1.0,
+                             source_hashes=gate.source_hashes, reason=metric.get("reason")))
+    if case['id'].startswith('MC-'):
+        from .validation import case_result_passes
+        passed = case_result_passes(case['id'], result.checks)
+        rows.append(dict(metric='jaxcont: producer predicates', measured=0. if passed else 1.,
+                         limit=0., passed=passed, verdict='PASS' if passed else 'FAIL',
+                         sample_count=len(tools['jaxcont']['branch']), coverage_fraction=1.,
+                         source_hashes=gate.source_hashes))
+    coverage = {}
+    for tool, data in tools.items():
+        fractions = []
+        for sheet in _sheets(data, case):
+            bounds = window(case, sheet[0].get('segment_id'))
+            if not bounds or isinstance(bounds, dict) or bounds[1] == bounds[0]:
+                fractions.append(1.)
+                continue
+            coordinates = [float(r['parameter']) for r in sheet]
+            fraction = max(0., min(max(coordinates), bounds[1])-max(min(coordinates), bounds[0])) / (bounds[1]-bounds[0])
+            gap = max(min(coordinates)-bounds[0], bounds[1]-max(coordinates), 0.)
+            fractions.append(1. if gap <= case["tolerances"]["parameter_atol"] else min(1., fraction))
+        coverage[tool] = min(fractions, default=0.)
+    for row in rows:
+        group = row['metric'].split(': ', 1)[0]
+        row['coverage_fraction'] = min(coverage[t] for t in group.split('--'))
+    for a,b in combinations(tools, 2):
+        sampled = {}
+        _pairwise(case, tools[a], tools[b], samples=sampled)
+        samples[f"{a}--{b}"] = sampled
+    for row in rows:
+        group, name = row['metric'].split(': ', 1)
+        sampled = samples.get(group, {})
+        if name in sampled:
+            row['sample_count'] = len(sampled[name]['x'])
+        elif group in tools:
+            row['sample_count'] = len(tools[group]['events'] if '.count' in name else tools[group]['branch'])
+        else:
+            row['sample_count'] = min(len(tools[t]['events'] if not name.startswith('sheet_') else tools[t]['branch']) for t in group.split('--'))
+    versions = {"jaxcont_fresh": jc.__version__, "jax": jax.__version__}
+    domains = {}
+    for tool, data in tools.items():
+        values = [float(r["parameter"]) for r in data["branch"]]
+        bounds = case.get("comparison_window")
+        if isinstance(bounds, list):
+            domains[tool] = [max(min(values), bounds[0]), min(max(values), bounds[1])]
+        else:
+            domains[tool] = [min(values), max(values)]
+        if tool != "jaxcont":
+            versions[tool] = str(next((v for k,v in data["metadata"].get("package_versions", {}).items() if k.lower() == tool), "unknown"))
+    return ValidationReport(case["canonical_id"], gate.status, rows, result.checks,
+        gate.to_dict(), None, "float64" if jax.config.x64_enabled else "float32",
+        gate.source_hashes, domains, {"gate": gate.to_dict(), "samples": samples, "tool_versions": versions})
+
+
+def require_publication(report):
+    """Publication requires every expected tool, event and domain predicate."""
+    if report.status != "PASS" or any(not r["passed"] or r.get("coverage_fraction", 1.) < 1. for r in report.metrics):
+        raise ValueError("publication requires complete domain, events and passing evidence")
+
+
+def combine_reports(reports, *, case_id=None):
+    """A combined figure and table have one immutable evidence identity."""
+    status = next((s for s in ('FAIL', 'PENDING', 'UNSUPPORTED') if any(r.status == s for r in reports)), 'PASS')
+    identity = case_id or ' + '.join(r.case_id for r in reports)
+    return ValidationReport(identity, status,
+        [{**row, 'metric': f'{r.case_id}: {row["metric"]}'} for r in reports for row in r.metrics],
+        {}, None, None, reports[0].precision,
+        {r.case_id: r.reference_hashes for r in reports},
+        {r.case_id.split('.')[-1]: [min(b[0] for b in r.compared_domain.values()), max(b[1] for b in r.compared_domain.values())] for r in reports if not r.case_id.endswith('eq-f')},
+        {'reports': [r.record() for r in reports], 'tool_versions': reports[0].record()['tool_versions']})

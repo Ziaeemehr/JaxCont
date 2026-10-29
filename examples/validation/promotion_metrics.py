@@ -283,7 +283,7 @@ def _spectrum_error(a, b, x, y, query, coordinate="parameter"):
     return error
 
 
-def _pairwise(case, a, b, *, coordinates=None):
+def _pairwise(case, a, b, *, coordinates=None, samples=None):
     """Compare each monotone sheet and each event without merging fold arms."""
     tol = case["tolerances"]
     result = {}
@@ -300,6 +300,7 @@ def _pairwise(case, a, b, *, coordinates=None):
         # Assignment uses observable values, not unrelated native segment names.
         costs = np.full((len(sa), len(sb)), 1e100)
         measured = {}
+        sampled = {}
         for i, x in enumerate(sa):
             for j, y in enumerate(sb):
                 columns = {k for k in x[0].keys() & y[0].keys()
@@ -340,6 +341,7 @@ def _pairwise(case, a, b, *, coordinates=None):
                 py = [float(r["parameter"]) for r in y]
                 plow, phigh = p_bounds if p_bounds else (-np.inf,np.inf)
                 metrics = {"endpoint_difference": _metric(max(abs(max(min(px),plow)-max(min(py),plow)),abs(min(max(px),phigh)-min(max(py),phigh))), tol["parameter_atol"])}
+                curves = {}
                 for column in sorted(columns):
                     xa = np.array([float(r[column]) for r in xx])
                     ya = np.array([float(r[column]) for r in yy])
@@ -347,10 +349,17 @@ def _pairwise(case, a, b, *, coordinates=None):
                     # Registry's existing mixed absolute/relative rule.
                     error = np.max(np.maximum(abs(av-bv) - tol.get("rtol", 0.)*np.maximum(abs(av),abs(bv)), 0.))
                     metrics[column] = _metric(error, _limit(column, tol))
+                    curves[column] = dict(coordinate=coordinate, x=query.tolist(),
+                        error=abs(av-bv).tolist(), limit=_limit(column, tol),
+                        budget=(_limit(column, tol) + tol.get("rtol", 0.)*np.maximum(abs(av),abs(bv))).tolist())
                 if case["canonical_id"] == "radial.cycle-floquet":
                     def radius(rows):
                         return np.array([max(abs(float(v)) for k,v in r.items() if k.startswith("state_")) for r in rows])
-                    metrics["radius"] = _metric(np.max(abs(np.interp(query,xp,radius(xx))-np.interp(query,yp,radius(yy)))), tol["radius_atol"], "Phase 1 observable: maximum absolute sampled coordinate; radius_atol is not a per-axis extrema budget")
+                    av, bv = np.interp(query,xp,radius(xx)), np.interp(query,yp,radius(yy))
+                    metrics["radius"] = _metric(np.max(abs(av-bv)), tol["radius_atol"], "Phase 1 observable: maximum absolute sampled coordinate; radius_atol is not a per-axis extrema budget")
+                    curves["radius"] = dict(coordinate=coordinate, x=query.tolist(),
+                        error=abs(av-bv).tolist(), limit=tol["radius_atol"],
+                        budget=np.full(len(query), tol["radius_atol"]).tolist())
                 spectral_limit = tol.get("spectrum_atol", tol.get("multiplier_atol"))
                 if spectral_limit is not None:
                     metrics["spectrum"] = _metric(_spectrum_error(a, b, xx, yy, query, coordinate), spectral_limit,
@@ -359,9 +368,12 @@ def _pairwise(case, a, b, *, coordinates=None):
                            if m["value"] is not None else 1e100 for m in metrics.values())
                 costs[i, j] = cost
                 measured[i, j] = metrics, coordinate
+                sampled[i, j] = curves
         ii, jj = linear_sum_assignment(costs)
         for i, j in zip(ii, jj):
             metrics, coordinate = measured.get((i, j), ({"observable": _metric(None, 0, "no comparable physical observable or overlap")}, None))
+            if samples is not None:
+                samples.update({f"sheet_{i}.{k}": v for k,v in sampled.get((i,j), {}).items()})
             if coordinates is not None:
                 coordinates[f"sheet_{i}"] = coordinate
             result.update({f"sheet_{i}.{k}": v for k, v in metrics.items()})
@@ -409,3 +421,20 @@ def _unrefined_reason(case, kind):
     if elsewhere:
         return f"unrefined {kind} detection excluded; refined {kind} is compared in {elsewhere}"
     return f"unrefined {kind} detection excluded; no refined comparison declared"
+
+
+def covered_elsewhere(metric):
+    """A PENDING item delegated to another run ("... compared in <run-id>") is
+    information, not a gap, once that run's registry evidence status is PASS
+    (e.g. an unrefined BifurcationKit BT on lorenz84.fold-ft, whose refined BT
+    is compared in lorenz84.bt-ft)."""
+    import re
+    from .registry import load_registry, select_cases
+    match = re.search(r"compared in ([a-z0-9-]+\.[a-z0-9-]+)", metric.get("reason") or "")
+    if not match:
+        return False
+    try:
+        (run,) = select_cases(load_registry(), [match.group(1)])
+    except (ValueError, KeyError):
+        return False
+    return run.get("evidence_status") == "PASS"

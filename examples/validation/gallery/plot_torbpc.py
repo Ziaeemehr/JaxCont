@@ -25,27 +25,26 @@ The committed series is MatCont's full LPC/PD/NS branch, without trimming.
 # JaxCont's missing LPC/PD labels and multiplier mismatch keep this case FAIL;
 # nearest-spectrum proxies are not detected events.
 
+# sphinx_gallery_start_ignore
 import argparse
+import sys
 import tempfile
 from pathlib import Path
-import sys
+
 if "__file__" in globals():
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-import jax
+parser = argparse.ArgumentParser()
+parser.add_argument("--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated")
+options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+# sphinx_gallery_end_ignore
+
 import jax.numpy as jnp
 import numpy as np
-import matplotlib.pyplot as plt
 import jaxcont as jc
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 from examples.validation.reporting import make_report, save_checked_figure
-from examples.validation.visualize import render_comparison, render_report_table
-
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated"
-)
-options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+from examples.validation.visualize import ReportTable, render_comparison, summarize_report
 import examples.validation as validation_package
 reference_dir = Path(validation_package.__file__).resolve().parent / "reference"
 
@@ -132,12 +131,15 @@ for index, figure in enumerate(figures):
 # --------------------
 # This table is generated from the same report as the figures and sidecars.
 
-summary = render_report_table(report)
-save_checked_figure(summary, report, options.output_dir / "plot_torbpc_table.png")
+ReportTable(report)
 
 # %%
 # Takeaway
 # --------
+
+print(summarize_report(report))
+
+# %%
 # The report retains FAIL when labels or multipliers disagree even where
 # the envelopes look close. The untrimmed stress case remains a limitation;
 # the event-local error panel and table show why it cannot be called a pass.

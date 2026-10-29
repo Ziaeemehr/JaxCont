@@ -55,13 +55,17 @@ def _metadata():
 
 @lru_cache(maxsize=2)
 def _equilibrium(x64):
+    return equilibrium_tables()
+
+
+def equilibrium_tables(computed=None):
     seed = jnp.asarray(model.F_SWEEP["seed_state"])
     # Correct the contract seed without substituting another tool's solution.
     for _ in range(5):
         seed = seed - jnp.linalg.solve(model.lorenz84_jacobian(seed, 3.), model.lorenz84_rhs(seed, 3., model.FIXED_ARGS))
     branches, events = [], []
     for label, endpoint in (("decreasing", -1.5), ("increasing", 3.0000001)):
-        result = jc.continuation(jc.bif_problem(model.lorenz84_rhs, u0=seed, p0=3., args=model.FIXED_ARGS),
+        result = computed[label] if computed is not None else jc.continuation(jc.bif_problem(model.lorenz84_rhs, u0=seed, p0=3., args=model.FIXED_ARGS),
             p_span=(3., endpoint), settings=jc.ContinuationPar(ds=.002, ds_max=.05,
             max_steps=200, newton_tol=1e-12, theta=1.), events=[jc.Fold(), jc.Hopf()])
         rows = [_row(u, p, .04, label, i, p) for i, (u, p) in enumerate(zip(result.branch.states, result.branch.params))]
@@ -99,24 +103,31 @@ def _fold(x64):
         events=[jc.BogdanovTakens(raw_f=model.lorenz84_ft_rhs, free=1, curve="fold", args=model.CONSTANTS),
                 jc.ZeroHopf(raw_f=model.lorenz84_ft_rhs, free=1, curve="fold", args=model.CONSTANTS),
                 jc.Cusp(raw_f=model.lorenz84_ft_rhs, free=1, curve="fold", args=model.CONSTANTS)])
-    rows=[]
+    return fold_tables(result)
+
+
+def fold_tables(result):
+    """Package a public fold continuation without recomputing it."""
+    rows = []
     for i, (state, T) in enumerate(zip(result.branch.states, result.branch.params)):
         u, F, *_ = unpack_fold_curve(state, 4)
         rows.append(_row(u, F, T, "fold", i, T))
     return result, rows
 
 
-def produce(case_id):
+def produce(case_id, *, computed=None):
     """Return v2 tables; failures raise and never masquerade as complete data."""
     x64 = jax.config.x64_enabled
     if not x64:
         # The contract's Newton tolerance (1e-12) is below float32 resolution.
         raise RuntimeError("Lorenz-84 reference producers run in float64; set jax_enable_x64")
     metadata = _metadata()
+    equilibrium = computed["equilibrium"] if computed is not None else _equilibrium(x64)
+    fold = computed.get("fold") if computed is not None else None
     if case_id == "lorenz84.eq-f":
-        rows, events = _equilibrium(x64)
+        rows, events = equilibrium
     elif case_id == "lorenz84.fold-ft":
-        result, rows = _fold(x64)
+        result, rows = fold if fold is not None else _fold(x64)
         events=[]
         labels = {"bogdanov_takens": "BT", "zero_hopf": "ZH", "cusp": "CP"}
         for e in result.events:
@@ -126,13 +137,16 @@ def produce(case_id):
                 label = labels[e.kind]
                 events.append(_event(_row(e.u, *p, "fold", int(nearest["point_id"]), p[1]), label, f"{label.lower()}{len(events)}"))
     elif case_id == "lorenz84.hopf-ft":
-        _, eq_events = _equilibrium(x64)
-        seed = model.select_event(eq_events, "H", model.EVENT_WINDOWS["hopf_seed"])
-        u = jnp.array([seed[f"state_{i}"] for i in range(4)])
-        prob = jc.hopf_curve_problem(model.lorenz84_ft_rhs, u, jnp.array([seed["F"], .04]), free=1, formulation="extended", tol=1e-12, args=model.CONSTANTS)
-        result = jc.continuation(prob, p_span=(.04, -.01), settings=jc.ContinuationPar(ds=.001, ds_min=1e-5, ds_max=.015,
-            max_steps=model.CODIM2_CONTROLS["max_steps"], theta=1., newton_tol=1e-12, compute_stability=False),
-            events=[jc.BogdanovTakens(raw_f=model.lorenz84_ft_rhs, free=1, curve="hopf", args=model.CONSTANTS)])
+        if computed is not None:
+            result = computed["hopf"]
+        else:
+            _, eq_events = equilibrium
+            seed = model.select_event(eq_events, "H", model.EVENT_WINDOWS["hopf_seed"])
+            u = jnp.array([seed[f"state_{i}"] for i in range(4)])
+            prob = jc.hopf_curve_problem(model.lorenz84_ft_rhs, u, jnp.array([seed["F"], .04]), free=1, formulation="extended", tol=1e-12, args=model.CONSTANTS)
+            result = jc.continuation(prob, p_span=(.04, -.01), settings=jc.ContinuationPar(ds=.001, ds_min=1e-5, ds_max=.015,
+                max_steps=model.CODIM2_CONTROLS["max_steps"], theta=1., newton_tol=1e-12, compute_stability=False),
+                events=[jc.BogdanovTakens(raw_f=model.lorenz84_ft_rhs, free=1, curve="hopf", args=model.CONSTANTS)])
         bts = [e for e in result.events if e.kind == "bogdanov_takens"]
         # The extended chart passes the BT and continues as a neutral-saddle
         # curve (omega^2 < 0), which is not a Hopf curve. MatCont and
@@ -150,12 +164,12 @@ def produce(case_id):
         metadata["chart_status"] = ("Hopf chart ends at the detected BT; the neutral-saddle continuation beyond it is cut"
                                     if bts else "no BT detected on the Hopf chart")
     elif case_id == "lorenz84.bt-ft":
-        result, curve = _fold(x64)
+        result, curve = fold if fold is not None else _fold(x64)
         candidates=[e for e in result.events if e.kind == "bogdanov_takens" and .01 <= float(e.info["p"][1]) <= .03]
         if len(candidates) != 1:
             raise RuntimeError(f"expected unique positive-T BT on fold curve, got {len(candidates)}")
         seed=candidates[0]
-        u,p,v0,v1,ok=jc.bogdanov_takens_point(model.lorenz84_ft_rhs, seed.u, seed.info["p"], args=model.CONSTANTS, tol=1e-12)
+        u,p,v0,v1,ok=computed["bt"] if computed is not None and "bt" in computed else jc.bogdanov_takens_point(model.lorenz84_ft_rhs, seed.u, seed.info["p"], args=model.CONSTANTS, tol=1e-12)
         if not bool(ok):
             raise RuntimeError("BT Newton refinement failed")
         row=_row(u,*p,"bt",0,p[1]); rows=[row]
@@ -199,8 +213,8 @@ def export(case_id, output_dir):
     return write_candidate(bundle, output, tool="jaxcont", driver=__file__, equation=model.__file__)
 
 
-def run(case_id):
-    bundle=produce(case_id)
+def run(case_id, *, computed=None):
+    bundle=produce(case_id, computed=computed)
     return CaseResult(case_id, {"max_residual": max(r["residual_norm"] for r in bundle["branch"])},
                       {"v2": bundle}, {"bundle": bundle, "events": bundle["events"], "states": [[r[f"state_{i}"] for i in range(4)] for r in bundle["branch"]],
                       "parameters": [r["parameter"] for r in bundle["branch"]]})

@@ -20,32 +20,30 @@ converged alpha and period recorded by the committed MatCont bundle.
 # What to look for
 # ----------------
 # The spectral panel reveals H on the otherwise flat equilibrium branch.
-# Stability is distinguished by colour. The iPRC describes phase sensitivity
+# The iPRC describes phase sensitivity
 # along the cycle: its phase is aligned and radian units converted to cycle
 # fractions before comparison. MatCont's time derivative of PRC is not
 # JaxCont's parameter derivative and is never treated as a matching series.
 
+# sphinx_gallery_start_ignore
 import argparse
+import sys
 import tempfile
 from pathlib import Path
-import sys
+
 if "__file__" in globals():
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-import jax
+parser = argparse.ArgumentParser()
+parser.add_argument("--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated")
+options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+# sphinx_gallery_end_ignore
+
 import jax.numpy as jnp
-import numpy as np
-import matplotlib.pyplot as plt
 import jaxcont as jc
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 from examples.validation.reporting import make_report, save_checked_figure
-from examples.validation.visualize import render_comparison, render_report_table
-
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated"
-)
-options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+from examples.validation.visualize import ReportTable, render_comparison, summarize_report
 import examples.validation as validation_package
 reference_dir = Path(validation_package.__file__).resolve().parent / "reference"
 
@@ -146,13 +144,22 @@ for label, case_result in [("hopf", hopf_result), ("prc", prc_result)]:
 # --------------------
 # Both tables read measured values and unchanged limits from the reports.
 
-for label, report in reports:
-    summary = render_report_table(report)
-    save_checked_figure(summary, report, options.output_dir / f"plot_adaptx_{label}_table.png")
+hopf_report, prc_report = (report for _, report in reports)
+ReportTable(hopf_report)
+
+# %%
+# The phase-response report:
+
+ReportTable(prc_report)
 
 # %%
 # Takeaway
 # --------
+
+print(summarize_report(hopf_report))
+print(summarize_report(prc_report))
+
+# %%
 # The Hopf and iPRC reports quantify agreement separately, preserving phase
 # alignment and unit conversion. JaxCont's dPRC is a parameter sensitivity;
 # this page makes no MatCont cross-validation claim for that quantity.

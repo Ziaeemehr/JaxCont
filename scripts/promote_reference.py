@@ -39,20 +39,8 @@ def _hashes(path):
 
 
 def _covered_elsewhere(metric):
-    """A PENDING item delegated to another run ("... compared in <run-id>") is
-    information, not a gap, once that run's registry evidence status is PASS
-    (e.g. an unrefined BifurcationKit BT on lorenz84.fold-ft, whose refined BT
-    is compared in lorenz84.bt-ft)."""
-    import re
-    from examples.validation.registry import load_registry, select_cases
-    match = re.search(r"compared in ([a-z0-9-]+\.[a-z0-9-]+)", metric.get("reason") or "")
-    if not match:
-        return False
-    try:
-        (run,) = select_cases(load_registry(), [match.group(1)])
-    except (ValueError, KeyError):
-        return False
-    return run.get("evidence_status") == "PASS"
+    from examples.validation.promotion_metrics import covered_elsewhere
+    return covered_elsewhere(metric)
 
 
 def _provenance(path, data, case):
