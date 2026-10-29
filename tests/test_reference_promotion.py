@@ -162,3 +162,70 @@ def test_window_boundary_contact_is_not_an_extra_sheet():
     data = dict(branch=[dict(segment_id="inward", parameter=p) for p in [1, 0]] +
                        [dict(segment_id="outward", parameter=p) for p in [1, 2]])
     assert len(_sheets(data, selected)) == 1
+
+
+@pytest.mark.parametrize("shift, verdict", [(0., "PASS"), (0.01, "FAIL")])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_fold_comparison_uses_regular_coordinate(shift, verdict, reverse):
+    import numpy as np
+    from examples.validation.promotion_metrics import _pairwise
+
+    def curve(samples, offset):
+        rows = [dict(segment_id="s", point_id=str(i), parameter=float(x*x + offset),
+                     state_0=float(x), state_1=float(x*x*x)) for i, x in enumerate(samples)]
+        return dict(branch=rows, spectra=[dict(segment_id="s", point_id=r["point_id"],
+                    real=2*r["state_0"], imag=0, event_index=-1) for r in rows])
+
+    selected = case()
+    selected.update(comparison_window=[0, 1], expected_events=[])
+    selected["comparison_window"] = [1e-5, .95]
+    sparse = curve(np.sqrt(np.linspace(1e-5, .95, 12)), 0)
+    dense = curve(np.sqrt(np.linspace(0, 1, 101)), shift)
+    metrics = _pairwise(selected, *( (dense, sparse) if reverse else (sparse, dense)))
+    assert all(m["verdict"] == verdict for k, m in metrics.items() if k.endswith("parameter"))
+    assert metrics["sheet_0.spectrum"]["verdict"] == "PASS"
+    if verdict == "PASS":
+        assert all(m["verdict"] == "PASS" for m in metrics.values())
+    else:
+        assert any(m["verdict"] == "FAIL" for m in metrics.values())
+
+
+def test_first_window_passage_excludes_and_reports_later_reentry():
+    from examples.validation.promotion_metrics import _sheets, passage_information
+    selected = case()
+    selected.update(comparison_window=[0, 1], comparison_passage="first")
+    data = dict(branch=[dict(segment_id="chart0" if i < 2 else "chart1", point_id=str(i),
+                             parameter=p, state_0=i)
+                        for i, p in enumerate([1, .5, .1, -.5, -1, .2, .8, 2])])
+    sheets = _sheets(data, selected)
+    assert len(sheets) == 1
+    assert [r["point_id"] for r in sheets[0]] == ["0", "1", "2", "3"]
+    data["events"] = [dict(segment_id="chart0", point_id="1", parameter=.5, event_type="H"),
+                      dict(segment_id="chart1", point_id="5", parameter=.2, event_type="H")]
+    from examples.validation.promotion_metrics import event_rows
+    assert [r["point_id"] for r in event_rows(selected, data)] == ["1"]
+    info = passage_information(data, selected)
+    assert len(info["later_reentries"]) == 1
+    assert info["later_reentries"][0]["point_ids"] == ["5", "6"]
+
+    from examples.validation.validation import build_validation_report
+    selected.update(expected_events=[], spectrum_required=False)
+    data["metadata"] = {}
+    for row in data["branch"]:
+        row["residual_norm"] = 0
+    report = build_validation_report(selected, {"jaxcont": data})
+    assert report.to_dict()["information"]["passages"]["jaxcont"]["later_reentries"] == info["later_reentries"]
+
+
+def test_pending_item_delegated_to_a_passing_run_is_information_only(monkeypatch):
+    import scripts.promote_reference as promote
+    registry = {"cases": [
+        {"id": "a.pass", "canonical_id": "a.pass", "aliases": [], "support": "supported", "evidence_status": "PASS"},
+        {"id": "a.open", "canonical_id": "a.open", "aliases": [], "support": "supported", "evidence_status": "PENDING"},
+    ]}
+    monkeypatch.setattr("examples.validation.registry.load_registry", lambda *a, **k: registry)
+    delegated = {"verdict": "PENDING", "reason": "unrefined BT detection excluded; refined BT is compared in a.pass"}
+    assert promote._covered_elsewhere(delegated)
+    assert not promote._covered_elsewhere({**delegated, "reason": "refined BT is compared in a.open"})
+    assert not promote._covered_elsewhere({**delegated, "reason": "refined BT is compared in a.missing"})
+    assert not promote._covered_elsewhere({"verdict": "PENDING", "reason": "no refined comparison declared"})

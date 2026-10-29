@@ -156,3 +156,44 @@ Initial G1 runs identified the CLI adapter defect, the obsolete PENDING registry
 Final G3 command (all runtime paths set as above): `JAXCONT_TEST_X64=1 python3 -m pytest tests/test_matcont_suite.py tests/test_validation_reports.py tests/test_lorenz84_three_tool.py tests/test_periodic_validation.py tests/test_curves.py tests/test_codim2.py -m slow -q` — **24 PASS, 1 strict XFAIL, exit 0**. Log: `/tmp/round3-g3-verified.log`. This full run started after every implementation and integration fix.
 
 Final integrity verification loaded all ten promoted bundles with `require_reviewed=True`, verified every numerical output hash, and enforced the unchanged 10 MiB cap. `git diff --check` passes. No `src/jaxcont` file changed. Final state has green focused tests, both G1 precisions, and G3; the numerical FAIL/PENDING runs in the table remain unpromoted and explicitly unresolved.
+
+## Round 4
+
+The shared promotion/report comparator now selects a coordinate that is strictly monotone on both matched sheets, maximizing the smaller normalized range (`range / max(1, max(abs(values)))`). Consecutive identical geometric samples are removed from the interpolation view only. If no physical coordinate qualifies, it uses normalized arclength in parameter/state space. All observables use cubic interpolation (lower degree only when fewer than four distinct samples exist), evaluated on the sparser native grid. Spectra use cubic interpolation of symmetric characteristic coefficients followed by root recovery and assignment; this preserves smoothness at eigenvalue collisions without depending on native mode order. The continuation parameter is explicitly measured when a state coordinate is used. Manifests and shared reports record the selected coordinates.
+
+The fold curve explicitly selects the first connected window passage from its seed, retaining boundary bracketing nodes and native continuation order across chart subdivisions. Later passages and their linked events are excluded from comparison and listed as information. This policy is specific to the seeded fold-curve contract: equilibrium fold arms remain separate comparison sheets. The retained MatCont candidate is monotone from T=0.04 to T=-1.698739811503063 and contains **no later window re-entry**; its extra comparison sheet was a native chart subdivision at T=0. The synthetic leave/re-enter fixture verifies the re-entry exclusion and information path independently. Neither candidate bytes nor reviewed bundles were rewritten.
+
+Regression fixtures cover an exact fold with dense and sparse parameter-offset sampling, a real parameter shift that must fail, both pair orders, and a first passage spanning two native charts with a later re-entry/event that must be informational. The baseline comparator fails the exact offset-grid fixture in both pair orders; the new comparator passes it. The report-information and event-exclusion assertions also failed before their implementations.
+
+### Manifests and promotions
+
+| Run / manifest | Round 3 | Round 4 | New promotion |
+|---|---|---|---|
+| lorenz84.eq-f | FAIL | PASS | MatCont, BifurcationKit |
+| lorenz84.fold-ft | FAIL | PENDING | None |
+| torbpc.cycle-lpc-pd-ns | FAIL | FAIL | None |
+| torbpc.external (MatCont/BifurcationKit only) | FAIL | FAIL | None |
+
+The three run manifests plus the external-only torBPC manifest were regenerated under `examples/validation/generated/promotion/manifests/`. The equilibrium spectrum error is at most 0.0002845277648449024 against the unchanged 0.0005 budget. Its sheets select `state_0` and `state_3`. Both external equilibrium bundles were promoted with reviewer `Claude (review delegated by owner, 2026-10-28)` and review date 2026-10-29. The registry records equilibrium PASS, fold PENDING, and torBPC JaxCont FAIL. There are now twelve promoted bundles; all twelve load as reviewed, all numerical output hashes verify, and all bundles remain below 10 MiB. Every newly promoted native file matches its candidate byte for byte.
+
+Fold branch comparisons now pass (worst state error 1.7211444736098258e-7 against 0.0002), with `state_3` as coordinate. Its remaining PENDING metrics are the existing BifurcationKit unrefined BT detection and BT count comparisons. This round does not silently treat that guess as a refined event or remove the event requirement. Refined BT evidence remains independently reviewed in `lorenz84.bt-ft`.
+
+The external torBPC pair selects `state_2_max` on the short arm and `state_0_max` on the long arm. The short-arm spectrum error passes at 0.0003404108468370026 / 0.005. The long-arm spectrum error still fails at 0.03320249726406388 / 0.005. At the worst sparse native coordinate `state_0_max=0.4861248763792423`, the large real multipliers are approximately -52.7990470 and -52.7658445; this is away from the LPC endpoint. No external torBPC bundle was promoted. JaxCont retains fourteen unresolved points, missing PD, residual 3.2492729488686756e-6 / 1e-7, and sheet-count failures. Further work must resolve these measured remaining limitations; no tolerance was widened.
+
+The other ten run manifests and the ten Round 3 promotions retain their prior status. No `src/jaxcont` file changed, no commit was made, and the pre-existing `.clinerules` remains untouched.
+
+### Verification
+
+The cubic control retains its pre-existing analytic `state_0` coordinate preference, provided it is strictly monotone. An intermediate run exposed why this matters: automatic range selection chose the parameter on the outer cubic arms, reproducing the fold singularity. `test_offline_suite_verdicts_match_registry[MC-EQ-001]` and `test_offline_cli_validates_supported_reference_case` failed; preserving the established cubic coordinate fixes that regression, and the isolated slow cubic check passes. The initial G1 also found `test_flagship_registry_and_conventions_are_ready_for_review` still expecting the Round 3 equilibrium/fold FAIL statuses; that assertion now follows the measured PASS/PENDING statuses. Offline three-tool bundle checks now include the promoted equilibrium run.
+
+All verification commands activate `~/envs/jaxcont`, set `JAX_PLATFORMS=cpu`, close stdin, and use one BLAS/OpenMP thread. Final commands also set writable `MPLCONFIGDIR=/tmp/round4-mpl`. G3 sets `MATLAB_BIN=$HOME/programms/Matlab/R2024a/bin/matlab`, `MATCONT_ROOT=$HOME/programms/MatCont/MatCont7p6`, `JULIA_BIN=$HOME/.juliaup/bin/julia`, and `JULIA_DEPOT_PATH=$PWD/.julia-depot:$HOME/.julia`.
+
+| Final check | Result |
+|---|---|
+| Promotion/report/schema plus offline Lorenz84 and reference-system checks, `JAXCONT_TEST_X64=0` | 66 PASS |
+| Same focused checks, `JAXCONT_TEST_X64=1` | 66 PASS |
+| G1: `JAXCONT_TEST_X64=0 python -m pytest -n 8 -q -x` | 862 PASS, 1 SKIP; exit 0 |
+| G1: `JAXCONT_TEST_X64=1 python -m pytest -n 8 -q -x` | 863 PASS; exit 0 |
+| G3: `JAXCONT_TEST_X64=1 python -m pytest tests/test_matcont_suite.py tests/test_validation_reports.py tests/test_lorenz84_three_tool.py tests/test_periodic_validation.py tests/test_curves.py tests/test_codim2.py -m slow -q` | 24 PASS, 1 strict XFAIL; exit 0 |
+
+Final logs and JUnit evidence use `/tmp/round4-verified-*.log` and `/tmp/round4-verified-*.xml`. The complete preceding G3 run also passed with 24 PASS and the same strict XFAIL (`/tmp/round4-final-g3.*`). The first accidentally broadened focused invocation included slow tests and reported the cubic regression above; the final focused invocations preserve the repository's default marker exclusions. The final G3 rerun started after the cubic fix. The strict xfail remains `test_torbpc_jaxcont_matches_all_matcont_diagnostics`. Final integrity checks verify reviewed bundles, native-file identity, manifest/report verdict and coordinate agreement, `git diff --check`, and no solver-source diff.

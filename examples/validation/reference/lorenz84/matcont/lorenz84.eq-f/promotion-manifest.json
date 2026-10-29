@@ -1,0 +1,2411 @@
+{
+  "schema_version": 1,
+  "canonical_id": "lorenz84.eq-f",
+  "system": "lorenz84",
+  "reviewer": "Claude (review delegated by owner, 2026-10-28)",
+  "review_date": "2026-10-29",
+  "expected_status": "FAIL",
+  "registry_case": {
+    "id": "lorenz84.eq-f",
+    "canonical_id": "lorenz84.eq-f",
+    "aliases": [],
+    "system": "lorenz84",
+    "title": "Extended Lorenz-84 eq-f",
+    "support": "supported",
+    "features": [
+      "equilibrium-continuation"
+    ],
+    "python": "examples.validation.cases.python_cases.lorenz84:run_equilibria",
+    "matlab": "run_lorenz84_equilibria",
+    "references": [],
+    "manual_source": "Reviewed Lorenz-84 contract; candidates awaiting Task 2.12 review",
+    "tolerances": {
+      "parameter_atol": 0.0005,
+      "state_atol": 0.0002,
+      "residual_atol": 1e-07,
+      "spectrum_atol": 0.0005,
+      "frequency_atol": 0.0005
+    },
+    "tool_coverage": {
+      "jaxcont": "PENDING",
+      "matcont": "PENDING",
+      "bifurcationkit": "PENDING"
+    },
+    "required_tools": [
+      "jaxcont",
+      "matcont",
+      "bifurcationkit"
+    ],
+    "evidence_status": "FAIL",
+    "expected_domain": [
+      -1.5,
+      3.0
+    ],
+    "expected_events": [
+      "LP",
+      "H",
+      "H",
+      "H"
+    ],
+    "model_contract": {
+      "state_order": [
+        "X",
+        "Y",
+        "Z",
+        "U"
+      ],
+      "parameter_order": [
+        "F",
+        "T"
+      ],
+      "time": "original nondimensional time; no time rescaling",
+      "jacobian": "rows are RHS components; columns follow X,Y,Z,U",
+      "frequency": "angular frequency in radians per original time unit",
+      "fold_label": "LP (BK fold aliases normalized by the exporter)",
+      "hopf_label": "H (BK hopf aliases normalized by the exporter)",
+      "bt_label": "BT; two small eigenvalues and geometric nullity one",
+      "normal_forms": "record tool-native definition and eigenvector normalization; no implicit l1 conversion",
+      "arclength": "record physical metric and state/parameter weights per tool",
+      "chart_boundary": "Hopf chart termination near BT is a boundary, not a BT detection",
+      "symmetry": "(U,T) -> (-U,-T); select positive-T BT by window",
+      "review_status": "REVIEWED (Claude review 1, 2026-10-28)",
+      "constants": {
+        "alpha": 0.25,
+        "beta": 1.0,
+        "gamma": 0.987,
+        "delta": 1.04,
+        "G": 0.25
+      },
+      "f_sweep": {
+        "fixed_T": 0.04,
+        "bounds": [
+          -1.5,
+          3.0
+        ],
+        "seed_F": 3.0,
+        "seed_state": [
+          2.9787004394953343,
+          -0.03868302503393752,
+          0.058232737694740085,
+          -0.02105288273117459
+        ],
+        "seed_policy": "Newton-correct at F=3,T=0.04 before continuation",
+        "both_directions": true,
+        "ds": 0.002,
+        "ds_max": 0.05,
+        "max_steps_per_direction": 200,
+        "newton_atol": 1e-12,
+        "source": "historical lorenz84_equilibria.jl (Julia 02)",
+        "comparison_domain": "clip each sheet to bounds before matching",
+        "expected_events": [
+          {
+            "kind": "LP",
+            "window": {
+              "F": [
+                1.5,
+                1.58
+              ]
+            }
+          },
+          {
+            "kind": "H",
+            "window": {
+              "F": [
+                1.59,
+                1.65
+              ]
+            }
+          },
+          {
+            "kind": "H",
+            "window": {
+              "F": [
+                2.4,
+                2.55
+              ]
+            }
+          },
+          {
+            "kind": "H",
+            "window": {
+              "F": [
+                2.8,
+                2.95
+              ]
+            }
+          }
+        ]
+      },
+      "codim2": {
+        "parameter_order": [
+          "F",
+          "T"
+        ],
+        "free_parameter": "T",
+        "T_bounds": [
+          -0.1,
+          3.2
+        ],
+        "ds": -0.001,
+        "ds_min": 1e-05,
+        "ds_max": 0.015,
+        "max_steps": 30,
+        "expected_T_domain": [
+          -0.01,
+          0.04
+        ],
+        "source": "historical lorenz84_codim2.jl; shared positive-T BT chart"
+      },
+      "event_windows": {
+        "fold_seed": {
+          "F": [
+            1.5,
+            1.58
+          ],
+          "T": [
+            0.039,
+            0.041
+          ]
+        },
+        "hopf_seed": {
+          "F": [
+            1.59,
+            1.65
+          ],
+          "T": [
+            0.039,
+            0.041
+          ]
+        },
+        "bt_positive_T": {
+          "F": [
+            1.4,
+            1.5
+          ],
+          "T": [
+            0.01,
+            0.03
+          ]
+        }
+      },
+      "domain_coordinate": "F",
+      "coverage_note": "BT is a refined point selected in a window; Hopf may terminate at a chart boundary, which cannot pass full-domain publication"
+    },
+    "metric_limits": {
+      "parameter_atol": 0.0005,
+      "state_atol": 0.0002,
+      "residual_atol": 1e-07,
+      "spectrum_atol": 0.0005,
+      "frequency_atol": 0.0005
+    },
+    "bifurcationkit": "lorenz84_equilibria.jl",
+    "comparison_window": [
+      1.5467,
+      2.99
+    ],
+    "comparison_window_comment": "Both fold arms; upper bound 2.99 is strictly inside MatCont coverage ending at F=2.997528062547353 and the other tools. The fold at F=1.546648 lies below the window.",
+    "comparison_expected_events": [
+      "H",
+      "H",
+      "H"
+    ]
+  },
+  "candidates": {
+    "jaxcont": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/lorenz84/jaxcont/lorenz84.eq-f",
+      "hashes": {
+        "branch.csv": "sha256:eaad34cf95aae7f42da08e2968c03a9f2524d1646b7f82ee7e19da40d196d4c1",
+        "events.csv": "sha256:db661877ce7d25ee62482ed0b29f20d0f4f6bab7c115c9958c3bee82038c9e27",
+        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0",
+        "metadata.json": "sha256:db5e09817d295703c32fc89bb77a00a1094be91f42348d0e78313edcf55076a4",
+        "regenerate_jaxcont.py": "sha256:265c05f933b81bc3263922f04104b173d5facf71447f8296cdc297dbd8e297d2",
+        "spectra.csv": "sha256:f664c3775990df913c96ea0ef16da4689627eeef0969f2975c42bc6876f50ec9"
+      },
+      "promotable": true,
+      "command": [
+        "/home/ziaee/envs/jaxcont/bin/python3",
+        "-"
+      ],
+      "logs": {
+        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0"
+      },
+      "coverage": "unspecified"
+    },
+    "matcont": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/lorenz84/matcont/lorenz84.eq-f",
+      "hashes": {
+        "branch.csv": "sha256:d779b3a0f637f482c45401dbe83d54599d8247f5a684c2d7dcfc07e1e077bb57",
+        "events.csv": "sha256:24dcf64355a3ddab708c0933d97c1e2634b1a6d586a772d8a6b0fb6731fa78ab",
+        "invocation.json": "sha256:0d949810ab456625fc5d5c6af978ac1a5d2a81572b779dc2601b420c7487f526",
+        "metadata.json": "sha256:2629aefd9c0c7fc84db5657d4275104b2606bb00070e4176484dc3540db45d44",
+        "native.json": "sha256:6d4d8962f4c272eafd8f290dfb01e6c2eef37b6cc75b761b0728ff484e8a0516",
+        "raw.json": "sha256:7856650b3495f5794c410b503098925c5e07a829bc86fe162733dc14f02a8603",
+        "regeneration.log": "sha256:53ddd9ef54be54180d068647087b6ea184b85afa9474b5bf05fee5c3f65bea74",
+        "run_lorenz84_equilibria.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "run_lorenz84_equilibria.stdout.log": "sha256:a2068c40e4a2c4ff6a6b6b449071e6bfc0098ad042897099ae49e0a78ab3f15f",
+        "spectra.csv": "sha256:9942480c49a857165d709c5a720eb5bb8442c0ad68c0afd6be17a039cd4abed0"
+      },
+      "promotable": true,
+      "command": [
+        "/home/ziaee/programms/Matlab/R2024a/bin/matlab",
+        "-batch",
+        "addpath('/home/ziaee/git/JaxCont/examples/validation/regenerate/matcont','/home/ziaee/git/JaxCont/examples/validation/regenerate/matcont/capability_gaps'); run_lorenz84_equilibria('/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/matcont/lorenz84.eq-f')"
+      ],
+      "logs": {
+        "regeneration.log": "sha256:53ddd9ef54be54180d068647087b6ea184b85afa9474b5bf05fee5c3f65bea74",
+        "run_lorenz84_equilibria.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "run_lorenz84_equilibria.stdout.log": "sha256:a2068c40e4a2c4ff6a6b6b449071e6bfc0098ad042897099ae49e0a78ab3f15f"
+      },
+      "coverage": "unspecified"
+    },
+    "bifurcationkit": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/lorenz84/bifurcationkit/lorenz84.eq-f",
+      "hashes": {
+        "branch.csv": "sha256:fcada8a8c358087e3894389ca633bd2c2bff5bb7c63f6bdf840104b24d412665",
+        "events.csv": "sha256:2fd022a65ccf32c97f5e5c207b7504246ba5baa7c1a3d0be356e9d2406afb69a",
+        "invocation.json": "sha256:0429c1f269c09ac34e98535edc31225993acf7a9ecd03ba48f3e357bc7f2b529",
+        "lorenz84_equilibria.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "lorenz84_equilibria.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "metadata.json": "sha256:b7edbcc756bdc45f2ace03d83222ad38239423fa620b37ded0985e43a74930ad",
+        "regeneration.log": "sha256:53ddd9ef54be54180d068647087b6ea184b85afa9474b5bf05fee5c3f65bea74",
+        "samples.json": "sha256:f220e5e798d634cdfa7b0aeec13145428e7212fa2ffa1abb925448b0ca58dec0",
+        "spectra.csv": "sha256:549ddd894906fdc17c1b829feba204a396a69e4662eb81b6b904ab63262729c5"
+      },
+      "promotable": true,
+      "command": [
+        "julia",
+        "--project=/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit",
+        "/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit/lorenz84_equilibria.jl",
+        "--case",
+        "lorenz84.eq-f",
+        "--output-dir",
+        "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/bifurcationkit/lorenz84.eq-f/lorenz84.eq-f/bifurcationkit"
+      ],
+      "logs": {
+        "lorenz84_equilibria.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "lorenz84_equilibria.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "regeneration.log": "sha256:53ddd9ef54be54180d068647087b6ea184b85afa9474b5bf05fee5c3f65bea74"
+      },
+      "coverage": "unspecified"
+    }
+  },
+  "independent": {
+    "jaxcont": {
+      "required_sheet_count": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_gap": {
+        "value": 6.355200347929468e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.endpoint_gap": {
+        "value": 6.355200347929468e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 6.355200347929468e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 5.167186123422596e-13,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "matcont": {
+      "required_sheet_count": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 1.457167719820518e-16,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "bifurcationkit": {
+      "required_sheet_count": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 8.921405281192563e-13,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      }
+    }
+  },
+  "pairwise": {
+    "jaxcont--matcont": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 6.355200347929468e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.F": {
+        "value": 1.1044783815972181e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.T": {
+        "value": 2.0816681711721685e-17,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.parameter": {
+        "value": 1.1044783815972181e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_0": {
+        "value": 1.3322676295501878e-15,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_1": {
+        "value": 4.7473759270943994e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_2": {
+        "value": 1.367860369416718e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_3": {
+        "value": 4.1829718016306305e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.spectrum": {
+        "value": 1.1963028052897062e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "sheet_1.endpoint_difference": {
+        "value": 6.355200347929468e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.F": {
+        "value": 2.79481764633438e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.T": {
+        "value": 4.163336342344337e-17,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.parameter": {
+        "value": 2.79481764633438e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.state_0": {
+        "value": 3.097439604893282e-05,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.state_1": {
+        "value": 3.962414455854768e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.state_2": {
+        "value": 3.422461033075752e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.state_3": {
+        "value": 2.220446049250313e-16,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.spectrum": {
+        "value": 0.0002573143678992798,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "H.count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.F": {
+        "value": 1.262350224351394e-10,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.T": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.frequency": {
+        "value": 1.537483473867951e-10,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.parameter": {
+        "value": 1.262350224351394e-10,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.state_0": {
+        "value": 5.775313560718587e-11,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.state_1": {
+        "value": 5.5521837127869844e-12,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.state_2": {
+        "value": 1.2103013036224297e-11,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.state_3": {
+        "value": 8.583378452442503e-11,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.spectrum": {
+        "value": 1.5492501426366271e-10,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      },
+      "H_1.F": {
+        "value": 4.083977600544131e-11,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.T": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.frequency": {
+        "value": 1.2949752381530288e-11,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.parameter": {
+        "value": 4.083977600544131e-11,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.state_0": {
+        "value": 1.3706813462022183e-12,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.state_1": {
+        "value": 1.9872645196095107e-13,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.state_2": {
+        "value": 3.1838420788687927e-13,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.state_3": {
+        "value": 9.806044865001695e-12,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.spectrum": {
+        "value": 1.3096239815824927e-11,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      },
+      "H_2.F": {
+        "value": 5.0813131480254015e-11,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.T": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.frequency": {
+        "value": 1.5725198920790717e-12,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.parameter": {
+        "value": 5.0813131480254015e-11,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.state_0": {
+        "value": 1.0806910921701274e-12,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.state_1": {
+        "value": 1.640632074639825e-13,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.state_2": {
+        "value": 2.535471832487701e-13,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.state_3": {
+        "value": 1.0425549312742532e-11,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.spectrum": {
+        "value": 1.2734423088841282e-11,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      }
+    },
+    "jaxcont--bifurcationkit": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 6.355200347929468e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.F": {
+        "value": 9.64384491730641e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.T": {
+        "value": 1.3877787807814457e-17,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.parameter": {
+        "value": 9.64384491730641e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_0": {
+        "value": 8.881784197001252e-16,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_1": {
+        "value": 3.5558123933493446e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_2": {
+        "value": 1.1087165913137298e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_3": {
+        "value": 3.535001541657423e-05,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.spectrum": {
+        "value": 0.0002845277648449024,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "sheet_1.endpoint_difference": {
+        "value": 6.355200347929468e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.F": {
+        "value": 4.215888527170364e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.T": {
+        "value": 1.3877787807814457e-17,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.parameter": {
+        "value": 4.215888527170364e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.state_0": {
+        "value": 4.607505590392691e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.state_1": {
+        "value": 1.0233734824838248e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.state_2": {
+        "value": 4.737292125245318e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.state_3": {
+        "value": 2.220446049250313e-16,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.spectrum": {
+        "value": 1.1868428849829004e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "H.count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.F": {
+        "value": 2.4089757544309975e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.T": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.frequency": {
+        "value": 2.93406567208887e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.parameter": {
+        "value": 2.4089757544309975e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.state_0": {
+        "value": 1.1021474599637315e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.state_1": {
+        "value": 1.0595610326624705e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.state_2": {
+        "value": 2.3097064039134807e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.state_3": {
+        "value": 1.638010690141467e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.spectrum": {
+        "value": 2.9565198325963135e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      },
+      "H_1.F": {
+        "value": 1.2828910160855855e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.T": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.frequency": {
+        "value": 4.0678646440195365e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.parameter": {
+        "value": 1.2828910160855855e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.state_0": {
+        "value": 4.3059823262581176e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.state_1": {
+        "value": 6.242227203884232e-09,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.state_2": {
+        "value": 1.0002670913777933e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.state_3": {
+        "value": 3.080497823493289e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.spectrum": {
+        "value": 4.1142223688756503e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      },
+      "H_2.F": {
+        "value": 0.00017184694315997007,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.T": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.frequency": {
+        "value": 5.324584987809189e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.parameter": {
+        "value": 0.00017184694315997007,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.state_0": {
+        "value": 3.653995386487807e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.state_1": {
+        "value": 5.547348573380073e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.state_2": {
+        "value": 8.573551425750114e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.state_3": {
+        "value": 3.5257452322690064e-05,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.spectrum": {
+        "value": 4.306120758727687e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      }
+    },
+    "matcont--bifurcationkit": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.F": {
+        "value": 4.290842859688837e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.T": {
+        "value": 2.0816681711721685e-17,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.parameter": {
+        "value": 4.290842859688837e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_0": {
+        "value": 1.1102230246251565e-15,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_1": {
+        "value": 1.654799532402329e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_2": {
+        "value": 5.034218905630716e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_3": {
+        "value": 1.5871076465556744e-05,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.spectrum": {
+        "value": 0.00012652548310537748,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "sheet_1.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.F": {
+        "value": 2.1153532414608378e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.T": {
+        "value": 2.0816681711721685e-17,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.parameter": {
+        "value": 2.1153532414608378e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.state_0": {
+        "value": 2.610953286907858e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.state_1": {
+        "value": 6.665626578472583e-09,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.state_2": {
+        "value": 4.289437294247023e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.state_3": {
+        "value": 2.220446049250313e-16,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.spectrum": {
+        "value": 5.201910672520949e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "H.count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.F": {
+        "value": 2.407713404206646e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.T": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.frequency": {
+        "value": 2.9325281886150023e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.parameter": {
+        "value": 2.407713404206646e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.state_0": {
+        "value": 1.1015699286076597e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.state_1": {
+        "value": 1.0590058142911918e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.state_2": {
+        "value": 2.3084961026098583e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.state_3": {
+        "value": 1.6371523522962228e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_0.spectrum": {
+        "value": 2.954970582453677e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      },
+      "H_1.F": {
+        "value": 1.28285017630958e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.T": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.frequency": {
+        "value": 4.067735146495721e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.parameter": {
+        "value": 1.28285017630958e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.state_0": {
+        "value": 4.3058452581234974e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.state_1": {
+        "value": 6.242028477432271e-09,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.state_2": {
+        "value": 1.0002352529570047e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.state_3": {
+        "value": 3.080399763044639e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_1.spectrum": {
+        "value": 4.1140914064775114e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      },
+      "H_2.F": {
+        "value": 0.0001718468923468386,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.T": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.frequency": {
+        "value": 5.324583415289297e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.parameter": {
+        "value": 0.0001718468923468386,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.state_0": {
+        "value": 3.653994305796715e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.state_1": {
+        "value": 5.547346932747999e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.state_2": {
+        "value": 8.573548890278282e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.state_3": {
+        "value": 3.525744189714075e-05,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "H_2.spectrum": {
+        "value": 4.306119485285386e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      }
+    }
+  },
+  "event_information": {
+    "jaxcont": {
+      "outside_window": [
+        {
+          "F": "1.5466483725981222",
+          "T": "0.04",
+          "bracket_lower": "1.5466483725981222",
+          "bracket_upper": "1.5466483725981222",
+          "event_id": "e0",
+          "event_type": "LP",
+          "first_lyapunov": "",
+          "fold_coefficient": "3.5612913954427152",
+          "frequency": "",
+          "kind": "LP",
+          "order": "51",
+          "parameter": "1.5466483725981222",
+          "point_id": "51",
+          "residual_norm": "8.383918559395909e-14",
+          "segment_id": "decreasing",
+          "state_0": "1.3117855253171298",
+          "state_1": "-0.042874998184959705",
+          "state_2": "0.18038939415092967",
+          "state_3": "-0.1570275849669715",
+          "status": "CONVERGED",
+          "unstable_dimension": "3"
+        }
+      ],
+      "unrefined_detections": []
+    },
+    "matcont": {
+      "outside_window": [
+        {
+          "F": "1.5466483725981275",
+          "T": "0.04",
+          "bracket_lower": "",
+          "bracket_status": "unknown",
+          "bracket_upper": "",
+          "coefficient_convention": "MatCont 7.6 native normal form, original time, tool-native eigenvector normalization",
+          "event_id": "event_0",
+          "event_type": "LP",
+          "first_lyapunov": "",
+          "fold_coefficient": "-3.561291395413363",
+          "frequency": "0",
+          "kind": "LP",
+          "parameter": "1.5466483725981275",
+          "point_id": "54",
+          "residual_norm": "2.7755575615628914e-17",
+          "segment_id": "0",
+          "state_0": "1.311785525317521",
+          "state_1": "-0.04287499818495587",
+          "state_2": "0.18038939415087565",
+          "state_3": "-0.15702758496645372",
+          "status": "REFINED"
+        }
+      ],
+      "unrefined_detections": []
+    },
+    "bifurcationkit": {
+      "outside_window": [
+        {
+          "F": "1.5466483726052815",
+          "T": "0.04",
+          "bracket_lower": "1.5466483725991549",
+          "bracket_upper": "1.5466483726052815",
+          "event_id": "e5",
+          "event_type": "LP",
+          "frequency": "",
+          "kind": "LP",
+          "native_label": "bp",
+          "native_status": "converged",
+          "order": "22",
+          "parameter": "1.5466483726052815",
+          "point_id": "22",
+          "residual_norm": "3.8163916471489756e-17",
+          "segment_id": "equilibrium",
+          "state_0": "1.311784287862582",
+          "state_1": "-0.042874922780755886",
+          "state_2": "0.18038962268652176",
+          "state_3": "-0.15702833787207549",
+          "status": "CONVERGED",
+          "unstable_dimension": "4"
+        }
+      ],
+      "unrefined_detections": []
+    }
+  },
+  "comparison_coordinates": {
+    "jaxcont--matcont": {
+      "sheet_0": "state_0",
+      "sheet_1": "state_3"
+    },
+    "jaxcont--bifurcationkit": {
+      "sheet_0": "state_0",
+      "sheet_1": "state_3"
+    },
+    "matcont--bifurcationkit": {
+      "sheet_0": "state_0",
+      "sheet_1": "state_3"
+    }
+  },
+  "passage_information": {
+    "jaxcont": {
+      "policy": "all",
+      "later_reentries": []
+    },
+    "matcont": {
+      "policy": "all",
+      "later_reentries": []
+    },
+    "bifurcationkit": {
+      "policy": "all",
+      "later_reentries": []
+    }
+  },
+  "validation_report": {
+    "canonical_id": "lorenz84.eq-f",
+    "coverage": {
+      "jaxcont": "PASS",
+      "matcont": "PASS",
+      "bifurcationkit": "PASS"
+    },
+    "pairwise": {
+      "jaxcont--matcont": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 6.355200347929468e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.F": {
+          "value": 1.1044783815972181e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.T": {
+          "value": 2.0816681711721685e-17,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.parameter": {
+          "value": 1.1044783815972181e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_0": {
+          "value": 1.3322676295501878e-15,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_1": {
+          "value": 4.7473759270943994e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_2": {
+          "value": 1.367860369416718e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_3": {
+          "value": 4.1829718016306305e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.spectrum": {
+          "value": 1.1963028052897062e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "sheet_1.endpoint_difference": {
+          "value": 6.355200347929468e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.F": {
+          "value": 2.79481764633438e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.T": {
+          "value": 4.163336342344337e-17,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.parameter": {
+          "value": 2.79481764633438e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.state_0": {
+          "value": 3.097439604893282e-05,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.state_1": {
+          "value": 3.962414455854768e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.state_2": {
+          "value": 3.422461033075752e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.state_3": {
+          "value": 2.220446049250313e-16,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.spectrum": {
+          "value": 0.0002573143678992798,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "H.count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.F": {
+          "value": 1.262350224351394e-10,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.T": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.frequency": {
+          "value": 1.537483473867951e-10,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.parameter": {
+          "value": 1.262350224351394e-10,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.state_0": {
+          "value": 5.775313560718587e-11,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.state_1": {
+          "value": 5.5521837127869844e-12,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.state_2": {
+          "value": 1.2103013036224297e-11,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.state_3": {
+          "value": 8.583378452442503e-11,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.spectrum": {
+          "value": 1.5492501426366271e-10,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        },
+        "H_1.F": {
+          "value": 4.083977600544131e-11,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.T": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.frequency": {
+          "value": 1.2949752381530288e-11,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.parameter": {
+          "value": 4.083977600544131e-11,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.state_0": {
+          "value": 1.3706813462022183e-12,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.state_1": {
+          "value": 1.9872645196095107e-13,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.state_2": {
+          "value": 3.1838420788687927e-13,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.state_3": {
+          "value": 9.806044865001695e-12,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.spectrum": {
+          "value": 1.3096239815824927e-11,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        },
+        "H_2.F": {
+          "value": 5.0813131480254015e-11,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.T": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.frequency": {
+          "value": 1.5725198920790717e-12,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.parameter": {
+          "value": 5.0813131480254015e-11,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.state_0": {
+          "value": 1.0806910921701274e-12,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.state_1": {
+          "value": 1.640632074639825e-13,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.state_2": {
+          "value": 2.535471832487701e-13,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.state_3": {
+          "value": 1.0425549312742532e-11,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.spectrum": {
+          "value": 1.2734423088841282e-11,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        }
+      },
+      "jaxcont--bifurcationkit": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 6.355200347929468e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.F": {
+          "value": 9.64384491730641e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.T": {
+          "value": 1.3877787807814457e-17,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.parameter": {
+          "value": 9.64384491730641e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_0": {
+          "value": 8.881784197001252e-16,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_1": {
+          "value": 3.5558123933493446e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_2": {
+          "value": 1.1087165913137298e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_3": {
+          "value": 3.535001541657423e-05,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.spectrum": {
+          "value": 0.0002845277648449024,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "sheet_1.endpoint_difference": {
+          "value": 6.355200347929468e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.F": {
+          "value": 4.215888527170364e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.T": {
+          "value": 1.3877787807814457e-17,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.parameter": {
+          "value": 4.215888527170364e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.state_0": {
+          "value": 4.607505590392691e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.state_1": {
+          "value": 1.0233734824838248e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.state_2": {
+          "value": 4.737292125245318e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.state_3": {
+          "value": 2.220446049250313e-16,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.spectrum": {
+          "value": 1.1868428849829004e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "H.count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.F": {
+          "value": 2.4089757544309975e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.T": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.frequency": {
+          "value": 2.93406567208887e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.parameter": {
+          "value": 2.4089757544309975e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.state_0": {
+          "value": 1.1021474599637315e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.state_1": {
+          "value": 1.0595610326624705e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.state_2": {
+          "value": 2.3097064039134807e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.state_3": {
+          "value": 1.638010690141467e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.spectrum": {
+          "value": 2.9565198325963135e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        },
+        "H_1.F": {
+          "value": 1.2828910160855855e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.T": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.frequency": {
+          "value": 4.0678646440195365e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.parameter": {
+          "value": 1.2828910160855855e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.state_0": {
+          "value": 4.3059823262581176e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.state_1": {
+          "value": 6.242227203884232e-09,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.state_2": {
+          "value": 1.0002670913777933e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.state_3": {
+          "value": 3.080497823493289e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.spectrum": {
+          "value": 4.1142223688756503e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        },
+        "H_2.F": {
+          "value": 0.00017184694315997007,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.T": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.frequency": {
+          "value": 5.324584987809189e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.parameter": {
+          "value": 0.00017184694315997007,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.state_0": {
+          "value": 3.653995386487807e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.state_1": {
+          "value": 5.547348573380073e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.state_2": {
+          "value": 8.573551425750114e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.state_3": {
+          "value": 3.5257452322690064e-05,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.spectrum": {
+          "value": 4.306120758727687e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        }
+      },
+      "matcont--bifurcationkit": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.F": {
+          "value": 4.290842859688837e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.T": {
+          "value": 2.0816681711721685e-17,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.parameter": {
+          "value": 4.290842859688837e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_0": {
+          "value": 1.1102230246251565e-15,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_1": {
+          "value": 1.654799532402329e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_2": {
+          "value": 5.034218905630716e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_3": {
+          "value": 1.5871076465556744e-05,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.spectrum": {
+          "value": 0.00012652548310537748,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "sheet_1.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.F": {
+          "value": 2.1153532414608378e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.T": {
+          "value": 2.0816681711721685e-17,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.parameter": {
+          "value": 2.1153532414608378e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.state_0": {
+          "value": 2.610953286907858e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.state_1": {
+          "value": 6.665626578472583e-09,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.state_2": {
+          "value": 4.289437294247023e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.state_3": {
+          "value": 2.220446049250313e-16,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.spectrum": {
+          "value": 5.201910672520949e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "H.count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.F": {
+          "value": 2.407713404206646e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.T": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.frequency": {
+          "value": 2.9325281886150023e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.parameter": {
+          "value": 2.407713404206646e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.state_0": {
+          "value": 1.1015699286076597e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.state_1": {
+          "value": 1.0590058142911918e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.state_2": {
+          "value": 2.3084961026098583e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.state_3": {
+          "value": 1.6371523522962228e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_0.spectrum": {
+          "value": 2.954970582453677e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        },
+        "H_1.F": {
+          "value": 1.28285017630958e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.T": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.frequency": {
+          "value": 4.067735146495721e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.parameter": {
+          "value": 1.28285017630958e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.state_0": {
+          "value": 4.3058452581234974e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.state_1": {
+          "value": 6.242028477432271e-09,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.state_2": {
+          "value": 1.0002352529570047e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.state_3": {
+          "value": 3.080399763044639e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_1.spectrum": {
+          "value": 4.1140914064775114e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        },
+        "H_2.F": {
+          "value": 0.0001718468923468386,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.T": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.frequency": {
+          "value": 5.324583415289297e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.parameter": {
+          "value": 0.0001718468923468386,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.state_0": {
+          "value": 3.653994305796715e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.state_1": {
+          "value": 5.547346932747999e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.state_2": {
+          "value": 8.573548890278282e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.state_3": {
+          "value": 3.525744189714075e-05,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "H_2.spectrum": {
+          "value": 4.306119485285386e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        }
+      }
+    },
+    "independent": {
+      "jaxcont": {
+        "required_sheet_count": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_gap": {
+          "value": 6.355200347929468e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.endpoint_gap": {
+          "value": 6.355200347929468e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 6.355200347929468e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 5.167186123422596e-13,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "matcont": {
+        "required_sheet_count": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 1.457167719820518e-16,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "bifurcationkit": {
+        "required_sheet_count": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 8.921405281192563e-13,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        }
+      }
+    },
+    "source_hashes": {
+      "jaxcont": {
+        "branch.csv": "sha256:eaad34cf95aae7f42da08e2968c03a9f2524d1646b7f82ee7e19da40d196d4c1",
+        "events.csv": "sha256:db661877ce7d25ee62482ed0b29f20d0f4f6bab7c115c9958c3bee82038c9e27",
+        "spectra.csv": "sha256:f664c3775990df913c96ea0ef16da4689627eeef0969f2975c42bc6876f50ec9"
+      },
+      "matcont": {
+        "branch.csv": "sha256:d779b3a0f637f482c45401dbe83d54599d8247f5a684c2d7dcfc07e1e077bb57",
+        "events.csv": "sha256:24dcf64355a3ddab708c0933d97c1e2634b1a6d586a772d8a6b0fb6731fa78ab",
+        "spectra.csv": "sha256:9942480c49a857165d709c5a720eb5bb8442c0ad68c0afd6be17a039cd4abed0"
+      },
+      "bifurcationkit": {
+        "branch.csv": "sha256:fcada8a8c358087e3894389ca633bd2c2bff5bb7c63f6bdf840104b24d412665",
+        "events.csv": "sha256:2fd022a65ccf32c97f5e5c207b7504246ba5baa7c1a3d0be356e9d2406afb69a",
+        "samples.json": "sha256:f220e5e798d634cdfa7b0aeec13145428e7212fa2ffa1abb925448b0ca58dec0",
+        "spectra.csv": "sha256:549ddd894906fdc17c1b829feba204a396a69e4662eb81b6b904ab63262729c5"
+      }
+    },
+    "status": "PASS",
+    "report_hash": "sha256:adc087319af68cc3220d0f126e23cea090bb170e4a326b2912893648221abb64"
+  },
+  "verdict": "PASS"
+}

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -168,6 +168,7 @@ class ValidationReport:
     independent: dict
     source_hashes: dict
     status: str
+    information: dict = field(default_factory=dict)
 
     @property
     def report_hash(self):
@@ -503,17 +504,21 @@ def _legacy_report(case, reference_dir, producer_passed, diagnostics, mismatch):
 def _window_report(case, tool_results):
     """Share the exact numerical gate with immutable reference promotion."""
     from itertools import combinations
-    from .promotion_metrics import _independent, _pairwise
+    from .promotion_metrics import _independent, _pairwise, passage_information
     independent, pairwise, hashes, coverage = {}, {}, {}, {}
+    information = {"passages": {}, "coordinates": {}}
     for tool, data in tool_results.items():
         metrics = _independent(case, data)
+        information["passages"][tool] = passage_information(data, case)
         independent[tool] = metrics
         failed = any(m["verdict"] == "FAIL" for m in metrics.values())
         pending = any(m["verdict"] == "PENDING" for m in metrics.values())
         coverage[tool] = "FAIL" if failed else "PENDING" if pending else case.get("tool_coverage", {}).get(tool, "PASS")
         hashes[tool] = data.get("metadata", {}).get("output_hashes", {})
     for a, b in combinations(tool_results, 2):
-        pairwise[f"{a}--{b}"] = _pairwise(case, tool_results[a], tool_results[b])
+        coordinates = {}
+        pairwise[f"{a}--{b}"] = _pairwise(case, tool_results[a], tool_results[b], coordinates=coordinates)
+        information["coordinates"][f"{a}--{b}"] = coordinates
     for tool in case.get("tool_coverage", {}):
         coverage.setdefault(tool, "PENDING")
     failed = any(m["verdict"] == "FAIL" for metrics in pairwise.values() for m in metrics.values())
@@ -521,4 +526,4 @@ def _window_report(case, tool_results):
     status = "FAIL" if failed else coverage_status(coverage, coverage.keys())
     if status == "PASS" and pending:
         status = "PENDING"
-    return ValidationReport(case.get("canonical_id", case["id"]), coverage, pairwise, independent, hashes, status)
+    return ValidationReport(case.get("canonical_id", case["id"]), coverage, pairwise, independent, hashes, status, information)

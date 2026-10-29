@@ -8,7 +8,7 @@ from examples.validation.validation import build_validation_report
 from tests.reference_bundles import REFERENCE
 
 
-@pytest.mark.parametrize('canonical_id', ['lorenz84.hopf-ft', 'lorenz84.bt-ft'])
+@pytest.mark.parametrize('canonical_id', ['lorenz84.eq-f', 'lorenz84.hopf-ft', 'lorenz84.bt-ft'])
 def test_flagship_requires_all_three_bundles(canonical_id):
     case, = select_cases(load_registry(), [canonical_id])
     bundles = {tool: load_bundle(REFERENCE / 'lorenz84' / tool / canonical_id,

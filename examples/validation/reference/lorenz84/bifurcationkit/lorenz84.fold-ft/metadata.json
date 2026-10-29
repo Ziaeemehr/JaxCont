@@ -1,0 +1,106 @@
+{
+  "canonical_id": "lorenz84.fold-ft",
+  "chart_status": "completed configured steps",
+  "command": [
+    "julia",
+    "--project=/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit",
+    "/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl",
+    "--case",
+    "lorenz84.fold-ft",
+    "--output-dir",
+    "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/bifurcationkit/lorenz84.fold-ft/lorenz84.fold-ft/bifurcationkit"
+  ],
+  "conventions": {
+    "chart_boundary": "Hopf termination near BT is not a BT detection",
+    "parameter_order": "F,T",
+    "time": "original"
+  },
+  "conversion_chain": [],
+  "coverage_status": "COMPLETE",
+  "driver_hash": "sha256:9493ba8412fd27aab49f5dec2e95dcb830640c1d1cf9ffadf57a379d5f013c49",
+  "equation_hash": "sha256:c38a6285db5e8a523077d3d4fe3771dfc14dd5da19779fa9ba2716a5695bee55",
+  "expected_domain": [
+    -0.01,
+    0.04
+  ],
+  "generated_utc": "2026-10-29T01:10:02Z",
+  "generator_revision": "3dd787c13a76e00e0e5552614ba1772d0259a84d",
+  "lock_hash": "sha256:134daaa75d8b8f9905b1c7afc9b4ae1fa3602dd6d03e4ec1600000bdddb3bb29",
+  "mesh": {
+    "kind": "equilibrium"
+  },
+  "observed_domain": [
+    -0.1,
+    0.04
+  ],
+  "output_hashes": {
+    "branch.csv": "sha256:e59d373b03f67a77720dcdf97650c124611d14b1d0888574c1f71d770ca046cc",
+    "events.csv": "sha256:8cb75454cb4271c979c95f26d195ba3583a125a571d0735c5d6a4c311381ce9c",
+    "spectra.csv": "sha256:18d690762465103688e5929cb6b17978e6de01525aa4fd924a5acf0f8d732789"
+  },
+  "package_versions": {
+    "BifurcationKit": "0.8.8",
+    "CSV": "1.2.0",
+    "JSON": "1.13.0"
+  },
+  "parameter_order": [
+    "F",
+    "T"
+  ],
+  "platform": {
+    "blas": "LBTConfig([ILP64] libopenblas64_.so)",
+    "cpu": "sapphirerapids",
+    "os": "Linux"
+  },
+  "precision": "float64",
+  "resolved_controls": {
+    "T_bounds": [
+      -0.1,
+      3.2
+    ],
+    "ds": -0.001,
+    "ds_max": 0.015,
+    "ds_min": 1e-05,
+    "free_parameter": "T",
+    "max_steps": 400,
+    "newton_atol": 1e-12,
+    "parameter_order": [
+      "F",
+      "T"
+    ]
+  },
+  "review_date": "2026-10-29",
+  "reviewed": true,
+  "reviewer": "Claude (review delegated by owner, 2026-10-28)",
+  "runtime_version": "1.13.3",
+  "scaling": {
+    "arclength": "BK PALC theta=0.5: state weight 0.5/n; parameter weight 0.5",
+    "time": "original"
+  },
+  "schema_version": 2,
+  "seeds": {
+    "F": 3.0,
+    "T": 0.04,
+    "curve_seed": "LP",
+    "state": [
+      2.9787004394953343,
+      -0.03868302503393752,
+      0.058232737694740085,
+      -0.02105288273117459
+    ],
+    "window": [
+      1.5,
+      1.58
+    ]
+  },
+  "solver_strategies": {
+    "event_selection": "type and parameter window",
+    "method": "BifurcationKit PALC"
+  },
+  "source_hashes": {
+    "export.jl": "sha256:c9d7f64f7e16e4829b8af9894b4449e56fbbb0c02403f028d749cdde77fe27b3",
+    "lorenz84_codim2.jl": "sha256:9493ba8412fd27aab49f5dec2e95dcb830640c1d1cf9ffadf57a379d5f013c49",
+    "lorenz84_equilibria.jl": "sha256:c38a6285db5e8a523077d3d4fe3771dfc14dd5da19779fa9ba2716a5695bee55"
+  },
+  "tool": "bifurcationkit"
+}

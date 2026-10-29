@@ -38,6 +38,23 @@ def _hashes(path):
             if p.is_file()}
 
 
+def _covered_elsewhere(metric):
+    """A PENDING item delegated to another run ("... compared in <run-id>") is
+    information, not a gap, once that run's registry evidence status is PASS
+    (e.g. an unrefined BifurcationKit BT on lorenz84.fold-ft, whose refined BT
+    is compared in lorenz84.bt-ft)."""
+    import re
+    from examples.validation.registry import load_registry, select_cases
+    match = re.search(r"compared in ([a-z0-9-]+\.[a-z0-9-]+)", metric.get("reason") or "")
+    if not match:
+        return False
+    try:
+        (run,) = select_cases(load_registry(), [match.group(1)])
+    except (ValueError, KeyError):
+        return False
+    return run.get("evidence_status") == "PASS"
+
+
 def _provenance(path, data, case):
     meta = data["metadata"]
     if meta["schema_version"] != 2:
@@ -128,7 +145,7 @@ def write_manifest(case, candidates, output, *, reviewer, review_date):
         raise ValueError("reviewer required")
     report = dict(schema_version=1, canonical_id=case["canonical_id"], system=case["system"],
                   reviewer=reviewer, review_date=review_date, expected_status=case["evidence_status"],
-                  registry_case=deepcopy(case), candidates={}, independent={}, pairwise={}, event_information={})
+                  registry_case=deepcopy(case), candidates={}, independent={}, pairwise={}, event_information={}, comparison_coordinates={}, passage_information={})
     bundles = {}
     for tool, candidate in candidates.items():
         path = Path(candidate).resolve()
@@ -146,7 +163,8 @@ def write_manifest(case, candidates, output, *, reviewer, review_date):
                          logs={k:v for k,v in entry["hashes"].items() if k.endswith(".log")},
                          coverage=meta.get("coverage_status", "unspecified"))
             report["independent"][tool] = _independent(case, data)
-            from examples.validation.promotion_metrics import event_rows, unrefined
+            from examples.validation.promotion_metrics import event_rows, unrefined, passage_information
+            report["passage_information"][tool] = passage_information(data, case)
             inside = event_rows(case,data,refined=False)
             report["event_information"][tool] = {
                 "outside_window": [r for r in data.get("events",[]) if r not in inside],
@@ -156,7 +174,9 @@ def write_manifest(case, candidates, output, *, reviewer, review_date):
         except (ValueError, KeyError, FileNotFoundError) as exc:
             entry["reason"] = str(exc)
     for a, b in combinations(bundles, 2):
-        report["pairwise"][f"{a}--{b}"] = _pairwise(case, bundles[a], bundles[b])
+        coordinates = {}
+        report["pairwise"][f"{a}--{b}"] = _pairwise(case, bundles[a], bundles[b], coordinates=coordinates)
+        report["comparison_coordinates"][f"{a}--{b}"] = coordinates
     # Promotion shares the CLI/publication gate. Registry PENDING describes
     # review state; it must not prevent measuring newly generated candidates.
     measured_case = deepcopy(case)
@@ -166,7 +186,7 @@ def write_manifest(case, candidates, output, *, reviewer, review_date):
     report["validation_report"] = gate.to_dict()
     all_metrics = [m for group in (report["independent"], report["pairwise"]) for metrics in group.values() for m in metrics.values()]
     failed = gate.status == "FAIL" or any(m["verdict"] == "FAIL" for m in all_metrics)
-    pending = any(m["verdict"] == "PENDING" for m in all_metrics)
+    pending = any(m["verdict"] == "PENDING" and not _covered_elsewhere(m) for m in all_metrics)
     complete = all(t in bundles for t in case["tool_coverage"])
     eligible = all(e["promotable"] for e in report["candidates"].values())
     report["verdict"] = "FAIL" if failed else "PASS" if complete and eligible and not pending else "PENDING"

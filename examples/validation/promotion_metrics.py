@@ -5,6 +5,7 @@ is reversed for interpolation; different fold arms are never merged.
 """
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+from scipy.interpolate import make_interp_spline
 from .artifacts import _monotone_segments, _sparse_native_query
 
 def _metric(value, limit, reason=None):
@@ -31,7 +32,15 @@ def applicable(column, row):
 
 def event_rows(case, data, *, refined=True):
     result = []
+    def identity(row):
+        return row.get("segment_id", "legacy"), str(row.get("point_id", row.get("point")))
+    excluded = set()
+    if case.get("comparison_passage") == "first":
+        selected, _ = _passages(data, case)
+        excluded = {identity(r) for r in data.get("branch", [])} - {identity(r) for r in selected}
     for row in data.get("events", []):
+        if identity(row) in excluded:
+            continue
         bounds = window(case, row.get("segment_id"))
         if bounds and not bounds[0] <= float(row["parameter"]) <= bounds[1]:
             continue
@@ -101,7 +110,8 @@ def _independent(case, data):
     missing = expected-present
     metrics["missing_expected_events"] = _metric(sum((missing-guesses).values()), 0)
     if missing & guesses:
-        metrics["unrefined_detections"] = _metric(sum((missing & guesses).values()), None, "unrefined detection; excluded from event location comparisons")
+        metrics["unrefined_detections"] = _metric(sum((missing & guesses).values()), None,
+            "; ".join(_unrefined_reason(case, kind) for kind in sorted(missing & guesses)))
     if inside and all(r.get("residual_norm") not in (None, "") for r in inside):
         metrics["residual"] = _metric(max(abs(float(r["residual_norm"])) for r in inside), tol.get("residual_atol", 1e-7))
     if case.get("spectrum_required", True) and not data.get("spectra"):
@@ -145,10 +155,79 @@ def _limit(column, tol):
     return tol.get(column + "_atol")
 
 
+def _passages(data, case):
+    """Preserve native order across chart subdivisions of a seeded curve."""
+    rows = data.get("branch", [])
+    if case.get("comparison_passage") != "first":
+        return rows, []
+    bounds = window(case)
+    inside = [bounds[0] <= float(r["parameter"]) <= bounds[1] for r in rows]
+    runs = []
+    for i, yes in enumerate(inside):
+        if yes and (i == 0 or not inside[i-1]):
+            runs.append([i, i])
+        elif yes:
+            runs[-1][1] = i
+    if not runs:
+        return [], []
+    start, end = runs[0]
+    return rows[max(0, start-1):min(len(rows), end+2)], [
+        {"point_ids": [r.get("point_id", r.get("point")) for r in rows[a:b+1]],
+         "parameter_range": [min(float(r["parameter"]) for r in rows[a:b+1]),
+                             max(float(r["parameter"]) for r in rows[a:b+1])]}
+        for a, b in runs[1:]]
+
+
+def passage_information(data, case):
+    return {"policy": case.get("comparison_passage", "all"),
+            "later_reentries": _passages(data, case)[1]}
+
+
+def _regular_coordinate(x, y, preferred=None):
+    """Maximize range / max(1, magnitude) on both compared sheets."""
+    candidates = [k for k in x[0].keys() & y[0].keys()
+                  if k == "parameter" or k.startswith("state_")]
+    def distinct(rows):
+        result = []
+        for row in rows:
+            if not result or any(float(row[k]) != float(result[-1][k]) for k in candidates):
+                result.append(row)
+        return result
+    x, y = distinct(x), distinct(y)
+    scores = {}
+    for k in candidates:
+        arrays = [np.array([float(r[k]) for r in rows]) for rows in (x, y)]
+        if all(len(v) > 1 and (np.all(np.diff(v) > 0) or np.all(np.diff(v) < 0)) for v in arrays):
+            scores[k] = min(np.ptp(v) / max(1., np.max(abs(v))) for v in arrays)
+    if preferred in scores:
+        return preferred, x, y
+    if scores:
+        return max(sorted(scores), key=lambda k: (scores[k], k != "parameter")), x, y
+    # No globally monotone physical coordinate: use normalized geometric length.
+    fields = sorted(candidates)
+    values = [np.array([[float(r[k]) for k in fields] for r in rows]) for rows in (x,y)]
+    scale = np.ptp(np.concatenate(values), axis=0)
+    scale[scale == 0] = 1
+    output = []
+    for rows, v in zip((x,y), values):
+        arc = np.r_[0., np.cumsum(np.linalg.norm(np.diff(v,axis=0)/scale, axis=1))]
+        if arc[-1] > 0: arc /= arc[-1]
+        output.append([{**r, "arclength": float(a)} for r,a in zip(rows,arc)])
+    return "arclength", *output
+
+
+def _cubic(coordinates, values, query):
+    if not np.all(np.isfinite(values)):
+        return np.full((len(query), *np.asarray(values).shape[1:]), np.nan)
+    if len(coordinates) == 1:
+        return np.repeat(np.asarray(values)[:1], len(query), axis=0)
+    return make_interp_spline(coordinates, values, k=min(3, len(coordinates)-1))(query)
+
+
 def _sheets(data, case=None):
     groups = {}
-    for row in data.get("branch", []):
-        groups.setdefault(row.get("segment_id", "legacy"), []).append(row)
+    for row in (_passages(data, case)[0] if case else data.get("branch", [])):
+        groups.setdefault("passage" if case and case.get("comparison_passage") == "first" else row.get("segment_id", "legacy"), []).append(row)
     sheets = [sheet for rows in groups.values() for sheet in _monotone_segments(rows, "parameter")]
     if case is None:
         return sheets
@@ -172,7 +251,7 @@ def _sheets(data, case=None):
 
 
 def _spectrum_error(a, b, x, y, query, coordinate="parameter"):
-    from examples.validation.artifacts import _interpolate_spectrum_roots, _unique_spectrum_points
+    from examples.validation.artifacts import _unique_spectrum_points
     curves = []
     for data, sheet in ((a, x), (b, y)):
         curve = []
@@ -191,14 +270,10 @@ def _spectrum_error(a, b, x, y, query, coordinate="parameter"):
                 return None
             curve.append({coordinate: float(row[coordinate]), "values": values})
         coordinates, values = _unique_spectrum_points(curve, coordinate)
-        if coordinate == "state_0" and len(coordinates) >= 3:
-            # Cubic control: J=x^2-1 is a quadratic polynomial in the
-            # regular state coordinate. Interpolating against p is singular
-            # at LP and linear interpolation in x adds a spurious O(ds^2) error.
-            from scipy.interpolate import make_interp_spline
-            curves.append(make_interp_spline(coordinates, np.asarray(values), k=2)(query))
-        else:
-            curves.append(_interpolate_spectrum_roots(coordinates, values, query))
+        # Symmetric coefficients remain smooth at eigenvalue collisions and
+        # do not depend on the native mode order.
+        coefficients = np.stack([np.poly(v) for v in values])
+        curves.append([np.roots(c) for c in _cubic(coordinates, coefficients, query)])
     error = 0.
     for va, vb in zip(*curves):
         if len(va) != len(vb):
@@ -208,7 +283,7 @@ def _spectrum_error(a, b, x, y, query, coordinate="parameter"):
     return error
 
 
-def _pairwise(case, a, b):
+def _pairwise(case, a, b, *, coordinates=None):
     """Compare each monotone sheet and each event without merging fold arms."""
     tol = case["tolerances"]
     result = {}
@@ -231,11 +306,11 @@ def _pairwise(case, a, b):
                            if _limit(k, tol) is not None and k not in ("parameter", "residual_norm")}
                 if not columns:
                     columns = {"parameter"}
-                coordinate = "state_0" if case["canonical_id"] == "cubic.eq-fold" else "parameter"
+                coordinate, x, y = _regular_coordinate(x, y,
+                    preferred="state_0" if case["canonical_id"] == "cubic.eq-fold" else None)
                 xx = x if float(x[0][coordinate]) <= float(x[-1][coordinate]) else x[::-1]
                 yy = y if float(y[0][coordinate]) <= float(y[-1][coordinate]) else y[::-1]
                 if coordinate != "parameter":
-                    columns.discard(coordinate)
                     columns.add("parameter")
                 xp = np.array([float(r[coordinate]) for r in xx])
                 yp = np.array([float(r[coordinate]) for r in yy])
@@ -268,11 +343,7 @@ def _pairwise(case, a, b):
                 for column in sorted(columns):
                     xa = np.array([float(r[column]) for r in xx])
                     ya = np.array([float(r[column]) for r in yy])
-                    if coordinate == "state_0" and len(xp)>=4 and len(yp)>=4:
-                        from scipy.interpolate import CubicSpline
-                        av, bv = CubicSpline(xp,xa)(query), CubicSpline(yp,ya)(query)
-                    else:
-                        av, bv = np.interp(query, xp, xa), np.interp(query, yp, ya)
+                    av, bv = _cubic(xp, xa, query), _cubic(yp, ya, query)
                     # Registry's existing mixed absolute/relative rule.
                     error = np.max(np.maximum(abs(av-bv) - tol.get("rtol", 0.)*np.maximum(abs(av),abs(bv)), 0.))
                     metrics[column] = _metric(error, _limit(column, tol))
@@ -287,10 +358,12 @@ def _pairwise(case, a, b):
                 cost = max((m["value"] / m["limit"] if m["limit"] else 0.)
                            if m["value"] is not None else 1e100 for m in metrics.values())
                 costs[i, j] = cost
-                measured[i, j] = metrics
+                measured[i, j] = metrics, coordinate
         ii, jj = linear_sum_assignment(costs)
         for i, j in zip(ii, jj):
-            metrics = measured.get((i, j), {"observable": _metric(None, 0, "no comparable physical observable or overlap")})
+            metrics, coordinate = measured.get((i, j), ({"observable": _metric(None, 0, "no comparable physical observable or overlap")}, None))
+            if coordinates is not None:
+                coordinates[f"sheet_{i}"] = coordinate
             result.update({f"sheet_{i}.{k}": v for k, v in metrics.items()})
     # Event matching is one to one within type. Extra native diagnostic labels
     # are retained in the bundle and reported, never relabelled here.
@@ -299,7 +372,7 @@ def _pairwise(case, a, b):
         eb = [e for e in event_rows(case, b) if e.get("event_type", e.get("kind")) == kind]
         has_guess = any(unrefined(e) and e.get("event_type") == kind for d in (a,b) for e in event_rows(case,d,refined=False))
         result[f"{kind}.count_difference"] = _metric(abs(len(ea)-len(eb)), None if has_guess else 0,
-            "unrefined detection excluded; refined BT is compared in lorenz84.bt-ft" if has_guess else None)
+            _unrefined_reason(case, kind) if has_guess else None)
         if not ea or len(ea) != len(eb):
             continue
         costs = np.array([[abs(float(x["parameter"])-float(y["parameter"])) for y in eb] for x in ea])
@@ -328,3 +401,11 @@ def _pairwise(case, a, b):
                 result[f"{kind}_{i}.spectrum"] = _metric(error, limit, "all modes, including flow mode")
     return result
 
+
+def _unrefined_reason(case, kind):
+    """Why an unrefined detection of ``kind`` is excluded, naming the run that
+    compares the refined point when the registry declares one."""
+    elsewhere = case.get("refined_events_elsewhere", {}).get(kind)
+    if elsewhere:
+        return f"unrefined {kind} detection excluded; refined {kind} is compared in {elsewhere}"
+    return f"unrefined {kind} detection excluded; no refined comparison declared"

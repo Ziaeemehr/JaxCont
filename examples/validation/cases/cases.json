@@ -797,7 +797,7 @@
       "python": "examples.validation.cases.python_cases.lorenz84:run_equilibria",
       "matlab": "run_lorenz84_equilibria",
       "references": [],
-      "manual_source": "Reviewed Lorenz-84 contract; candidates awaiting Task 2.12 review",
+      "manual_source": "Reviewed three-tool promotion, Claude (review delegated by owner, 2026-10-28), 2026-10-29",
       "tolerances": {
         "parameter_atol": 0.0005,
         "state_atol": 0.0002,
@@ -806,16 +806,16 @@
         "frequency_atol": 0.0005
       },
       "tool_coverage": {
-        "jaxcont": "PENDING",
-        "matcont": "PENDING",
-        "bifurcationkit": "PENDING"
+        "jaxcont": "PASS",
+        "matcont": "PASS",
+        "bifurcationkit": "PASS"
       },
       "required_tools": [
         "jaxcont",
         "matcont",
         "bifurcationkit"
       ],
-      "evidence_status": "FAIL",
+      "evidence_status": "PASS",
       "expected_domain": [
         -1.5,
         3.0
@@ -992,6 +992,7 @@
     {
       "id": "lorenz84.fold-ft",
       "canonical_id": "lorenz84.fold-ft",
+      "comparison_passage": "first",
       "aliases": [],
       "system": "lorenz84",
       "title": "Extended Lorenz-84 fold-ft",
@@ -1002,7 +1003,7 @@
       "python": "examples.validation.cases.python_cases.lorenz84:run_fold",
       "matlab": "run_lorenz84_codim2",
       "references": [],
-      "manual_source": "Reviewed Lorenz-84 contract; candidates awaiting Task 2.12 review",
+      "manual_source": "Reviewed three-tool promotion, Claude (review delegated by owner, 2026-10-28), 2026-10-29",
       "tolerances": {
         "parameter_atol": 0.0005,
         "state_atol": 0.0002,
@@ -1011,16 +1012,16 @@
         "frequency_atol": 0.0005
       },
       "tool_coverage": {
-        "jaxcont": "PENDING",
-        "matcont": "PENDING",
-        "bifurcationkit": "PENDING"
+        "jaxcont": "PASS",
+        "matcont": "PASS",
+        "bifurcationkit": "PASS"
       },
       "required_tools": [
         "jaxcont",
         "matcont",
         "bifurcationkit"
       ],
-      "evidence_status": "FAIL",
+      "evidence_status": "PASS",
       "expected_domain": [
         -0.01,
         0.04
@@ -1184,7 +1185,11 @@
         -0.01,
         0.04
       ],
-      "comparison_window_comment": "Shared positive-T fold chart including ZH, CP and BT."
+      "comparison_window_comment": "Shared positive-T fold chart including ZH, CP and BT.",
+      "refined_events_elsewhere": {
+        "BT": "lorenz84.bt-ft"
+      },
+      "refined_events_elsewhere_justification": "BifurcationKit reports the BT on the fold curve as an unrefined guess; the Newton-refined BT is compared in all three tools in lorenz84.bt-ft."
     },
     {
       "id": "lorenz84.hopf-ft",
