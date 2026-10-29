@@ -36,7 +36,7 @@ def test_switch_lands_on_the_pitchfork_second_branch():
     # convention), so check magnitude only.
     # Measured absolute error: x32=0, x64=0; analytic branch u = +/-sqrt(p).
     assert abs(float(new_prob.u0[0])) == pytest.approx(
-        float(jnp.sqrt(jnp.abs(new_prob.p0))), rel=32 * jnp.finfo(new_prob.u0.dtype).eps, abs=0
+        float(jnp.sqrt(jnp.abs(new_prob.p0))), rel=32 * float(jnp.finfo(new_prob.u0.dtype).eps), abs=0
     )
     assert float(new_prob.p0) > 0.0  # the pitchfork's second branch only exists for p > 0
 
@@ -60,7 +60,7 @@ def test_switch_lands_on_the_transcritical_second_branch():
     new_prob = branch_switch(_transcritical, event, ds=0.05)
     # second branch: u = p
     # Measured absolute error: x32=3.73e-9, x64=6.94e-18.
-    assert float(new_prob.u0[0]) == pytest.approx(float(new_prob.p0), rel=32 * jnp.finfo(new_prob.u0.dtype).eps, abs=0)
+    assert float(new_prob.u0[0]) == pytest.approx(float(new_prob.p0), rel=32 * float(jnp.finfo(new_prob.u0.dtype).eps), abs=0)
     residual = _transcritical(new_prob.u0, new_prob.p0, None)
     # Measured residual: x32=0, x64=0; default switching Newton tolerance.
     assert float(jnp.max(jnp.abs(residual))) < (1e-9 if jax.config.x64_enabled else 1e-5)
@@ -127,7 +127,7 @@ def test_branch_switch_vmap_batches_over_a_second_parameter():
 
     batched = jax.vmap(switch_one)(u_stars, p_stars, tangents, bs)
     assert batched[0].shape == (4,)
-    lane_atol = 8 * jnp.finfo(bs.dtype).eps
+    lane_atol = 8 * float(jnp.finfo(bs.dtype).eps)
     for i, b in enumerate(bs):
         serial_u, serial_p = switch_for_b(float(b))
         # Measured u difference across all four lanes: x32=0, x64=0.

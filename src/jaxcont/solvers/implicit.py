@@ -118,7 +118,17 @@ def differentiable_root_checked(
     """
     x_star = differentiable_root(G, x0, theta, tol=tol, max_iter=max_iter)
     residual = jnp.linalg.norm(G(x_star, theta))
-    tol_ = default_tol(x_star.dtype) if tol is None else tol
+    if tol is None:
+        # The default tolerance is absolute, but even the correctly rounded
+        # root of a badly scaled system has residual ~ eps * |J| * |x|; accept
+        # that rounding floor (with a small safety factor) so a root accurate
+        # to working precision is not reported as a failure. An explicit tol
+        # stays strict.
+        jacobian = jax.lax.stop_gradient(jax.jacfwd(lambda x: G(x, theta))(x_star))
+        floor = 16 * jnp.finfo(x_star.dtype).eps * jnp.linalg.norm(jacobian) * (1 + jnp.linalg.norm(x_star))
+        tol_ = jnp.maximum(default_tol(x_star.dtype), floor)
+    else:
+        tol_ = tol
     converged = (
         jnp.isfinite(residual)
         & (residual < tol_)

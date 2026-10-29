@@ -118,3 +118,35 @@ def test_scan_natural_corrector_reverse_mode_matches_forward():
     np_expected = jax.jacfwd(forward)(a)
     # Measured |error| x32/x64: 0/2.22e-16; forward/reverse implicit derivative consistency.
     assert jnp.allclose(jax.grad(reverse)(a), np_expected, rtol=16 * _eps_J(), atol=0)
+
+
+def _scaled_cube_root():
+    """G(x) = theta * (x^3 - 2): the root 2**(1/3) is not representable, so its
+    best float has residual ~ theta * 3 x^2 * eps * x, far above default_tol
+    in float32 for theta = 1e4."""
+    return (lambda x, theta: theta * (x ** 3 - 2.0)), 2.0 ** (1.0 / 3.0)
+
+
+def test_checked_root_accepts_a_root_at_the_rounding_floor():
+    """With the default tolerance, a root as accurate as the dtype allows is converged."""
+    from jaxcont.solvers.implicit import differentiable_root_checked
+    G, root = _scaled_cube_root()
+    x, converged = differentiable_root_checked(G, jnp.array([1.5]), jnp.asarray(1e4))
+    assert bool(converged)
+    assert abs(float(x[0]) - root) <= 4 * float(jnp.finfo(x.dtype).eps) * root
+
+
+def test_checked_root_still_rejects_a_non_root():
+    from jaxcont.solvers.implicit import differentiable_root_checked
+    G = lambda x, theta: x ** 2 + theta  # no real root for theta > 0
+    _, converged = differentiable_root_checked(G, jnp.array([0.5]), jnp.asarray(1.0))
+    assert not bool(converged)
+
+
+def test_checked_root_keeps_an_explicit_tolerance_strict():
+    """A caller-chosen tol below the floor is not silently relaxed."""
+    from jaxcont.solvers.implicit import differentiable_root_checked
+    G, _ = _scaled_cube_root()
+    x, converged = differentiable_root_checked(G, jnp.array([1.5]), jnp.asarray(1e4), tol=1e-30)
+    if float(jnp.abs(G(x, 1e4))[0]) > 0:  # an exactly zero residual would legitimately meet any tol
+        assert not bool(converged)
