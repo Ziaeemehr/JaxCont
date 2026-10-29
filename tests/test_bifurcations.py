@@ -12,7 +12,7 @@ from dataclasses import dataclass, field, replace
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax import jacfwd
+from jax import config, jacfwd
 
 import jaxcont as jc
 from jaxcont.bifurcations.events import BP, BranchPoint as EventPoint
@@ -46,8 +46,11 @@ def test_bp_fires_on_pitchfork_but_not_on_a_plain_fold():
     )
     bp_hits = [e for e in sol.events if e.kind == "branch_point"]
     assert len(bp_hits) == 1
-    assert bp_hits[0].p == pytest.approx(0.0, abs=1e-3)
-    assert bp_hits[0].u[0] == pytest.approx(0.0, abs=1e-3)
+    refine_atol = 1e-9 if config.x64_enabled else 1e-5
+    # Measured p error: x32=0, x64=0; use the default event Newton tolerance.
+    assert bp_hits[0].p == pytest.approx(0.0, abs=refine_atol)
+    # Measured u error: x32=0, x64=0.
+    assert bp_hits[0].u[0] == pytest.approx(0.0, abs=refine_atol)
     assert "tangent" in bp_hits[0].info
 
     # Negative control: a plain fold must NOT be classified as a branch
@@ -76,7 +79,8 @@ def test_fold_test_function_is_tangent_dp_component():
     # tangent = (du_1, ..., du_n, dp); last entry is the dp component.
     fold = Fold()
     point = BranchPoint(p=0.0, u=jnp.zeros(1), tangent=jnp.array([0.5, 0.02]))
-    assert jnp.isclose(fold.test_function(point), 0.02, atol=1e-6)
+    # Measured absolute error: x32=4.47e-10, x64=0; tangent component lookup.
+    assert jnp.isclose(fold.test_function(point), 0.02, rtol=8 * jnp.finfo(point.u.dtype).eps, atol=0)
 
 
 def test_detect_events_ignores_real_to_complex_transition_far_from_axis():
@@ -126,8 +130,10 @@ def test_hopf_refine_converges_via_extended_system():
     assert hit.kind == "hopf"
     assert abs(hit.p) < 1e-6
     assert hit.info["method"] == "extended_system"
-    assert jnp.isclose(hit.info["omega0"], 0.1, atol=1e-4)
-    assert jnp.isclose(hit.info["l1"], 0.0, atol=1e-4)
+    # Measured frequency error: x32=1.49e-9, x64=0.
+    assert jnp.isclose(hit.info["omega0"], 0.1, rtol=32 * jnp.finfo(hit.u.dtype).eps, atol=0)
+    # Measured l1 error: x32=0, x64=0; the linear RHS has zero higher derivatives.
+    assert jnp.isclose(hit.info["l1"], 0.0, rtol=0, atol=8 * jnp.finfo(hit.u.dtype).eps)
     assert hit.info["criticality"] == "degenerate"
 
 
@@ -224,7 +230,8 @@ def test_hopf_refine_supercritical_label_end_to_end():
     # extended system is ~6e-8, and Task 2 made Hopf.refine gate on actually
     # reaching `tolerance`, not just finiteness.
     hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-6, max_iterations=50)
-    assert jnp.isclose(hit.info["l1"], -2.0, atol=1e-4)
+    # Measured absolute error: x32=2.38e-7, x64=4.44e-16.
+    assert jnp.isclose(hit.info["l1"], -2.0, rtol=32 * jnp.finfo(hit.u.dtype).eps, atol=0)
     assert hit.info["criticality"] == "supercritical"
 
 
@@ -247,7 +254,8 @@ def test_hopf_refine_subcritical_label_end_to_end():
     # tolerance=1e-6 -- see test_hopf_refine_converges_via_extended_system's
     # comment (float32 residual floor).
     hit = hopf.refine(left, right, (0, 1), rhs, tolerance=1e-6, max_iterations=50)
-    assert jnp.isclose(hit.info["l1"], 2.0, atol=1e-4)
+    # Measured absolute error: x32=2.38e-7, x64=4.44e-16.
+    assert jnp.isclose(hit.info["l1"], 2.0, rtol=32 * jnp.finfo(hit.u.dtype).eps, atol=0)
     assert hit.info["criticality"] == "subcritical"
 
 
@@ -433,7 +441,8 @@ def test_refine_outside_bracket_rejected(monkeypatch):
     rejected = [h for h in hits if h.status == "failed"]
     assert len(rejected) == 1
     assert rejected[0].info["reason"] == "outside_bracket"
-    assert rejected[0].info["refined_p"] == pytest.approx(5.0)
+    # Measured absolute error: x32=0, x64=0; the stub returns Python float 5.0.
+    assert rejected[0].info["refined_p"] == pytest.approx(5.0, rel=8 * np.finfo(float).eps, abs=0)
 
 
 def test_fold_outside_bracket_p_range_still_validates():
@@ -446,7 +455,8 @@ def test_fold_outside_bracket_p_range_still_validates():
     )
     validated = [h for h in hits if h.status == "validated"]
     assert len(validated) == 1
-    assert validated[0].p == pytest.approx(0.0, abs=1e-3)
+    # Measured absolute error: x32=0, x64=0; default event Newton tolerance.
+    assert validated[0].p == pytest.approx(0.0, abs=1e-9 if config.x64_enabled else 1e-5)
 
 
 def test_within_bracket_p_interval_fallback_and_zero_width():
@@ -503,7 +513,8 @@ def test_hopf_spurious_case_from_review():
     result = _hopf_sweep(prob, (-0.5, 0.5))
     hopf = [e for e in result.events if e.kind == "hopf"]
     assert len(hopf) == 1
-    assert abs(hopf[0].p) < 1e-3
+    # Measured absolute error: x32=1.86e-9, x64=0; default event Newton tolerance.
+    assert abs(hopf[0].p) < (1e-9 if config.x64_enabled else 1e-5)
     assert result.rejected_events == []
 
 
@@ -799,7 +810,8 @@ def test_dedup_keeps_hits_on_different_sheets():
     )
     hopfs = [h for h in hits if h.kind == "hopf" and h.status == "validated"]
     assert len(hopfs) == 2
-    assert abs(hopfs[0].p - hopfs[1].p) < 1e-3
+    # Measured difference: x32=5.96e-8, x64=1.72e-10; two default-tolerance solves.
+    assert abs(hopfs[0].p - hopfs[1].p) < 2 * (1e-9 if config.x64_enabled else 1e-5)
     assert abs(float(hopfs[0].u[0]) - float(hopfs[1].u[0])) > 1.0
 
 
@@ -868,8 +880,10 @@ def test_detect_events_refines_each_bracket_with_step_updated_args():
     assert hits == []
     assert [index for index, _, _ in seen] == [(1, 2), (3, 4), (5, 6)]
     for (i, j), b_args, r in seen:
-        np.testing.assert_allclose(b_args["ref"], states[i] + params[i])
-        np.testing.assert_allclose(r, -float(params[i]))
+        # Measured absolute error: x32=0, x64=0; identical reference-state addition.
+        np.testing.assert_allclose(b_args["ref"], states[i] + params[i], rtol=8 * np.finfo(float).eps, atol=0)
+        # Measured absolute error: x32=0, x64=0; exactly representable half-integers.
+        np.testing.assert_allclose(r, -float(params[i]), rtol=8 * np.finfo(float).eps, atol=0)
 
 
 def test_detect_events_step_update_requires_f():
