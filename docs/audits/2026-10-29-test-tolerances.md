@@ -196,7 +196,6 @@ Total: 356 assertions in 39 files.
 
 Not reached before the quota stop (some may hold no numeric tolerances):
 
-- `tests/test_codim2.py`
 - `tests/test_examples_migration_map.py`
 - `tests/test_external_runners.py`
 - `tests/test_gallery_sources.py`
