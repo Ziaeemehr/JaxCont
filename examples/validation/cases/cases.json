@@ -357,7 +357,9 @@
         "jaxcont",
         "matcont",
         "bifurcationkit"
-      ]
+      ],
+      "bifurcationkit": "torbpc_ns.jl",
+      "v2_python": "examples.validation.cases.python_cases.periodic:produce_torbpc_periodic"
     },
     {
       "id": "MC-LC-003",
@@ -370,7 +372,7 @@
         "floquet-multipliers"
       ],
       "python": "examples.validation.cases.python_cases.pd_switch:run_adaptx_pd_switch",
-      "matlab": null,
+      "matlab": "run_adaptx_pd",
       "references": [],
       "manual_source": "MatCont 7.6 Testruns/testadapt2.m and TestSystems/adaptx.m (live 2026-08-27 export)",
       "tolerances": {
@@ -385,11 +387,17 @@
       "system": "adaptx",
       "tool_coverage": {
         "jaxcont": "PENDING",
-        "bifurcationkit": "PENDING"
+        "bifurcationkit": "PENDING",
+        "matcont": "PENDING"
       },
       "evidence_status": "PENDING",
-      "expected_domain": null,
-      "expected_events": [],
+      "expected_domain": [
+        0.55,
+        0.9
+      ],
+      "expected_events": [
+        "PD"
+      ],
       "metric_limits": {
         "parameter_atol": 0.002,
         "period_atol": 0.005,
@@ -397,8 +405,12 @@
       },
       "required_tools": [
         "jaxcont",
+        "matcont",
         "bifurcationkit"
-      ]
+      ],
+      "bifurcationkit": "adaptx_pd.jl",
+      "domain_justification": "cases/systems/periodic.json: independently computed before producer implementation",
+      "v2_python": "examples.validation.cases.python_cases.pd_switch:produce_adaptx_periodic"
     },
     {
       "id": "US-BP-001",

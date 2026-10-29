@@ -28,10 +28,23 @@ def write_candidate(bundle, output_dir, *, tool, driver, equation, lock=None):
             writer.writeheader()
             writer.writerows(rows)
         hashes[name] = file_hash(output / name)
+    if "orbits" in bundle:
+        rows = bundle["orbits"]
+        columns = sorted(set().union(*(row.keys() for row in rows)))
+        with (output / "orbits.csv").open("w", newline="", encoding="utf-8") as stream:
+            writer = csv.DictWriter(stream, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(rows)
+        hashes["orbits.csv"] = file_hash(output / "orbits.csv")
+    hashes.update({path.name: file_hash(path) for path in output.glob("*.csv")})
     metadata = dict(bundle.get("metadata", {}))
     revision = subprocess.run(["git", "rev-parse", "HEAD"], stdin=subprocess.DEVNULL,
                               capture_output=True, text=True, check=True).stdout.strip()
     metadata["source_hashes"] = {str(Path(p).name): file_hash(p) for p in Path(driver).parent.glob("lorenz84*.m")} if tool == "matcont" else {}
+    if tool == "jaxcont" and bundle["canonical_id"] in ("adaptx.cycle-pd-switch", "torbpc.cycle-lpc-pd-ns"):
+        metadata["source_hashes"].update({p.name: file_hash(p) for p in (Path(driver).parent / "periodic_checks.py", Path(driver).parents[1] / "systems/periodic.json")})
+    if bundle["canonical_id"] == "adaptx.cycle-pd-switch" and tool == "matcont":
+        metadata["source_hashes"].update({p.name: file_hash(p) for p in (Path(driver).parent / "export_cycle_run.m", Path(driver).parents[2] / "cases/systems/periodic.json")})
     if bundle["canonical_id"] in ("lorenz84.fold-ft", "lorenz84.hopf-ft"):
         from .cases.systems.lorenz84 import chart_coverage
         T_values = [float(r["T"]) for r in bundle["branch"]]

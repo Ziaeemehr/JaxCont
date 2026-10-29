@@ -64,6 +64,8 @@ def run_julia(script, args, timeout, *, cli=None, project=None, depot=None, log_
         _save_logs(logs, script.stem, exc.stdout, exc.stderr)
         raise RuntimeError(f"Julia {script.name} timed out after {timeout}s; logs: {logs}") from exc
     _save_logs(logs, script.stem, result.stdout, result.stderr)
+    if "soft scope" in result.stderr.lower():
+        raise RuntimeError(f"Julia {script.name} emitted a soft scope warning; logs: {logs}")
     if result.returncode:
         raise RuntimeError(f"Julia {script.name} exited {result.returncode}; logs: {logs}")
     return result

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 import jax
@@ -108,9 +109,12 @@ def run_radial_cycle(*, computed=None) -> CaseResult:
     nontrivial_indices = 1 - trivial_indices
     nontrivial = multipliers[jnp.arange(multipliers.shape[0]), nontrivial_indices]
     multiplier_errors = jnp.abs(nontrivial - expected_nontrivial)
+    from .periodic_checks import independent_defect
+    defect = independent_defect(_radial_rhs, mesh, problem.u0, problem.p0)
     return CaseResult(
         case_id="MC-LC-001",
         checks={
+            **defect,
             "max_radius_error": float(jnp.max(radius_errors)),
             "max_period_error": float(jnp.max(jnp.abs(periods - 2.0 * jnp.pi))),
             "max_collocation_residual": float(jnp.max(jnp.abs(residuals))),
@@ -497,6 +501,9 @@ def run_torbpc_cycle(reference_dir: Path, *, computed=None) -> CaseResult:
             "jaxcont_events": [
                 {"kind": hit.kind, "parameter": hit.p} for hit in jaxcont_result.events
             ],
+            "jaxcont_parameter_estimates": {kind:float(jaxcont_parameters[index]) for kind,index in observed_indices.items()},
+            "jaxcont_period_estimates": {kind:float(jaxcont_states[index,-1]) for kind,index in observed_indices.items()},
+            "jaxcont_spectrum_estimates": {kind:[[float(z.real),float(z.imag)] for z in jaxcont_spectra[index]] for kind,index in observed_indices.items()},
             "jaxcont_period_errors": period_errors,
             "jaxcont_extrema_errors": extrema_errors,
             "jaxcont_spectrum_errors": spectrum_errors,
@@ -514,3 +521,22 @@ def run_torbpc_cycle(reference_dir: Path, *, computed=None) -> CaseResult:
 
 
 __all__ = ["load_torbpc_reference", "run_radial_cycle", "run_torbpc_cycle"]
+
+
+def produce_torbpc_periodic(*, computed=None):
+    """Full fresh stress-case record, with explicit native label failures."""
+    from .periodic_checks import periodic_records, mesh_refinement
+    result,mesh = _run_torbpc_jaxcont() if computed is None else computed
+    tables=periodic_records(result,mesh,_torbpc_rhs,allow_failed=True)
+    contract=json.loads((Path(__file__).parents[1]/'systems/periodic.json').read_text())['torbpc']
+    selected={kind:[e for e in tables['events'] if e['event_type']==kind and contract[kind.lower()+'_window'][0]<=e['parameter']<=contract[kind.lower()+'_window'][1]] for kind in ('LPC','PD','NS')}
+    kinds={kind for kind,events in selected.items() if events}
+    comparison=run_torbpc_cycle(Path(__file__).resolve().parents[2]/'reference',computed=(result,mesh))
+    tables['canonical_id']='torbpc.cycle-lpc-pd-ns'
+    tables['metadata']=dict(canonical_id='torbpc.cycle-lpc-pd-ns',tool='jaxcont',
+        status='FAIL',comparison_checks=comparison.checks,comparison_observations=comparison.observations,failed_spectrum_point_ids=[r['point_id'] for r in tables['branch'] if r['status']=='FLOQUET_FAILED'],missing_event_types=sorted({'LPC','PD','NS'}-kinds),
+        expected_event_status={kind:('MISSING' if not events else 'DUPLICATE' if len(events)>1 else 'FOUND' if events[0]['status']=='CONVERGED' else 'FAILED') for kind,events in selected.items()},
+        refinement=mesh_refinement(_torbpc_rhs,mesh,result.branch.states[int(result.branch.n_valid)-1],result.branch.params[int(result.branch.n_valid)-1]))
+    import platform
+    tables['metadata'].update(runtime_version=platform.python_version(),package_versions={'JaxCont':jc.__version__,'JAX':jax.__version__},precision=str(result.branch.states.dtype),parameter_order=['nu'],scaling={'time':'original','metric':'theta=1 Euclidean collocation coordinates'},seeds={'nu':-.589286291695516,'method':'local Hopf eigenvector'},mesh={'ntst':mesh.ntst,'ncol':mesh.ncol},resolved_controls={'ds':.005,'ds_min':1e-5,'ds_max':.02,'max_steps':300},solver_strategies={'method':'JaxCont PseudoArclength','event_selection':'native event labels; missing labels remain FAIL'})
+    return tables

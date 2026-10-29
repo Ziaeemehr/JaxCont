@@ -69,6 +69,12 @@ from . import CaseResult
 
 _TWO_PI = 2.0 * np.pi
 
+
+def prc_derivative_conventions():
+    """These derivatives have distinct independent variables and no conversion."""
+    return {"jaxcont_dprc": "parameter", "matcont_dprc": "absolute time"}
+
+
 # atol tightened from 0.065 to 0.005 (rtol unchanged at 0.05) after fixing
 # a real bug in examples/validation/regenerate/matcont/export_prc_run.m: it paired calcPRC.m's *rotated*
 # PRC/dPRC value output (circularly shifted to start at the trajectory's

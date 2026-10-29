@@ -16,6 +16,7 @@ function cli(default_case)
     (startswith(resolved,reference*"/") || resolved==reference || startswith(reference,resolved*"/")) && error("Candidate output overlaps reference")
     mkpath(output)
     rm(joinpath(output,"metadata.json");force=true)
+    rm(joinpath(output,"failure.json");force=true)
     case,output
 end
 hashfile(path)="sha256:"*bytes2hex(sha256(read(path)))

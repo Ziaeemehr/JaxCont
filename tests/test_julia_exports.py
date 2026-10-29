@@ -70,3 +70,50 @@ def check_radial_modes(bundle):
         selected=[r for r in modes if r['point_id']==point['point_id'] and int(r['is_trivial'])]
         assert len(selected)==1
         assert float(selected[0]['flow_alignment'])>.99
+
+
+def run_periodic_native(case, script):
+    output=ROOT/'examples/validation/generated/candidates'/('periodic-test-x'+os.environ.get('JAXCONT_TEST_X64','0'))/case/'bifurcationkit'
+    result=run_julia(JULIA/script,['--case',case,'--output-dir',str(output)],600,log_dir=output)
+    assert 'soft scope' not in result.stderr.lower()
+    bundle=load_bundle(output,case_id=case,tool='bifurcationkit')
+    assert (output/'orbits.csv').is_file()
+    assert bundle['metadata']['coverage_status']=='COMPLETE'
+    assert bundle['metadata']['comparable'] is False
+    refinement=bundle['metadata']['refinement']
+    assert refinement['fine']['independent_dense_defect'] < refinement['coarse']['independent_dense_defect']
+    return bundle
+
+
+@pytest.mark.julia
+def test_pd_export_has_base_and_doubled_orbit_identity():
+    bundle=run_periodic_native('adaptx.cycle-pd-switch','adaptx_pd.jl')
+    assert {r['segment_id'] for r in bundle['branch']}=={'base','doubled'}
+    assert abs(bundle['metadata']['period_ratio']-2)<.005
+    doubled=[r for r in bundle['branch'] if r['segment_id']=='doubled']
+    assert max(float(r['half_period_difference']) for r in doubled)>1e-3
+    pd=[e for e in bundle['events'] if e['event_type']=='PD' and e['segment_id']=='base']
+    assert len(pd)==1
+    critical=[complex(float(m['real']),float(m['imag'])) for m in bundle['spectra'] if m['event_id']==pd[0]['event_id']]
+    assert sum(abs(z+1)<1e-5 for z in critical)==1
+    window=json.loads((ROOT/'examples/validation/cases/systems/periodic.json').read_text())['adaptx']['doubled_pd_window']
+    dp=[e for e in bundle['events'] if e['event_type']=='PD' and e['segment_id']=='doubled' and window[0]<=float(e['parameter'])<=window[1]]
+    assert len(dp)==1
+    dm=[complex(float(m['real']),float(m['imag'])) for m in bundle['spectra'] if m['event_id']==dp[0]['event_id']]
+    assert sum(abs(z+1)<1e-5 for z in dm)==1
+
+
+@pytest.mark.julia
+def test_torbpc_export_requires_full_expected_event_domain():
+    bundle=run_periodic_native('torbpc.cycle-lpc-pd-ns','torbpc_ns.jl')
+    from examples.validation.cases.python_cases.periodic_checks import require_events
+    contract=json.loads((ROOT/'examples/validation/cases/systems/periodic.json').read_text())['torbpc']
+    expected=[e for e in bundle['events'] if e['event_type'] in ('LPC','PD','NS') and contract[e['event_type'].lower()+'_window'][0]<=float(e['parameter'])<=contract[e['event_type'].lower()+'_window'][1]]
+    require_events(expected,('LPC','PD','NS'))
+    assert min(float(r['parameter']) for r in bundle['branch'])<=-.747263543778405
+    ns=next(e for e in expected if e['event_type']=='NS')
+    lpc=next(e for e in expected if e['event_type']=='LPC')
+    lm=[complex(float(m['real']),float(m['imag'])) for m in bundle['spectra'] if m['event_id']==lpc['event_id']]
+    assert sum(abs(z-1)<1e-4 for z in lm)==2
+    assert .01<float(ns['ns_angle'])<np.pi-.01
+    assert float(ns['crossing_logabs_before'])*float(ns['crossing_logabs_after'])<0

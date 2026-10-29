@@ -161,7 +161,7 @@ def _run_matlab_function(
                 text=True,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
-                timeout=300,
+                timeout=600 if function_name == "run_adaptx_pd" else 300,
             )
         except subprocess.TimeoutExpired as exc:
             _save_matlab_logs(output_dir, function_name, exc.stdout, exc.stderr)
@@ -203,7 +203,7 @@ def _regenerate(cases: list[dict], args: argparse.Namespace) -> bool:
             ok = False
             continue
         output = None
-        if case["canonical_id"].startswith("lorenz84."):
+        if case["canonical_id"].startswith("lorenz84.") or case["canonical_id"] == "adaptx.cycle-pd-switch":
             output = args.generated_dir / case["canonical_id"] / "matcont"
             output.mkdir(parents=True, exist_ok=True)
             # A failure-only driver invocation must never refresh old evidence.
@@ -227,7 +227,7 @@ def _regenerate(cases: list[dict], args: argparse.Namespace) -> bool:
                 matcont_root=args.matcont_root,
                 output_dir=args.generated_dir,
             )
-            if case["canonical_id"].startswith("lorenz84."):
+            if case["canonical_id"].startswith("lorenz84.") or case["canonical_id"] == "adaptx.cycle-pd-switch":
                 from .candidates import write_candidate
                 output = args.generated_dir / case["canonical_id"] / "matcont"
                 raw = output / "raw.json"
@@ -237,20 +237,24 @@ def _regenerate(cases: list[dict], args: argparse.Namespace) -> bool:
                 native = json.loads(raw.read_text())
                 # MATLAB's jsonencode writes a one-element struct array (the
                 # single-point lorenz84.bt-ft branch) as an object, not a list.
-                for table in ("branch", "events", "spectra"):
+                for table in ("branch", "events", "spectra", "orbits"):
                     if isinstance(native.get(table), dict):
                         native[table] = [native[table]]
                 if completed is not None:
                     native["metadata"]["command"] = completed.args
                 write_candidate(native, output, tool="matcont",
                     driver=_SUITE_DIR / "regenerate" / "matcont" / (function_name + ".m"),
-                    equation=_SUITE_DIR / "regenerate" / "matcont" / "systems" / "lorenz84.m")
+                    equation=(_SUITE_DIR / "regenerate" / "matcont" / "systems" / "lorenz84.m" if case["canonical_id"].startswith("lorenz84.") else Path(args.matcont_root) / "Testruns/TestSystems/adaptx.m"))
+                (output / "failure.json").unlink(missing_ok=True)
                 print(f"REGENERATED {case['canonical_id']}")
                 continue
             metadata_path = args.generated_dir / f"{case['id']}_metadata.json"
             enrich_generated_metadata(metadata_path, case, _equation_path(case, args.matcont_root))
             print(f"REGENERATED {case['id']}")
         except Exception as exc:  # every producer failure must remain visible
+            if output is not None:
+                (output / "metadata.json").unlink(missing_ok=True)
+                (output / "failure.json").write_text(json.dumps({"canonical_id": case["canonical_id"], "status": "FAIL", "error": str(exc)}, indent=2) + "\n")
             print(f"FAIL {case['id']}: {exc}", file=sys.stderr)
             ok = False
         finally:
@@ -278,7 +282,7 @@ def _regenerate_julia(cases, args):
             run_julia(
                 _SUITE_DIR / "regenerate" / "bifurcationkit" / script,
                 ["--case", case["canonical_id"], "--output-dir", str(output)],
-                300,
+                600 if script in ("adaptx_pd.jl", "torbpc_ns.jl") else 300,
                 cli=args.julia_bin,
                 project=args.bifurcationkit_project,
                 depot=args.julia_depot,
@@ -287,6 +291,9 @@ def _regenerate_julia(cases, args):
             load_bundle(output, case_id=case["canonical_id"], tool="bifurcationkit")
             print(f"REGENERATED {case['canonical_id']}")
         except Exception as exc:
+            output.mkdir(parents=True, exist_ok=True)
+            (output / "metadata.json").unlink(missing_ok=True)
+            (output / "failure.json").write_text(json.dumps({"canonical_id": case["canonical_id"], "status": "FAIL", "error": str(exc)}, indent=2) + "\n")
             print(f"FAIL {case['canonical_id']}: {exc}", file=sys.stderr)
             success = False
     return success
@@ -322,7 +329,7 @@ def _validate_case(case: dict, reference_dir: Path) -> tuple[bool, dict]:
             if (path / "metadata.json").is_file()
         }
         if case.get("python"):
-            fresh = _load_case_callable(case["python"])()
+            fresh = _load_case_callable(case.get("v2_python", case["python"]))()
             results["jaxcont"] = fresh if isinstance(fresh, dict) else fresh.artifacts["bundle"]
         report = build_validation_report(case, results)
         return report.status == "PASS", {

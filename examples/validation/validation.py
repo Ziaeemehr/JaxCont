@@ -88,7 +88,8 @@ def case_result_passes(case_id: str, checks: dict[str, Any]) -> bool:
         ),
         "MC-LC-002": lambda: bool(checks["all_comparisons_pass"]),
         "MC-LC-003": lambda: (
-            checks["pd_found"]
+            checks.get("matcont_reference_present", True)
+            and checks["pd_found"]
             and checks["pd_parameter_error"] < 2e-3
             and checks["pd_period_error"] < 5e-3
             and checks["switched_parameter_offset_error"] < 1e-5
