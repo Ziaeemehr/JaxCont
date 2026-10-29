@@ -11,6 +11,12 @@ import pytest
 import jaxcont as jc
 from jaxcont.stability.periodic_schur import periodic_spectrum
 
+def _eps_J():
+    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+
+_POINT_ATOL = 1e-9 if jnp.asarray(0.).dtype == jnp.float64 else 1e-5
+
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
@@ -42,8 +48,8 @@ def test_repeated_multiplier_reverse_mode_is_nan(compiled):
     assert float(grad_simple) == 0.0
     # Away from the collision the derivative of log|det| is one.
     t1 = jnp.asarray(1e-3, _dtype())
-    np.testing.assert_allclose(transform(jax.grad(lambda t: jnp.sum(logabs(t))))(t1), 1.0,
-                               rtol=1e-3)
+    # Measured |error| x32/x64: 0/0; simple eigenvalue derivative or forward/reverse consistency.
+    np.testing.assert_allclose(transform(jax.grad(lambda t: jnp.sum(logabs(t))))(t1), 1.0, rtol=32 * _eps_J(), atol=0)
 
 
 def test_repeated_multiplier_phase_reverse_mode_is_nan():
@@ -113,11 +119,13 @@ def test_final_nonfinite_trial_keeps_reverse_gradient(alg):
     reverse = jax.jit(jax.grad(lambda a: loss(a)[0]))(a)
     forward = jax.jit(jax.jacfwd(lambda a: loss(a)[0]))(a)
     assert bool(jnp.isfinite(reverse))
-    np.testing.assert_allclose(reverse, forward, rtol=1e-4)
+    # Measured |error| x32/x64: 0/8.88e-16; simple eigenvalue derivative or forward/reverse consistency.
+    np.testing.assert_allclose(reverse, forward, rtol=32 * _eps_J(), atol=0)
     if isinstance(alg, jc.Natural):
         # Fixed parameter grid 0, 0.1, ..., 0.9: d/da = sum sqrt(0.95 - p).
         expected = np.sum(np.sqrt(0.95 - 0.1 * np.arange(10)))
-        np.testing.assert_allclose(reverse, expected, rtol=1e-4)
+        # Measured |error| x32/x64: 5.21e-07/8.88e-16; analytic sensitivity accumulated along Newton-corrected branch.
+        np.testing.assert_allclose(reverse, expected, rtol=10 * _POINT_ATOL, atol=0)
 
 
 def test_corrector_reverse_mode_ignores_rejected_trial():
@@ -337,8 +345,8 @@ def test_low_frequency_minimal_seed_is_accepted():
     s = 1e-5 if jax.config.x64_enabled else 1e-3
     problem = hopf_curve_problem(_scaled_bt(s), jnp.array([.6, -.4], dt), jnp.array([.29, 1.3], dt))
     # The floor follows the seed frequency, omega_seed = s * sqrt(0.2).
-    np.testing.assert_allclose(problem.args.omega_floor, default_tol(dt) ** .5 * s * np.sqrt(.2),
-                               rtol=1e-3)
+    # Measured |error| x32/x64: 1.19e-13/0; closed-form seed frequency floor roundoff.
+    np.testing.assert_allclose(problem.args.omega_floor, default_tol(dt) ** 0.5 * s * np.sqrt(0.2), rtol=64 * _eps_J(), atol=0)
     r = jc.continuation(problem, jc.PseudoArclength(), p_span=(1.3, 1.25), settings=_BT_SETTINGS)
     assert r.status == 'reached_end'
 
@@ -414,8 +422,10 @@ def test_stiff_mode_does_not_change_minimal_hopf_scale(K):
     # Exact Hopf curve: trace q - 1.2 + x = 0 and omega**2 = -2 x.
     x = X[:, 0] - .7
     tol = 1e-5 if jax.config.x64_enabled else 1e-4
-    assert float(jnp.max(jnp.abs(q - 1.2 + x))) < tol
-    assert float(jnp.max(jnp.abs(X[:, 4] ** 2 + 2 * x))) < tol
+    # Measured |error| x32/x64: 5.96e-08/1.11e-16; defining trace/frequency equations, Newton and rounding budget.
+    assert float(jnp.max(jnp.abs(q - 1.2 + x))) < 1e-05
+    # Measured |error| x32/x64: 2.79e-07/6.97e-15; defining trace/frequency equations, Newton and rounding budget.
+    assert float(jnp.max(jnp.abs(X[:, 4] ** 2 + 2 * x))) < 1e-05
 
 
 def test_fast_brusselator_hopf_curve_is_unchanged():

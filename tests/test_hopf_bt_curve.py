@@ -11,6 +11,12 @@ import jaxcont as jc
 from jaxcont.bifurcations.curves import hopf_curve_problem
 from jaxcont.utils.precision import default_tol
 
+def _eps_J():
+    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+
+_POINT_ATOL = 1e-9 if jnp.asarray(0.).dtype == jnp.float64 else 1e-5
+
+
 
 def shifted(u, p, args):
     x, y = u - jnp.array([.7, -.4])
@@ -26,7 +32,8 @@ def test_bt_chart_residual_and_jacobian_at_zero():
     problem = seed()
     a = eqx.tree_at(lambda a: a.v_anchor, problem.args, jnp.array([1., 0.]))
     X = jnp.array([.7, -.4, .3, 1., 0., 0., 1., 0.])
-    assert jnp.max(jnp.abs(problem.f(X, 1.2, a))) < 100*default_tol(X.dtype)
+    # Measured |error| x32/x64: 0/0; closed-form Jordan-chain residual, unit scale.
+    assert jnp.max(jnp.abs(problem.f(X, 1.2, a))) < 32 * _eps_J()
     assert jnp.linalg.svd(jax.jacfwd(problem.f)(X, 1.2, a), compute_uv=False)[-1] > .05
 
 
@@ -41,10 +48,13 @@ def check_locus(branch):
     tol = 100*default_tol(X.dtype)
     assert len(q) == 21
     assert branch.valid is None or jnp.all(branch.valid)
-    np.testing.assert_allclose(q, jnp.linspace(1.3, 1.1, 21), atol=tol)
+    # Measured |error| x32/x64: 1.19e-07/2.22e-16; twenty fixed steps, accumulated roundoff.
+    np.testing.assert_allclose(q, jnp.linspace(1.3, 1.1, 21), atol=0, rtol=32 * _eps_J())
     x = 1.2-q
-    assert jnp.max(jnp.abs(X[:, 2]-(.3-x*x))) < tol
-    assert jnp.max(jnp.abs(X[:, -1]+2*x)) < tol
+    # Measured |error| x32/x64: 2.98e-08/1.66e-10; well-conditioned chart Newton budget, inverse singular value below 4.
+    assert jnp.max(jnp.abs(X[:, 2] - (0.3 - x * x))) < 8 * _POINT_ATOL
+    # Measured |error| x32/x64: 2.38e-07/4.65e-10; well-conditioned chart Newton budget, inverse singular value below 4.
+    assert jnp.max(jnp.abs(X[:, -1] + 2 * x)) < 8 * _POINT_ATOL
     assert X[0, -1] > 0 and X[-1, -1] < 0
     return x
 
@@ -52,7 +62,8 @@ def check_locus(branch):
 def test_hopf_bt_kappa_crosses_shifted_bt():
     branch = run(seed())
     x = check_locus(branch)
-    assert jnp.max(jnp.abs(branch.states[:, :2]-jnp.stack([.7+x, jnp.full_like(x, -.4)], axis=-1))) < 100*default_tol(x.dtype)
+    # Measured |error| x32/x64: 5.96e-08/1.11e-16; well-conditioned chart Newton budget, inverse singular value below 4.
+    assert jnp.max(jnp.abs(branch.states[:, :2] - jnp.stack([0.7 + x, jnp.full_like(x, -0.4)], axis=-1))) < 8 * _POINT_ATOL
 
 
 def transform(q):
@@ -73,13 +84,15 @@ def test_bt_fixed_anchor_nonnormal_similarity():
     x = check_locus(branch)
     expected = jax.vmap(lambda q, x: jnp.array([.7, -.4])+transform(q)@jnp.array([x, 0.]))(branch.params, x)
     tol = 100*default_tol(x.dtype)
-    assert jnp.max(jnp.abs(branch.states[:, :2]-expected)) < tol
+    # Measured |error| x32/x64: 1.19e-07/1.81e-10; well-conditioned chart Newton budget, inverse singular value below 4.
+    assert jnp.max(jnp.abs(branch.states[:, :2] - expected)) < 8 * _POINT_ATOL
     for X, q in zip(branch.states, branch.params):
         for accepted in [False, True]:
             a = _apply_step_update(problem.step_update, problem.args, X, q, accepted)
             for before, after in zip(jax.tree.leaves(problem.args), jax.tree.leaves(a)):
                 np.testing.assert_array_equal(before, after)
-            assert jnp.max(jnp.abs(problem.f(X, q, a))) < tol
+            # Measured |error| x32/x64: 1.19e-07/8.25e-10; Newton residual with chart conditioning and vector norm allowance.
+            assert jnp.max(jnp.abs(problem.f(X, q, a))) < 16 * _POINT_ATOL
         assert jnp.linalg.svd(jax.jacfwd(problem.f)(X, q, a), compute_uv=False)[-1] > .01
         _, _, m = decode_curve_state(X, q, problem.curve_layout, nonnormal, None)
         np.testing.assert_array_equal(m.v, X[3:5])
@@ -93,9 +106,11 @@ def test_bt_fixed_anchor_nonnormal_similarity():
     X = jnp.concatenate([jnp.zeros(3), v, w, jnp.zeros(1)])
     a = eqx.tree_at(lambda a: a.v_anchor, problem.args, jnp.array([1., 0.]))
     from jaxcont.bifurcations.curves import _bt_hopf_residual
-    assert jnp.max(jnp.abs(_bt_hopf_residual(X, jnp.zeros(2), linear, a, 2))) < tol
+    # Measured |error| x32/x64: 1.61e-10/1.11e-16; closed-form Jordan-chain residual, unit scale.
+    assert jnp.max(jnp.abs(_bt_hopf_residual(X, jnp.zeros(2), linear, a, 2))) < 32 * _eps_J()
     bad = eqx.tree_at(lambda a: a.v_anchor, a, v)
-    assert abs(_bt_hopf_residual(X, jnp.zeros(2), linear, bad, 2)[-1]+.1923076923) < tol
+    # Measured |error| x32/x64: 0/7.69e-12; closed form 0.2/1.04, decimal reference rounding below 8e-12.
+    assert abs(_bt_hopf_residual(X, jnp.zeros(2), linear, bad, 2)[-1] + 0.1923076923) < max(32 * _eps_J(), 1e-10)
 
 
 def test_bt_decoder_zero_and_neutral_modes_are_real_and_trace_safe():
@@ -112,7 +127,8 @@ def test_bt_decoder_zero_and_neutral_modes_are_real_and_trace_safe():
     np.testing.assert_array_equal(modes.oscillatory, [True, False, False])
     np.testing.assert_array_equal(modes.q2[1:], jnp.zeros((2, 2)))
     omega, oscillatory = jax.jit(hopf_curve_frequency)(jnp.array([.2, 0., -.2]))
-    np.testing.assert_allclose(omega, modes.omega)
+    # Measured |error| x32/x64: 0/0; same decoder arithmetic.
+    np.testing.assert_allclose(omega, modes.omega, atol=0, rtol=0)
     np.testing.assert_array_equal(oscillatory, modes.oscillatory)
 
 
@@ -163,7 +179,8 @@ def test_bt_kappa_event_once_and_validated():
     assert len(result.events) == 1
     hit = result.events[0]
     assert hit.info['converged']
-    assert jnp.max(jnp.abs(hit.info['p']-jnp.array([.3, 1.2]))) < 100*default_tol(hit.u.dtype)
+    # Measured |error| x32/x64: 0/0; well-conditioned chart Newton budget, inverse singular value below 4.
+    assert jnp.max(jnp.abs(hit.info['p'] - jnp.array([0.3, 1.2]))) < 8 * _POINT_ATOL
     assert not any(h.info.get('reason') == 'curve_terminated' for h in result.rejected_events)
 
 
@@ -202,7 +219,8 @@ def test_bt_chart_jit_vmap_scan_gradient():
     values = jax.jit(jax.vmap(solve))(jnp.array([.3, .4]))
     assert jnp.all(jnp.isfinite(values))
     grad = jax.jit(jax.grad(solve))(jnp.asarray(.3))
-    assert abs(grad-1) < 100*default_tol(grad.dtype)
+    # Measured |error| x32/x64: 0/4.44e-16; analytic derivative or same normal-form coefficient.
+    assert abs(grad - 1) < 128 * _eps_J()
 
 
 def test_bt_mixed_kappa_coefficient_grad():
@@ -226,8 +244,10 @@ def test_bt_mixed_kappa_coefficient_grad():
         q = q/jnp.linalg.norm(q)
         return lyapunov_coefficient(f,jnp.zeros(2),jnp.zeros(2),q.real,q.imag,jnp.sqrt(.2),a)
     tol = 100*default_tol(a.dtype)
-    assert abs(values[0]-reference(a[0])) < tol
-    assert abs(grads[0]-jax.grad(reference)(a[0])) < tol
+    # Measured |error| x32/x64: 0/0; analytic derivative or same normal-form coefficient.
+    assert abs(values[0] - reference(a[0])) < 128 * _eps_J()
+    # Measured |error| x32/x64: 0/0; analytic derivative or same normal-form coefficient.
+    assert abs(grads[0] - jax.grad(reference)(a[0])) < 128 * _eps_J()
     assert jnp.all(jnp.isfinite(grads))
     np.testing.assert_array_equal(values[1:], 0)
     np.testing.assert_array_equal(grads[1:], 0)
@@ -285,8 +305,10 @@ def test_bt_domain_restricted_coefficient_grad():
             q.real, q.imag, jnp.sqrt(k[0]), strength)
 
     tol = 100*default_tol(a.dtype)
-    assert abs(values[0]-reference(a[0])) < tol
-    assert abs(gradients[0]-jax.grad(reference)(a[0])) < tol
+    # Measured |error| x32/x64: 2.86e-06/0; third-derivative coefficient evaluation at scale about ten.
+    assert abs(values[0] - reference(a[0])) < 512 * _eps_J()
+    # Measured |error| x32/x64: 4.63e-06/7.89e-31; third-derivative coefficient evaluation at scale about ten.
+    assert abs(gradients[0] - jax.grad(reference)(a[0])) < 512 * _eps_J()
     assert jnp.all(jnp.isfinite(gradients))
     np.testing.assert_array_equal(values[1:], 0)
     np.testing.assert_array_equal(gradients[1:], 0)

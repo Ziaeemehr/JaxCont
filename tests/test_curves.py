@@ -8,6 +8,9 @@ import pytest
 import jaxcont as jc
 from jaxcont.bifurcations.curves import fold_curve_problem, unpack_fold_curve
 
+_POINT_ATOL = 1e-9 if jnp.asarray(0.).dtype == jnp.float64 else 1e-5
+
+
 
 def _cusp_shifted(u, p, args):
     """u' = (p0-0.3) + (p1-1.2)*(u-0.7) - (u-0.7)**3.
@@ -84,8 +87,10 @@ def test_hopf_curve_traces_the_exact_parabola():
     for i in range(sol.branch.params.shape[0]):
         p1 = float(sol.branch.params[i])
         _, p0, _, _, omega = unpack_hopf_curve(sol.branch.states[i], n=2)
-        assert abs(float(p0) + p1**2 - 2.0) < 1e-3
-        assert abs(float(omega) - 1.0) < 1e-3
+        # Measured |error| x32/x64: 1.31e-06/1.25e-06; explicit Newton 1e-5, parameter constraint.
+        assert abs(float(p0) + p1 ** 2 - 2.0) < 2e-05
+        # Measured |error| x32/x64: 0/0; explicit Newton 1e-5.
+        assert abs(float(omega) - 1.0) < 1e-05
 
 
 def test_fold_curve_continuation_under_jit():
@@ -152,7 +157,8 @@ def test_hopf_curve_continuation_under_jit():
         0.5,
     )
     assert valid.sum() > 10
-    assert max_residual < 1e-4
+    # Measured |error| x32/x64: 9.56e-07/9.32e-07; explicit Newton 1e-5.
+    assert max_residual < 1e-05
 
 
 def test_two_parameter_surface_is_exported_top_level():
@@ -216,8 +222,10 @@ def test_lorenz84_bt_matches_bifurcationkit():
     hits = [h for h in sol.events if h.kind == "bogdanov_takens"]
     assert len(hits) == 1
     assert hits[0].info["converged"] is True
-    assert jnp.allclose(hits[0].u, jnp.array(BK_BT_U), atol=1e-3)
-    assert jnp.allclose(hits[0].info["p"], jnp.array(BK_BT_P), atol=1e-3)
+    # Measured |error| x32/x64: 2.38e-07/3.69e-13; reviewed BK BT reference, default refinement Newton budget.
+    assert jnp.allclose(hits[0].u, jnp.array(BK_BT_U), atol=_POINT_ATOL, rtol=0)
+    # Measured |error| x32/x64: 2.38e-07/4.78e-13; reviewed BK BT reference, default refinement Newton budget.
+    assert jnp.allclose(hits[0].info['p'], jnp.array(BK_BT_P), atol=_POINT_ATOL, rtol=0)
 
 
 # --------------------------------------------------------------------------
@@ -245,7 +253,8 @@ def test_fold_curve_events_do_not_eigendecompose_the_extended_jacobian():
     assert sol.branch.eigenvalues is None
     hits = [h for h in sol.events if h.kind == "cusp"]
     assert len(hits) == 1
-    assert abs(hits[0].p - 1.2) < 5e-2
+    # Measured |error| x32/x64: 4.77e-08/0; analytic event, default Newton budget.
+    assert abs(hits[0].p - 1.2) < _POINT_ATOL
 
 
 def test_hopf_curve_events_do_not_eigendecompose_the_extended_jacobian():
@@ -275,7 +284,8 @@ def test_hopf_curve_events_do_not_eigendecompose_the_extended_jacobian():
     assert sol.branch.eigenvalues is None
     hits = [h for h in sol.events if h.kind == "generalized_hopf"]
     assert len(hits) == 1
-    assert abs(hits[0].p - 0.4) < 5e-2
+    # Measured |error| x32/x64: 5.96e-09/0; analytic event, default Newton budget.
+    assert abs(hits[0].p - 0.4) < _POINT_ATOL
 
 
 _FLIP_CENTRE = jnp.array([0.5, -0.3, 0.2])
@@ -318,8 +328,10 @@ def test_hopf_curve_survives_eigenvector_rotation():
     for i in range(sol.branch.params.shape[0]):
         p1 = float(sol.branch.params[i])
         _, p0, _, _, omega = unpack_hopf_curve(sol.branch.states[i], n=3)
-        assert abs(float(p0) - p1) < 1e-3
-        assert abs(float(omega) - 1.0) < 1e-3
+        # Measured |error| x32/x64: 5.96e-08/3.56e-08; explicit Newton 1e-5.
+        assert abs(float(p0) - p1) < 1e-05
+        # Measured |error| x32/x64: 5.96e-08/3.22e-08; explicit Newton 1e-5.
+        assert abs(float(omega) - 1.0) < 1e-05
 
 
 def test_fold_curve_seed_grad_wrt_start_parameter():
@@ -337,7 +349,8 @@ def test_fold_curve_seed_grad_wrt_start_parameter():
         h = 1e-5
         central = (seed(q + h) - seed(q - h)) / (2 * h)
         assert jnp.isfinite(derivative)
-        assert jnp.allclose(derivative, central, rtol=1e-4, atol=1e-9)
+        # Measured |error| x32/x64: 4.55e-12/4.55e-12; linear translated root; central difference cancellation at h=1e-5.
+        assert jnp.allclose(derivative, central, rtol=0, atol=1e-09)
 
 
 def test_hopf_curve_seed_grad_wrt_start_parameter():
@@ -357,4 +370,5 @@ def test_hopf_curve_seed_grad_wrt_start_parameter():
         h = 1e-5
         central = (seed(q + h) - seed(q - h)) / (2 * h)
         assert jnp.isfinite(derivative)
-        assert jnp.allclose(derivative, central, rtol=1e-4, atol=1e-9)
+        # Measured |error| x32/x64: 4.55e-12/4.55e-12; linear translated root; central difference cancellation at h=1e-5.
+        assert jnp.allclose(derivative, central, rtol=0, atol=1e-09)

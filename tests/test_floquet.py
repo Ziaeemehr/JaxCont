@@ -22,6 +22,10 @@ from jaxcont.stability.floquet import (
     floquet_stable,
 )
 
+def _eps_J():
+    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+
+
 
 def _rhs(u, p, args):
     x, y = u[0], u[1]
@@ -75,7 +79,8 @@ def test_monodromy_matrix_matches_interval_propagators_scan():
         lambda carry, M: (M @ carry, None), jnp.eye(n), M_all
     )
     Phi_direct = monodromy_matrix(_rhs, D, E, h, mesh_states, coll_states, T, prob.p0)
-    assert jnp.max(jnp.abs(Phi_from_blocks - Phi_direct)) < 1e-6
+    # Measured |error| x32/x64: 0/0; identical interval product recurrence at unit scale.
+    assert jnp.max(jnp.abs(Phi_from_blocks - Phi_direct)) < 8 * _eps_J()
 
 
 def test_floquet_multipliers_matches_closed_form_at_rho_1():
@@ -117,7 +122,8 @@ def test_branch_floquet_multipliers_matches_per_point_calls():
         floquet_multipliers(_rhs, mesh, prob1.u0, prob1.p0)[1],
         floquet_multipliers(_rhs, mesh, prob2.u0, prob2.p0)[1],
     ]))
-    assert jnp.allclose(jnp.sort(jnp.abs(batched), axis=1), jnp.sort(jnp.abs(individual), axis=1), atol=1e-4)
+    # Measured |error| x32/x64: 0/0; batched/individual spectra roundoff.
+    assert jnp.allclose(jnp.sort(jnp.abs(batched), axis=1), jnp.sort(jnp.abs(individual), axis=1), atol=64 * _eps_J(), rtol=0)
 
 
 def test_trivial_multiplier_by_eigenvector(monkeypatch):
@@ -159,7 +165,8 @@ def test_floquet_multiplier_derivatives_keep_eigensolver_path(monkeypatch):
             lambda u, p, args: jnp.array([1., 0.]), mesh,
             jnp.array([1., 0., 1., 0., 1.]), p, ProductFloquet())
         return jnp.real(values[1 - index])
-    assert jnp.allclose(jax.grad(transverse)(jnp.array(1.00001)), 1.)
+    # Measured |error| x32/x64: 0/0; diagonal analytic multiplier derivative.
+    assert jnp.allclose(jax.grad(transverse)(jnp.array(1.00001)), 1.0, atol=0, rtol=16 * _eps_J())
 
 
 # --- periodic Schur strategy (docs/superpowers/specs/2026-10-17-periodic-schur-floquet-design.md)
@@ -367,19 +374,19 @@ def test_floquet_event_override_detection_and_refinement(monkeypatch):
         assert np.all(trivial[schur] != 5)
         # Branch reporting follows the bundle strategy.
         np.testing.assert_array_equal(branch.trivial_index, trivial[bundle])
-        np.testing.assert_allclose(branch.eigenvalues,
-                                   np.asarray(own[bundle].values), atol=1e3 * _eps())
+        # Measured |error| x32/x64: 2.38e-07/1.33e-15; same Floquet strategy across compiled paths.
+        np.testing.assert_allclose(branch.eigenvalues, np.asarray(own[bundle].values), atol=128 * _eps_J(), rtol=0)
         # Scan inputs: PD sees the override spectrum, both NS see the bundle's.
         assert len(log["scanned"]) == 3
         for raw, strategy in zip(log["scanned"], (override, bundle, bundle)):
-            np.testing.assert_allclose(raw, np.asarray(own[strategy].values),
-                                       atol=1e3 * _eps())
+            # Measured |error| x32/x64: 2.38e-07/1.33e-15; same Floquet strategy across compiled paths.
+            np.testing.assert_allclose(raw, np.asarray(own[strategy].values), atol=128 * _eps_J(), rtol=0)
         for candidate, strategy in zip(result.event_candidates, (override, bundle, bundle)):
             assert int(np.asarray(candidate.bracket_mask).sum()) in (1, 2)
             raw = np.asarray(own[strategy].values)
             perm = np.asarray(candidate.permutation)
-            np.testing.assert_allclose(candidate.spectra, np.take_along_axis(raw, perm, 1),
-                                       atol=1e3 * _eps())
+            # Measured |error| x32/x64: 2.38e-07/1.33e-15; same Floquet strategy across compiled paths.
+            np.testing.assert_allclose(candidate.spectra, np.take_along_axis(raw, perm, 1), atol=128 * _eps_J(), rtol=0)
             # Raw-column exclusion uses the event strategy's trivial index.
             flow = perm == trivial[strategy][:, None]
             assert not np.asarray(candidate.eligible)[flow].any()

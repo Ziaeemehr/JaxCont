@@ -8,6 +8,12 @@ import pytest
 import jaxcont as jc
 from jaxcont.utils.precision import default_tol
 
+def _eps_J():
+    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+
+_POINT_ATOL = 1e-9 if jnp.asarray(0.).dtype == jnp.float64 else 1e-5
+
+
 
 def test_curve_layout_roundtrip_extended():
     from jaxcont.bifurcations.curve_layout import decode_curve_state
@@ -22,9 +28,12 @@ def test_curve_layout_roundtrip_extended():
     layout = problem.curve_layout
     u, p, modes = jax.jit(lambda X: decode_curve_state(X, 0.5, layout, f, None))(problem.u0)
     tol = default_tol(u.dtype)
-    assert jnp.max(jnp.abs(u - jnp.array([0.5, -0.3]))) < 100 * tol
-    assert jnp.max(jnp.abs(p - jnp.array([1.75, 0.5]))) < 100 * tol
-    assert abs(modes.omega - 1) < 100 * tol
+    # Measured |error| x32/x64: 0/0; well-conditioned curve Newton budget.
+    assert jnp.max(jnp.abs(u - jnp.array([0.5, -0.3]))) < 8 * _POINT_ATOL
+    # Measured |error| x32/x64: 0/0; well-conditioned curve Newton budget.
+    assert jnp.max(jnp.abs(p - jnp.array([1.75, 0.5]))) < 8 * _POINT_ATOL
+    # Measured |error| x32/x64: 0/0; well-conditioned curve Newton budget.
+    assert abs(modes.omega - 1) < 8 * _POINT_ATOL
     assert modes.w is None
     assert jax.tree.unflatten(*reversed(jax.tree.flatten(problem))).curve_layout == layout
     settings = jc.ContinuationPar(compute_stability=False, max_steps=4, bothside=True)
@@ -61,7 +70,8 @@ def test_layout_fold_diagnostic_orientation_no_false_cp():
         return modes.v, eligible
 
     vectors, eligible = jax.jit(jax.vmap(run))(jnp.stack([raw, -raw]))
-    np.testing.assert_allclose(vectors[:, [0, 1, 3], 0], 1)
+    # Measured |error| x32/x64: 0/0; analytic eigenvector or normalization.
+    np.testing.assert_allclose(vectors[:, [0, 1, 3], 0], 1, atol=0, rtol=min(16 * _eps_J(), 1e-07))
     np.testing.assert_array_equal(eligible, [[True, False, False, False]] * 2)
     assert crossings(np.asarray(vectors[0, :, 0]), np.asarray(valid)) == []
     assert len(crossings(np.array([-1.0, 1.0, 0.0, 1.0, 0.0]), np.asarray(valid))) == 1
@@ -83,9 +93,11 @@ def test_layout_hopf_diagnostic_unit_norm():
         q = scale * jnp.exp(1j * phase) * jnp.array([1.0, -1j])
         X = jnp.concatenate([jnp.zeros(2), jnp.zeros(1), q.real, q.imag, jnp.ones(1)])
         u, p, m = decode_curve_state(X, 0.5, CurveLayout("hopf", "extended", 2, 1), f, None)
-        assert abs(jnp.linalg.norm(m.q1 + 1j * m.q2) - 1) < 100 * default_tol(u.dtype)
+        # Measured |error| x32/x64: 5.96e-08/1.11e-16; unit-normalized vector roundoff.
+        assert abs(jnp.linalg.norm(m.q1 + 1j * m.q2) - 1) < 32 * _eps_J()
         values.append(lyapunov_coefficient(f, u, p, m.q1, m.q2, m.omega))
-    np.testing.assert_allclose(values, values[0], atol=100 * default_tol(u.dtype))
+    # Measured |error| x32/x64: 3.58e-07/8.88e-16; phase-invariant normal-form coefficient roundoff.
+    np.testing.assert_allclose(values, values[0], atol=64 * _eps_J(), rtol=0)
 
 
 def test_layout_cusp_eager_scan_signs_and_padding():
@@ -118,7 +130,8 @@ def test_layout_hopf_phase_alignment_preserves_unit_modes_after_orthogonal_step(
         CurveModes(q1=z.real, q2=z.imag), jnp.ones(3, dtype=bool)
     )
     aligned = modes.q1 + 1j*modes.q2
-    np.testing.assert_allclose(jnp.linalg.norm(aligned, axis=-1), jnp.ones(3))
+    # Measured |error| x32/x64: 0/0; analytic eigenvector or normalization.
+    np.testing.assert_allclose(jnp.linalg.norm(aligned, axis=-1), jnp.ones(3), atol=0, rtol=min(16 * _eps_J(), 1e-07))
     np.testing.assert_array_equal(eligible, [False, True])
 
 
@@ -182,9 +195,11 @@ def test_minimal_fold_shifted_cusp():
     X = result.branch.states
     q = result.branch.params
     assert X.shape == (11, 2)
-    np.testing.assert_allclose(q, jnp.linspace(4.2, 5.2, 11), atol=100*default_tol(X.dtype))
+    # Measured |error| x32/x64: 9.54e-07/2.66e-15; fixed parameter stepping accumulation.
+    np.testing.assert_allclose(q, jnp.linspace(4.2, 5.2, 11), atol=0, rtol=32 * _eps_J())
     error = jnp.abs(27*(X[:, 1]-.3)**2 - 4*(q-1.2)**3) / (1+4*(q-1.2)**3)
-    assert jnp.max(error) < 100*default_tol(X.dtype)
+    # Measured |error| x32/x64: 2.31e-07/2.21e-16; well-conditioned curve Newton budget.
+    assert jnp.max(error) < 8 * _POINT_ATOL
 
 
 def test_border_refresh_preserves_root_and_reject_keeps_args():
@@ -194,10 +209,13 @@ def test_border_refresh_preserves_root_and_reject_keeps_args():
     problem = fold_curve_problem(_shifted_cusp, jnp.array([1.7]), jnp.array([-1.7, 4.2]), formulation="minimal")
     a = eqx.tree_at(lambda a: (a.b, a.c), problem.args, (2*problem.args.b, -3*problem.args.c))
     refreshed = fold_curve_step_update(a, problem.u0, problem.p0)
-    np.testing.assert_allclose(jnp.linalg.norm(refreshed.b), 1)
-    np.testing.assert_allclose(jnp.linalg.norm(refreshed.c), 1)
+    # Measured |error| x32/x64: 0/0; analytic eigenvector or normalization.
+    np.testing.assert_allclose(jnp.linalg.norm(refreshed.b), 1, atol=0, rtol=min(16 * _eps_J(), 1e-07))
+    # Measured |error| x32/x64: 0/0; analytic eigenvector or normalization.
+    np.testing.assert_allclose(jnp.linalg.norm(refreshed.c), 1, atol=0, rtol=min(16 * _eps_J(), 1e-07))
     for updated in [a, refreshed]:
-        assert jnp.max(jnp.abs(problem.f(problem.u0, problem.p0, updated))) < 100*default_tol(problem.u0.dtype)
+        # Measured |error| x32/x64: 2.38e-07/0; well-conditioned curve Newton budget.
+        assert jnp.max(jnp.abs(problem.f(problem.u0, problem.p0, updated))) < 8 * _POINT_ATOL
     rejected = jax.jit(lambda a: _apply_step_update(fold_curve_step_update, a, problem.u0, problem.p0, False))(a)
     for before, after in zip(jax.tree.leaves(a), jax.tree.leaves(rejected)):
         np.testing.assert_array_equal(before, after)
@@ -215,7 +233,8 @@ def test_fold_diagnostic_orientation_no_false_cp():
     assert event.scan([point(1.), point(2.), point(3.)]) == []
     assert event.scan([point(-1.), point(1.)]) == [(0, 1, None)]
     _, _, modes = jax.jit(lambda X: decode_curve_state(X, 4.2, layout, _shifted_cusp, None))(point(1.).u)
-    np.testing.assert_allclose(modes.v, [1.])
+    # Measured |error| x32/x64: 0/0; analytic eigenvector or normalization.
+    np.testing.assert_allclose(modes.v, [1.0], atol=0, rtol=min(16 * _eps_J(), 1e-07))
 
 
 def test_minimal_fold_array_cp_padding_and_batches():
@@ -243,7 +262,8 @@ def test_minimal_fold_default_plotting():
     result = jc.continuation(problem, p_span=(4.2, 4.4), alg=jc.Natural(),
         settings=jc.ContinuationPar(ds=.1, adaptive=False, max_steps=2, compute_stability=False))
     ax = plot_two_parameter_diagram([(result, "fold")])
-    np.testing.assert_allclose(ax.lines[0].get_ydata(), result.branch.states[:, 1])
+    # Measured |error| x32/x64: 0/0; exact plot copy or binary-exact fixed steps.
+    np.testing.assert_allclose(ax.lines[0].get_ydata(), result.branch.states[:, 1], atol=0, rtol=0)
     plt.close(ax.figure)
 
 
@@ -273,15 +293,20 @@ def test_minimal_hopf_shifted_parabola():
     tol = default_tol(X.dtype)
     assert X.shape == (5, 4)
     assert result.branch.valid is None or jnp.all(result.branch.valid)
-    assert jnp.max(jnp.abs(X[:, :2] - jnp.array([.5, -.3]))) < 100*tol
-    assert jnp.max(jnp.abs(X[:, 2] - jnp.array([2, 1.9375, 1.75, 1.4375, 1]))) < 100*tol
-    assert jnp.max(jnp.abs(X[:, 3] - 1)) < 100*tol
+    # Measured |error| x32/x64: 0/0; well-conditioned curve Newton budget.
+    assert jnp.max(jnp.abs(X[:, :2] - jnp.array([0.5, -0.3]))) < 8 * _POINT_ATOL
+    # Measured |error| x32/x64: 0/0; well-conditioned curve Newton budget.
+    assert jnp.max(jnp.abs(X[:, 2] - jnp.array([2, 1.9375, 1.75, 1.4375, 1]))) < 8 * _POINT_ATOL
+    # Measured |error| x32/x64: 0/0; well-conditioned curve Newton budget.
+    assert jnp.max(jnp.abs(X[:, 3] - 1)) < 8 * _POINT_ATOL
 
 
 def test_minimal_and_extended_agree_at_fixed_parameters():
     minimal, extended = _hopf_branch(), _hopf_branch("extended")
-    assert jnp.max(jnp.abs(minimal.branch.states[:, :3] - extended.branch.states[:, :3])) < 100*default_tol(minimal.branch.states.dtype)
-    np.testing.assert_allclose(minimal.branch.params, [0, .25, .5, .75, 1])
+    # Measured |error| x32/x64: 0/0; well-conditioned curve Newton budget.
+    assert jnp.max(jnp.abs(minimal.branch.states[:, :3] - extended.branch.states[:, :3])) < 8 * _POINT_ATOL
+    # Measured |error| x32/x64: 0/0; exact plot copy or binary-exact fixed steps.
+    np.testing.assert_allclose(minimal.branch.params, [0, 0.25, 0.5, 0.75, 1], atol=0, rtol=0)
 
 
 def test_minimal_curve_decoding_events_and_plotting():
@@ -297,19 +322,23 @@ def test_minimal_curve_decoding_events_and_plotting():
     for X, q in zip(result.branch.states, result.branch.params):
         u, p, modes = decode_curve_state(X, q, layout, _shifted_hopf, event.args)
         assert u.shape == (2,)
-        assert abs(jnp.linalg.norm(modes.q1+1j*modes.q2)-1) < 100*default_tol(X.dtype)
+        # Measured |error| x32/x64: 0/0; unit-normalized vector roundoff.
+        assert abs(jnp.linalg.norm(modes.q1 + 1j * modes.q2) - 1) < 32 * _eps_J()
         points.append(BranchPoint(p=q, u=X, curve_layout=layout))
     assert event.scan(points) == []
     ax = plot_two_parameter_diagram([(result, "hopf")])
-    np.testing.assert_allclose(ax.lines[0].get_ydata(), [2, 1.9375, 1.75, 1.4375, 1], atol=100*default_tol(X.dtype))
+    # Measured |error| x32/x64: 0/0; exact plot copy or binary-exact fixed steps.
+    np.testing.assert_allclose(ax.lines[0].get_ydata(), [2, 1.9375, 1.75, 1.4375, 1], atol=0, rtol=0)
     plt.close(ax.figure)
 
 
 def test_minimal_curve_seed_q_sensitivity():
     seed = lambda q: _hopf_problem(q).u0[2]
     derivative = jax.jit(jax.grad(seed))(.5)
-    assert abs(derivative + 1) < 100*default_tol(derivative.dtype)
-    np.testing.assert_allclose(jax.jit(jax.vmap(seed))(jnp.array([0., .5, 1.])), [2, 1.75, 1], atol=100*default_tol(derivative.dtype))
+    # Measured |error| x32/x64: 5.96e-08/0; analytic parabola seed sensitivity.
+    assert abs(derivative + 1) < 64 * _eps_J()
+    # Measured |error| x32/x64: 0/0; analytic parabola roots, Newton budget.
+    np.testing.assert_allclose(jax.jit(jax.vmap(seed))(jnp.array([0.0, 0.5, 1.0])), [2, 1.75, 1], atol=_POINT_ATOL, rtol=0)
     def branch_sum(q):
         problem = _hopf_problem(q)
         result = jc.continuation(problem, p_span=(q, q+.5), alg=jc.Natural(),
@@ -325,12 +354,14 @@ def test_hopf_diagnostic_unit_norm():
     from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
     problem = _hopf_problem(.5)
     u, p, m = decode_curve_state(problem.u0, .5, problem.curve_layout, _shifted_hopf, problem.args.user_args)
-    assert abs(jnp.linalg.norm(m.q1+1j*m.q2)-1) < 100*default_tol(u.dtype)
+    # Measured |error| x32/x64: 0/0; unit-normalized vector roundoff.
+    assert abs(jnp.linalg.norm(m.q1 + 1j * m.q2) - 1) < 32 * _eps_J()
     minimal = lyapunov_coefficient(_shifted_hopf, u, p, m.q1, m.q2, m.omega, problem.args.user_args)
     extended = _hopf_problem(.5, "extended")
     _, _, e = decode_curve_state(extended.u0, .5, extended.curve_layout, _shifted_hopf, extended.args.user_args)
     expected = lyapunov_coefficient(_shifted_hopf, u, p, e.q1, e.q2, e.omega, problem.args.user_args)
-    assert abs(minimal-expected) < 100*default_tol(u.dtype)
+    # Measured |error| x32/x64: 0/0; minimal/extended Lyapunov coefficient algebra.
+    assert abs(minimal - expected) < 128 * _eps_J()
 
 
 def test_minimal_hopf_border_refresh_and_frequency_limit():
@@ -343,14 +374,17 @@ def test_minimal_hopf_border_refresh_and_frequency_limit():
     refreshed = jax.jit(hopf_curve_step_update)(a, problem.u0, problem.p0)
     tol = default_tol(problem.u0.dtype)
     for border in [refreshed.b, refreshed.c]:
-        assert abs(jnp.linalg.norm(border)-1) < 100*tol
+        # Measured |error| x32/x64: 5.96e-08/1.11e-16; unit-normalized vector roundoff.
+        assert abs(jnp.linalg.norm(border) - 1) < 32 * _eps_J()
     for updated in [a, refreshed]:
-        assert jnp.max(jnp.abs(problem.f(problem.u0, problem.p0, updated))) < 100*tol
+        # Measured |error| x32/x64: 8.32e-11/9.87e-19; well-conditioned curve Newton budget.
+        assert jnp.max(jnp.abs(problem.f(problem.u0, problem.p0, updated))) < 8 * _POINT_ATOL
     rejected = jax.jit(lambda a: _apply_step_update(hopf_curve_step_update, a, problem.u0, problem.p0, False))(a)
     for before, after in zip(jax.tree.leaves(a), jax.tree.leaves(rejected)):
         np.testing.assert_array_equal(before, after)
     u, fixed, omega = unpack_minimal_hopf_curve(problem.u0, 2)
-    assert u.shape == (2,) and abs(fixed-1.75) < 100*tol and abs(omega-1) < 100*tol
+    # Measured |error| x32/x64: 0/0; analytic decoded point, well-conditioned Newton budget.
+    assert u.shape == (2,) and abs(fixed - 1.75) < 8 * _POINT_ATOL and (abs(omega - 1) < 8 * _POINT_ATOL)
     # Below the chart's floor the residual is finite and bounded away from a root.
     from jaxcont.bifurcations.curve_layout import minimal_hopf_floor
     floor = minimal_hopf_floor(problem.u0.dtype)
@@ -401,5 +435,7 @@ def test_minimal_hopf_diagnostic_derivative_with_repeated_stable_modes():
     values, derivatives = jax.jit(jax.vmap(jax.value_and_grad(objective)))(angles)
     tol = 100 * default_tol(state.dtype)
     assert jnp.all(jnp.isfinite(derivatives))
-    np.testing.assert_allclose(values, .5 * jnp.cos(angles) ** 2, atol=tol)
-    np.testing.assert_allclose(derivatives, -jnp.sin(angles) * jnp.cos(angles), atol=tol)
+    # Measured |error| x32/x64: 5.96e-08/1.11e-16; analytic rotated cusp coefficient and derivative.
+    np.testing.assert_allclose(values, 0.5 * jnp.cos(angles) ** 2, atol=32 * _eps_J(), rtol=0)
+    # Measured |error| x32/x64: 1.49e-08/5.55e-17; analytic rotated cusp coefficient and derivative.
+    np.testing.assert_allclose(derivatives, -jnp.sin(angles) * jnp.cos(angles), atol=32 * _eps_J(), rtol=0)

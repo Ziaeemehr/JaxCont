@@ -54,6 +54,14 @@ from examples.validation.run_validation import (
 )
 from examples.validation.validation import case_result_passes
 
+import jax.numpy as jnp
+
+def _eps_J():
+    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+
+_POINT_ATOL = 1e-9 if jnp.asarray(0.).dtype == jnp.float64 else 1e-5
+
+
 REQUIRED_CASE_FIELDS = {
     "id",
     "title",
@@ -73,11 +81,13 @@ def test_cubic_case_finds_both_analytic_folds():
     result = run_cubic_fold()
 
     assert result.checks["fold_count"] == 2
-    assert result.checks["max_fold_error"] < 5e-4
+    # Measured |error| x32/x64: 1.99e-08/1.41e-11; analytic or reviewed BT point, default Newton budget.
+    assert result.checks['max_fold_error'] < _POINT_ATOL
     assert result.checks["max_residual"] < 2e-5
     assert result.checks["natural_stalled_at_fold"]
     assert result.checks["palc_traversed_both_folds"]
-    assert result.checks["max_fold_coefficient_error"] < 1e-4
+    # Measured |error| x32/x64: 0/7.07e-12; normal-form coefficient at a Newton-refined point.
+    assert result.checks['max_fold_coefficient_error'] < _POINT_ATOL
     assert result.checks["stability_transition_count"] == 2
 
 
@@ -87,10 +97,13 @@ def test_vanderpol_case_recovers_the_analytic_hopf():
     result = run_vanderpol_hopf()
 
     assert result.checks["hopf_count"] == 1
-    assert result.checks["max_hopf_error"] < 5e-4
-    assert result.checks["frequency_error"] < 5e-4
+    # Measured |error| x32/x64: 1.39e-17/4.42e-19; analytic or reviewed BT point, default Newton budget.
+    assert result.checks['max_hopf_error'] < _POINT_ATOL
+    # Measured |error| x32/x64: 0/0; analytic normal-form coefficient/frequency/sensitivity at unit scale.
+    assert result.checks['frequency_error'] < 64 * _eps_J()
     assert result.checks["max_residual"] < 2e-5
-    assert result.checks["lyapunov_error"] < 1e-4
+    # Measured |error| x32/x64: 3.47e-18/1.11e-19; analytic normal-form coefficient/frequency/sensitivity at unit scale.
+    assert result.checks['lyapunov_error'] < 64 * _eps_J()
     assert result.checks["stable_for_negative_parameter"]
     assert result.checks["unstable_for_positive_parameter"]
 
@@ -101,10 +114,13 @@ def test_adaptive_control_case_recovers_the_analytic_hopf():
     result = run_adaptive_control_hopf()
 
     assert result.checks["hopf_count"] == 1
-    assert result.checks["max_hopf_error"] < 5e-4
-    assert result.checks["frequency_error"] < 5e-4
+    # Measured |error| x32/x64: 5.96e-08/3.33e-16; analytic or reviewed BT point, default Newton budget.
+    assert result.checks['max_hopf_error'] < _POINT_ATOL
+    # Measured |error| x32/x64: 0/2.22e-16; analytic normal-form coefficient/frequency/sensitivity at unit scale.
+    assert result.checks['frequency_error'] < 64 * _eps_J()
     assert result.checks["max_residual"] < 2e-5
-    assert result.checks["lyapunov_error"] < 5e-4
+    # Measured |error| x32/x64: 1.79e-08/5.55e-16; analytic normal-form coefficient/frequency/sensitivity at unit scale.
+    assert result.checks['lyapunov_error'] < 64 * _eps_J()
 
 
 @pytest.mark.slow
@@ -113,7 +129,8 @@ def test_transform_case_matches_analytic_and_finite_difference_gradients():
     result = run_transform_checks()
 
     assert result.checks["all_finite"]
-    assert result.checks["max_analytic_gradient_error"] < 2e-3
+    # Measured |error| x32/x64: 2.38e-07/4.44e-16; analytic normal-form coefficient/frequency/sensitivity at unit scale.
+    assert result.checks['max_analytic_gradient_error'] < 64 * _eps_J()
     assert result.checks["max_finite_difference_error"] < 2e-3
     assert result.checks["jit_matches_eager"]
     assert result.checks["vmap_valid_masks_present"]
@@ -127,14 +144,10 @@ def test_transform_case_matches_analytic_and_finite_difference_gradients():
         batched_valid = np.asarray(result.artifacts["valid"])[batch_index]
         serial_valid = np.arange(batched_valid.size) < serial.branch.n_valid
         assert np.array_equal(batched_valid, serial_valid)
-        assert np.allclose(
-            np.asarray(result.artifacts["parameters"])[batch_index][batched_valid],
-            np.asarray(serial.branch.params),
-        )
-        assert np.allclose(
-            np.asarray(result.artifacts["states"])[batch_index][batched_valid],
-            np.asarray(serial.branch.states),
-        )
+        # Measured |error| x32/x64: 1.19e-07/1.11e-16; serial/batched valid branch consistency at unit scale.
+        assert np.allclose(np.asarray(result.artifacts['parameters'])[batch_index][batched_valid], np.asarray(serial.branch.params), atol=min(32 * _eps_J(), 1e-08), rtol=32 * _eps_J())
+        # Measured |error| x32/x64: 1.19e-07/2.22e-16; serial/batched valid branch consistency at unit scale.
+        assert np.allclose(np.asarray(result.artifacts['states'])[batch_index][batched_valid], np.asarray(serial.branch.states), atol=min(32 * _eps_J(), 1e-08), rtol=32 * _eps_J())
 
 
 @pytest.mark.slow
@@ -143,12 +156,17 @@ def test_codim2_case_recovers_all_shifted_points():
     result = run_codim2_points()
 
     assert result.checks["all_converged"]
-    assert result.checks["max_parameter_error"] < 1e-3
-    assert result.checks["bt_bifurcationkit_error"] < 1e-3
-    assert result.checks["frequency_error"] < 1e-3
-    assert result.checks["gh_lyapunov_error"] < 1e-4
+    # Measured |error| x32/x64: 0/1.19e-11; analytic or reviewed BT point, default Newton budget.
+    assert result.checks['max_parameter_error'] < _POINT_ATOL
+    # Measured |error| x32/x64: 1.19e-07/2.22e-16; analytic or reviewed BT point, default Newton budget.
+    assert result.checks['bt_bifurcationkit_error'] < _POINT_ATOL
+    # Measured |error| x32/x64: 0/2.08e-13; analytic or reviewed BT point, default Newton budget.
+    assert result.checks['frequency_error'] < _POINT_ATOL
+    # Measured |error| x32/x64: 1.94e-25/1.13e-11; normal-form coefficient at a Newton-refined point.
+    assert result.checks['gh_lyapunov_error'] < _POINT_ATOL
     assert result.checks["parameter_gradients_finite"]
-    assert result.checks["max_analytic_gradient_error"] < 2e-3
+    # Measured |error| x32/x64: 5.96e-08/1.11e-16; analytic normal-form coefficient/frequency/sensitivity at unit scale.
+    assert result.checks['max_analytic_gradient_error'] < 64 * _eps_J()
     assert result.checks["max_finite_difference_error"] < 2e-3
 
 
@@ -159,7 +177,8 @@ def test_two_parameter_fold_curve_matches_matcont():
     result = run_two_parameter_fold_curve()
 
     assert result.checks["lp_found"]
-    assert result.checks["lp_seed_error"] < 1e-3
+    # Measured |error| x32/x64: 2.58e-06/2.63e-06; independent refined fold seed, native point and conditioning budget.
+    assert result.checks['lp_seed_error'] < 5e-05
     assert result.checks["max_curve_error"] < 1e-3
 
 
@@ -179,10 +198,13 @@ def test_radial_cycle_matches_exact_floquet_formula():
     """Using equilibrium eigenvalues in place of Floquet multipliers must fail."""
     result = run_radial_cycle()
 
-    assert result.checks["max_radius_error"] < 5e-3
-    assert result.checks["max_period_error"] < 5e-3
+    # Measured |error| x32/x64: 1.91e-06/7.03e-07; Gauss circle ntst=12 ncol=4 plus Newton roundoff.
+    assert result.checks['max_radius_error'] < 0.0001
+    # Measured |error| x32/x64: 1.43e-06/5.94e-09; Gauss circle ntst=12 ncol=4 plus Newton roundoff.
+    assert result.checks['max_period_error'] < 0.0001
     assert result.checks["max_collocation_residual"] < 2e-5
-    assert result.checks["max_multiplier_error"] < 5e-3
+    # Measured |error| x32/x64: 1.51e-08/1.91e-10; Gauss ntst=12 ncol=4 Floquet truncation and accumulated roundoff.
+    assert result.checks['max_multiplier_error'] < max(256 * _eps_J(), 1e-07)
     assert result.checks["all_stable"]
 
 
@@ -217,20 +239,23 @@ def test_adaptx_period_doubling_switch_matches_matcont():
     result = run_adaptx_pd_switch()
 
     assert result.checks["pd_found"]
-    assert result.checks["switched_parameter_offset_error"] < 1e-5
+    # Measured |error| x32/x64: 1.19e-08/0; fixed switched-parameter offset arithmetic, unit scale.
+    assert result.checks['switched_parameter_offset_error'] < 8 * _eps_J()
     assert result.checks["doubled_period_ratio_error"] < 5e-3
     assert result.checks["switch_residual"] < 2e-5
     assert result.checks["genuine_doubled_orbit"]
     assert result.observations["reference_status"] != "PENDING"
     assert result.checks["pd_parameter_error"] < 2e-3
     assert result.checks["pd_period_error"] < 5e-3
-    assert result.checks["switched_parameter_offset_error"] < 1e-5
+    # Measured |error| x32/x64: 1.19e-08/0; fixed switched-parameter offset arithmetic, unit scale.
+    assert result.checks['switched_parameter_offset_error'] < 8 * _eps_J()
     assert result.checks["doubled_period_error"] < 2e-2
     assert result.checks["doubled_period_ratio_error"] < 5e-3
     # Guard first: the period comparison below is only meaningful while
     # JaxCont's switched alpha still coincides with MatCont's reference point.
     assert result.checks["doubled_branch_alphas_match"]
-    assert result.checks["doubled_branch_period_error"] < 1e-3
+    # Measured |error| x32/x64: 2.78e-06/4.06e-06; doubled branch period comparison, fixed mesh and interpolation.
+    assert result.checks['doubled_branch_period_error'] < 0.0001
     assert result.checks["switch_residual"] < 2e-5
     assert result.checks["genuine_doubled_orbit"]
     assert case_result_passes("MC-LC-003", result.checks)
@@ -276,7 +301,8 @@ def test_torbpc_reference_schema_covers_events_periods_extrema_and_multipliers(t
     assert set(reference["events_by_type"]) == {"LPC", "NS", "PD"}
     assert all(len(reference["spectra"][kind]) == 3 for kind in ("LPC", "NS", "PD"))
     assert all(len(reference["extrema"][kind]) == 3 for kind in ("LPC", "NS", "PD"))
-    assert reference["max_event_parameter_error"] < 2e-3
+    # Measured |error| x32/x64: 0/0; identical mock event parameters.
+    assert reference['max_event_parameter_error'] < 32 * np.finfo(float).eps
     assert reference["all_periods_finite_positive"]
     assert reference["critical_multipliers_match"]
 
@@ -304,8 +330,10 @@ def test_equilibrium_reference_schema_requires_spectra_and_normal_forms(tmp_path
     diagnostics = validate_equilibrium_artifacts(tmp_path, "MC-EQ-003")
 
     assert diagnostics["spectrum_rows"] == 3
-    assert diagnostics["hopf_frequency"] == pytest.approx(1.0)
-    assert diagnostics["first_lyapunov"] == pytest.approx(-0.3)
+    # Measured |error| x32/x64: 0/0; closed-form host comparison arithmetic at unit scale.
+    assert diagnostics['hopf_frequency'] == pytest.approx(1.0, abs=32 * np.finfo(float).eps, rel=0)
+    # Measured |error| x32/x64: 0/0; closed-form host comparison arithmetic at unit scale.
+    assert diagnostics['first_lyapunov'] == pytest.approx(-0.3, abs=32 * np.finfo(float).eps, rel=0)
 
 
 @pytest.fixture(scope="module")
@@ -344,11 +372,16 @@ def test_matlab_equilibrium_exporters_preserve_spectra_and_normal_forms(matcont_
     adaptive = validate_equilibrium_artifacts(matcont_generated_dir, "MC-EQ-003")
 
     assert cubic["spectrum_rows"] > 0
-    assert sorted(cubic["fold_coefficients"]) == pytest.approx([-1.0, 1.0], abs=5e-4)
-    assert vanderpol["hopf_frequency"] == pytest.approx(1.0, abs=5e-4)
-    assert vanderpol["first_lyapunov"] == pytest.approx(0.0, abs=1e-4)
-    assert adaptive["hopf_frequency"] == pytest.approx(1.0, abs=5e-4)
-    assert adaptive["first_lyapunov"] == pytest.approx(-0.3, abs=5e-4)
+    # Measured |error| x32/x64: 7.63e-07/7.63e-07; native normal-form evaluation at a refined event, conditioning budget.
+    assert sorted(cubic['fold_coefficients']) == pytest.approx([-1.0, 1.0], abs=1e-05, rel=0)
+    # Measured |error| x32/x64: 0/0; native normal-form point accuracy, Newton budget.
+    assert vanderpol['hopf_frequency'] == pytest.approx(1.0, abs=1e-08, rel=0)
+    # Measured |error| x32/x64: 0/0; native normal-form point accuracy, Newton budget.
+    assert vanderpol['first_lyapunov'] == pytest.approx(0.0, abs=1e-08, rel=0)
+    # Measured |error| x32/x64: 5.64e-07/5.64e-07; native normal-form evaluation at a refined event, conditioning budget.
+    assert adaptive['hopf_frequency'] == pytest.approx(1.0, abs=1e-05, rel=0)
+    # Measured |error| x32/x64: 1.19e-07/1.19e-07; native normal-form evaluation at a refined event, conditioning budget.
+    assert adaptive['first_lyapunov'] == pytest.approx(-0.3, abs=1e-05, rel=0)
 
     # Historical metadata keeps its original runtime versions. Compare the
     # regenerated numerical artifacts without rewriting that provenance.
@@ -481,7 +514,8 @@ def test_scaled_close_reports_the_largest_absolute_error():
     """Dropping absolute-error diagnostics would hide the scale of an accepted mismatch."""
     diagnostics = scaled_close(np.array([1.0, 2.0]), np.array([1.0, 2.001]), atol=0.002)
 
-    assert diagnostics["max_error"] == pytest.approx(0.001)
+    # Measured |error| x32/x64: 1.1e-16/1.1e-16; closed-form host comparison arithmetic at unit scale.
+    assert diagnostics['max_error'] == pytest.approx(0.001, abs=32 * np.finfo(float).eps, rel=0)
 
 
 def test_scaled_close_rejects_errors_beyond_the_scaled_tolerance():
@@ -498,7 +532,8 @@ def test_interpolate_observable_interpolates_each_observable_column():
         np.array([0.5, 1.5]),
     )
 
-    np.testing.assert_allclose(interpolated, np.array([[1.0, 2.0], [3.0, 6.0]]))
+    # Measured |error| x32/x64: 0/0; analytic linear interpolation, host double precision.
+    np.testing.assert_allclose(interpolated, np.array([[1.0, 2.0], [3.0, 6.0]]), atol=0, rtol=16 * np.finfo(float).eps)
 
 
 def test_match_events_rejects_duplicate_reuse():
@@ -518,7 +553,8 @@ def test_match_events_returns_unique_assignments_and_maximum_error():
     diagnostics = match_events(actual, reference, atol=0.01)
 
     assert diagnostics["assignments"] == [(1, 0), (0, 1)]
-    assert diagnostics["max_error"] == pytest.approx(0.002)
+    # Measured |error| x32/x64: 1.73e-18/1.73e-18; closed-form host comparison arithmetic at unit scale.
+    assert diagnostics['max_error'] == pytest.approx(0.002, abs=32 * np.finfo(float).eps, rel=0)
 
 
 def test_match_spectrum_ignores_only_one_trivial_multiplier():
@@ -526,7 +562,8 @@ def test_match_spectrum_ignores_only_one_trivial_multiplier():
     actual = np.array([1.0, 0.5, -1.0])
     reference = np.array([1.0, -1.0, 0.5])
 
-    assert match_spectrum(actual, reference, atol=1e-8)["max_error"] == pytest.approx(0.0)
+    # Measured |error| x32/x64: 0/0; identical fixture comparison has exactly zero error.
+    assert match_spectrum(actual, reference, atol=1e-08)['max_error'] == pytest.approx(0.0, abs=0, rel=0)
 
 
 def test_match_spectrum_retains_a_second_unit_multiplier():
@@ -545,7 +582,8 @@ def test_match_spectrum_prefers_a_tolerance_feasible_assignment():
 
     diagnostics = match_spectrum(actual, reference, atol=1.0)
 
-    assert diagnostics["max_error"] == pytest.approx(0.9, abs=1e-5)
+    # Measured |error| x32/x64: 0/0; closed-form host comparison arithmetic at unit scale.
+    assert diagnostics['max_error'] == pytest.approx(0.9, abs=32 * np.finfo(float).eps, rel=0)
     assert diagnostics["assignments"] == [(2, 1), (1, 2)]
 
 
@@ -871,7 +909,8 @@ def test_reference_verification_is_tolerant_and_never_overwrites_reviewed_files(
     before = (reviewed / "branch.csv").read_bytes()
     diagnostics = verify_case_references(case, generated, reviewed)
 
-    assert diagnostics["max_numeric_error"] == pytest.approx(1e-7)
+    # Measured |error| x32/x64: 5.84e-17/5.84e-17; closed-form host comparison arithmetic at unit scale.
+    assert diagnostics['max_numeric_error'] == pytest.approx(1e-07, abs=32 * np.finfo(float).eps, rel=0)
     assert (reviewed / "branch.csv").read_bytes() == before
 
     (generated / "branch.csv").write_text(
@@ -955,8 +994,10 @@ def test_reference_verification_matches_topology_not_row_order_or_mesh(tmp_path)
 
     diagnostics = verify_case_references(case, generated, reviewed)
 
-    assert diagnostics["event_max_error"] == pytest.approx(0.0)
-    assert diagnostics["spectrum_max_error"] == pytest.approx(0.0)
+    # Measured |error| x32/x64: 0/0; identical fixture comparison has exactly zero error.
+    assert diagnostics['event_max_error'] == pytest.approx(0.0, abs=0, rel=0)
+    # Measured |error| x32/x64: 0/0; identical fixture comparison has exactly zero error.
+    assert diagnostics['spectrum_max_error'] == pytest.approx(0.0, abs=0, rel=0)
 
     event_path = generated / "events.csv"
     event_path.write_text(
@@ -1037,7 +1078,8 @@ def test_folded_branch_comparison_accepts_reversed_adaptive_segments(tmp_path):
 
     diagnostics = verify_case_references(case, generated, reviewed)
 
-    assert diagnostics["branch_max_error"] == pytest.approx(0.0)
+    # Measured |error| x32/x64: 0/0; identical fixture comparison has exactly zero error.
+    assert diagnostics['branch_max_error'] == pytest.approx(0.0, abs=0, rel=0)
 
 
 def _write_folded_spectrum_fixture(
@@ -1130,7 +1172,8 @@ def test_folded_branch_spectra_accept_reversed_adaptive_equivalent_arms(tmp_path
 
     diagnostics = verify_case_references(case, generated, reviewed)
 
-    assert diagnostics["spectrum_max_error"] == pytest.approx(0.0)
+    # Measured |error| x32/x64: 0/0; identical fixture comparison has exactly zero error.
+    assert diagnostics['spectrum_max_error'] == pytest.approx(0.0, abs=0, rel=0)
 
 
 def test_relative_generated_directory_resolves_before_matlab_changes_directory(

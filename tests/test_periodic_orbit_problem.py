@@ -17,6 +17,12 @@ from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 from jaxcont.problems.periodic_args import PeriodicArgs
 
+def _eps_J():
+    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+
+_POINT_ATOL = 1e-9 if jnp.asarray(0.).dtype == jnp.float64 else 1e-5
+
+
 
 def _rhs(u, p, args):
     x, y = u[0], u[1]
@@ -140,7 +146,8 @@ def test_periodic_problem_is_jit_argument():
     mesh = Collocation(ntst=10, ncol=4)
     prob = periodic_orbit_problem(_rhs, u_trajectory, t_trajectory, 5.5, 1.0, mesh)
     total = jax.jit(lambda pr: pr.u0.sum())(prob)
-    assert float(total) == pytest.approx(float(prob.u0.sum()))
+    # Measured |error| x32/x64: 0/0; compiled/eager reduction roundoff.
+    assert float(total) == pytest.approx(float(prob.u0.sum()), abs=0, rel=min(64 * _eps_J(), 1e-06))
 
 
 def _hopf_omega(u, p, omega):
@@ -163,13 +170,15 @@ def _period_for(omega, p=1.0):
 
 def test_periodic_rhs_receives_user_args():
     omega = jnp.asarray(1.5)
-    assert float(_period_for(omega)) == pytest.approx(2 * np.pi / 1.5, rel=1e-3)
+    # Measured |error| x32/x64: 3.6e-07/3.96e-09; Gauss ntst=10 ncol=4 period and sensitivity truncation.
+    assert float(_period_for(omega)) == pytest.approx(2 * np.pi / 1.5, rel=max(32 * _eps_J(), 1e-07), abs=0)
 
 
 def test_grad_period_wrt_user_args():
     omega = jnp.asarray(1.5)
     g = jax.grad(_period_for)(omega)
-    assert float(g) == pytest.approx(-2 * np.pi / 1.5**2, rel=1e-3)
+    # Measured |error| x32/x64: 3.96e-07/2.64e-09; Gauss ntst=10 ncol=4 period and sensitivity truncation.
+    assert float(g) == pytest.approx(-2 * np.pi / 1.5 ** 2, rel=max(32 * _eps_J(), 1e-07), abs=0)
 
 
 def test_periodic_continuation_reuses_compiled_kernel():
@@ -196,7 +205,8 @@ def test_construction_grad_matches_exact_radius_derivative_with_fixed_guess():
         parameters
     )
     expected = 1.0 / (2.0 * jnp.sqrt(parameters))
-    np.testing.assert_allclose(actual, expected, atol=5e-3, rtol=0.0)
+    # Measured |error| x32/x64: 6.56e-07/8.83e-08; Gauss ntst=10 ncol=4 analytic radial sensitivity.
+    np.testing.assert_allclose(actual, expected, atol=max(_POINT_ATOL, 1e-06), rtol=0)
 
 
 def test_construction_grad_matches_exact_radius_derivative_with_parameter_dependent_guess():
@@ -205,7 +215,8 @@ def test_construction_grad_matches_exact_radius_derivative_with_parameter_depend
         parameters
     )
     expected = 1.0 / (2.0 * jnp.sqrt(parameters))
-    np.testing.assert_allclose(actual, expected, atol=5e-3, rtol=0.0)
+    # Measured |error| x32/x64: 1.79e-07/8.83e-08; Gauss ntst=10 ncol=4 analytic radial sensitivity.
+    np.testing.assert_allclose(actual, expected, atol=max(_POINT_ATOL, 1e-06), rtol=0)
 
 
 def test_vmap_over_construction_matches_eager_radii():
@@ -249,7 +260,8 @@ def test_floquet_and_prc_receive_user_args():
     Z = prc_curve(_hopf_omega, _OMEGA_MESH, prob.u0, prob.p0, args=pargs.user_args)
     x0 = prob.u0[:2]
     f0 = _hopf_omega(x0, prob.p0, pargs.user_args)
-    assert float(Z[0] @ f0) == pytest.approx(2 * np.pi / T, rel=1e-3)
+    # Measured |error| x32/x64: 5.35e-06/1.53e-14; PRC flow normalization, explicit discrete adjoint accuracy.
+    assert float(Z[0] @ f0) == pytest.approx(2 * np.pi / T, rel=0, abs=0.0001)
 
 
 def test_trajectory_time_offset_is_rebased():
@@ -323,9 +335,11 @@ def test_trajectory_longer_than_period0_is_not_folded():
     reference = np.stack([np.cos(tau * period0), np.sin(tau * period0)], axis=-1)
     np.testing.assert_allclose(seed, reference, atol=1e-4)
 
-    assert float(prob.u0[-1]) == pytest.approx(2 * np.pi, rel=1e-3)
+    # Measured |error| x32/x64: 7.79e-07/5.94e-09; Gauss ntst=10 ncol=4 analytic circle period.
+    assert float(prob.u0[-1]) == pytest.approx(2 * np.pi, rel=max(32 * _eps_J(), 1e-07), abs=0)
     radius = np.linalg.norm(np.asarray(prob.u0[: 2 * mesh.ntst]).reshape(-1, 2), axis=1)
-    np.testing.assert_allclose(radius, 1.0, atol=1e-3)
+    # Measured |error| x32/x64: 1.19e-07/1.76e-08; Gauss circle radius, Newton and mesh error.
+    np.testing.assert_allclose(radius, 1.0, atol=max(_POINT_ATOL, 1e-06), rtol=0)
 
 
 def test_periodic_residual_preserves_constant_polynomial():

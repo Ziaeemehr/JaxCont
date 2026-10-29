@@ -12,6 +12,9 @@ from jaxcont.bifurcations.events import BranchPoint, EventHit, detect_events, _t
 from jaxcont.core.continuation import ContinuationSolution
 from tests.test_period_doubling_neimark_sacker import _sweep, BETA_PD, BETA_NS
 
+_POINT_ATOL = 1e-9 if jnp.asarray(0.).dtype == jnp.float64 else 1e-5
+
+
 
 def test_distinct_cusps_keep_all_parameter_coordinates():
     def f(u, p, args):
@@ -25,7 +28,8 @@ def test_distinct_cusps_keep_all_parameter_coordinates():
                          None, None, lambda u, p: u, ds=1.,
                          curve_layout=CurveLayout("fold", "extended", 1, 1))
     assert len(hits) == 2
-    np.testing.assert_allclose(sorted(float(h.info['p'][0]) for h in hits), [0., 1.], atol=1e-4)
+    # Measured |error| x32/x64: 3.97e-10/3.98e-10; analytic cusp parameter, Newton budget with tenfold margin.
+    np.testing.assert_allclose(sorted((float(h.info['p'][0]) for h in hits)), [0.0, 1.0], atol=10 * _POINT_ATOL, rtol=0)
 
 
 @pytest.mark.parametrize('key', ['p', 'p_fixed'])
@@ -42,7 +46,8 @@ def test_bp_refinement_preserves_both_candidate_modes():
     result = jc.continuation(jc.bif_problem(f, jnp.zeros(2), -.1), p_span=(-.1, .11),
         settings=jc.ContinuationPar(ds=.2, ds_max=.2, adaptive=False, max_steps=2), events=[jc.BP()])
     assert result.status == 'reached_end'
-    np.testing.assert_allclose(sorted(h.p for h in result.events), [-.03, .04], atol=1e-4)
+    # Measured |error| x32/x64: 8.94e-10/0; analytic codimension event, default Newton budget.
+    np.testing.assert_allclose(sorted((h.p for h in result.events)), [-0.03, 0.04], atol=_POINT_ATOL, rtol=0)
 
 
 @pytest.mark.parametrize('beta,event', [(BETA_PD, jc.PeriodDoubling), (BETA_NS, jc.NeimarkSacker)])

@@ -9,7 +9,8 @@ from examples.validation.cases.python_cases.periodic_checks import doubled_shape
 def test_pd_switch_requires_genuine_doubled_shape():
     t = np.linspace(0,2*np.pi,80,endpoint=False)
     base = np.c_[np.cos(2*t), np.sin(2*t)]
-    assert doubled_shape(base) < 1e-12
+    # Measured |error| x32/x64: 1.19e-15/1.19e-15; host trigonometric repeat roundoff at unit scale.
+    assert doubled_shape(base) < 64 * np.finfo(float).eps
     assert doubled_shape(base + np.c_[.1*np.cos(t), .1*np.sin(t)]) > .1
     assert doubled_shape(np.ones((80,2))) == 0
     assert doubled_shape(base+100) < 1e-12
@@ -49,7 +50,8 @@ def test_prc_parameter_derivative_is_not_time_derivative():
     hi,_ = _circle_problem(1.01)
     lo,_ = _circle_problem(.99)
     fd = (np.asarray(prc_curve(_rhs,mesh,hi.u0,hi.p0))-np.asarray(prc_curve(_rhs,mesh,lo.u0,lo.p0)))/.02
-    np.testing.assert_allclose(dp,fd,atol=.01,rtol=0)
+    # Measured |error| x32/x64: 6.06e-05/4.6e-05; central difference h=.01, O(h^2) and Newton cancellation.
+    np.testing.assert_allclose(dp, fd, atol=0.002, rtol=0)
     dt = np.c_[-z[:,1],z[:,0]]
     assert np.max(np.abs(dp-dt)) > .5
 

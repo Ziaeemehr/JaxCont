@@ -34,7 +34,8 @@ def native():
 def test_flagship_exports_all_four_runs(native):
     for run, data in native.items():
         assert data['states'] and data['parameters']
-        assert max(np.atleast_1d(data['residuals'])) < 1e-7
+        # Measured |error| x32/x64: 6.66e-16/6.66e-16; native float64 Newton stopping tolerance 1e-12.
+        assert max(np.atleast_1d(data['residuals'])) < 1e-11
     assert native['lorenz84.hopf-ft']['parameters'][-1][1] < .04
     assert native['lorenz84.fold-ft']['parameters'][-1][1] < .04
     events = native['lorenz84.eq-f']['events']
@@ -72,7 +73,8 @@ def test_refined_events_preserve_spectra_residuals_and_native_platform(native):
             modes = [m for m in raw['spectra'] if m['event_id'] == event['event_id']]
             assert len(modes) == 4
             assert {m['mode_id'] for m in modes} == set(range(4))
-            assert event['residual_norm'] < 1e-7
+            # Measured |error| x32/x64: 5.55e-17/5.55e-17; native float64 Newton stopping tolerance 1e-12.
+            assert event['residual_norm'] < 1e-11
             assert event['parameter'] == event['F' if run.endswith('eq-f') else 'T']
             assert event['bracket_status'] in ('native', 'unknown')
             if event['bracket_status'] == 'unknown':
@@ -83,7 +85,8 @@ def test_refined_events_preserve_spectra_residuals_and_native_platform(native):
             with enable_x64():
                 expected = np.linalg.eigvals(np.asarray(contract.lorenz84_jacobian(state, event['F'], (*contract.CONSTANTS, event['T'])), dtype=float))
             actual = np.array([complex(m['real'], m['imag']) for m in modes])
-            np.testing.assert_allclose(np.sort_complex(actual), np.sort_complex(expected), atol=3e-6, rtol=3e-6)
+            # Measured |error| x32/x64: 4.56e-09/4.56e-09; native versus contract spectra, double-zero eigenvalue conditioning.
+            np.testing.assert_allclose(np.sort_complex(actual), np.sort_complex(expected), atol=1e-07, rtol=0)
         platform = raw['metadata']['platform']
         assert platform['os'] and platform['cpu'] and platform['blas']
         assert platform['source'] == 'MATLAB native runtime'

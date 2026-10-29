@@ -20,6 +20,10 @@ import jaxcont as jc
 
 from jaxcont.core.scan_continuation import _newton_correct, _tangent
 
+def _eps_J():
+    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+
+
 
 class TestPseudoArclengthBasic:
     """Test basic pseudo-arclength continuation functionality."""
@@ -120,7 +124,8 @@ class TestPseudoArclengthBasic:
 
         if errors:
             max_error = max(errors)
-            assert max_error < 1e-4, f"Maximum error {max_error} exceeds tolerance"
+            # Measured |error| x32/x64: 8.64e-07/8.44e-07; Newton residual 1e-6 divided by 2*sqrt(r)>=0.6.
+            assert max_error < 1e-05, f"Maximum error {max_error} exceeds tolerance"
 
         assert step >= 1, f"Only completed {step} steps, expected at least 1"
 
@@ -135,13 +140,15 @@ class TestPseudoArclengthBasic:
         tangent = _tangent(f, u, param, None, jnp.array([0.0, 1.0]))
 
         norm = jnp.linalg.norm(tangent)
-        assert jnp.isclose(norm, 1.0), f"Tangent not normalized: norm={norm}"
+        # Measured |error| x32/x64: 5.96e-08/1.11e-16; unit tangent normalization roundoff.
+        assert jnp.isclose(norm, 1.0, atol=0, rtol=16 * _eps_J()), f"Tangent not normalized: norm={norm}"
 
         assert tangent.shape[0] == 2, f"Tangent has wrong shape: {tangent.shape}"
 
         # For f(u,p)=p-u, equilibrium is u=p, so du/dp should be ~1.
         du_dp = tangent[0] / tangent[1] if abs(tangent[1]) > 1e-10 else 0
-        assert abs(du_dp - 1.0) < 0.1, f"du/dp = {du_dp}, expected ~1.0"
+        # Measured |error| x32/x64: 0/0; analytic linear-branch slope one.
+        assert abs(du_dp - 1.0) < 16 * _eps_J(), f"du/dp = {du_dp}, expected ~1.0"
 
 
 class TestPseudoArclengthFoldBifurcation:
@@ -251,7 +258,8 @@ class TestPseudoArclengthFoldBifurcation:
 
             if errors:
                 max_error = max(errors)
-                assert max_error < 1e-3, f"Maximum error {max_error} exceeds tolerance"
+                # Measured |error| x32/x64: 2.38e-07/2.84e-07; Newton residual 1e-6, branch derivative bounded below by two.
+                assert max_error < 1e-05, f"Maximum error {max_error} exceeds tolerance"
 
 
 class TestPseudoArclengthStepControl:
@@ -325,8 +333,10 @@ class TestPseudoArclengthStepControl:
         dot_product = jnp.dot(tangent1, tangent2)
         assert dot_product > 0.5, f"Tangents not consistent: dot={dot_product}"
 
-        assert jnp.isclose(jnp.linalg.norm(tangent1), 1.0)
-        assert jnp.isclose(jnp.linalg.norm(tangent2), 1.0)
+        # Measured |error| x32/x64: 5.96e-08/1.11e-16; unit tangent normalization roundoff.
+        assert jnp.isclose(jnp.linalg.norm(tangent1), 1.0, atol=0, rtol=16 * _eps_J())
+        # Measured |error| x32/x64: 0/0; unit tangent normalization roundoff.
+        assert jnp.isclose(jnp.linalg.norm(tangent2), 1.0, atol=0, rtol=16 * _eps_J())
 
 
 class TestPseudoArclengthVsNatural:
@@ -386,7 +396,8 @@ def test_tangent_orientation_uses_weighted_alignment():
     tangent = _tangent(residual, jnp.zeros(1), jnp.array(0.), None,
                        previous, theta=theta)
 
-    np.testing.assert_allclose(tangent, expected, rtol=1e-5)
+    # Measured |error| x32/x64: 5.96e-08/1.11e-16; analytic weighted tangent and step, unit conditioning.
+    np.testing.assert_allclose(tangent, expected, rtol=32 * _eps_J(), atol=0)
     assert theta * tangent[0] * previous[0] + tangent[1] * previous[1] > 0
 
 
@@ -401,7 +412,8 @@ def test_theta_controls_arclength_and_reuses_compile_cache(loop):
             theta=theta, loop=loop, ds=0.1, ds_max=0.1, max_steps=2,
             adaptive=False, compute_stability=False))
         weight = 1 / 3 if theta is None else theta
-        np.testing.assert_allclose(sol.branch.params[1], 0.1 / np.sqrt(1 + 3 * weight), rtol=1e-5)
+        # Measured |error| x32/x64: 3.26e-09/1.39e-17; analytic weighted tangent and step, unit conditioning.
+        np.testing.assert_allclose(sol.branch.params[1], 0.1 / np.sqrt(1 + 3 * weight), rtol=32 * _eps_J(), atol=0)
         sizes.append(engine._cache_size())
     assert sizes[0] == sizes[1] == sizes[2]
 

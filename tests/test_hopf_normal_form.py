@@ -16,6 +16,11 @@ from jaxcont.bifurcations.hopf_normal_form import (
 )
 
 
+def _eps_J():
+    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+
+
+
 def _textbook_hopf(u, p, args):
     # Standard supercritical-Hopf textbook example (Kuznetsov Sec 3.2/3.4):
     # exact Hopf at u=(0,0), p=0, omega0=1, l1=-2.
@@ -28,11 +33,14 @@ def test_hopf_point_recovers_exact_hopf_of_textbook_example():
     u, p, q1, q2, omega0, _converged = hopf_point(
         _textbook_hopf, jnp.zeros(2), 0.05, tol=1e-10, max_iter=50,
     )
-    assert jnp.allclose(u, jnp.zeros(2), atol=1e-5)
-    assert jnp.isclose(float(p), 0.0, atol=1e-5)
-    assert jnp.isclose(float(omega0), 1.0, atol=1e-5)
+    # Measured |error| x32/x64: 0/0; explicit Newton stopping tolerance 1e-10.
+    assert jnp.allclose(u, jnp.zeros(2), atol=1e-10, rtol=0)
+    # Measured |error| x32/x64: 0/6.94e-18; explicit Newton stopping tolerance 1e-10.
+    assert jnp.isclose(float(p), 0.0, atol=1e-10, rtol=0)
+    assert jnp.isclose(float(omega0), 1.0, atol=1e-06)
     # q1+i*q2 is a unit vector (G4's normalization).
-    assert jnp.isclose(jnp.dot(q1, q1) + jnp.dot(q2, q2), 1.0, atol=1e-5)
+    # Measured |error| x32/x64: 5.96e-08/2.22e-16; analytic normal form or eigenvector normalization roundoff.
+    assert jnp.isclose(jnp.dot(q1, q1) + jnp.dot(q2, q2), 1.0, atol=0, rtol=32 * _eps_J())
 
 
 def _hopf_plus_slow_real_mode(u, p, args):
@@ -57,11 +65,14 @@ def test_seed_masks_out_near_zero_real_eigenvalue():
     # complex pair (omega ~ 1, Im > 0 per the seed's orientation
     # convention), never the near-zero real mode (which would give omega=0).
     q1, q2, omega = _seed(_hopf_plus_slow_real_mode, jnp.zeros(3), 0.05, None, 3)
-    assert jnp.isclose(omega, 1.0, atol=1e-6)
+    # Measured |error| x32/x64: 0/0; analytic normal form or eigenvector normalization roundoff.
+    assert jnp.isclose(omega, 1.0, atol=0, rtol=32 * _eps_J())
     # The real z-component must not be excited by a seed drawn from the
     # complex (x, y) pair's eigenvector.
-    assert jnp.isclose(q1[2], 0.0, atol=1e-8)
-    assert jnp.isclose(q2[2], 0.0, atol=1e-8)
+    # Measured |error| x32/x64: 0/0; decoupled eigenvector component is exactly zero.
+    assert jnp.isclose(q1[2], 0.0, atol=0, rtol=0)
+    # Measured |error| x32/x64: 0/0; decoupled eigenvector component is exactly zero.
+    assert jnp.isclose(q2[2], 0.0, atol=0, rtol=0)
 
 
 def test_hopf_point_end_to_end_ignores_slow_real_mode():
@@ -75,9 +86,12 @@ def test_hopf_point_end_to_end_ignores_slow_real_mode():
     )
     assert jnp.all(jnp.isfinite(u))
     assert jnp.isfinite(p) and jnp.isfinite(omega0)
-    assert jnp.allclose(u, jnp.zeros(3), atol=1e-5)
-    assert jnp.isclose(float(p), 0.0, atol=1e-5)
-    assert jnp.isclose(float(omega0), 1.0, atol=1e-5)
+    # Measured |error| x32/x64: 0/0; explicit Newton stopping tolerance 1e-10.
+    assert jnp.allclose(u, jnp.zeros(3), atol=1e-10, rtol=0)
+    # Measured |error| x32/x64: 0/6.94e-18; explicit Newton stopping tolerance 1e-10.
+    assert jnp.isclose(float(p), 0.0, atol=1e-10, rtol=0)
+    # Measured |error| x32/x64: 0/0; analytic normal form or eigenvector normalization roundoff.
+    assert jnp.isclose(float(omega0), 1.0, atol=0, rtol=32 * _eps_J())
 
 
 def _hopf_with_param_shift(u, p, shift):
@@ -99,7 +113,8 @@ def test_hopf_parameter_grad_matches_finite_difference():
     eps = 1e-4
     fd = (p_star(0.1 + eps) - p_star(0.1 - eps)) / (2 * eps)
     assert jnp.isclose(grad, fd, atol=1e-3)
-    assert jnp.isclose(grad, 1.0, atol=1e-3)
+    # Measured |error| x32/x64: 5.96e-08/0; analytic normal form or eigenvector normalization roundoff.
+    assert jnp.isclose(grad, 1.0, atol=0, rtol=32 * _eps_J())
 
 
 def test_lyapunov_coefficient_matches_exact_textbook_value():
@@ -107,7 +122,8 @@ def test_lyapunov_coefficient_matches_exact_textbook_value():
         _textbook_hopf, jnp.zeros(2), 0.05, tol=1e-10, max_iter=50,
     )
     l1 = lyapunov_coefficient(_textbook_hopf, u, p, q1, q2, omega0)
-    assert jnp.isclose(float(l1), -2.0, atol=1e-4)
+    # Measured |error| x32/x64: 1.19e-07/4.44e-16; analytic normal form or eigenvector normalization roundoff.
+    assert jnp.isclose(float(l1), -2.0, atol=0, rtol=32 * _eps_J())
 
 
 def test_lyapunov_coefficient_scales_linearly_with_cubic_coefficient():
@@ -123,7 +139,8 @@ def test_lyapunov_coefficient_scales_linearly_with_cubic_coefficient():
             hopf_scaled, jnp.zeros(2), 0.05, k, tol=1e-10, max_iter=50,
         )
         l1 = lyapunov_coefficient(hopf_scaled, u, p, q1, q2, omega0, k)
-        assert jnp.isclose(float(l1), -2 * k, atol=1e-4)
+        # Measured |error| x32/x64: 2.38e-07/8.88e-16; analytic normal form or eigenvector normalization roundoff.
+        assert jnp.isclose(float(l1), -2 * k, atol=0, rtol=32 * _eps_J())
 
 
 def test_lyapunov_coefficient_grad_matches_finite_difference():
@@ -144,7 +161,8 @@ def test_lyapunov_coefficient_grad_matches_finite_difference():
     eps = 1e-4
     fd = (l1_of_scale(1.0 + eps) - l1_of_scale(1.0 - eps)) / (2 * eps)
     assert jnp.isclose(grad, fd, atol=1e-2)
-    assert jnp.isclose(grad, -2.0, atol=1e-2)
+    # Measured |error| x32/x64: 2.38e-07/4.44e-16; analytic normal form or eigenvector normalization roundoff.
+    assert jnp.isclose(grad, -2.0, atol=0, rtol=32 * _eps_J())
 
 
 def test_lyapunov_coefficient_matches_bifurcationkit_jl_independent_run():
@@ -161,7 +179,8 @@ def test_lyapunov_coefficient_matches_bifurcationkit_jl_independent_run():
     l1 = lyapunov_coefficient(f, u, p, q1, q2, omega0)
 
     bk_l1_reference = historical_values("hopf-normal-form")["bk_l1_reference"]
-    assert jnp.isclose(float(omega0), 1.0, atol=1e-6)
+    # Measured |error| x32/x64: 0/0; analytic normal form or eigenvector normalization roundoff.
+    assert jnp.isclose(float(omega0), 1.0, atol=0, rtol=32 * _eps_J())
     assert jnp.isclose(float(l1), bk_l1_reference, atol=1e-4)
 
 
@@ -191,9 +210,12 @@ def test_l1_grad_with_repeated_stable_modes():
         h = 1e-5
         central = (l1(a + h) - l1(a - h)) / (2 * h)
         assert jnp.isfinite(derivative)
-        assert jnp.allclose(derivative, central, rtol=1e-4, atol=1e-9)
-        assert jnp.abs(derivative) < 1e-9
-        assert jnp.allclose(l1(a), -2.0)
+        # Measured |error| x32/x64: 0/0; central difference cancellation at h=1e-5.
+        assert jnp.allclose(derivative, central, rtol=0, atol=1e-09)
+        # Measured |error| x32/x64: 0/0; coefficient independent of the repeated stable block.
+        assert jnp.abs(derivative) < 32 * _eps_J()
+        # Measured |error| x32/x64: 4.44e-16/4.44e-16; analytic polynomial coefficient or equivalent RHS.
+        assert jnp.allclose(l1(a), -2.0, atol=0, rtol=32 * _eps_J())
 
 
 def test_l1_with_non_holomorphic_rhs():
@@ -207,8 +229,10 @@ def test_l1_with_non_holomorphic_rhs():
     assert converged
     actual = lyapunov_coefficient(f, u, p, q1, q2, omega)
     polynomial = lyapunov_coefficient(_textbook_hopf, u, p, q1, q2, omega)
-    assert jnp.allclose(actual, polynomial)
-    assert jnp.isclose(actual, -2.0, atol=1e-4)
+    # Measured |error| x32/x64: 0/0; analytic polynomial coefficient or equivalent RHS.
+    assert jnp.allclose(actual, polynomial, atol=0, rtol=32 * _eps_J())
+    # Measured |error| x32/x64: 1.19e-07/4.44e-16; analytic normal form or eigenvector normalization roundoff.
+    assert jnp.isclose(actual, -2.0, atol=0, rtol=32 * _eps_J())
 
 
 def test_hopf_without_classification_skips_l1(monkeypatch):

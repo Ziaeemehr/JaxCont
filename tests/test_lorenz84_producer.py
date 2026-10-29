@@ -21,7 +21,8 @@ def test_branch_has_expected_domain_and_events(runs):
     assert len(bundle["events"]) == len(F_SWEEP["expected_events"])
     for event in F_SWEEP["expected_events"]:
         select_event(bundle["events"], event["kind"], event["window"])
-    assert max(r["residual_norm"] for r in bundle["branch"]) < 1e-7
+    # Measured |error| x32/x64: 5.17e-13/5.17e-13; float64-only producer, explicit Newton tolerance 1e-12.
+    assert max((r['residual_norm'] for r in bundle['branch'])) < 1e-11
     for name in ("fold-ft", "hopf-ft"):
         assert len(runs[name]["branch"]) > 2
         assert runs[name]["metadata"]["parameter_order"] == ["F", "T"]
@@ -32,9 +33,13 @@ def test_bt_has_jordan_structure(runs):
     from examples.validation.cases.systems.lorenz84 import EVENT_WINDOWS
     bundle = produce("lorenz84.bt-ft")
     event = select_event(bundle["events"], "BT", EVENT_WINDOWS["bt_positive_T"])
-    assert event["residual_norm"] < 1e-7
-    assert event["jordan_v0_residual"] < 1e-6
-    assert event["jordan_v1_residual"] < 1e-6
+    # Measured |error| x32/x64: 7.63e-17/7.63e-17; float64-only producer, explicit Newton tolerance 1e-12.
+    assert event['residual_norm'] < 1e-11
+    # Measured |error| x32/x64: 2.64e-16/2.64e-16; float64-only producer, explicit Newton tolerance 1e-12.
+    assert event['jordan_v0_residual'] < 1e-11
+    # Measured |error| x32/x64: 2.43e-14/2.43e-14; float64-only producer, explicit Newton tolerance 1e-12.
+    assert event['jordan_v1_residual'] < 1e-11
     assert event["geometric_nullity"] == 1
     eig = np.array([complex(r["real"], r["imag"]) for r in bundle["spectra"] if r["event_id"]])
-    assert sum(abs(eig) < 1e-3) == 2
+    # Measured |error| x32/x64: 5.59e-09/5.59e-09; defective double-zero eigenvalue splitting scales with sqrt(float64 epsilon).
+    assert sum(abs(eig) < 1e-07) == 2

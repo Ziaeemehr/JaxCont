@@ -5,6 +5,8 @@ import pytest
 
 from tests.test_validation_schema import make_bundle
 
+import numpy as np
+
 
 def candidates(tmp_path):
     paths = {tool: make_bundle(tmp_path / tool, tool=tool)
@@ -96,7 +98,8 @@ def test_branch_spectrum_disagreement_cannot_pass(tmp_path):
     report = manifest(tmp_path, paths)
     assert report["verdict"] == "FAIL"
     metric = report["pairwise"]["jaxcont--bifurcationkit"]["sheet_0.spectrum"]
-    assert metric["value"] == pytest.approx(1)
+    # Measured |error| x32/x64: 0/0; exact mocked report metric.
+    assert metric['value'] == pytest.approx(1, abs=0, rel=8 * np.finfo(float).eps)
     assert metric["limit"] == 1e-4
 
 

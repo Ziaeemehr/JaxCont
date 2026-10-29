@@ -13,6 +13,10 @@ from jaxcont.bifurcations.curve_layout import CurveLayout, decode_curve_state
 from jaxcont.bifurcations.event_scan import EventScanInput, scan_event_candidates
 from jaxcont.stability.periodic_schur import periodic_spectrum
 
+def _eps_J():
+    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -28,13 +32,15 @@ def _seed(a):
 
 
 def test_isotropic_bt_seed_and_scan_gradient():
-    np.testing.assert_allclose(jax.grad(lambda a: _seed(a).u0.sum())(.5), 1., atol=2e-4)
+    # Measured |error| x32/x64: 0/0; analytic normal form or exact diagonal sensitivity.
+    np.testing.assert_allclose(jax.grad(lambda a: _seed(a).u0.sum())(0.5), 1.0, atol=32 * _eps_J(), rtol=0)
     def branch(a):
         result = jc.continuation(_seed(a), jc.Natural(), p_span=(1., 1.1),
             settings=jc.ContinuationPar(loop='scan', ds=.05, ds_max=.05, max_steps=2,
                                        compute_stability=False, adaptive=False))
         return (result.branch.states[:, 0]*result.branch.valid).sum()
-    np.testing.assert_allclose(jax.jit(jax.grad(branch))(.5), 3., atol=2e-4)
+    # Measured |error| x32/x64: 0/0; analytic normal form or exact diagonal sensitivity.
+    np.testing.assert_allclose(jax.jit(jax.grad(branch))(0.5), 3.0, atol=32 * _eps_J(), rtol=0)
 
 
 def _fold(u, p, a):
@@ -47,7 +53,8 @@ def test_repeated_stable_fold_decoder_gradient():
     def decoded(t):
         return decode_curve_state(jnp.array([t, 0., 0., 2*t**3]), -3*t*t,
                                   layout, _fold, 1.)[2].v[0]
-    np.testing.assert_allclose(jax.jit(jax.grad(decoded))(.2), 0., atol=2e-4)
+    # Measured |error| x32/x64: 0/0; analytic normal form or exact diagonal sensitivity.
+    np.testing.assert_allclose(jax.jit(jax.grad(decoded))(0.2), 0.0, atol=32 * _eps_J(), rtol=0)
 
 
 def test_repeated_stable_cusp_scan_gradient():
@@ -58,8 +65,10 @@ def test_repeated_stable_cusp_scan_gradient():
     def coefficient(a):
         rhs = lambda u, p, args: _fold(u, p, a)
         return scan_event_candidates((jc.Cusp(rhs),), data, None)[0].values[1, 0]
-    np.testing.assert_allclose(coefficient(1.), .6, atol=2e-4)
-    np.testing.assert_allclose(jax.jit(jax.grad(coefficient))(1.), 0., atol=2e-4)
+    # Measured |error| x32/x64: 2.38e-08/1.11e-16; analytic normal form or exact diagonal sensitivity.
+    np.testing.assert_allclose(coefficient(1.0), 0.6, atol=32 * _eps_J(), rtol=0)
+    # Measured |error| x32/x64: 0/0; analytic normal form or exact diagonal sensitivity.
+    np.testing.assert_allclose(jax.jit(jax.grad(coefficient))(1.0), 0.0, atol=32 * _eps_J(), rtol=0)
 
 
 def test_cancelling_local_growth_derivatives():
@@ -69,8 +78,10 @@ def test_cancelling_local_growth_derivatives():
         factors = jnp.stack([jnp.array([[large*jnp.exp(t), .1], [0., small]]),
                              jnp.diag(jnp.array([2*small, .5*large]))])
         return periodic_spectrum(factors)[1]
-    np.testing.assert_allclose(jax.jacfwd(logs)(0.), [1., 0.], atol=2e-4)
-    np.testing.assert_allclose(jax.jit(jax.grad(lambda t: logs(t).sum()))(0.), 1., atol=2e-4)
+    # Measured |error| x32/x64: 0/0; analytic normal form or exact diagonal sensitivity.
+    np.testing.assert_allclose(jax.jacfwd(logs)(0.0), [1.0, 0.0], atol=32 * _eps_J(), rtol=0)
+    # Measured |error| x32/x64: 0/0; analytic normal form or exact diagonal sensitivity.
+    np.testing.assert_allclose(jax.jit(jax.grad(lambda t: logs(t).sum()))(0.0), 1.0, atol=32 * _eps_J(), rtol=0)
 
 
 @pytest.mark.slow

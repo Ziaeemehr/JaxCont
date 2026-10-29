@@ -25,8 +25,10 @@ def test_gauss_legendre_01_matches_numpy_reference():
         x_ref, w_ref = np.polynomial.legendre.leggauss(ncol)
         expected_nodes = 0.5 * (x_ref + 1.0)
         expected_weights = 0.5 * w_ref
-        assert np.allclose(nodes, expected_nodes)
-        assert np.allclose(weights, expected_weights)
+        # Measured |error| x32/x64: 0/0; closed-form Gauss nodes and weights.
+        assert np.allclose(nodes, expected_nodes, atol=0, rtol=32 * np.finfo(float).eps)
+        # Measured |error| x32/x64: 0/0; closed-form Gauss nodes and weights.
+        assert np.allclose(weights, expected_weights, atol=0, rtol=32 * np.finfo(float).eps)
 
 
 def test_gauss_legendre_nodes_are_interior_to_01():
@@ -53,7 +55,8 @@ def test_lagrange_diff_matrix_is_exact_on_degree_ncol_polynomial():
 
     v = p(local_nodes)
     Dv = D @ v
-    assert np.max(np.abs(Dv - pprime(local_nodes))) < 1e-12
+    # Measured |error| x32/x64: 5.55e-15/5.55e-15; degree-four differentiation, row-sum conditioning below 100.
+    assert np.max(np.abs(Dv - pprime(local_nodes))) < 512 * np.finfo(float).eps
 
 
 def test_lagrange_eval_weights_extrapolate_exactly():
@@ -68,7 +71,8 @@ def test_lagrange_eval_weights_extrapolate_exactly():
         return x**4 - 2 * x**3 + x - 1
 
     v = p(local_nodes)
-    assert abs(float(E @ v) - p(1.0)) < 1e-12
+    # Measured |error| x32/x64: 1.11e-16/1.11e-16; degree-four endpoint interpolation, well-conditioned weights.
+    assert abs(float(E @ v) - p(1.0)) < 32 * np.finfo(float).eps
 
 
 def test_collocation_matrices_shapes():

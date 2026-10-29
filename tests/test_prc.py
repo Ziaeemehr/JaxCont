@@ -16,6 +16,10 @@ from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 from jaxcont.stability.prc import prc_curve
 
+def _eps_J():
+    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+
+
 
 def _rhs(u, p, args):
     x, y = u[0], u[1]
@@ -106,7 +110,8 @@ def test_branch_prc_matches_per_point_calls():
             ]
         )
     assert batched.shape == (2, mesh.ntst, 2)
-    assert jnp.max(jnp.abs(batched - individual)) < 1e-6
+    # Measured |error| x32/x64: 0/0; batched/individual discrete adjoint consistency.
+    assert jnp.max(jnp.abs(batched - individual)) < 8 * _eps_J()
 
 
 def test_dprc_curve_matches_finite_difference_of_reconverged_orbits():
@@ -131,4 +136,5 @@ def test_dprc_curve_matches_finite_difference_of_reconverged_orbits():
 
     dZ_fd = (Z_hi - Z_lo) / (2 * eps)
     assert dZ.shape == (mesh.ntst, 2)
-    assert float(jnp.max(jnp.abs(np.asarray(dZ) - np.asarray(dZ_fd)))) < 0.01
+    # Measured |error| x32/x64: 6.06e-05/4.6e-05; central difference h=.01 truncation and Newton cancellation.
+    assert float(jnp.max(jnp.abs(np.asarray(dZ) - np.asarray(dZ_fd)))) < 0.002

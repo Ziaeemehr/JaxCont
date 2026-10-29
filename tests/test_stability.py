@@ -14,6 +14,11 @@ from jaxcont.stability.eigenvalue import (
 )
 
 
+def _eps_J():
+    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+
+
+
 def test_compute_eigenvalues():
     """Test eigenvalue computation."""
     # 2x2 matrix with known eigenvalues
@@ -21,7 +26,8 @@ def test_compute_eigenvalues():
     eigs = compute_eigenvalues(A)
     
     # Should be sorted by real part (descending)
-    assert jnp.allclose(jnp.sort(eigs), jnp.array([-2.0, 1.0]))
+    # Measured |error| x32/x64: 0/0; exact diagonal eigenvalues.
+    assert jnp.allclose(jnp.sort(eigs), jnp.array([-2.0, 1.0]), atol=0, rtol=16 * _eps_J())
 
 
 def test_analyze_stability_stable():
@@ -96,7 +102,8 @@ def test_analyze_stability_dominant_eigenvalue():
     eigs = jnp.array([1.0, -2.0, -0.5])
     analysis = analyze_stability(eigs)
 
-    assert jnp.allclose(jnp.real(analysis['dominant_eigenvalue']), 1.0)
+    # Measured |error| x32/x64: 0/0; exact diagonal eigenvalues.
+    assert jnp.allclose(jnp.real(analysis['dominant_eigenvalue']), 1.0, atol=0, rtol=16 * _eps_J())
 
 
 def _linear_problem() -> ContinuationProblem:
@@ -123,7 +130,8 @@ def test_compute_eigenvalues_along_branch():
     eigs = compute_eigenvalues_along_branch(problem, solution)
 
     assert eigs.shape == (3, 1)
-    assert jnp.allclose(jnp.real(eigs[:, 0]), jnp.array([-2.0, -0.5, 3.0]))
+    # Measured |error| x32/x64: 0/0; exact diagonal eigenvalues.
+    assert jnp.allclose(jnp.real(eigs[:, 0]), jnp.array([-2.0, -0.5, 3.0]), atol=0, rtol=16 * _eps_J())
 
 
 def test_compute_stability_along_branch():

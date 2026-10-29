@@ -8,6 +8,13 @@ from jaxcont.bifurcations.codim2_events import Cusp
 from jaxcont.bifurcations.curves import fold_curve_problem
 
 
+def _eps_J():
+    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+
+_POINT_ATOL = 1e-9 if jnp.asarray(0.).dtype == jnp.float64 else 1e-5
+
+
+
 def _cusp_shifted(u, p, args):
     """Same shifted cusp normal form as tests/test_curves.py. Its cusp point
     is exactly u=0.7, p=(0.3, 1.2) (where the discriminant's two fold
@@ -32,8 +39,10 @@ def test_cusp_detected_on_the_fold_curve():
     )
     hits = [h for h in sol.events if h.kind == "cusp"]
     assert len(hits) == 1
-    assert abs(hits[0].p - 1.2) < 5e-2
-    assert abs(float(hits[0].info["p_fixed"]) - 0.3) < 5e-2
+    # Measured |error| x32/x64: 4.77e-08/0; analytic event, default Newton budget.
+    assert abs(hits[0].p - 1.2) < _POINT_ATOL
+    # Measured |error| x32/x64: 1.19e-08/0; analytic event, default Newton budget.
+    assert abs(float(hits[0].info['p_fixed']) - 0.3) < _POINT_ATOL
 
 
 from jaxcont.bifurcations.codim2_events import BogdanovTakens
@@ -73,7 +82,8 @@ def test_fold_curve_matches_the_exact_bt_parabola():
     for i in range(sol.branch.params.shape[0]):
         p1 = float(sol.branch.params[i])
         _, p0, _ = unpack_fold_curve(sol.branch.states[i], n=2)
-        assert abs(float(p0) - (3.0 + (p1 + 1.0) ** 2 / 4.0)) < 1e-3
+        # Measured |error| x32/x64: 1.09e-07/9.64e-09; exact fold equation, explicit Newton 1e-5.
+        assert abs(float(p0) - (3.0 + (p1 + 1.0) ** 2 / 4.0)) < 1e-05
 
 
 def test_bogdanov_takens_detected_on_the_fold_curve():
@@ -83,8 +93,10 @@ def test_bogdanov_takens_detected_on_the_fold_curve():
     hits = [h for h in sol.events if h.kind == "bogdanov_takens"]
     assert len(hits) == 1
     assert hits[0].info["converged"] is True
-    assert abs(hits[0].p - (-1.0)) < 5e-2
-    assert jnp.allclose(hits[0].u, jnp.array([5.0, 2.0]), atol=5e-2)
+    # Measured |error| x32/x64: 0/0; analytic event, default Newton budget.
+    assert abs(hits[0].p - -1.0) < _POINT_ATOL
+    # Measured |error| x32/x64: 0/0; analytic event, default Newton budget.
+    assert jnp.allclose(hits[0].u, jnp.array([5.0, 2.0]), atol=_POINT_ATOL, rtol=0)
 
 
 def test_bt_mode_values_ignore_the_pinned_zero_eigenvalue():
@@ -105,7 +117,8 @@ def test_bt_mode_values_ignore_the_pinned_zero_eigenvalue():
     for i, point in enumerate(points):
         assert int(where[i].sum()) == 1
         val = float(values[i][where[i]][0])
-        assert abs(val - (-(point.p + 1.0) / 2.0)) < 5e-2
+        # Measured |error| x32/x64: 3.96e-05/3.68e-14; eigenvalue sensitivity near the pinned double zero.
+        assert abs(val - -(point.p + 1.0) / 2.0) < 4096 * _eps_J()
         saw_positive |= val > 0.05
         saw_negative |= val < -0.05
     assert saw_positive and saw_negative, "no sign change -> nothing to detect"
@@ -136,8 +149,10 @@ def test_bogdanov_takens_detected_on_the_hopf_curve():
     hits = [h for h in sol.events if h.kind == "bogdanov_takens"]
     assert len(hits) == 1
     assert hits[0].info["converged"] is True
-    assert abs(hits[0].p - (-1.0)) < 5e-2
-    assert jnp.allclose(hits[0].u, jnp.array([5.0, 2.0]), atol=5e-2)
+    # Measured |error| x32/x64: 0/0; analytic event, default Newton budget.
+    assert abs(hits[0].p - -1.0) < _POINT_ATOL
+    # Measured |error| x32/x64: 0/0; analytic event, default Newton budget.
+    assert jnp.allclose(hits[0].u, jnp.array([5.0, 2.0]), atol=_POINT_ATOL, rtol=0)
 
 
 from jaxcont.bifurcations.codim2_events import ZeroHopf
@@ -200,8 +215,10 @@ def test_zero_hopf_detected_on_the_hopf_curve():
     hits = [h for h in sol.events if h.kind == "zero_hopf"]
     assert len(hits) == 1
     assert hits[0].info["converged"] is True
-    assert abs(hits[0].p - 0.5) < 5e-2
-    assert abs(float(hits[0].info["p_fixed"]) - 0.75) < 5e-2
+    # Measured |error| x32/x64: 0/0; analytic event, default Newton budget.
+    assert abs(hits[0].p - 0.5) < _POINT_ATOL
+    # Measured |error| x32/x64: 5.96e-08/0; analytic event, default Newton budget.
+    assert abs(float(hits[0].info['p_fixed']) - 0.75) < _POINT_ATOL
 
 
 def _zh_fold_system(u, p, args):
@@ -244,8 +261,10 @@ def test_zero_hopf_detected_on_the_fold_curve_with_large_omega():
     hits = [h for h in sol.events if h.kind == "zero_hopf"]
     assert len(hits) == 1
     assert hits[0].info["converged"] is True
-    assert abs(hits[0].p - (-0.4)) < 5e-2
-    assert abs(hits[0].info["omega"] - 3.0) < 5e-2
+    # Measured |error| x32/x64: 5.96e-09/0; analytic event, default Newton budget.
+    assert abs(hits[0].p - -0.4) < _POINT_ATOL
+    # Measured |error| x32/x64: 0/0; analytic event, default Newton budget.
+    assert abs(hits[0].info['omega'] - 3.0) < _POINT_ATOL
 
 
 from jaxcont.bifurcations.codim2_events import GeneralizedHopf
@@ -280,7 +299,8 @@ def test_generalized_hopf_detected_on_the_hopf_curve():
     hits = [h for h in sol.events if h.kind == "generalized_hopf"]
     assert len(hits) == 1
     assert hits[0].info["converged"] is True
-    assert abs(hits[0].p - 0.4) < 5e-2
+    # Measured |error| x32/x64: 5.96e-09/0; analytic event, default Newton budget.
+    assert abs(hits[0].p - 0.4) < _POINT_ATOL
 
 
 from jaxcont.bifurcations.codim2_events import DoubleHopf
@@ -322,7 +342,8 @@ def test_double_hopf_detected_with_automatic_seed_b():
     hits = [h for h in sol.events if h.kind == "double_hopf"]
     assert len(hits) == 1
     assert hits[0].info["converged"] is True
-    assert abs(hits[0].p - 0.3) < 5e-2
+    # Measured |error| x32/x64: 1.19e-08/7.12e-12; analytic event, default Newton budget.
+    assert abs(hits[0].p - 0.3) < _POINT_ATOL
     # The two frequencies must be genuinely distinct -- a collapsed pair is
     # the degenerate case double_hopf_point returns nan for.
     assert abs(hits[0].info["omega_a"] - hits[0].info["omega_b"]) > 0.5

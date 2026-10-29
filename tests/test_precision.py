@@ -77,4 +77,5 @@ def test_pd_ns_refine_locates_event_tightly_in_float64():
     for beta, cls in ((BETA_PD, jc.PeriodDoubling), (BETA_NS, jc.NeimarkSacker)):
         sol = _sweep(beta, cls, span=(-0.05, 0.05))
         assert len(sol.events) == 1
-        assert abs(sol.events[0].p - EVENT_ALPHA) < 1e-6
+        # Measured |error| x32/x64: 3.35e-10/3.35e-10; float64-only periodic event, Newton/bisection and Gauss mesh budget.
+        assert abs(sol.events[0].p - EVENT_ALPHA) < 1e-08
