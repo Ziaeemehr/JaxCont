@@ -7,22 +7,27 @@ python3 -m examples.validation.run_validation --case MC-EQ-001
 python3 -m examples.validation.run_validation --dry-run
 ```
 
-The registry is `cases/cases.json`. Its 18 legacy case IDs are preserved,
-including the supported catalytic fold and Hopf curve cases with `US-` IDs.
-The migration plan and canonical IDs are recorded in
-`docs/source/examples-migration.json`; canonical selection is later work.
+The registry is `cases/cases.json` (23 cases). Cases are selected by
+canonical ID (for example `cubic.eq-fold`, `lorenz84.bt-ft`) or by a legacy
+alias (`MC-EQ-001`); alias collisions are errors. The status of every case,
+its committed bundles and their promotion verdicts are listed on the
+generated docs page `docs/source/validation.md`
+(`python3 -m examples.validation.docs_page`).
 
-Default supported cases use analytic checks or committed MatCont evidence.
-The six historical bundles (22 files) are under
-`reference/<system>/matcont/<legacy-id>/`. Their filenames, bytes, provenance,
-and historical version strings are unchanged. `MC-PRC-001` is **adaptx**.
-The PRC comparison checks MatCont's time derivative separately from JaxCont's
-parameter derivative; it does not claim an external d(PRC)/dp validation.
+Reference bundles live under `reference/<system>/<tool>/<run>/`. Current v2
+bundles from MatCont 7.6 (MATLAB R2024a) and BifurcationKit 0.8.8 (Julia
+1.13.3) carry a `promotion-manifest.json` with the reviewed verdict; they
+exist for cubic, radial, adaptx PD switching and the four Lorenz-84 runs.
+The six historical MatCont bundles (22 files, MATLAB 9.8) keep their legacy
+IDs (`reference/<system>/matcont/<legacy-id>/`) with unchanged bytes and
+provenance. `MC-PRC-001` is **adaptx**. The PRC comparison checks MatCont's
+time derivative separately from JaxCont's parameter derivative; it does not
+claim an external d(PRC)/dp validation.
 
-The torBPC comparison retains its known failures and strict xfail. A failed
-comparison remains FAIL in the CLI and renderer. No tolerance was widened.
-The registry distinguishes executable capability gaps from non-executable
-BVP and heteroclinic templates. Unsupported cases require
+The torBPC comparison retains its known failure and strict xfail; a failed
+comparison remains FAIL in the CLI and the renderer, and no tolerance was
+widened. The registry distinguishes executable capability gaps from
+non-executable BVP and heteroclinic templates. Unsupported cases require
 `--include-unsupported`; templates never report successful execution.
 
 External regeneration is opt-in. MATLAB R2024a and MatCont 7.6 are configured
@@ -35,22 +40,24 @@ python3 -m examples.validation.run_validation --case MC-EQ-001 \
   --verify-references --generated-dir /tmp/jaxcont-candidates
 ```
 
-Candidates remain separate from the reviewed references. A custom flat
-`--reference-dir` remains supported for candidate checks. MATLAB drivers are
-under `regenerate/matcont/`, with capability gaps and templates separated.
-Julia scripts are under `regenerate/bifurcationkit/`; their headless export
-rewrite is a later task. The [comparison gallery](gallery/) now contains cubic, Van der Pol,
-adaptx Hopf/iPRC, radial, torBPC and independent PRC-shooting pages. Each page
-runs fresh JaxCont computations, renders report-driven tables and writes PNG
-figures with matching `.checks.json` sidecars. For example:
+Candidates remain separate from the reviewed references; promotion is a
+reviewed step (`scripts/promote_reference.py`). MATLAB drivers are under
+`regenerate/matcont/`, with capability gaps and templates separated; the
+headless Julia exporters are under `regenerate/bifurcationkit/`.
+
+The [comparison gallery](gallery/) has one page per system: cubic, Van der
+Pol, adaptx (Hopf and iPRC), radial, torBPC, independent PRC shooting and the
+three-tool Lorenz-84 page. Each page runs a fresh JaxCont computation, reads
+the committed bundles (never MATLAB or Julia), renders report-driven tables
+and writes PNG figures with matching `.checks.json` sidecars. For example:
 
 ```sh
 python3 examples/validation/gallery/plot_cubic.py --output-dir /tmp/jaxcont-evidence
 ```
 
-Figures remain open for Sphinx-Gallery capture. The 16 public API lessons
-live separately in `../tutorials/`. Later comparison pages and external
-series remain future work; no missing result is substituted with JaxCont data.
+Figures remain open for Sphinx-Gallery capture. The public API lessons live
+separately in `../tutorials/`. No missing external result is substituted with
+JaxCont data.
 
 ## v2 bundles and opt-in runtimes
 
@@ -90,19 +97,17 @@ The `matlab` and `julia` markers are deselected by default. Explicit selection
 requires a working runtime and fails when one is missing. See
 `regenerate/bifurcationkit/README.md` for the pinned Julia setup command.
 
-## Lorenz-84 contract awaiting owner review
+## Lorenz-84 contract
 
-Review `cases/systems/lorenz84.py`, the four `lorenz84.*` registry records,
-and `tests/test_reference_systems.py` before starting any flagship producer.
-The contract fixes state order X,Y,Z,U, parameter order F,T, the original time
-scale, model constants, the T=0.04 F sweep from Julia 02, Newton correction of
-the historical starting guess, selection windows, and chart conventions.
-The tests contain hand-evaluated RHS and analytic Jacobian samples independent
-of continuation results. Selection requires exactly one matching event by
-type and named window; numeric special-point indices are not an interface.
-The codimension-two comparison domain is the existing positive-T BT chart;
-Hopf termination at a chart boundary is recorded rather than called BT.
-The contract passed Claude review 1 (2026-10-28): the Hopf seed window was
-narrowed to the Hopf point nearest the BT, the full F-sweep event set (one LP,
-three H) was recorded, and branches are clipped to the F window per sheet.
-All four runs remain PENDING until their bundles are produced and promoted.
+`cases/systems/lorenz84.py` fixes state order X,Y,Z,U, parameter order F,T,
+the original time scale, model constants, the T=0.04 F sweep (one LP and
+three H), Newton correction of the historical starting guess, the selection
+windows (fold seed F in [1.50, 1.58], Hopf seed F in [1.59, 1.65], BT in
+F [1.40, 1.50] with T in [0.01, 0.03]) and the chart conventions. Selection
+requires exactly one matching event by type and named window; numeric
+special-point indices are not an interface. The codimension-two comparison
+domain is the positive-T BT chart; Hopf termination at a chart boundary is
+recorded rather than called BT. BifurcationKit's BT on its fold and Hopf
+curves has native status `guess`; only the refined BT (`lorenz84.bt-ft`) is
+compared. All four runs (`eq-f`, `fold-ft`, `hopf-ft`, `bt-ft`) PASS against
+both external tools; the producers run in float64 (Newton tolerance 1e-12).
