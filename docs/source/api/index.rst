@@ -250,6 +250,32 @@ event's ``floquet_solver``):
 
 .. autofunction:: jaxcont.stability.floquet_spectrum
 
+.. autofunction:: jaxcont.stability.floquet.floquet_multipliers
+
+.. autofunction:: jaxcont.stability.floquet.branch_floquet_multipliers
+
+.. autofunction:: jaxcont.stability.floquet.floquet_stable
+
+Periodic orbits and phase response
+----------------------------------
+
+A periodic-orbit problem continues a limit cycle discretized by orthogonal
+collocation. Its ``args`` is a ``PeriodicArgs`` module whose ``user_args``
+holds the caller's data; ``raw_f`` is always called as
+``raw_f(u, p, user_args)``.
+
+.. autofunction:: jaxcont.periodic_orbit_problem
+
+.. autoclass:: jaxcont.Collocation
+
+.. autoclass:: jaxcont.problems.periodic_args.PeriodicArgs
+
+.. autofunction:: jaxcont.prc_curve
+
+.. autofunction:: jaxcont.branch_prc
+
+.. autofunction:: jaxcont.dprc_curve
+
 Lower-level problem and solver infrastructure
 -----------------------------------------------
 
