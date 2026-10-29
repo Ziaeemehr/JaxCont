@@ -103,9 +103,8 @@ class BifProblem:
 
     Registered as a JAX PyTree: ``u0``, ``p0``, ``args`` are dynamic leaves;
     ``f``, ``kind``, ``state_names``, ``param_name``, ``curve_layout`` and ``step_update`` are
-    static. This makes ``jax.vmap(..., in_axes=...)`` over a batched problem
-    structurally valid (full end-to-end vmap awaits the lax.scan loop
-    rewrite; see ARCHITECTURE.md §3.1).
+    static, so ``jax.vmap`` and ``jax.jit`` apply to a whole
+    ``continuation`` call with either loop option.
     """
 
     f: Callable[[Array, Array, PyTree], Array]

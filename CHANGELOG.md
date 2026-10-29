@@ -267,12 +267,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   existing single-direction scan engine twice and stitches the two legs into one branch; no
   changes to `core/scan_continuation.py`. Eager-only (raises `NotImplementedError` under
   `jax.vmap`/`jax.jit`).
-- MatCont cross-validation for two-parameter fold/Hopf curves: `examples/MatCont/cases.json`'s
-  `US-C2-LP-001`/`US-C2-H-001` promoted to `supported`, cross-checked against a live MatCont 7.6
-  run of the catalytic-oscillator LP/Hopf curves (`examples/MatCont/python_cases/codim2_curves.py`).
+- Two-parameter fold/Hopf curve validation cases: `US-C2-LP-001`/`US-C2-H-001`
+  (`catalytic.fold-curve`, `catalytic.hopf-curve` in `examples/validation/cases/cases.json`)
+  are `supported`, with JaxCont producers in
+  `examples/validation/cases/python_cases/codim2_curves.py`. Their evidence is PENDING: native
+  MatCont 7.6 results exist, but no complete reference bundle has been promoted.
 - `jc.BP`/`jc.branch_switch`: detect equilibrium branch points (pitchfork/transcritical
   crossings) and compute the crossing branch's tangent, closing the last v0.3.0+ roadmap
-  item. Period-doubling switching remains a separate future item.
+  item.
 - `jc.branch_switch_pd`: switch from a detected period-doubling bifurcation onto the
   period-doubled cycle, completing the branch-switching feature. Verifies the switched
   orbit is genuinely period-doubled rather than the original orbit traversed twice, and
@@ -344,7 +346,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Natural continuation lands its final step exactly on `p_end` (a remainder of at most
   `ds_min` is absorbed into the last step), so round-off no longer adds a step beyond the
   span or turns `reached_end` into `nonfinite`.
-- `examples/example_06_vmap_sweep.py` no longer says events are unsupported under `vmap`.
+- The `vmap` sweep tutorial (now `examples/tutorials/plot_07_vmap_sweep.py`) no longer says
+  events are unsupported under `vmap`.
 
 ### Known limitations
 

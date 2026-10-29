@@ -1,7 +1,9 @@
 API reference
 =============
 
-The functional equilibrium API is the supported v0.1 surface.
+The public 0.5.0 API: equilibrium and periodic-orbit continuation, events,
+Floquet analysis, phase response curves, branch switching and two-parameter
+curves. Breaking changes since 0.4 are listed in the changelog.
 
 Problem and continuation
 ------------------------
