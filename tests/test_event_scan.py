@@ -480,3 +480,33 @@ def test_period_doubling_through_a_complex_pair_turning_real(rows, crosses):
     candidate, = jax.jit(lambda d: scan_event_candidates((events.PeriodDoubling(),), d, None))(data)
     assert len(eager) == int(crosses)
     assert int(np.sum(candidate.bracket_mask)) == int(crosses)
+
+
+def test_period_doubling_refinement_rejects_a_complex_crossing_of_minus_one():
+    """Review R1-01: the pair -(.5+p) +/- sqrt(.25p - .15) starts inside the
+    unit circle, crosses Re mu = -1 while complex and turns real below -1;
+    no multiplier equals -1 on [0, 1]. The widened PD mask opens brackets,
+    so refinement must check the tracked mode, not any real mode near -1."""
+    from unittest.mock import patch
+    from jaxcont.bifurcations.events import BranchPoint, PeriodDoubling
+    from jaxcont.core.collocation import Collocation
+    from jaxcont.problems.periodic_args import PeriodicArgs
+
+    def spectrum(p):
+        a, d = .5 + float(p), .25 * float(p) - .15
+        s = np.sqrt(complex(d))
+        return np.array([-a + s, -a - s, -.95, -.8, 1.])
+
+    points = [BranchPoint(float(p), jnp.zeros(1), eigenvalues=spectrum(p), trivial_index=4)
+              for p in (0., 1.)]
+    event = PeriodDoubling()
+    brackets = event.scan(points)
+    assert brackets
+    args = PeriodicArgs(jnp.zeros((1, 1, 1)), jnp.zeros((1, 1, 1)), None,
+                        lambda u, p, a: u, Collocation(ntst=1, ncol=1))
+    with patch.object(PeriodDoubling, '_multipliers', lambda self, u, p, args: (spectrum(p), 4)):
+        for i, j, mode in brackets:
+            hit = event.refine(points[i], points[j], (i, j), lambda u, p: u,
+                               tolerance=1e-8, max_iterations=60, mode=mode, args=args)
+            assert hit.status == "failed"
+            assert hit.info["reason"] == "spectral_check_failed"

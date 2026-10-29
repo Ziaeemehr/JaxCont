@@ -571,3 +571,19 @@ def test_flow_in_a_plane_of_distinct_multipliers_stays_unresolved(monkeypatch):
             spectrum = _spectrum_with_factor(monkeypatch, factor, strategy)
             assert not bool(spectrum.converged)
             assert int(spectrum.trivial_index) == -1
+
+
+def test_flow_alignment_memory_grows_quadratically():
+    """Review R1-04: the pair fallback must not materialize (n, n^2) arrays;
+    its compiled temporaries grow like n^2 (x4 per doubling), not n^3 (x8)."""
+    from jaxcont.stability.floquet import _aligned
+    dtype = jnp.result_type(jnp.asarray(0.), jnp.complex64)
+
+    def temporaries(n):
+        compiled = jax.jit(_aligned).lower(
+            jax.ShapeDtypeStruct((n, n), dtype), jax.ShapeDtypeStruct((n,), jnp.asarray(0.).dtype),
+            jax.ShapeDtypeStruct((n,), dtype)).compile()
+        return compiled.memory_analysis().temp_size_in_bytes
+
+    small, large = temporaries(64), temporaries(128)
+    assert large <= 5 * small

@@ -26,7 +26,7 @@ from .artifacts import (
     verify_case_references,
 )
 from .registry import load_registry, select_cases
-from .validation import build_validation_report, evaluate_case_result
+from .validation import build_validation_report, case_result_passes, evaluate_case_result
 
 _SUITE_DIR = Path(__file__).resolve().parent
 _DEFAULT_REFERENCE_DIR = _SUITE_DIR / "reference"
@@ -329,16 +329,27 @@ def _validate_case(case: dict, reference_dir: Path) -> tuple[bool, dict]:
             for tool, path in v2_paths.items()
             if (path / "metadata.json").is_file()
         }
+        predicates = None
         if case.get("python"):
             fresh = _load_case_callable(case.get("v2_python", case["python"]))()
             results["jaxcont"] = (fresh if isinstance(fresh, dict) else
                                   fresh.artifacts.get("bundle") or case_result_payload(case, fresh))
+            if not isinstance(fresh, dict) and case["id"].startswith("MC-"):
+                # The gallery applies the producer's own predicates too; the
+                # CLI must not accept what the gallery rejects (review B-06).
+                predicates = case_result_passes(case["id"], fresh.checks)
         report = build_validation_report(case, results)
-        return report.status == "PASS", {
-            "status": report.status,
+        if predicates is not None:
+            from dataclasses import replace
+            report = replace(report, status="FAIL" if not predicates else report.status,
+                             information={**report.information, "producer_predicates": predicates})
+        status = report.status
+        return status == "PASS", {
+            "status": status,
             "validation_report": report.to_dict(),
             "reason": (
-                "required evidence incomplete" if report.status == "PENDING" else report.status
+                "producer predicates failed" if predicates is False else
+                "required evidence incomplete" if status == "PENDING" else status
             ),
         }
     bundle_dir = reference_directory(reference_dir, case["id"])

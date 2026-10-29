@@ -34,7 +34,8 @@
         "matcont": "PASS",
         "bifurcationkit": "PASS"
       },
-      "evidence_status": "PASS",
+      "evidence_status": "PENDING",
+      "evidence_comment": "Review B-02 (2026-10-29): MatCont's event rows carry no state_0 and BifurcationKit's no fold_coefficient, so those budgeted values are compared in no pair that includes them; the branch, spectra and the LP parameters agree.",
       "expected_domain": [
         -1.0,
         4.17408451642958
@@ -339,6 +340,7 @@
         "period_atol": 0.005,
         "extrema_atol": 0.005,
         "multiplier_atol": 0.005,
+        "multiplier_rtol": 0.005,
         "residual_atol": 1e-07
       },
       "canonical_id": "torbpc.cycle-lpc-pd-ns",
@@ -366,6 +368,7 @@
         "period_atol": 0.005,
         "extrema_atol": 0.005,
         "multiplier_atol": 0.005,
+        "multiplier_rtol": 0.005,
         "residual_atol": 1e-07
       },
       "required_tools": [
@@ -386,6 +389,7 @@
       ],
       "comparison_event_comment": "LPC at -0.584492842 is outside the explicit upper bound -0.5845; retain it as informational native evidence.",
       "comparison_coordinate": "period",
+      "multiplier_rtol_comment": "Owner decision 2026-10-29: |dmu|/max(1,|mu|) <= 0.005 in three-tool promotion. The unstable multiplier reaches ~-53, where MatCont and BifurcationKit themselves differ by 0.033 (relative 6e-4); multiplier_atol stays absolute for the legacy MatCont check.",
       "comparison_coordinate_comment": "The period is a solved unknown in every tool, monotone on both sheets and regular at the LPC that ends them. The envelope extrema otherwise chosen carry ~1e-4 sampling error, which the multiplier slope between NS and PD (~26 per unit of state_0_max) turns into ~5e-3; nu has a square-root turn at the LPC, where the sparse MatCont/BifurcationKit series cannot be interpolated (measured 2026-10-29)."
     },
     {
@@ -405,6 +409,7 @@
       "tolerances": {
         "parameter_atol": 0.002,
         "period_atol": 0.005,
+        "multiplier_atol": 0.005,
         "residual_atol": 2e-05
       },
       "canonical_id": "adaptx.cycle-pd-switch",
@@ -428,6 +433,7 @@
       "metric_limits": {
         "parameter_atol": 0.002,
         "period_atol": 0.005,
+        "multiplier_atol": 0.005,
         "residual_atol": 2e-05
       },
       "required_tools": [
@@ -448,7 +454,15 @@
           0.63
         ]
       },
-      "comparison_window_comment": "Frozen base and doubled branch contract windows in periodic.json."
+      "comparison_window_comment": "Frozen base and doubled branch contract windows in periodic.json.",
+      "multiplier_atol_comment": "Review B-03 (2026-10-29): the same Floquet budget as the other periodic cases, so branch and PD spectra are compared at all.",
+      "comparison_coordinate": "parameter",
+      "comparison_coordinate_comment": "Neither sheet has a fold in its window, so nu is monotone and exact in every tool. Measured 2026-10-29: the default envelope coordinate (state_0_max, ~1e-4 sampling error) gives spectrum differences up to 2.0e-2; the period, nearly flat on the doubled sheet, 1.0e-2; nu at most 1.4e-4.",
+      "doubled_shape": {
+        "segment": "doubled",
+        "min_half_period_difference": 0.001
+      },
+      "doubled_shape_comment": "A base orbit traversed twice has half-period difference ~0; the legacy MatCont test uses the same 1e-3 floor (measured maxima: MatCont 0.564, BifurcationKit 0.633)."
     },
     {
       "id": "US-BP-001",
@@ -817,7 +831,8 @@
         "matcont",
         "bifurcationkit"
       ],
-      "evidence_status": "PASS",
+      "evidence_status": "PENDING",
+      "evidence_comment": "Review B-04 (2026-10-29): at JaxCont's and MatCont's dense nodes the sparse BifurcationKit series cannot support the state/spectrum budgets near the fold (differences within its own interpolation-error estimate); MatCont-JaxCont agree.",
       "expected_domain": [
         -1.5,
         3.0

@@ -189,7 +189,10 @@ class BoundRHS:
     eager point solvers can be compiled once per ``f`` (``equinox.filter_jit``
     keys on ``f``'s identity and treats the arrays of ``args`` as inputs) and
     reused for every bracket and every later call. Any other callable is
-    refined uncompiled, as before.
+    refined uncompiled, as before. The compiled programs, and with them every
+    distinct ``f`` (and what its closure captures), stay alive until
+    ``jax.clear_caches()``; build ``f`` once rather than a fresh closure per
+    continuation when that matters.
     """
 
     __slots__ = ("f", "args")
@@ -755,16 +758,16 @@ class _FloquetEvent:
         spectrum = self._multipliers(u_bif, p_bif, args)
         if spectrum is None:
             return failed("floquet_not_converged")
-        multipliers, trivial_index = spectrum
+        multipliers, _ = spectrum
+        # The bisected mode itself must have the event's form at the root: a
+        # root of Re mu + 1 where that mode is still complex is no PD, and
+        # another real mode near -1 must not stand in for it (review R1-01).
         tracked = track_modes(np.stack([row_left, multipliers]))[1][k]
-        keep = np.arange(multipliers.shape[0]) != trivial_index
-        distance = np.where(keep, np.abs(multipliers - self._critical(tracked)), np.inf)
-        nearest = multipliers[np.argmin(distance)]
-        if not self._spectral_ok(nearest, _classify_tol(self.tolerance, multipliers)):
-            return failed("spectral_check_failed", multiplier=complex(nearest))
+        if not self._spectral_ok(tracked, _classify_tol(self.tolerance, multipliers)):
+            return failed("spectral_check_failed", multiplier=complex(tracked))
         return EventHit(
             kind=self.kind, p=float(p_bif), u=u_bif, index=index,
-            info={"method": "bisection", "corrected": True, "multiplier": complex(nearest)},
+            info={"method": "bisection", "corrected": True, "multiplier": complex(tracked)},
         )
 
 
@@ -779,8 +782,7 @@ class PeriodDoubling(_FloquetEvent, Event):
     and has a member pass ``-1`` within one step is found; a pair outside the
     circle opens no bracket. Refinement bisects on the same
     tracked mode, correcting each midpoint onto the collocation residual, and
-    accepts the result only if the non-trivial multiplier nearest ``-1`` is
-    real. See ``docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md``.
+    accepts the result only if that tracked multiplier is real at the root. See ``docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md``.
 
     Only meaningful for ``kind="periodic"`` branches (``point.eigenvalues``
     must be Floquet multipliers, not equilibrium eigenvalues) -- using this

@@ -112,10 +112,41 @@ def _independent(case, data):
     if missing & guesses:
         metrics["unrefined_detections"] = _metric(sum((missing & guesses).values()), None,
             "; ".join(_unrefined_reason(case, kind) for kind in sorted(missing & guesses)))
-    if inside and all(r.get("residual_norm") not in (None, "") for r in inside):
-        metrics["residual"] = _metric(max(abs(float(r["residual_norm"])) for r in inside), tol.get("residual_atol", 1e-7))
+    # Every residual must be finite (a NaN after a finite value must not be
+    # dropped by max), and refined events meet the same budget as branch
+    # points (review B-01).
+    for name, records in (("residual", inside), ("event_residual", events)):
+        values = [r.get("residual_norm") for r in records if r.get("residual_norm") not in (None, "")]
+        if not values or (name == "residual" and len(values) != len(records)):
+            continue
+        values = np.abs(np.asarray(values, dtype=float))
+        metrics[name] = (_metric(float(values.max()), tol.get("residual_atol", 1e-7)) if np.all(np.isfinite(values))
+                         else _metric(None, tol.get("residual_atol", 1e-7), "nonfinite residual"))
     if case.get("spectrum_required", True) and not data.get("spectra"):
         metrics["spectra_present"] = _metric(None, 0, "required spectra absent")
+    # Spectra of the compared points must be finite whether or not the case
+    # declares a spectral budget (review B-03).
+    compared = {(r.get("segment_id", "legacy"), str(r.get("point_id", r.get("point")))) for r in inside}
+    compared_events = {str(e.get("event_id", e.get("event_index", ""))) for e in events}
+    def finite_mode(m):
+        try:
+            return np.isfinite(float(m["real"])) and np.isfinite(float(m["imag"]))
+        except (KeyError, ValueError, TypeError):
+            return False
+    nonfinite = sum(not finite_mode(m) for m in data.get("spectra", [])
+                    if (m.get("segment_id", "legacy"), str(m.get("point_id", m.get("point")))) in compared
+                    or (m.get("event_id") and str(m["event_id"]) in compared_events))
+    if nonfinite:
+        metrics["spectra_finite"] = _metric(None, 0, f"{nonfinite} nonfinite modes at compared points")
+    # A period-doubled branch must be a genuine doubling, not the base orbit
+    # traversed twice: its half-period difference must reach the declared
+    # minimum somewhere on the branch (it vanishes at the PD point itself).
+    doubled = case.get("doubled_shape")
+    if doubled:
+        values = [float(r["half_period_difference"]) for r in data.get("branch", [])
+                  if r.get("segment_id") == doubled["segment"] and r.get("half_period_difference") not in (None, "")]
+        deficit = max(doubled["min_half_period_difference"] - max(values), 0.) if values else None
+        metrics["doubled_shape"] = _metric(deficit, 0, "max half-period difference on the doubled branch")
     for table, records in (("branch", inside), ("event", events)):
         for row in records:
             for column, value in row.items():
@@ -150,6 +181,8 @@ def _limit(column, tol):
         return tol.get("period_atol")
     if column == "frequency":
         return tol.get("frequency_atol")
+    if column == "residual_norm":
+        return tol.get("residual_atol")
     if column.startswith("state_"):
         return tol.get("extrema_atol") if column.endswith(("_min", "_max")) else tol.get("state_atol")
     return tol.get(column + "_atol")
@@ -253,16 +286,66 @@ def _sheets(data, case=None):
 def _mode_error(va, vb, relative):
     """Largest matched difference between two spectra.
 
-    ``relative`` (Floquet multipliers, ``multiplier_atol``) divides by
+    ``relative`` (a case that declares ``multiplier_rtol``) divides by
     ``max(1, |mu|)``: absolute up to the unit circle, relative above it,
     because a multiplier ``exp(lambda*T)`` carries an error proportional to
     its size (torBPC: MatCont and BifurcationKit differ by 0.033 at -53).
+    Without the declaration the difference stays absolute.
     """
     ii, jj = linear_sum_assignment(abs(va[:, None]-vb[None, :]))
     difference = abs(va[ii]-vb[jj])
     if relative:
         difference = difference / np.maximum(1., np.maximum(abs(va[ii]), abs(vb[jj])))
     return float(max(difference))
+
+
+def _spectral_budget(tol):
+    """``(limit, relative)``: a declared ``multiplier_rtol`` is relative above
+    ``|mu| = 1``; ``spectrum_atol``/``multiplier_atol`` stay absolute."""
+    if tol.get("multiplier_rtol") is not None:
+        return tol["multiplier_rtol"], True
+    return tol.get("spectrum_atol", tol.get("multiplier_atol")), False
+
+
+def _spectral_curve(data, sheet, coordinate):
+    """``(coordinates, values)`` of the native branch spectra on one sheet, or
+    ``None`` when a point has no finite spectrum."""
+    from examples.validation.artifacts import _unique_spectrum_points
+    curve = []
+    for row in sheet:
+        values = [complex(float(s["real"]), float(s["imag"])) for s in data.get("spectra", [])
+                  if str(s.get("point_id", s.get("point"))) == str(row.get("point_id", row.get("point")))
+                  and str(s.get("segment_id", "legacy")) == str(row.get("segment_id", "legacy"))
+                  and not s.get("event_id") and str(s.get("event_index", -1)) == "-1"]
+        if not values or not np.all(np.isfinite(values)):
+            return None
+        curve.append({coordinate: float(row[coordinate]), "values": values})
+    return _unique_spectrum_points(curve, coordinate)
+
+
+def _spectral_roots(coordinates, values, query):
+    coefficients = np.stack([np.poly(v) for v in values])
+    return [np.roots(c) for c in _cubic(coordinates, coefficients, query)]
+
+
+def _dense_spectrum_metric(a, b, x, y, lo, hi, query, coordinate, limit, relative):
+    """Spectra at the denser tool's own nodes against the sparser interpolant."""
+    curves = [_spectral_curve(d, sheet, coordinate) for d, sheet in ((a, x), (b, y))]
+    if any(c is None for c in curves):
+        return None  # the sparse-node spectrum metric already reports this
+    (dc, dv), (sc, sv) = sorted(curves, key=lambda c: -len(c[0]))
+    dc = np.asarray(dc)
+    nodes = (dc >= lo) & (dc <= hi) & ~np.isin(dc, query)
+    if not np.any(nodes) or len(sc) < 2:
+        return None  # no node of the denser tool lies between sparse nodes
+    sc = np.asarray(sc)
+    full = _spectral_roots(sc, sv, dc[nodes])
+    half_c, half_v = _half_grid(sc, np.arange(len(sc)))
+    half = _spectral_roots(half_c, [sv[k] for k in half_v], dc[nodes])
+    dense = [np.asarray(v) for v, keep in zip(dv, nodes) if keep]
+    differences = [_mode_error(f, d, relative) if len(f) == len(d) else np.inf for f, d in zip(full, dense)]
+    change = [_mode_error(f, h, relative) if len(f) == len(h) else np.inf for f, h in zip(full, half)]
+    return _dense_node_metric(differences, limit, _interval_allowance(sc, dc[nodes], change), "spectrum")
 
 
 def _spectrum_error(a, b, x, y, query, coordinate="parameter", relative=False):
@@ -297,6 +380,51 @@ def _spectrum_error(a, b, x, y, query, coordinate="parameter", relative=False):
     return error
 
 
+def _half_grid(nodes, values):
+    """Every other native node (always keeping both ends)."""
+    keep = np.r_[np.arange(0, len(nodes), 2), len(nodes) - 1]
+    keep = np.unique(keep)
+    return nodes[keep], np.asarray(values)[keep]
+
+
+def _interval_allowance(sparse, nodes, change):
+    """``change`` (full minus half-grid interpolant) is a pointwise estimate
+    that crosses zero inside an interval; use its maximum over the sparse
+    interval holding each node and its two neighbours instead."""
+    change = np.abs(np.asarray(change, float))
+    interval = np.clip(np.searchsorted(sparse, nodes) - 1, 0, len(sparse) - 2)
+    peak = np.zeros(len(sparse) - 1)
+    np.maximum.at(peak, interval, np.where(np.isfinite(change), change, np.inf))
+    local = np.maximum(peak, np.maximum(np.r_[peak[1:], 0.], np.r_[0., peak[:-1]]))
+    return local[interval]
+
+
+def _dense_node_metric(differences, limit, allowance, what):
+    """Compare at the denser tool's own nodes (review B-04).
+
+    ``allowance`` estimates the sparser series' interpolation error at each
+    node: the change of its cubic interpolant when every other node is
+    dropped (an O(h^4) interpolant changes by ~15x its own error). A
+    difference within ``limit`` passes; one only explained by the allowance
+    is unresolved (PENDING, the sparse series cannot support the budget
+    there); a larger one fails."""
+    differences, allowance = np.asarray(differences, float), np.asarray(allowance, float)
+    if not len(differences) or limit is None:
+        return None
+    worst = float(np.max(differences))
+    if not np.all(np.isfinite(differences)):
+        verdict = "FAIL"
+    elif worst <= limit:
+        verdict = "PASS"
+    elif np.all(differences <= limit + allowance):
+        verdict = "PENDING"
+    else:
+        verdict = "FAIL"
+    return dict(value=worst if np.isfinite(worst) else None, limit=limit, verdict=verdict,
+                reason=f"{what} at the denser tool's nodes; sparse interpolation allowance up to "
+                       f"{float(np.max(allowance)) if np.all(np.isfinite(allowance)) else float('inf'):.3g}")
+
+
 def _pairwise(case, a, b, *, coordinates=None, samples=None):
     """Compare each monotone sheet and each event without merging fold arms."""
     tol = case["tolerances"]
@@ -317,8 +445,12 @@ def _pairwise(case, a, b, *, coordinates=None, samples=None):
         sampled = {}
         for i, x in enumerate(sa):
             for j, y in enumerate(sb):
-                columns = {k for k in x[0].keys() & y[0].keys()
+                # A budgeted column exported by one tool only is missing
+                # evidence, not an inapplicable check (review B-02).
+                columns = {k for k in x[0].keys() | y[0].keys()
                            if _limit(k, tol) is not None and k not in ("parameter", "residual_norm")}
+                one_sided = {k for k in columns if k not in x[0] or k not in y[0]}
+                columns -= one_sided
                 if not columns:
                     columns = {"parameter"}
                 coordinate, x, y = _regular_coordinate(x, y, preferred=case.get(
@@ -356,6 +488,9 @@ def _pairwise(case, a, b, *, coordinates=None, samples=None):
                 plow, phigh = p_bounds if p_bounds else (-np.inf,np.inf)
                 metrics = {"endpoint_difference": _metric(max(abs(max(min(px),plow)-max(min(py),plow)),abs(min(max(px),phigh)-min(max(py),phigh))), tol["parameter_atol"])}
                 curves = {}
+                for column in sorted(one_sided):
+                    # Not compared, so no verdict is claimed for it.
+                    metrics[column] = _metric(None, None, f"{column} exported by one tool only; not compared")
                 for column in sorted(columns):
                     xa = np.array([float(r[column]) for r in xx])
                     ya = np.array([float(r[column]) for r in yy])
@@ -363,6 +498,18 @@ def _pairwise(case, a, b, *, coordinates=None, samples=None):
                     # Registry's existing mixed absolute/relative rule.
                     error = np.max(np.maximum(abs(av-bv) - tol.get("rtol", 0.)*np.maximum(abs(av),abs(bv)), 0.))
                     metrics[column] = _metric(error, _limit(column, tol))
+                    # The sparse-node comparison cannot see a disagreement
+                    # between sparse nodes; compare at the dense nodes too.
+                    (dp, dv), (sp, sv) = sorted(((xp, xa), (yp, ya)), key=lambda c: -len(c[0]))
+                    nodes = (dp >= lo) & (dp <= hi) & ~np.isin(dp, query)
+                    if np.any(nodes) and len(sp) > 1:
+                        full = _cubic(sp, sv, dp[nodes])
+                        half = _cubic(*_half_grid(sp, sv), dp[nodes])
+                        difference = np.maximum(abs(full - dv[nodes]) - tol.get("rtol", 0.) * np.maximum(abs(full), abs(dv[nodes])), 0.)
+                        dense = _dense_node_metric(difference, _limit(column, tol),
+                                                   _interval_allowance(sp, dp[nodes], full - half), column)
+                        if dense is not None:
+                            metrics[f"{column}.dense_nodes"] = dense
                     curves[column] = dict(coordinate=coordinate, x=query.tolist(),
                         error=abs(av-bv).tolist(), limit=_limit(column, tol),
                         budget=(_limit(column, tol) + tol.get("rtol", 0.)*np.maximum(abs(av),abs(bv))).tolist())
@@ -374,12 +521,14 @@ def _pairwise(case, a, b, *, coordinates=None, samples=None):
                     curves["radius"] = dict(coordinate=coordinate, x=query.tolist(),
                         error=abs(av-bv).tolist(), limit=tol["radius_atol"],
                         budget=np.full(len(query), tol["radius_atol"]).tolist())
-                spectral_limit = tol.get("spectrum_atol", tol.get("multiplier_atol"))
+                spectral_limit, relative = _spectral_budget(tol)
                 if spectral_limit is not None:
-                    relative = "spectrum_atol" not in tol
+                    dense = _dense_spectrum_metric(a, b, xx, yy, lo, hi, query, coordinate, spectral_limit, relative)
+                    if dense is not None:
+                        metrics["spectrum.dense_nodes"] = dense
                     metrics["spectrum"] = _metric(_spectrum_error(a, b, xx, yy, query, coordinate, relative), spectral_limit,
                                                   "all native modes; no failed modes omitted"
-                                                  + ("; relative above |mu| = 1" if relative else ""))
+                                                  + ("; multiplier_rtol: relative above |mu| = 1" if relative else ""))
                 cost = max((m["value"] / m["limit"] if m["limit"] else 0.)
                            if m["value"] is not None else 1e100 for m in metrics.values())
                 costs[i, j] = cost
@@ -407,24 +556,36 @@ def _pairwise(case, a, b, *, coordinates=None, samples=None):
         ii, jj = linear_sum_assignment(costs)
         for i, j in zip(ii, jj):
             x, y = ea[i], eb[j]
-            for column in sorted(x.keys() & y.keys()):
+            def number(row, column):
+                if row.get(column) in (None, ""):
+                    return None
+                try:
+                    return float(row[column])
+                except (ValueError, TypeError):
+                    return float("nan")  # present but not a number: a failure
+            for column in sorted(x.keys() | y.keys()):
                 limit = _limit(column, tol)
-                if limit is not None and applicable(column, x) and applicable(column, y):
-                    try:
-                        av, bv = float(x[column]), float(y[column])
-                    except (ValueError, TypeError):
-                        continue
-                    result[f"{kind}_{i}.{column}"] = _metric(max(abs(av-bv)-tol.get("rtol",0)*max(abs(av),abs(bv)),0), limit)
+                if limit is None or column == "residual_norm" or not (applicable(column, x) and applicable(column, y)):
+                    continue
+                av, bv = number(x, column), number(y, column)
+                if av is None and bv is None:
+                    continue  # exported by neither tool for this event
+                if av is None or bv is None:
+                    # One tool reports a budgeted value the other does not
+                    # export: missing evidence, never silently dropped (B-02).
+                    result[f"{kind}_{i}.{column}"] = _metric(None, None, f"{column} reported by one tool only; not compared")
+                    continue
+                result[f"{kind}_{i}.{column}"] = _metric(max(abs(av-bv)-tol.get("rtol",0)*max(abs(av),abs(bv)),0), limit)
             def modes(data, event):
                 identity = str(event.get("event_id", event.get("event_index", "")))
                 return np.array([complex(float(r["real"]), float(r["imag"])) for r in data.get("spectra", [])
                                  if str(r.get("event_id", r.get("event_index", ""))) == identity])
             va, vb = modes(a, x), modes(b, y)
-            limit = tol.get("spectrum_atol", tol.get("multiplier_atol"))
+            limit, relative = _spectral_budget(tol)
             if limit is not None:
                 error = None
                 if len(va) == len(vb) and len(va) and np.all(np.isfinite(va)) and np.all(np.isfinite(vb)):
-                    error = _mode_error(va, vb, "spectrum_atol" not in tol)
+                    error = _mode_error(va, vb, relative)
                 result[f"{kind}_{i}.spectrum"] = _metric(error, limit, "all modes, including flow mode")
     return result
 

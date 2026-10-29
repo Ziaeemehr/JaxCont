@@ -117,24 +117,26 @@ def _aligned(vectors: Array, flow: Array, log_multipliers: Array | None = None) 
     ok = (residual[column] <= limit) & flow_ok
     if log_multipliers is None or vectors.shape[1] < 2:
         return column, ok
-    first, second = (jnp.asarray(i) for i in np.triu_indices(vectors.shape[1], 1))
-    a, b = unit_vectors[:, first], unit_vectors[:, second]
-    # Least-squares projection of the flow onto span(a, b) per pair.
-    ab = jnp.sum(jnp.conj(a) * b, axis=0)
-    gram_det = 1 - jnp.abs(ab) ** 2
-    fa, fb = overlap[first], overlap[second]
-    safe_det = jnp.where(gram_det > limit, gram_det, 1)
-    ca = (fa - ab * fb) / safe_det
-    cb = (fb - jnp.conj(ab) * fa) / safe_det
-    plane_residual = jnp.linalg.norm(unit_flow[:, None] - a * ca - b * cb, axis=0)
+    # Projection of the unit flow onto span(u_i, u_j) for every pair, from
+    # the Gram matrix and the overlaps alone (O(n^2) memory, review R1-04):
+    # |P f|^2 = (|f_i|^2 + |f_j|^2 - 2 Re(conj(f_i) g_ij f_j)) / (1 - |g_ij|^2).
+    m = vectors.shape[1]
+    safe_vectors = jnp.where(usable[None, :], unit_vectors, 0)
+    gram = jnp.conj(safe_vectors).T @ safe_vectors
+    gram_det = 1 - jnp.abs(gram) ** 2
+    fi, fj = overlap[:, None], overlap[None, :]
+    projected = ((jnp.abs(fi) ** 2 + jnp.abs(fj) ** 2 - 2 * jnp.real(jnp.conj(fi) * gram * fj))
+                 / jnp.where(gram_det > limit, gram_det, 1))
+    plane_residual = jnp.sqrt(jnp.maximum(1 - projected, 0))
     at_one = jnp.abs(log_multipliers) <= limit
-    plane_ok = (usable[first] & usable[second] & (gram_det > limit)
-                & at_one[first] & at_one[second] & jnp.isfinite(plane_residual))
+    upper = jnp.asarray(np.triu(np.ones((m, m), bool), 1))
+    plane_ok = (upper & usable[:, None] & usable[None, :] & (gram_det > limit)
+                & at_one[:, None] & at_one[None, :] & jnp.isfinite(plane_residual))
     plane_residual = jnp.where(plane_ok, plane_residual, jnp.inf)
     pair = jnp.argmin(plane_residual)
-    nearer = jnp.where(jnp.abs(log_multipliers[first[pair]]) <= jnp.abs(log_multipliers[second[pair]]),
-                       first[pair], second[pair])
-    use_pair = ~ok & (plane_residual[pair] <= limit) & flow_ok
+    i, j = pair // m, pair % m
+    nearer = jnp.where(jnp.abs(log_multipliers[i]) <= jnp.abs(log_multipliers[j]), i, j)
+    use_pair = ~ok & (plane_residual.reshape(-1)[pair] <= limit) & flow_ok
     return jnp.where(use_pair, nearer, column), ok | use_pair
 
 

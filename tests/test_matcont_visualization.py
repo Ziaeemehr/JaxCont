@@ -830,3 +830,58 @@ def test_gallery_example_runs_from_outside_repository_root(
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert list((tmp_path / "generated").glob("*.png"))
     assert not (tmp_path / "images").exists()
+
+
+def test_registered_torbpc_renderer_reports_a_failure(tmp_path, monkeypatch):
+    """Review R1-03: the FAIL rendering stays covered in both precisions.
+    A controlled result (MatCont's own series standing in for JaxCont, with
+    no located PD and an out-of-budget multiplier) needs no orbit solve."""
+    from examples.validation.cases.python_cases import CaseResult
+    from examples.validation.cases.python_cases import periodic
+    from examples.validation.visualize import render_periodic_overlay
+
+    def failing(reference_dir):
+        reference = periodic.load_torbpc_reference(reference_dir)
+        rows = reference["branch"]
+        parameters = np.array([float(r["parameter"]) for r in rows])
+        periods = np.array([float(r["period"]) for r in rows])
+        orbits = np.stack([np.array([[float(r[f"state_{j}_{side}"]) for j in range(3)]
+                                     for side in ("min", "max")]) for r in rows])
+        by_point = {}
+        for m in reference["multiplier_rows"]:
+            if m["event_type"].strip() == "BRANCH":
+                by_point.setdefault(int(m["point"]), []).append(complex(float(m["real"]), float(m["imag"])))
+        multipliers = np.array([by_point[int(r["point"])][:3] for r in rows])
+        events = {e["event_type"].strip(): float(e["parameter"]) for e in reference["events"]}
+        checks = {
+            "jaxcont_lpc_parameter_error": 0.0, "jaxcont_ns_parameter_error": 0.0,
+            "jaxcont_pd_parameter_error": 0.0, "jaxcont_max_period_error": 0.0,
+            "jaxcont_max_extrema_error": 0.0, "jaxcont_max_multiplier_error": 0.04,
+            "jaxcont_critical_multipliers_match": False,
+            "jaxcont_missing_event_types": ["PD"], "all_comparisons_pass": False,
+        }
+        return CaseResult(
+            case_id="MC-LC-002", checks=checks,
+            observations={"jaxcont_events": [{"kind": "fold", "parameter": events["LPC"]},
+                                             {"kind": "neimark_sacker", "parameter": events["NS"]}],
+                          "jaxcont_located_event_types": ["LPC", "NS"]},
+            artifacts={"branch": rows, "events": reference["events"],
+                       "multipliers": reference["multiplier_rows"],
+                       "jaxcont_parameters": parameters,
+                       "jaxcont_states": np.c_[np.zeros((len(rows), 1)), periods],
+                       "jaxcont_orbits": orbits, "jaxcont_multipliers": multipliers},
+        )
+
+    monkeypatch.setattr(periodic, "run_torbpc_cycle", failing)
+    figure = render_periodic_overlay("MC-LC-002", output_path=tmp_path / "torbpc.png")
+    summary = " ".join(text.get_text() for text in figure.texts)
+    assert "Systematic comparison: FAIL" in summary
+    assert "missing correctly located event types PD" in summary
+    assert "multiplier 4.00e-02" in summary
+    assert (tmp_path / "torbpc.png").is_file()
+    labels = {label for axis in figure.axes for label in axis.get_legend_handles_labels()[1]}
+    assert {"JaxCont detected LPC", "JaxCont detected NS"} <= labels
+    assert "JaxCont detected PD" not in labels
+    # Without a spectrum at the located event the nearest sample is drawn,
+    # and the label says so.
+    assert {"JaxCont near LPC", "JaxCont near NS", "JaxCont near PD"} <= labels

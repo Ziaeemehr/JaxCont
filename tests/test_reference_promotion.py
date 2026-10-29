@@ -243,8 +243,9 @@ def test_pending_item_delegated_to_a_passing_run_is_information_only(monkeypatch
     (0.98, 0.006, "FAIL"),
 ])
 def test_floquet_multipliers_compare_relative_to_their_size(level, shift, verdict):
-    """multiplier_atol is absolute up to |mu| = 1 and relative above: a large
-    multiplier exp(lambda*T) carries an error proportional to its size."""
+    """A declared multiplier_rtol is absolute up to |mu| = 1 and relative
+    above: a large multiplier exp(lambda*T) carries an error proportional to
+    its size. Without the declaration multiplier_atol stays absolute."""
     from examples.validation.promotion_metrics import _pairwise
 
     def curve(samples, offset):
@@ -257,6 +258,10 @@ def test_floquet_multipliers_compare_relative_to_their_size(level, shift, verdic
     selected = case()
     selected.update(comparison_window=[0, 1], expected_events=[],
                     tolerances={"parameter_atol": 1e-4, "state_atol": 1e-4,
-                                "multiplier_atol": 5e-3, "residual_atol": 1e-7})
+                                "multiplier_atol": 5e-3, "multiplier_rtol": 5e-3, "residual_atol": 1e-7})
     metrics = _pairwise(selected, curve(np.linspace(0, 1, 5), 0), curve(np.linspace(0, 1, 9), shift))
     assert metrics["sheet_0.spectrum"]["verdict"] == verdict
+    # Review R1-02: the absolute budget alone is never read as relative.
+    del selected["tolerances"]["multiplier_rtol"]
+    absolute = _pairwise(selected, curve(np.linspace(0, 1, 5), 0), curve(np.linspace(0, 1, 9), shift))
+    assert absolute["sheet_0.spectrum"]["verdict"] == ("PASS" if shift < 5e-3 else "FAIL")

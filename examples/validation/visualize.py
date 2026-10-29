@@ -504,10 +504,11 @@ def plot_torbpc_overlay(
         )
         # The case compares the spectrum at JaxCont's located event; the
         # nearest branch sample stands in only for a missing event.
-        located = event_type in result.observations.get("jaxcont_located_event_types", ())
         estimate = result.observations.get("jaxcont_spectrum_estimates", {}).get(event_type)
+        located = (event_type in result.observations.get("jaxcont_located_event_types", ())
+                   and estimate is not None)
         jax_spectrum = (np.asarray([complex(re, im) for re, im in estimate])
-                        if located and estimate is not None else jax_multipliers[nearest_index])
+                        if located else jax_multipliers[nearest_index])
         event_index = int(event["event_index"])
         matcont_spectrum = np.asarray(
             [

@@ -143,6 +143,28 @@ def test_checked_root_still_rejects_a_non_root():
     assert not bool(converged)
 
 
+def test_checked_root_floor_is_per_equation():
+    """Review A-01: a huge derivative in one satisfied equation must not relax
+    another. x[1]**2 + 1 = 0 has no real root, whatever theta * x[0] does."""
+    import jax
+    from jaxcont.solvers.implicit import differentiable_root_checked
+    theta = 1e16 if jnp.asarray(0.).dtype == jnp.float64 else 1e8
+    G = lambda x, t: jnp.array([t * x[0], x[1] ** 2 + 1])
+    for solve in (differentiable_root_checked, jax.jit(differentiable_root_checked, static_argnums=0)):
+        _, converged = solve(G, jnp.array([0., .5]), jnp.asarray(theta))
+        assert not bool(converged)
+
+
+def test_checked_root_floor_still_accepts_a_badly_scaled_equation_beside_a_regular_one():
+    """The per-equation floor keeps the L2-F2 behaviour for the scaled equation."""
+    from jaxcont.solvers.implicit import differentiable_root_checked
+    G1, root = _scaled_cube_root()
+    G = lambda x, t: jnp.array([G1(x[:1], t)[0], x[1] - 0.5])
+    x, converged = differentiable_root_checked(G, jnp.array([1.5, 0.]), jnp.asarray(1e4))
+    assert bool(converged)
+    assert abs(float(x[0]) - root) <= 4 * float(jnp.finfo(x.dtype).eps) * root
+
+
 def test_checked_root_keeps_an_explicit_tolerance_strict():
     """A caller-chosen tol below the floor is not silently relaxed."""
     from jaxcont.solvers.implicit import differentiable_root_checked
