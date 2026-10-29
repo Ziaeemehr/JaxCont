@@ -167,7 +167,39 @@ Slice a batched result pytree before refining outside the trace::
 Use the corresponding unbatched problem and the same solver bundle as detection.
 Refinement applies the problem's ``step_update`` at each bracket's left point,
 then validates locality and deduplicates adjacent roots. Candidates alone do
-not certify a bifurcation. Bothside continuation remains eager only.
+not certify a bifurcation.
+
+Both directions from one seed
+-----------------------------
+
+``ContinuationPar(bothside=True)`` continues from ``problem.p0`` toward both
+ends of ``p_span`` in one call: one leg toward each bound, each with its own
+``max_steps`` / ``max_attempts`` budget. The legs are stitched into one branch
+(backward leg reversed, the shared seed once, then the forward leg), and
+events are detected once on that assembled branch, so an event at the seed is
+reported once. A leg whose bound equals ``p0`` is skipped; a zero-length
+``p_span`` raises ``ValueError``. ``result.status`` reports the first leg that
+did not reach its end. ``bothside`` is eager only: under ``jax.jit`` or
+``jax.vmap`` it raises ``NotImplementedError``; run one direction per traced
+call instead.
+
+.. code-block:: python
+
+   import jax.numpy as jnp
+   import jaxcont as jc
+
+
+   def rotation(u, p, args):
+       x, y = u
+       return jnp.array([p * x - y, x + p * y])
+
+
+   both = jc.continuation(
+       jc.bif_problem(rotation, u0=jnp.zeros(2), p0=0.0), p_span=(-0.5, 0.5),
+       settings=jc.ContinuationPar(bothside=True, ds=0.02, max_steps=40),
+       events=[jc.Hopf()],
+   )
+   assert len(both.events) == 1
 
 Detection masks and assignment permutations have stopped gradients; derivatives
 at a crossing or spectral degeneracy are not promised. Smooth branch outputs

@@ -65,14 +65,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty legs. Collocation meshes require positive `ntst` and raise `ValueError`
   for zero intervals.
 - Event deduplication requires adjacent brackets and refined state/parameter
-  agreement within dtype-derived refinement accuracy. Bothside stitching drops
-  a seed-touching backward event only when a matching forward event exists.
+  agreement within dtype-derived refinement accuracy.
 - PD/NS refinement rejects unfinished or unresolved event brackets with
   `reason="not_converged"`. The default event refinement budget is now 50
   iterations to resolve float64 brackets. Direct refinement requires `PeriodicArgs` and
   raises `ValueError` when it is missing.
-- Shared-seed events in `bothside` continuation belong to the forward leg.
-  Spectral scans preserve distinct crossing modes within a single bracket;
+- `bothside` continuation detects events once, on the assembled branch
+  (backward leg reversed, then the forward leg), so an event at the shared
+  seed is reported once. Spectral scans preserve distinct crossing modes
+  within a single bracket;
   Hopf refinement follows each candidate's mode.
 - Both continuation engines report `nonfinite` for nonfinite corrector
   trials while retaining only finite accepted branch points.
