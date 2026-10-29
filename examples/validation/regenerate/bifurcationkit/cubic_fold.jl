@@ -15,7 +15,15 @@ end
 for (i,sp) in enumerate(br.specialpoint)
     normalize_kind(sp.type)=="LP" || continue
     row=equilibrium_row(sp.x,(p=sp.param,),F,J;point=argmin([abs(r["parameter"]-sp.param) for r in rows])-1,coordinate=:p)
-    push!(events,event_row(row,"LP","e$i";bracket=sp.interval));append!(spectra,spectrum_rows(row,J,sp.x,(p=sp.param,);event="e$i"))
+    e=event_row(row,"LP","e$i";bracket=sp.interval)
+    # BK's native fold normal form x' = a01*dp + b20/2*x^2 + ... with
+    # |zeta| = 1 and <zeta*, zeta> = 1, the MatCont normalization of q and p;
+    # MatCont's coefficient a = <p, B(q,q)>/2 is therefore b20/2 (analytic
+    # cubic: +1 at x=-1, -1 at x=+1). The native value is kept alongside.
+    nf=get_normal_form(br,i;verbose=false)
+    e["fold_coefficient"]=nf.nf.b20/2;e["native_b20"]=nf.nf.b20
+    e["fold_coefficient_convention"]="MatCont a = BK b20/2"
+    push!(events,e);append!(spectra,spectrum_rows(row,J,sp.x,(p=sp.param,);event="e$i"))
 end
 println("Cubic special types: ",[(s.type,s.param) for s in br.specialpoint]); length(events)==2 || error("Full cubic branch must contain two folds; points=$(length(rows))")
 export_bundle(case,output,rows,events,spectra;driver=@__FILE__,parameter_order=["p"],controls=Dict("newton_atol"=>1e-12,"ds"=>.01,"ds_max"=>.05,"max_steps"=>300,"bounds"=>[-1.,1.]),seeds=Dict("state"=>seed,"p"=>-1.))
