@@ -50,7 +50,10 @@ under "Validation gallery" show the figures and tables for each system.
 - **UNSUPPORTED**: a MatCont capability JaxCont does not implement; listed so
   the boundary of the validation is explicit.
 
-## Known limitation
+## Known limitations
+
+Near a Hopf seed, periodic branches can report spurious folds at very small
+amplitude; start periodic continuation from a seed of finite amplitude.
 
 `torbpc.cycle-lpc-pd-ns` fails: JaxCont locates the period-doubling point
 but does not label it PD, and its largest critical-multiplier error (about

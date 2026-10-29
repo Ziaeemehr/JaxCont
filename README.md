@@ -33,18 +33,29 @@ The current surface supports equilibrium and periodic-orbit continuation,
 their principal codimension-one events, direct codimension-two point
 solvers, two-parameter continuation (fold/Hopf curves with their own
 codimension-two events), and infinitesimal phase response curves (iPRC,
-`prc_curve`, cross-validated against MatCont) plus their parameter-derivative
-sensitivity (dPRC, `dprc_curve`, validated independently -- MatCont does not
-compute this quantity). Equilibrium branch switching (`BP`, `branch_switch`)
-and period-doubling switching (`branch_switch_pd`) are shipped. General
-connecting-orbit/BVP workflows remain future work.
+`prc_curve`) plus their parameter-derivative sensitivity (dPRC, `dprc_curve`,
+validated independently -- MatCont does not compute this quantity).
+Equilibrium branch switching (`BP`, `branch_switch`) and period-doubling
+switching (`branch_switch_pd`) are shipped. General connecting-orbit/BVP
+workflows remain future work.
+
+Validation is per case against committed MatCont 7.6 and BifurcationKit 0.8.8
+references; the [validation page](docs/source/validation.md) lists every case
+with its status. Known limitations:
+
+- The torBPC limit-cycle case fails: fold-of-cycles, period-doubling and
+  Neimark-Sacker detection on periodic branches are experimental.
+- Near a Hopf seed, periodic branches can report spurious folds at very small
+  amplitude.
+- The iPRC agrees with MatCont's historical PRC output; its current
+  reference evidence is PENDING.
 
 <p align="center">
   <img src="docs/images/matcont_cubic_overlay.png" width="500" alt="Cubic S-curve: JaxCont vs MatCont 7.6, folds overlaid">
 </p>
 
 <p align="center"><sub>JaxCont's branch (blue) traced independently over MatCont 7.6's reference (orange) —
-more cases, including known limitations, in the <a href="examples/validation/README.md">MatCont validation suite</a>.</sub></p>
+more cases, including known limitations, on the <a href="docs/source/validation.md">validation page</a>.</sub></p>
 
 ## Installation
 
@@ -116,7 +127,9 @@ plot_eigenvalues(result, shade_stability=True)
   differentiable bifurcation analysis
 - [Comparison gallery](https://jaxcont.readthedocs.io/en/latest/auto_validation/index.html)
 - [`examples/validation`](examples/validation/README.md) — reproducible analytic,
-  MATLAB/MatCont and JaxCont validation cases
+  MatCont and BifurcationKit validation cases. The pages and tests read the
+  committed references; regenerating them is opt-in and needs `MATLAB_BIN` and
+  `MATCONT_ROOT` (MatCont) or `JULIA_BIN` (BifurcationKit).
 
 ## Development
 
