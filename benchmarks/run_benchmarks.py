@@ -16,6 +16,7 @@ import json
 import os
 import platform
 import queue
+import random
 import statistics
 import subprocess
 import sys
@@ -29,10 +30,12 @@ from benchmarks.contracts import load_cases
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "benchmarks" / "results" / "raw"
-WORKERS = {"jaxcont": "benchmarks.adapters.jaxcont"}
-# MATLAB and Julia workers follow the same READY/JSON protocol; until they
-# exist those tools are recorded as PENDING, never timed with other controls.
-PENDING_TOOLS = {"matcont": "MATLAB worker not implemented", "bifurcationkit": "Julia worker not implemented"}
+WORKERS = {"jaxcont": "benchmarks.adapters.jaxcont", "matcont": "benchmarks.adapters.matcont",
+           "bifurcationkit": "benchmarks.adapters.bifurcationkit"}
+# Workers follow one READY/JSON protocol. A tool without a worker, a workload
+# a worker does not cover, or a missing MATLAB/Julia install is PENDING,
+# never timed with other controls.
+PENDING_TOOLS: dict[str, str] = {}
 
 
 def _environment():
@@ -41,6 +44,15 @@ def _environment():
                MKL_NUM_THREADS="1", XLA_FLAGS="--xla_cpu_multi_thread_eigen=false")
     env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
     return env
+
+
+def _cpu():
+    """CPU model and logical core count: the named machine, without a hostname."""
+    try:
+        model = next(line.split(":", 1)[1].strip() for line in open("/proc/cpuinfo") if line.startswith("model name"))
+    except (OSError, StopIteration):
+        model = platform.processor() or "unknown"
+    return {"model": model, "logical_cores": os.cpu_count()}
 
 
 def run_worker(tool, benchmark_id, mode, timeout, extra=(), clock=time.perf_counter):
@@ -96,7 +108,7 @@ def benchmark(benchmark_id, tool):
     (case,) = [c for c in load_cases() if c.benchmark_id == benchmark_id]
     sampling = case.sampling
     record = {"benchmark_id": benchmark_id, "canonical_id": case.canonical_id, "tool": tool,
-              "generated_utc": datetime.now(timezone.utc).isoformat(), "platform": platform.platform(),
+              "generated_utc": datetime.now(timezone.utc).isoformat(), "platform": platform.platform(), "cpu": _cpu(),
               "python": sys.version.split()[0], "timer": "time.perf_counter", "accuracy_limits": dict(case.accuracy_limits)}
     if tool in PENDING_TOOLS:
         return record | {"status": "PENDING", "reason": PENDING_TOOLS[tool]}
@@ -106,7 +118,8 @@ def benchmark(benchmark_id, tool):
             startup, (row,) = run_worker(tool, benchmark_id, "first_call", sampling.timeout_seconds)
             startups.append(startup)
             first_calls.append(row["seconds"])
-            accuracy, controls = row["accuracy"], row["controls"]
+            accuracy, controls, versions = row["accuracy"], row["controls"], row.get("versions")
+            first_points = row.get("points")
         _, warm = run_worker(tool, benchmark_id, "warm", sampling.timeout_seconds,
                              ("--repetitions", str(sampling.warm_repetitions), "--warmups", str(sampling.untimed_warmups)))
     except NotImplementedError as exc:
@@ -119,8 +132,13 @@ def benchmark(benchmark_id, tool):
         # A failure is a recorded outcome, never a timing and never a crash of the sweep.
         return record | {"status": "FAILED", "reason": str(exc)}
     warm_seconds = [row["seconds"] for row in warm]
+    # Every timed repetition must do the same work as the first call.
+    points = {"first_call": first_points, "warm": sorted({row.get("points") for row in warm}, key=str)}
     record |= {
-        "status": "MEASURED", "resolved_controls": controls, "accuracy": accuracy,
+        "status": "MEASURED", "points": points, "resolved_controls": controls, "accuracy": accuracy, "versions": versions,
+        "sampling": {"first_calls": sampling.first_calls, "warm_repetitions": sampling.warm_repetitions,
+                     "untimed_warmups": sampling.untimed_warmups, "timeout_seconds": sampling.timeout_seconds},
+        "timer_resolution": time.get_clock_info("perf_counter").resolution,
         "eligible_for_cross_tool": eligible({"accuracy": accuracy}, case.accuracy_limits),
         "startup": summarize(startups), "first_call": summarize(first_calls), "warm": summarize(warm_seconds),
         # Labelled as an estimate: first call minus warm also includes Python-side work.
@@ -135,11 +153,16 @@ def main(argv=None):
     parser.add_argument("--case", action="append", required=True)
     parser.add_argument("--tool", action="append", choices=("jaxcont", "matcont", "bifurcationkit"), required=True)
     parser.add_argument("--output-dir", type=Path, default=RAW)
+    parser.add_argument("--seed", type=int, default=0, help="seed for the randomized tool order")
     args = parser.parse_args(argv)
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    order = random.Random(args.seed)
     for benchmark_id in args.case:
-        for tool in args.tool:
-            record = benchmark(benchmark_id, tool)
+        # Tools run sequentially in a randomized, recorded order (no fixed first-runner advantage).
+        tools = order.sample(args.tool, len(args.tool))
+        for position, tool in enumerate(tools):
+            record = benchmark(benchmark_id, tool) | {"tool_order": tools, "order_seed": args.seed,
+                                                      "order_position": position}
             name = f"{benchmark_id.replace('/', '__')}__{tool}.json"
             (args.output_dir / name).write_text(json.dumps(record, indent=2) + "\n")
             print(f"{record['status']:9s} {benchmark_id} {tool}")

@@ -41,6 +41,7 @@ differentiable fold locations.
    auto_tutorials/index
    auto_validation/index
    validation
+   benchmarks
    transformations
    api/index
 

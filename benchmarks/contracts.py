@@ -46,7 +46,7 @@ class ResolvedControls:
     adaptive: bool
     max_steps: int
     direction: int
-    bounds: tuple[float, float]
+    bounds: Optional[tuple[float, float]]  # None: the tool cannot stop at parameter bounds
     state_weight: float | str  # a number, or the target rule "1/n_state" before resolution
     parameter_weight: float
     stability_every_step: bool
@@ -213,5 +213,5 @@ def load_cases(path: Path = CASES_FILE) -> list[BenchmarkCase]:
 def controls_record(controls: ResolvedControls) -> dict:
     """JSON-ready resolved controls, as stored per tool in each raw record."""
     record = asdict(controls)
-    record["bounds"] = list(record["bounds"])
+    record["bounds"] = None if record["bounds"] is None else list(record["bounds"])
     return record

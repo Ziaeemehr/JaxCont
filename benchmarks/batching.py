@@ -27,7 +27,7 @@ import sys
 import time
 from pathlib import Path
 
-from benchmarks.contracts import controls_record, load_cases
+from benchmarks.contracts import TOOLS, controls_record, load_cases
 from benchmarks.run_benchmarks import PENDING_TOOLS, RAW, ROOT, _environment
 
 BATCH_SIZES = (1, 8, 32, 128)
@@ -156,9 +156,10 @@ def measure(case, B, strategy, tool="jaxcont", clock=time.perf_counter):
               "success_fraction": None, "throughput": None,
               "peak_memory": {"bytes": None, "source": None, "reason": "row not measured"},
               "eligible_for_cross_tool": False}
-    reason = PENDING_TOOLS.get(tool)
-    if tool != "jaxcont" and reason is None:
+    if tool not in TOOLS:
         raise ValueError(f"unknown tool {tool!r}")
+    # Batched external strategies (e.g. MATLAB parfor, Julia threads) are not implemented.
+    reason = None if tool == "jaxcont" else PENDING_TOOLS.get(tool, f"no batched strategy implemented for {tool}")
     if reason:
         return record | {"status": "PENDING", "reason": reason}
     try:
@@ -217,7 +218,7 @@ def main(argv=None):
     parser.add_argument("--case", required=True, choices=[c.benchmark_id for c in load_cases()])
     parser.add_argument("--batch", action="append", type=int, choices=BATCH_SIZES)
     parser.add_argument("--strategy", action="append", choices=STRATEGIES)
-    parser.add_argument("--tool", action="append", choices=("jaxcont", *PENDING_TOOLS))
+    parser.add_argument("--tool", action="append", choices=TOOLS)
     parser.add_argument("--output-dir", type=Path, default=RAW)
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)

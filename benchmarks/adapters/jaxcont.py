@@ -12,24 +12,17 @@ so a supervisor can time startup externally.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import sys
 import time
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
+from benchmarks.accuracy import measure
 from benchmarks.contracts import ResolvedControls, StageTiming, controls_record, load_cases
 
-ROOT = Path(__file__).resolve().parents[2]
-REFERENCE = ROOT / "examples" / "validation" / "reference"
-EQUILIBRIUM = {
-    "cubic.eq-fold": ("cubic", "matcont/cubic.eq-fold"),
-    "lorenz84.eq-f": ("lorenz84", "matcont/lorenz84.eq-f"),
-}
 
 
 def _system(canonical_id):
@@ -94,37 +87,20 @@ def synchronize(result):
 
 
 def accuracy(case, result) -> dict:
-    """Errors against the committed MatCont bundle, computed here, never self-reported.
+    """Errors against the shared reference (``benchmarks.accuracy``), never self-reported.
 
-    ``parameter_atol``: largest distance between matched event parameters
-    (one-to-one within type, nearest first); ``residual_atol``: largest
-    equilibrium residual on the fresh branch. Other registry metrics are
-    ``None`` (not measured), which keeps the row out of cross-tool tables.
+    ``residual_atol`` is the largest equilibrium residual on the fresh branch.
     """
-    system, bundle = EQUILIBRIUM[case.canonical_id]
-    with open(REFERENCE / system / bundle / "events.csv", newline="") as handle:
-        rows = list(csv.DictReader(handle))
-    reference = {}
-    for row in rows:
-        reference.setdefault(row.get("event_type") or row.get("kind"), []).append(float(row["parameter"]))
-    fresh = {}
+    events, states = {}, {}
     for event in result.events:
         kind = {"fold": "LP", "hopf": "H"}.get(event.kind)
         if kind:
-            fresh.setdefault(kind, []).append(float(event.p))
-    errors = []
-    for kind, values in reference.items():
-        found = sorted(fresh.get(kind, []))
-        if len(found) != len(values):
-            return {metric: None for metric in case.accuracy_limits} | {"missing_events": kind}
-        errors += [abs(a - b) for a, b in zip(sorted(values), found)]
+            events.setdefault(kind, []).append(float(event.p))
+            states.setdefault(kind, []).append(float(jnp.ravel(event.u)[0]))
     rhs, _, _, args = _system(case.canonical_id)
     branch = result.branch
     residual = max(float(jnp.max(jnp.abs(rhs(u, p, args)))) for u, p in zip(branch.states, branch.params))
-    measured = {metric: None for metric in case.accuracy_limits}
-    measured["parameter_atol"] = max(errors) if errors else None
-    measured["residual_atol"] = residual
-    return measured
+    return measure(case, events, residual, states)
 
 
 def _case(benchmark_id):
@@ -133,6 +109,8 @@ def _case(benchmark_id):
 
 
 def worker(benchmark_id, mode, repetitions, warmups):
+    import jaxcont as jc
+
     case = _case(benchmark_id)
     problem, settings, solve = build(case)
     print("READY", flush=True)
@@ -140,16 +118,20 @@ def worker(benchmark_id, mode, repetitions, warmups):
         start = time.perf_counter()
         result = synchronize(solve())
         timing = StageTiming("first_call", time.perf_counter() - start)
-        print(json.dumps({"stage": timing.stage, "seconds": timing.seconds,
+        print(json.dumps({"stage": timing.stage, "seconds": timing.seconds, "points": int(result.branch.n_valid),
                           "controls": controls_record(resolved_controls(case, problem, settings)),
-                          "accuracy": accuracy(case, result)}), flush=True)
+                          "accuracy": accuracy(case, result),
+                          "versions": {"jaxcont": jc.__version__, "jax": jax.__version__,
+                                       "x64": bool(jax.config.x64_enabled)}}), flush=True)
         return
     for _ in range(warmups):
         synchronize(solve())
     for _ in range(repetitions):
         start = time.perf_counter()
-        synchronize(solve())
-        print(json.dumps({"stage": "warm", "seconds": time.perf_counter() - start}), flush=True)
+        result = synchronize(solve())
+        seconds = time.perf_counter() - start
+        # The point count shows every repetition did the same work.
+        print(json.dumps({"stage": "warm", "seconds": seconds, "points": int(result.branch.n_valid)}), flush=True)
 
 
 if __name__ == "__main__":

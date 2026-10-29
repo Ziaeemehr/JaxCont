@@ -72,7 +72,8 @@ def test_failed_lane_counts_in_denominator():
     assert record["valid_points"] == [2, 1, 3, 0]
     assert record["lanes_total"] == 4 and record["lanes_ok"] == 1
     assert record["success_fraction"] == 0.25
-    assert record["throughput"] == pytest.approx(2 / 3)
+    # Measured absolute error: x32=0, x64=0; this is Python float division.
+    assert record["throughput"] == pytest.approx(2 / 3, rel=8 * np.finfo(float).eps, abs=0)
 
 
 @pytest.mark.parametrize("tool,case_id", [("matcont", "cubic.eq-fold/fixed"),

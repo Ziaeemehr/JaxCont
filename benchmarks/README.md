@@ -30,6 +30,36 @@ Fixed-step rows come first; adaptive rows are a separate experiment.
 Measuring MATLAB and Julia timings is opt-in. Reviewed records are committed
 to `results/reviewed/`, and the docs render only those records.
 
+## Running
+
+```sh
+export MATLAB_BIN=... MATCONT_ROOT=... JULIA_BIN=...   # opt-in external tools
+python3 -m benchmarks.run_benchmarks --case cubic.eq-fold/fixed \
+  --tool jaxcont --tool matcont --tool bifurcationkit < /dev/null
+python3 -m benchmarks.reporting --check benchmarks/results/raw
+python3 -m benchmarks.reporting --markdown benchmarks/results/raw
+```
+
+The supervisor starts one fresh worker per first call and one for the warm
+repetitions, and times startup from launch to the worker's `READY` line. Tools
+run in a randomized order recorded with its seed. Threads are pinned to one
+(`OMP_NUM_THREADS=1` and XLA flags for JAX, `-singleCompThread` for MATLAB,
+`--threads=1` for Julia). A worker that hangs, fails or times out is recorded
+as `FAILED`; a tool, workload or install that is not available is `PENDING`.
+
+| Tool | Worker | Workloads | Notes |
+|---|---|---|---|
+| JaxCont | `adapters/jaxcont.py` | cubic, Lorenz-84 equilibria | periodic workloads PENDING |
+| MatCont 7.6 | `adapters/matcont.py` + `matcont_worker.m` | cubic | no parameter bounds (stops at `MaxNumPoints`); Newton bounds both residual and step |
+| BifurcationKit 0.8.8 | `adapters/bifurcationkit.py` + `bifurcationkit_worker.jl` | cubic | `PALC(θ=0.5)`, `ds` scaled by √0.5 to the contract metric; reports the cubic folds as `bp` |
+
+Accuracy is computed by `accuracy.py` from each worker's raw branch and
+events against one shared reference per workload (analytic folds for cubic,
+the committed MatCont bundle otherwise), never from the tool's own report.
+The resolved controls of the three tools differ in what the Newton tolerance
+bounds (and MatCont in bounds), so the cubic rows are reported per tool
+without a cross-tool table.
+
 ## Batched throughput
 
 Run `python -m benchmarks.batching --case cubic.eq-fold/fixed --batch 1 --batch 8`

@@ -1,10 +1,12 @@
 """Benchmark harness mechanics with fakes (no real timing assertions)."""
 
 import io
+import json
 import threading
 import types
 
 import jax.numpy as jnp
+import numpy as np
 
 import pytest
 
@@ -56,7 +58,8 @@ def test_first_call_uses_fresh_process(monkeypatch):
         startup, records = harness.run_worker("jaxcont", "x", "first_call", 60, clock=_clock(0.0, 0.1, 0.4, 0.5))
         assert records == [{"seconds": 0.5, "accuracy": {}, "controls": {}}]
     assert _FakeProcess.launched == 2
-    assert startup == pytest.approx(0.4)  # launch -> READY, timed outside the worker
+    # Measured absolute error: x32=0, x64=0; launch -> READY uses Python floats.
+    assert startup == pytest.approx(0.4, rel=8 * np.finfo(float).eps, abs=0)
 
 
 def test_silent_hung_worker_times_out(monkeypatch):
@@ -93,7 +96,7 @@ def test_warm_keeps_callable_identity_and_resets_seed(monkeypatch, capsys):
 
         def solve():
             seeds.append((id(solve), float(problem.u0[0])))
-            return {"branch": jnp.zeros(3)}
+            return types.SimpleNamespace(branch=types.SimpleNamespace(n_valid=3))
 
         builds.append(solve)
         return problem, None, solve
@@ -105,6 +108,7 @@ def test_warm_keeps_callable_identity_and_resets_seed(monkeypatch, capsys):
     assert lines[0] == "READY" and len(lines) == 1 + 4
     assert len(builds) == 1
     assert len(seeds) == 6 and len(set(seeds)) == 1
+    assert all(json.loads(line)["points"] == 3 for line in lines[1:])
 
 
 def test_failed_accuracy_row_is_ineligible():
@@ -115,9 +119,36 @@ def test_failed_accuracy_row_is_ineligible():
     assert not harness.eligible({"accuracy": {"parameter_atol": 1e-6, "residual_atol": None}}, limits)
 
 
-def test_external_tools_without_workers_are_pending_not_timed():
+def test_missing_julia_is_pending_not_timed(monkeypatch):
+    monkeypatch.setenv("JULIA_BIN", "/nonexistent/julia")
+    record = harness.benchmark("cubic.eq-fold/fixed", "bifurcationkit")
+    assert record["status"] == "PENDING" and "Julia" in record["reason"] and "first_call" not in record
+
+
+def test_bifurcationkit_controls_are_converted_to_the_contract_metric():
+    """PALC(θ=0.5) halves the squared norm; the worker scales ds by sqrt(0.5), so contract units match."""
+    import benchmarks.adapters.bifurcationkit as bk
+    from benchmarks.contracts import compare_controls, load_cases
+    from benchmarks.adapters.jaxcont import build, resolved_controls
+    (case,) = [c for c in load_cases() if c.benchmark_id == "cubic.eq-fold/fixed"]
+    problem, settings, _ = build(case)
+    result = compare_controls({"jaxcont": resolved_controls(case, problem, settings),
+                               "bifurcationkit": bk.resolved_controls(case)})
+    # The step metric matches. Neither tool exposes an event atol (both None);
+    # what the Newton tolerance bounds differs, so the row stays non-comparable.
+    assert [m.field for m in result.mismatches] == ["newton_criterion"] and not result.comparable
+
+
+def test_missing_matlab_is_pending_not_timed(monkeypatch):
+    monkeypatch.setenv("MATLAB_BIN", "/nonexistent/matlab")
     record = harness.benchmark("cubic.eq-fold/fixed", "matcont")
-    assert record["status"] == "PENDING" and "first_call" not in record
+    assert record["status"] == "PENDING" and "MATLAB" in record["reason"] and "first_call" not in record
+
+
+def test_matcont_worker_rejects_uncovered_workloads():
+    import benchmarks.adapters.matcont as matcont
+    with pytest.raises(NotImplementedError, match="cubic.eq-fold only"):
+        matcont.worker("lorenz84.eq-f/fixed", "first_call", 1, 0)
 
 
 def test_summary_keeps_every_sample():
