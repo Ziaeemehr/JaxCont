@@ -43,8 +43,6 @@ Validation is per case against committed MatCont 7.6 and BifurcationKit 0.8.8
 references; the [validation page](docs/source/validation.md) lists every case
 with its status. Known limitations:
 
-- The torBPC limit-cycle case fails: fold-of-cycles, period-doubling and
-  Neimark-Sacker detection on periodic branches are experimental.
 - Near a Hopf seed, periodic branches can report spurious folds at very small
   amplitude.
 - The iPRC agrees with MatCont's historical PRC output; its current

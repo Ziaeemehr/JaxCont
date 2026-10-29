@@ -99,7 +99,8 @@ def test_registered_radial_cycle_renders_three_panel_pass_figure(tmp_path):
     )
 
 
-def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
+@pytest.mark.float64_only  # torBPC's Newton tolerance 1e-8
+def test_registered_torbpc_renderer_reports_pass(tmp_path):
     from examples.validation.visualize import render_periodic_overlay
 
     figure = render_periodic_overlay(
@@ -107,10 +108,10 @@ def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
     )
     summary = " ".join(text.get_text() for text in figure.texts)
 
-    assert "Systematic comparison: FAIL (known limitation)" in summary
+    assert "Systematic comparison: PASS" in summary
     assert "multiplier" in summary
-    assert "critical-signature proxy parameter discrepancies" in summary
-    assert "missing correctly located event types PD" in summary
+    assert "event parameter errors" in summary
+    assert "missing correctly located event types none" in summary
     assert "event errors" not in summary
     assert (tmp_path / "torbpc.png").is_file()
     assert len(figure.axes) == 3
@@ -123,9 +124,9 @@ def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
     }
     for event_type in ("LPC", "NS", "PD"):
         assert f"MatCont 7.6 {event_type}" in labels
-        assert f"JaxCont near {event_type}" in labels
-    assert {"JaxCont detected LPC", "JaxCont detected NS"} <= labels
-    assert "JaxCont detected PD" not in labels
+        # The spectrum at the located event, the one the case compares.
+        assert f"JaxCont at {event_type}" in labels
+        assert f"JaxCont detected {event_type}" in labels
 
     parameter_labels = {
         label
@@ -134,15 +135,15 @@ def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
     }
     spectrum_labels = set(figure.axes[2].get_legend_handles_labels()[1])
     assert not any(
-        label.startswith("JaxCont near") for label in parameter_labels
+        label.startswith(("JaxCont near", "JaxCont at")) for label in parameter_labels
     )
     assert not any(
         label.startswith("JaxCont detected") for label in spectrum_labels
     )
     assert {
-        "JaxCont near LPC",
-        "JaxCont near NS",
-        "JaxCont near PD",
+        "JaxCont at LPC",
+        "JaxCont at NS",
+        "JaxCont at PD",
     } <= spectrum_labels
 
     amplitude_markers = {

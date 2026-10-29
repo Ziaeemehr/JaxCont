@@ -13,6 +13,7 @@ import numpy as np
 import jaxcont as jc
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
+from jaxcont.stability.floquet import floquet_spectrum
 
 from ...compare import ValidationMismatch, match_spectrum
 from ...artifacts import reference_directory
@@ -238,7 +239,10 @@ def _run_torbpc_jaxcont():
     start_parameter = -0.589286291695516
     trajectory, period = _torbpc_hopf_seed(start_parameter)
     time = np.linspace(0.0, period, trajectory.shape[0], endpoint=False)
-    mesh = Collocation(ntst=10, ncol=4)
+    contract = json.loads((Path(__file__).parents[1] / "systems/periodic.json").read_text())["torbpc"]
+    # The external-tool contract mesh: a coarser mesh moves the multipliers
+    # by more than the comparison allows (L1-F1).
+    mesh = Collocation(ntst=contract["ntst"], ncol=contract["ncol"])
     problem = periodic_orbit_problem(
         _torbpc_rhs,
         jnp.asarray(trajectory),
@@ -246,7 +250,7 @@ def _run_torbpc_jaxcont():
         period,
         start_parameter,
         mesh,
-        tol=1e-5,  # Jacobian condition number ~1.6e8 near the Hopf seed (measured)
+        tol=1e-8,
     )
     result = jc.continuation(
         problem,
@@ -260,13 +264,15 @@ def _run_torbpc_jaxcont():
             ds_min=1e-5,
             ds_max=0.02,
             max_steps=300,
-            # Jacobian condition number ~1.6e8 near the Hopf seed (measured).
-            newton_tol=1e-5,
+            # Measured at ntst=25 (2026-10-29): every point converges at 1e-8.
+            # At 1e-5 the orbit was too inaccurate to identify the flow mode
+            # (trivial multiplier 1.0002, 67 points without a spectrum).
+            newton_tol=1e-8,
         ),
         events=[
             jc.Fold(),
-            jc.NeimarkSacker(corrector_tol=1e-5),
-            jc.PeriodDoubling(corrector_tol=1e-5),
+            jc.NeimarkSacker(corrector_tol=1e-8),
+            jc.PeriodDoubling(corrector_tol=1e-8),
         ],
     )
     return result, mesh
@@ -426,48 +432,58 @@ def run_torbpc_cycle(reference_dir: Path, *, computed=None) -> CaseResult:
             // jaxcont_spectra.shape[1]
         ),
     }
+    # MatCont's rows are at its located events, so each is compared with
+    # JaxCont's refined event of the same kind; the nearest branch sample is
+    # the fallback only when that event is missing (and the case then fails).
+    located = {}
+    for hit in jaxcont_result.events:
+        kind = {"fold": "LPC", "neimark_sacker": "NS", "period_doubling": "PD"}.get(hit.kind)
+        if kind and abs(hit.p - _TORBPC_EVENT_PARAMETERS[kind]) < 2e-3:
+            best = located.get(kind)
+            if best is None or abs(hit.p - _TORBPC_EVENT_PARAMETERS[kind]) < abs(best.p - _TORBPC_EVENT_PARAMETERS[kind]):
+                located[kind] = hit
+    event_parameters, event_states, event_spectra = {}, {}, {}
+    for kind, index in observed_indices.items():
+        if kind in located:
+            hit = located[kind]
+            event_parameters[kind] = float(hit.p)
+            event_states[kind] = np.asarray(hit.u)
+            event_spectra[kind] = np.asarray(floquet_spectrum(
+                _torbpc_rhs, mesh, jnp.asarray(hit.u), jnp.asarray(hit.p, jnp.asarray(hit.u).dtype)).values)
+        else:
+            event_parameters[kind] = float(jaxcont_parameters[index])
+            event_states[kind] = jaxcont_states[index]
+            event_spectra[kind] = jaxcont_spectra[index]
     parameter_errors = {
-        kind: abs(float(jaxcont_parameters[index]) - expected)
+        kind: abs(event_parameters[kind] - expected)
         for kind, expected in _TORBPC_EVENT_PARAMETERS.items()
-        for index in [observed_indices[kind]]
     }
     reference_events = {row["event_type"].strip(): row for row in events}
     period_errors = {
-        kind: abs(float(jaxcont_states[index, -1]) - float(reference_events[kind]["period"]))
-        for kind, index in observed_indices.items()
+        kind: abs(float(event_states[kind][-1]) - float(reference_events[kind]["period"]))
+        for kind in observed_indices
     }
     extrema_errors = {}
     spectrum_errors = {}
     spectrum_matches = {}
-    for kind, index in observed_indices.items():
-        actual_extrema = np.stack(
-            [np.min(orbit_states[index], axis=0), np.max(orbit_states[index], axis=0)],
-            axis=1,
-        )
+    for kind in observed_indices:
+        orbit = event_states[kind][:-1].reshape((orbit_count, dimension))
+        actual_extrema = np.stack([np.min(orbit, axis=0), np.max(orbit, axis=0)], axis=1)
         extrema_errors[kind] = float(
             np.max(np.abs(actual_extrema - reference["extrema"][kind]))
         )
         try:
             diagnostics = match_spectrum(
-                jaxcont_spectra[index], reference["spectra"][kind], atol=5e-3
+                event_spectra[kind], reference["spectra"][kind], atol=5e-3
             )
             spectrum_matches[kind] = True
         except ValidationMismatch:
             diagnostics = match_spectrum(
-                jaxcont_spectra[index], reference["spectra"][kind], atol=1e6
+                event_spectra[kind], reference["spectra"][kind], atol=1e6
             )
             spectrum_matches[kind] = False
         spectrum_errors[kind] = diagnostics["max_error"]
-    matched_event_types = set()
-    for hit in jaxcont_result.events:
-        kind = {
-            "fold": "LPC",
-            "neimark_sacker": "NS",
-            "period_doubling": "PD",
-        }.get(hit.kind)
-        if kind and abs(hit.p - _TORBPC_EVENT_PARAMETERS[kind]) < 2e-3:
-            matched_event_types.add(kind)
-    missing_event_types = sorted(set(_TORBPC_EVENT_PARAMETERS) - matched_event_types)
+    missing_event_types = sorted(set(_TORBPC_EVENT_PARAMETERS) - set(located))
     all_comparisons_pass = bool(
         max(parameter_errors.values()) < 2e-3
         and max(period_errors.values()) < 5e-3
@@ -501,9 +517,10 @@ def run_torbpc_cycle(reference_dir: Path, *, computed=None) -> CaseResult:
             "jaxcont_events": [
                 {"kind": hit.kind, "parameter": hit.p} for hit in jaxcont_result.events
             ],
-            "jaxcont_parameter_estimates": {kind:float(jaxcont_parameters[index]) for kind,index in observed_indices.items()},
-            "jaxcont_period_estimates": {kind:float(jaxcont_states[index,-1]) for kind,index in observed_indices.items()},
-            "jaxcont_spectrum_estimates": {kind:[[float(z.real),float(z.imag)] for z in jaxcont_spectra[index]] for kind,index in observed_indices.items()},
+            "jaxcont_located_event_types": sorted(located),
+            "jaxcont_parameter_estimates": {kind: event_parameters[kind] for kind in observed_indices},
+            "jaxcont_period_estimates": {kind: float(event_states[kind][-1]) for kind in observed_indices},
+            "jaxcont_spectrum_estimates": {kind: [[float(z.real), float(z.imag)] for z in event_spectra[kind]] for kind in observed_indices},
             "jaxcont_period_errors": period_errors,
             "jaxcont_extrema_errors": extrema_errors,
             "jaxcont_spectrum_errors": spectrum_errors,
@@ -534,7 +551,7 @@ def produce_torbpc_periodic(*, computed=None):
     comparison=run_torbpc_cycle(Path(__file__).resolve().parents[2]/'reference',computed=(result,mesh))
     tables['canonical_id']='torbpc.cycle-lpc-pd-ns'
     tables['metadata']=dict(canonical_id='torbpc.cycle-lpc-pd-ns',tool='jaxcont',
-        status='FAIL',comparison_checks=comparison.checks,comparison_observations=comparison.observations,failed_spectrum_point_ids=[r['point_id'] for r in tables['branch'] if r['status']=='FLOQUET_FAILED'],missing_event_types=sorted({'LPC','PD','NS'}-kinds),
+        status='PASS' if comparison.checks['all_comparisons_pass'] else 'FAIL',comparison_checks=comparison.checks,comparison_observations=comparison.observations,failed_spectrum_point_ids=[r['point_id'] for r in tables['branch'] if r['status']=='FLOQUET_FAILED'],missing_event_types=sorted({'LPC','PD','NS'}-kinds),
         expected_event_status={kind:('MISSING' if not events else 'DUPLICATE' if len(events)>1 else 'FOUND' if events[0]['status']=='CONVERGED' else 'FAILED') for kind,events in selected.items()},
         refinement=mesh_refinement(_torbpc_rhs,mesh,result.branch.states[int(result.branch.n_valid)-1],result.branch.params[int(result.branch.n_valid)-1]))
     import platform

@@ -400,10 +400,7 @@ def test_matlab_equilibrium_exporters_preserve_spectra_and_normal_forms(matcont_
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known JaxCont torBPC LPC/PD event and Floquet comparison mismatch",
-)
+@pytest.mark.matlab  # torbpc_result regenerates the MatCont run through MATLAB
 def test_torbpc_jaxcont_matches_all_matcont_diagnostics(torbpc_result):
     checks = torbpc_result.checks
 
@@ -433,21 +430,6 @@ def test_torbpc_jaxcont_matches_all_matcont_diagnostics(torbpc_result):
 @pytest.fixture(scope="module")
 def torbpc_result(matcont_generated_dir):
     return run_torbpc_cycle(matcont_generated_dir)
-
-
-@pytest.mark.slow
-@pytest.mark.matlab  # torbpc_result regenerates the MatCont run through MATLAB
-def test_torbpc_known_disagreements_are_explicit_failures(torbpc_result):
-    checks = torbpc_result.checks
-
-    assert checks["jaxcont_pd_parameter_error"] < 2e-3
-    assert checks["jaxcont_max_period_error"] < 5e-3
-    assert checks["jaxcont_max_extrema_error"] < 5e-3
-    assert not checks["jaxcont_critical_multipliers_match"]
-    missing = set(checks["jaxcont_missing_event_types"])
-    assert "PD" in missing
-    assert "LPC" not in missing
-    assert not checks["all_comparisons_pass"]
 
 
 def test_cycle_reference_has_normalized_columns(tmp_path):

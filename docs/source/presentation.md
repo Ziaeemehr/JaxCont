@@ -13,7 +13,8 @@ boundary. The deck describes v0.4.0; the current comparison pages are in the
 The deck distinguishes released **v0.4.0 capabilities** from **future work —
 not implemented**. PRC/dPRC and fold/Hopf two-parameter continuation are
 included in the v0.4.0 capability surface. LPC/PD/NS detection is explicitly
-marked experimental while the strict `MC-LC-002` comparison remains failing.
+marked experimental in that release, while the strict `MC-LC-002` comparison
+was failing; it passes since the Floquet fixes after v0.4.0.
 
 [**Download the slides (PDF)**](_static/jaxcont_technical_presentation.pdf)
 

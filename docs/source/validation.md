@@ -11,7 +11,7 @@ limit. The status column is the registry's `evidence_status`; each bundle
 also records the verdict of its reviewed promotion. The comparison pages
 under "Validation gallery" show the figures and tables for each system.
 
-**23 registered cases: 8 PASS, 1 FAIL, 7 PENDING, 7 UNSUPPORTED.**
+**23 registered cases: 9 PASS, 7 PENDING, 7 UNSUPPORTED.**
 
 | Case | What is checked | Status | Reference bundles | Comparison page |
 | --- | --- | --- | --- | --- |
@@ -21,7 +21,7 @@ under "Validation gallery" show the figures and tables for each system.
 | `jax.transforms` | JAX transformation and sensitivity checks | PENDING | — | — |
 | `analytic.codim2` | Shifted direct codimension-two point solvers | PENDING | — | — |
 | `radial.cycle-floquet` | Analytic radial periodic orbit | PASS | MatCont 7.6: PASS; MatCont: legacy (v1) bundle; BifurcationKit 0.8.8: PASS | {doc}`auto_validation/plot_radial` |
-| `torbpc.cycle-lpc-pd-ns` | MatCont torBPC1 limit-cycle bifurcations | FAIL | MatCont: legacy (v1) bundle | {doc}`auto_validation/plot_torbpc` |
+| `torbpc.cycle-lpc-pd-ns` | MatCont torBPC1 limit-cycle bifurcations | PASS | MatCont: legacy (v1) bundle | {doc}`auto_validation/plot_torbpc` |
 | `adaptx.cycle-pd-switch` | MatCont adaptx period-doubling branch switch | PASS | MatCont 7.6: PASS; BifurcationKit 0.8.8: PASS | {doc}`auto_validation/plot_adaptx` |
 | `US-BP-001` | Bratu branch switching | UNSUPPORTED | — | — |
 | `catalytic.fold-curve` | Two-parameter fold-curve continuation | PENDING | — | — |
@@ -55,12 +55,6 @@ under "Validation gallery" show the figures and tables for each system.
 Near a Hopf seed, periodic branches can report spurious folds at very small
 amplitude; start periodic continuation from a seed of finite amplitude.
 
-`torbpc.cycle-lpc-pd-ns` fails: JaxCont locates the period-doubling point
-but does not label it PD, and its largest critical-multiplier error (about
-0.04) exceeds the 0.005 limit. On the external tools' finer mesh
-(`ntst=25`) JaxCont's multipliers are not finite, a solver defect tracked
-separately. Treat fold of cycles, period-doubling and Neimark-Sacker
-detection as experimental until this case passes.
 
 ## Comparison policy
 
@@ -76,8 +70,8 @@ detection as experimental until this case passes.
   nearest-to-`+1` fallback when it does not.
 - Hopf coefficients use the MatCont/Kuznetsov convention with unit-norm `q`
   and denominator `2 * omega0`; the standard cubic Hopf has `l1 = -2`.
-- Lorenz-84 runs use a Newton tolerance of `1e-12` and therefore require
-  float64 (`jax.config.update("jax_enable_x64", True)`).
+- Lorenz-84 runs use a Newton tolerance of `1e-12` and torBPC runs `1e-8`;
+  both therefore require float64 (`jax.config.update("jax_enable_x64", True)`).
 
 ## Reproducing
 
@@ -88,8 +82,7 @@ the committed bundles. To re-run the comparisons:
 JAX_ENABLE_X64=1 JAX_PLATFORMS=cpu python3 -m examples.validation.run_validation
 ```
 
-Float64 is required for the Lorenz-84 cases. The command exits with status 1
-while `torbpc.cycle-lpc-pd-ns` fails.
+Float64 is required for the Lorenz-84 and torBPC cases.
 
 Regenerating a reference bundle is opt-in and needs `MATLAB_BIN` and
 `MATCONT_ROOT` (MatCont) or `JULIA_BIN` (BifurcationKit); see

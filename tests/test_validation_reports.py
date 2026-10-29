@@ -155,7 +155,12 @@ def test_offline_suite_verdicts_match_registry(case_id):
     passed, checks = _validate_case(case, _DEFAULT_REFERENCE_DIR)
     assert passed == (case["evidence_status"] == "PASS")
     if case_id == "MC-LC-002":
-        assert checks["validation_report"]["status"] == "FAIL"
+        # The legacy (v1) report carries the JaxCont-MatCont comparison in the
+        # JaxCont producer checks, which pass; tools without a promoted v2
+        # bundle (MatCont, BifurcationKit) stay PENDING there.
+        report = checks["validation_report"]
+        assert report["coverage"] == {"jaxcont": "PASS", "matcont": "PENDING", "bifurcationkit": "PENDING"}
+        assert report["status"] == "PENDING"
 
 
 def test_v2_cli_uses_report_and_exits_nonzero_on_fail(tmp_path, monkeypatch, capsys):

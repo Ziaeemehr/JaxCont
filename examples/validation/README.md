@@ -24,9 +24,9 @@ provenance. `MC-PRC-001` is **adaptx**. The PRC comparison checks MatCont's
 time derivative separately from JaxCont's parameter derivative; it does not
 claim an external d(PRC)/dp validation.
 
-The torBPC comparison retains its known failure and strict xfail; a failed
-comparison remains FAIL in the CLI and the renderer, and no tolerance was
-widened. The registry distinguishes executable capability gaps from
+The torBPC comparison passes on the external tools' mesh at JaxCont's
+refined events; a failed comparison remains FAIL in the CLI and the
+renderer, and no tolerance was widened. The registry distinguishes executable capability gaps from
 non-executable BVP and heteroclinic templates. Unsupported cases require
 `--include-unsupported`; templates never report successful execution.
 

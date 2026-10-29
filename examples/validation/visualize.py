@@ -502,6 +502,12 @@ def plot_torbpc_overlay(
         nearest_index = int(
             np.argmin(np.abs(jax_parameters - event_parameter))
         )
+        # The case compares the spectrum at JaxCont's located event; the
+        # nearest branch sample stands in only for a missing event.
+        located = event_type in result.observations.get("jaxcont_located_event_types", ())
+        estimate = result.observations.get("jaxcont_spectrum_estimates", {}).get(event_type)
+        jax_spectrum = (np.asarray([complex(re, im) for re, im in estimate])
+                        if located and estimate is not None else jax_multipliers[nearest_index])
         event_index = int(event["event_index"])
         matcont_spectrum = np.asarray(
             [
@@ -522,14 +528,14 @@ def plot_torbpc_overlay(
             zorder=6,
         )
         spectrum_axis.scatter(
-            np.real(jax_multipliers[nearest_index]),
-            np.imag(jax_multipliers[nearest_index]),
+            np.real(jax_spectrum),
+            np.imag(jax_spectrum),
             marker="o",
             s=55,
             facecolor="none",
             edgecolor=color,
             linewidth=1.8,
-            label=f"JaxCont near {event_type}",
+            label=f"JaxCont {'at' if located else 'near'} {event_type}",
             zorder=5,
         )
 
@@ -898,12 +904,10 @@ def render_periodic_overlay(
         missing_event_types = ", ".join(checks["jaxcont_missing_event_types"])
         _annotate_summary(
             figure,
-            status=(
-                "PASS" if validation.passed else "FAIL (known limitation)"
-            ),
+            status="PASS" if validation.passed else "FAIL",
             passed=validation.passed,
             details=[
-                "critical-signature proxy parameter discrepancies "
+                "event parameter errors "
                 f"LPC {checks['jaxcont_lpc_parameter_error']:.2e}, "
                 f"NS {checks['jaxcont_ns_parameter_error']:.2e}, "
                 f"PD {checks['jaxcont_pd_parameter_error']:.2e}",

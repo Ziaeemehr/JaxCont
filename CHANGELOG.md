@@ -291,6 +291,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Floquet trivial multiplier is identified next to a Hopf point: when
+  the flow lies in the plane of two eigenvectors whose multipliers are both 1
+  to tolerance (the monodromy is nearly the identity there), the trivial index
+  is the pair member nearest 1 instead of an unresolved spectrum (NaN).
+
+- `PeriodDoubling` detects a crossing of `-1` in a step where a complex pair
+  inside the unit circle turns real; such brackets were skipped because the
+  mode was not real at both ends.
+
+- Repeated `continuation` calls with the same `f` no longer retrace it for
+  event refinement: Fold/Hopf point solvers, the Jacobian for spectra and
+  branch eigenvalues are compiled once per `f` (a warm cubic run with
+  stability and `Fold()` drops from 0.22 s to 0.009 s).
+
+- The torBPC validation case passes against MatCont on the external tools'
+  mesh (`ntst=25`), comparing at JaxCont's refined events.
+
 - MatCont validation resolves MATLAB from `MATLAB_BIN` or `PATH` and MatCont
   from `MATCONT_ROOT`, removing machine-specific installation defaults.
 

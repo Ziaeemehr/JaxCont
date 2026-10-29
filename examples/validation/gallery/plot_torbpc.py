@@ -1,6 +1,6 @@
 r"""
-torBPC: a visible failing stress case
-=====================================
+torBPC: cycles with LPC, PD and NS
+===================================
 
 The system
 ----------
@@ -21,9 +21,9 @@ The committed series is MatCont's full LPC/PD/NS branch, without trimming.
 # ----------------
 # LPC is a turning point of cycles, PD a multiplier crossing minus one,
 # and NS a complex pair crossing the unit circle. The envelopes and periods
-# show the branch while the event-centred spectrum exposes discrepancies.
-# JaxCont's missing LPC/PD labels and multiplier mismatch keep this case FAIL;
-# nearest-spectrum proxies are not detected events.
+# show the branch; the event-centred spectrum compares the multipliers at
+# each located event. JaxCont uses the external tools' mesh (ntst=25) and
+# compares its refined events, not the nearest branch samples.
 
 # sphinx_gallery_start_ignore
 import argparse
@@ -36,6 +36,9 @@ if "__file__" in globals():
 parser = argparse.ArgumentParser()
 parser.add_argument("--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated")
 options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+# The Newton tolerance 1e-8 requires double precision in either gallery mode.
+import jax
+jax.config.update("jax_enable_x64", True)
 # sphinx_gallery_end_ignore
 
 import jax.numpy as jnp
@@ -82,7 +85,7 @@ def _torbpc_rhs(u, nu, args):
 start_parameter = -0.589286291695516
 trajectory, period = _torbpc_hopf_seed(start_parameter)
 time = np.linspace(0.0, period, trajectory.shape[0], endpoint=False)
-mesh = Collocation(ntst=10, ncol=4)
+mesh = Collocation(ntst=25, ncol=4)
 problem = periodic_orbit_problem(
     _torbpc_rhs,
     jnp.asarray(trajectory),
@@ -90,7 +93,7 @@ problem = periodic_orbit_problem(
     period,
     start_parameter,
     mesh,
-    tol=1e-5,  # Jacobian condition number ~1.6e8 near the Hopf seed (measured)
+    tol=1e-8,
 )
 result = jc.continuation(
     problem,
@@ -104,13 +107,14 @@ result = jc.continuation(
         ds_min=1e-5,
         ds_max=0.02,
         max_steps=300,
-        # Jacobian condition number ~1.6e8 near the Hopf seed (measured).
-        newton_tol=1e-5,
+        # A looser tolerance leaves the orbit too inaccurate to identify
+        # the flow mode of the Floquet spectrum.
+        newton_tol=1e-8,
     ),
     events=[
         jc.Fold(),
-        jc.NeimarkSacker(corrector_tol=1e-5),
-        jc.PeriodDoubling(corrector_tol=1e-5),
+        jc.NeimarkSacker(corrector_tol=1e-8),
+        jc.PeriodDoubling(corrector_tol=1e-8),
     ],
 )
 case_result = run_torbpc_cycle(reference_dir, computed=(result, mesh))
@@ -140,6 +144,6 @@ ReportTable(report)
 print(summarize_report(report))
 
 # %%
-# The report retains FAIL when labels or multipliers disagree even where
-# the envelopes look close. The untrimmed stress case remains a limitation;
-# the event-local error panel and table show why it cannot be called a pass.
+# All three event types are located and their multipliers agree with
+# MatCont at the located events; the event-local error panel and the table
+# show the remaining differences.
