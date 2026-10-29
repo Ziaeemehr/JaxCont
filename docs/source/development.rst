@@ -184,6 +184,8 @@ Common Issues
 
 If you see "Abstract tracer value encountered", you're mixing JAX arrays with Python control flow:
 
+.. illustrative
+
 .. code-block:: python
 
    # Bad

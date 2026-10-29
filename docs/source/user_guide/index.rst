@@ -54,6 +54,8 @@ Basic Workflow
 
 Example workflow:
 
+.. illustrative
+
 .. code-block:: python
 
    import jaxcont as jc
