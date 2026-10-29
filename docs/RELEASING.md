@@ -16,16 +16,19 @@ must also match `CITATION.cff` and the changelog.
 1. From a clean checkout, run:
 
    ```bash
-   env PYTHONPATH=src python -m pytest
+   JAXCONT_TEST_X64=0 python -m pytest -q
+   JAXCONT_TEST_X64=1 python -m pytest -q
    make docs
    python -m build
    python -m twine check dist/*
    ```
 
-2. Run the **Publish distribution** workflow with `testpypi`. Install the
-   uploaded wheel in a fresh environment and run a smoke continuation.
+2. Run the **Publish distribution** workflow with `testpypi`. Before
+   uploading, the workflow installs the built wheel in a clean job and runs
+   the default test suite against it in both precisions (`JAXCONT_TEST_X64`
+   0 and 1); an upload happens only if both pass.
 3. Run the same workflow with `pypi`, approving the protected environment.
-4. Tag the exact published commit (`v0.1.0`) and create a GitHub release using
+4. Tag the exact published commit (`vX.Y.Z`, e.g. `v0.5.0`) and create a GitHub release using
    the matching changelog section.
 5. Confirm Zenodo archived the GitHub release. Add the minted DOI badge and DOI
    to `CITATION.cff` in the next commit; use the concept DOI when citing the
