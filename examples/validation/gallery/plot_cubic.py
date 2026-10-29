@@ -26,7 +26,6 @@ exporters and the comparison machinery before the harder systems.
 # Agreement means the curves coincide and both tools place the LP points at
 # the same :math:`(p, x)`.
 
-# sphinx_gallery_start_ignore
 import argparse
 import sys
 import tempfile
@@ -36,8 +35,7 @@ if "__file__" in globals():
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 parser = argparse.ArgumentParser()
 parser.add_argument("--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated")
-options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
-# sphinx_gallery_end_ignore
+options = parser.parse_args() if __name__ == "__main__" and "__file__" in globals() else parser.parse_args([])
 
 import jax.numpy as jnp
 

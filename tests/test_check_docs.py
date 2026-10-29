@@ -87,3 +87,14 @@ def test_ledger_outside_the_repository_is_reported_not_crashed(tmp_path, capsys)
     # ROOT is the real repository here; the ledger lives in a temp directory.
     assert check_docs.check_ledger(_ledger(tmp_path, [("L1", "closed")], []))
     assert str(tmp_path) in capsys.readouterr().out
+
+
+def test_release_fixed_dispositions_match_changelog_content():
+    ledger = check_docs.ROOT / "docs/audits/2026-10-18-loop-1.md"
+    rows = {row[0]: row for row in check_docs.table_rows(ledger.read_text(), "Changelog dispositions")}
+    for entry, text in check_docs.changelog_entries("0.5.0"):
+        if entry.startswith("F"):
+            assert entry in rows, f"missing disposition for {entry}: {text}"
+            assert rows[entry][1] == text, f"{entry} evidence is attached to a different change"
+            assert all(rows[entry][column] for column in (2, 3, 4))
+    assert check_docs.check_changelog("0.5.0", ledger)

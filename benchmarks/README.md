@@ -46,6 +46,14 @@ run in a randomized order recorded with its seed. Threads are pinned to one
 (`OMP_NUM_THREADS=1` and XLA flags for JAX, `-singleCompThread` for MATLAB,
 `--threads=1` for Julia). A worker that hangs, fails or times out is recorded
 as `FAILED`; a tool, workload or install that is not available is `PENDING`.
+The deadline covers both stdout reads and process exit.
+
+New records retain every first-call and warm replicate's timing, status,
+point count, controls, accuracy, and versions under `replicates`. Inconsistent
+work, controls, versions, or unsuccessful replicates fail the row without a
+successful timing summary. Accuracy uses the worst error across all replicates;
+an unavailable measurement keeps the row ineligible. Nonfinite or negative
+errors are invalid evidence. Accuracy extraction happens after each timed solve.
 
 | Tool | Worker | Workloads | Notes |
 |---|---|---|---|

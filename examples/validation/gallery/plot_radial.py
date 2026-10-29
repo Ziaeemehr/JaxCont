@@ -24,7 +24,6 @@ radius sqrt(rho), period two pi and nontrivial multiplier exp(-4 pi rho).
 # trivial multiplier at one represents time translation. The error panel
 # magnifies period differences hidden by the overlapping curves.
 
-# sphinx_gallery_start_ignore
 import argparse
 import sys
 import tempfile
@@ -34,8 +33,7 @@ if "__file__" in globals():
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 parser = argparse.ArgumentParser()
 parser.add_argument("--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated")
-options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
-# sphinx_gallery_end_ignore
+options = parser.parse_args() if __name__ == "__main__" and "__file__" in globals() else parser.parse_args([])
 
 import jax.numpy as jnp
 import numpy as np

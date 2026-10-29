@@ -25,7 +25,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated"
 )
-options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+options = parser.parse_args() if __name__ == "__main__" and "__file__" in globals() else parser.parse_args([])
 options.output_dir.mkdir(parents=True, exist_ok=True)
 
 

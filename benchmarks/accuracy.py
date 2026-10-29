@@ -9,7 +9,10 @@ return stay ``None``, which keeps the row out of cross-tool tables.
 from __future__ import annotations
 
 import csv
+import math
 from pathlib import Path
+
+import numpy as np
 
 REFERENCE = Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference"
 ANALYTIC = {"cubic.eq-fold": {"LP": [-2.0 / 3.0, 2.0 / 3.0]}}
@@ -17,6 +20,33 @@ ANALYTIC = {"cubic.eq-fold": {"LP": [-2.0 / 3.0, 2.0 / 3.0]}}
 ANALYTIC_STATES = {"cubic.eq-fold": {"LP": [1.0, -1.0]}}
 JACOBIAN = {"cubic.eq-fold": lambda u: 1.0 - u**2}
 BUNDLES = {"cubic.eq-fold": "cubic/matcont/cubic.eq-fold", "lorenz84.eq-f": "lorenz84/matcont/lorenz84.eq-f"}
+
+
+def valid_accuracy(value):
+    """Accuracy evidence must be a finite, nonnegative number."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
+
+
+def meets_limit(value, limit):
+    return valid_accuracy(value) and valid_accuracy(limit) and value <= limit
+
+
+def eligible(row, limits):
+    """Every required metric must be measured and meet its limit."""
+    accuracy = row.get("accuracy") or {}
+    return all(meets_limit(accuracy.get(metric), limit) for metric, limit in limits.items())
+
+
+def branch_residual(states, params, rhs):
+    """Maximum residual only for a complete, finite, nonempty branch."""
+    states, params = np.asarray(states), np.asarray(params)
+    if (not states.size or not params.size or len(states) != len(params)
+            or not np.all(np.isfinite(states)) or not np.all(np.isfinite(params))):
+        return None
+    residuals = [np.asarray(rhs(u, p)) for u, p in zip(states, params)]
+    if any(not value.size or not np.all(np.isfinite(value)) for value in residuals):
+        return None
+    return max(float(np.max(np.abs(value))) for value in residuals)
 
 
 def reference_events(canonical_id: str) -> dict[str, list[float]]:
@@ -42,6 +72,19 @@ def measure(case, events: dict[str, list[float]], residual: float | None,
     largest |f| the harness evaluated on the returned branch.
     """
     measured = {metric: None for metric in case.accuracy_limits}
+    # Validate all samples before sorting or reducing: max can hide later NaNs,
+    # and zip would silently truncate mismatched state/event arrays.
+    if any(not math.isfinite(value) for values in events.values() for value in values):
+        return measured
+    if event_states is not None:
+        if any(kind not in events or len(values) != len(events[kind])
+               or any(not math.isfinite(value) for value in values)
+               for kind, values in event_states.items()):
+            return measured
+        if any(kind not in event_states for kind in events):
+            return measured
+    if residual is not None and not valid_accuracy(residual):
+        return measured
     errors, state_errors, spectral = [], [], []
     for kind, values in reference_events(case.canonical_id).items():
         found = events.get(kind, [])

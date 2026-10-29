@@ -22,7 +22,9 @@ import statistics
 import sys
 from pathlib import Path
 
+from benchmarks.accuracy import eligible as _eligible, meets_limit, valid_accuracy
 from benchmarks.contracts import ResolvedControls, compare_controls, load_cases
+from benchmarks.replicates import record_problems
 
 ROOT = Path(__file__).resolve().parents[1]
 REVIEWED = ROOT / "benchmarks" / "results" / "reviewed"
@@ -42,11 +44,6 @@ def bootstrap_ci(samples, resamples=2000, level=0.95, seed=0):
     medians = sorted(statistics.median(draw.choices(samples, k=len(samples))) for _ in range(resamples))
     tail = (1 - level) / 2
     return [medians[int(tail * (resamples - 1))], medians[int((1 - tail) * (resamples - 1))]]
-
-
-def _eligible(record, limits):
-    accuracy = record.get("accuracy") or {}
-    return all(accuracy.get(metric) is not None and accuracy[metric] <= limit for metric, limit in limits.items())
 
 
 def check(records: list[dict]) -> list[str]:
@@ -73,7 +70,11 @@ def check(records: list[dict]) -> list[str]:
             if record.get("label") != "throughput; not a single-branch speedup":
                 problems.append(f"{name}: batched row without the throughput label")
             continue
+        problems.extend(f"{name}: {issue}" for issue in record_problems(record, case))
         accuracy = record.get("accuracy") or {}
+        for metric, value in accuracy.items():
+            if value is not None and not valid_accuracy(value):
+                problems.append(f"{name}: invalid accuracy {metric}={value!r}")
         missing = sorted(set(case.accuracy_limits) - set(accuracy))
         if missing:
             problems.append(f"{name}: accuracy lacks {missing}")
@@ -120,11 +121,15 @@ def comparison(records: list[dict]) -> dict:
     reasons += [f"{m.field}: {m.baseline_tool}={m.baseline_value!r}, {m.tool}={m.value!r}" for m in result.mismatches]
     limits = {case.benchmark_id: case.accuracy_limits for case in load_cases()}
     for record in measured:
+        case = next(c for c in load_cases() if c.benchmark_id == record["benchmark_id"])
+        reasons += [f"{record['tool']}: {issue}" for issue in record_problems(record, case)]
         accuracy = record.get("accuracy") or {}
         for metric, limit in limits[record["benchmark_id"]].items():
             if accuracy.get(metric) is None:
                 reasons.append(f"{record['tool']}: {metric} not measured")
-            elif accuracy[metric] > limit:
+            elif not valid_accuracy(accuracy[metric]):
+                reasons.append(f"{record['tool']}: invalid accuracy {metric}={accuracy[metric]!r}")
+            elif not meets_limit(accuracy[metric], limit):
                 reasons.append(f"{record['tool']}: {metric} = {accuracy[metric]:.3g} exceeds {limit:g}")
     return {"comparable": not reasons, "reasons": reasons}
 

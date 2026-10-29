@@ -30,7 +30,7 @@ for k = 1:warmups
     run_once(opt);
 end
 for k = 1:repetitions
-    emit('warm', opt, false);
+    emit('warm', opt, true);
 end
 end
 

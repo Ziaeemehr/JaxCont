@@ -19,7 +19,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from benchmarks.accuracy import measure
+from benchmarks.accuracy import branch_residual, measure
 from benchmarks.contracts import ResolvedControls, controls_record, load_cases
 
 HERE = Path(__file__).resolve().parent
@@ -55,7 +55,7 @@ def _matlab():
 
 
 def _cubic_residual(states, params):
-    return max(abs(p + u - u**3 / 3) for u, p in zip(states, params))
+    return branch_residual(states, params, lambda u, p: p + u - u**3 / 3)
 
 
 def _as_list(value):

@@ -20,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from benchmarks.accuracy import measure
+from benchmarks.accuracy import branch_residual, measure
 from benchmarks.contracts import ResolvedControls, controls_record, load_cases
 
 HERE = Path(__file__).resolve().parent
@@ -71,7 +71,7 @@ def worker(benchmark_id, mode, repetitions, warmups):
             row = json.loads(line)
             if "folds" in row:
                 states, params = row.pop("states"), row.pop("params")
-                residual = max(abs(p + u - u**3 / 3) for u, p in zip(states, params))
+                residual = branch_residual(states, params, lambda u, p: p + u - u**3 / 3)
                 row["accuracy"] = measure(case, {"LP": row.pop("folds")}, residual, {"LP": row.pop("fold_states")})
                 row["controls"] = controls_record(resolved_controls(case))
             print(json.dumps(row), flush=True)
