@@ -457,3 +457,26 @@ def test_python_scalar_event_rejected_under_jit():
 
     with pytest.raises(TypeError, match='array-pure'):
         jax.jit(run)(jnp.zeros(1))
+
+
+@pytest.mark.parametrize('rows, crosses', [
+    # torBPC at ntst=25, newton_tol=1e-8, points 177/178: a complex pair
+    # inside the unit circle turns real and one member passes -1 in one step.
+    ([[-.7137 - .1654j, -.7137 + .1654j, 1.], [-1.0143, -.5183, 1.]], True),
+    # The same step reversed.
+    ([[-1.0143, -.5183, 1.], [-.7137 - .1654j, -.7137 + .1654j, 1.]], True),
+    # A pair outside the circle turning real below -1 passed no real -1.
+    ([[-.9 - .6j, -.9 + .6j, 1.], [-1.3, -.95, 1.]], False),
+])
+def test_period_doubling_through_a_complex_pair_turning_real(rows, crosses):
+    from jaxcont.bifurcations import events
+    from jaxcont.bifurcations.event_scan import EventScanInput, scan_event_candidates
+    raw = jnp.array(rows, dtype=jnp.result_type(1j))
+    data = EventScanInput(jnp.array([0., 1.]), jnp.zeros((2, 1)), None, raw,
+                          jnp.array([2, 2]), jnp.ones(2, bool))
+    points = [events.BranchPoint(data.params[i], data.states[i], eigenvalues=raw[i],
+                                 trivial_index=data.trivial_index[i]) for i in range(2)]
+    eager = events.PeriodDoubling().scan(points)
+    candidate, = jax.jit(lambda d: scan_event_candidates((events.PeriodDoubling(),), d, None))(data)
+    assert len(eager) == int(crosses)
+    assert int(np.sum(candidate.bracket_mask)) == int(crosses)

@@ -17,6 +17,7 @@ from typing import Any, Callable, NamedTuple, Optional
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 
 from jaxcont.core.collocation import (
@@ -86,12 +87,20 @@ def _orbit(mesh: Collocation, U: Array):
     return jnp.asarray(D_np), jnp.asarray(E_np), 1.0 / ntst, mesh_states, coll_states, U[-1]
 
 
-def _aligned(vectors: Array, flow: Array) -> tuple[Array, Array]:
+def _aligned(vectors: Array, flow: Array, log_multipliers: Array | None = None) -> tuple[Array, Array]:
     """Select a reconstructed column only if it represents the flow direction.
 
     The normalized projection residual permits discretization error while
     rejecting physical modes that merely overlap a missing flow mode.
     Complex phase and column/flow scaling do not change the test.
+
+    With ``log_multipliers`` (complex ``log`` of the multipliers, column
+    order), a flow along no single column is still resolved when it lies in
+    the plane of two columns whose multipliers are both 1 to the same
+    tolerance: next to a Hopf point the monodromy is nearly the identity on
+    that plane, so its computed eigenvectors are arbitrary there (torBPC at
+    ``ntst=25``: ``0.999995 +/- 1.7e-5j``). The trivial index is then the pair
+    member nearest 1.
     """
     norms = jnp.linalg.norm(vectors, axis=0)
     flow_norm = jnp.linalg.norm(flow)
@@ -103,9 +112,30 @@ def _aligned(vectors: Array, flow: Array) -> tuple[Array, Array]:
     residual = jnp.where(usable, residual, jnp.inf)
     column = jnp.argmin(residual)
     # Coarse collocation can rotate the flow mode beyond the solve tolerance.
-    ok = ((residual[column] <= 10 * jnp.sqrt(default_tol(flow.real.dtype)))
-          & (flow_norm > 0) & jnp.isfinite(flow_norm))
-    return column, ok
+    limit = 10 * jnp.sqrt(default_tol(flow.real.dtype))
+    flow_ok = (flow_norm > 0) & jnp.isfinite(flow_norm)
+    ok = (residual[column] <= limit) & flow_ok
+    if log_multipliers is None or vectors.shape[1] < 2:
+        return column, ok
+    first, second = (jnp.asarray(i) for i in np.triu_indices(vectors.shape[1], 1))
+    a, b = unit_vectors[:, first], unit_vectors[:, second]
+    # Least-squares projection of the flow onto span(a, b) per pair.
+    ab = jnp.sum(jnp.conj(a) * b, axis=0)
+    gram_det = 1 - jnp.abs(ab) ** 2
+    fa, fb = overlap[first], overlap[second]
+    safe_det = jnp.where(gram_det > limit, gram_det, 1)
+    ca = (fa - ab * fb) / safe_det
+    cb = (fb - jnp.conj(ab) * fa) / safe_det
+    plane_residual = jnp.linalg.norm(unit_flow[:, None] - a * ca - b * cb, axis=0)
+    at_one = jnp.abs(log_multipliers) <= limit
+    plane_ok = (usable[first] & usable[second] & (gram_det > limit)
+                & at_one[first] & at_one[second] & jnp.isfinite(plane_residual))
+    plane_residual = jnp.where(plane_ok, plane_residual, jnp.inf)
+    pair = jnp.argmin(plane_residual)
+    nearer = jnp.where(jnp.abs(log_multipliers[first[pair]]) <= jnp.abs(log_multipliers[second[pair]]),
+                       first[pair], second[pair])
+    use_pair = ~ok & (plane_residual[pair] <= limit) & flow_ok
+    return jnp.where(use_pair, nearer, column), ok | use_pair
 
 
 def _product_spectrum(strategy, raw_f, mesh, U, p, args):
@@ -113,7 +143,8 @@ def _product_spectrum(strategy, raw_f, mesh, U, p, args):
     Phi = monodromy_matrix(raw_f, D, E, h, mesh_states, coll_states, T, p, args)
     # Mode identity is discrete; multiplier derivatives use the supplied solver.
     reference, vectors = jnp.linalg.eig(jax.lax.stop_gradient(Phi))
-    column, ok = _aligned(vectors, jax.lax.stop_gradient(raw_f(mesh_states[0], p, args)))
+    column, ok = _aligned(vectors, jax.lax.stop_gradient(raw_f(mesh_states[0], p, args)),
+                          jnp.log(reference.astype(jnp.result_type(reference, jnp.complex64))))
     values = strategy.eigen_solver(Phi)
     values = values.astype(jnp.result_type(values, jnp.complex64))
     trivial = jnp.argmin(jnp.abs(values - reference[column]))
@@ -132,8 +163,10 @@ def _schur_spectrum(strategy, raw_f, mesh, U, p, args):
         factors, max_sweeps=strategy.max_sweeps)
     # Reconstructed phase-zero right eigenvectors, not Schur vectors, carry
     # the flow identity.
+    log_multipliers = jax.lax.stop_gradient(
+        logabs + 1j * jnp.angle(phase)).astype(jnp.result_type(phase, jnp.complex64))
     trivial, ok = _aligned(jax.lax.stop_gradient(right),
-                           jax.lax.stop_gradient(raw_f(mesh_states[0], p, args)))
+                           jax.lax.stop_gradient(raw_f(mesh_states[0], p, args)), log_multipliers)
     converged = converged & ok
     # Failed lanes use finite surrogates so masked gradients stay zero.
     safe_logabs = jnp.where(converged, logabs, 0)
@@ -212,8 +245,10 @@ def floquet_spectrum(
     ``ProductFloquet(eigen_solver)``; ``None`` selects ``DEFAULT_FLOQUET``,
     the same default as ``Solvers.floquet``. The trivial index selects the right
     eigenvector most aligned with ``raw_f(x0, p, args)``, never the value
-    nearest ``+1``. Eager evaluation raises ``RuntimeError`` when the spectrum
-    did not converge; traced evaluation returns the failed status instead.
+    nearest ``+1`` alone (a pair of multipliers at 1 whose plane holds the
+    flow resolves to its member nearest 1). Eager evaluation raises
+    ``RuntimeError`` when the spectrum did not converge; traced evaluation
+    returns the failed status instead.
     """
     strategy = _default_strategy() if floquet_solver is None else floquet_solver
     return _require_converged(_point_spectrum(strategy, raw_f, mesh, U, p, args))

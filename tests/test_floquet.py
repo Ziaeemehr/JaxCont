@@ -513,3 +513,61 @@ def test_flow_alignment_requires_direction_not_partial_overlap():
         # Arbitrary complex phase and column scaling preserve identity.
         index, valid = run(jnp.diag(jnp.array([2j, 3., 4.])), flow)
         assert bool(valid) and int(index) == 0
+
+
+def _rotation_factor(angle, multiplier):
+    """One propagator: rotation by ``angle`` in (e0, e1), ``multiplier`` on e2."""
+    c, s = np.cos(angle), np.sin(angle)
+    return jnp.array([[c, -s, 0.], [s, c, 0.], [0., 0., multiplier]])
+
+
+def _spectrum_with_factor(monkeypatch, factor, strategy):
+    import importlib
+    module = importlib.import_module('jaxcont.stability.floquet')
+    if isinstance(strategy, ProductFloquet):
+        monkeypatch.setattr(module, 'monodromy_matrix', lambda *a: factor)
+    else:
+        monkeypatch.setattr(module, 'interval_propagators', lambda *a: factor[None])
+    mesh = Collocation(ntst=1, ncol=1)
+    U = jnp.array([1., 0., 0., 1., 0., 0., 1.])
+    flow = lambda u, p, args: jnp.array([1., 0., 0.])
+    # Traced, so a failed spectrum is returned as a status instead of raising.
+    return jax.jit(lambda U: floquet_spectrum(flow, mesh, U, jnp.array(0.), strategy))(U)
+
+
+def test_flow_in_a_unit_multiplier_pair_is_resolved(monkeypatch):
+    """Near a Hopf point the trivial and the next multiplier form a pair at 1
+    (torBPC at ntst=25: 0.999995 +/- 1.7e-5j; MatCont gives a complex pair
+    too). The flow lies in the pair's plane but along neither eigenvector,
+    so the trivial multiplier is the pair member nearest 1."""
+    import pytest
+    angle = 1e-5 if jnp.asarray(0.).dtype == jnp.float64 else 1e-3
+    for strategy in (PeriodicSchur(), ProductFloquet()):
+        spectrum = _spectrum_with_factor(monkeypatch, _rotation_factor(angle, 0.5), strategy)
+        assert bool(spectrum.converged)
+        values = np.asarray(spectrum.values)
+        trivial = values[int(spectrum.trivial_index)]
+        # Exact pair exp(+/- i angle); measured error is roundoff.
+        assert abs(abs(trivial) - 1) < 64 * _eps_J()
+        assert abs(abs(np.angle(trivial)) - angle) < 64 * _eps_J()
+        assert np.sort(np.abs(values)) == pytest.approx([0.5, 1., 1.], abs=64 * _eps_J())
+
+
+def test_flow_in_a_plane_of_distinct_multipliers_stays_unresolved(monkeypatch):
+    """The flow lies in the span of any two eigenvectors in three dimensions
+    often enough; without both multipliers at 1 that is no flow identity."""
+    far_pair = _rotation_factor(0.3, 0.5)
+    # Real multipliers 1 and 0.986 with eigenvectors (1, 1, 0) and (1, -1, 0):
+    # the flow e0 is in their plane and along neither (torBPC point 41 at
+    # newton_tol=1e-5).
+    # float32 counts |log mu| <= 10*sqrt(1e-5) = 0.032 as 1 (the flow-direction
+    # limit), so there the second multiplier sits just outside that limit.
+    from jaxcont.utils.precision import default_tol
+    second = min(0.986, float(np.exp(-3 * 10 * np.sqrt(default_tol(jnp.asarray(0.).dtype)))))
+    basis = jnp.array([[1., 1., 0.], [1., -1., 0.], [0., 0., 1.]])
+    real_pair = basis @ jnp.diag(jnp.array([1., second, 0.5])) @ jnp.linalg.inv(basis)
+    for factor in (far_pair, real_pair):
+        for strategy in (PeriodicSchur(), ProductFloquet()):
+            spectrum = _spectrum_with_factor(monkeypatch, factor, strategy)
+            assert not bool(spectrum.converged)
+            assert int(spectrum.trivial_index) == -1

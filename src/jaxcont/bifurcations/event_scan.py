@@ -143,7 +143,8 @@ def _spectral(event, data, raw, pinned=None, trivial_index=None, usable=None):
             raise ValueError('Floquet events require flow-direction trivial_index at every point')
         keep = nontrivial_mask(permutation, trivial_index) & usable[:, None]
         if isinstance(event, PeriodDoubling):
-            values, eligible = spectra.real + 1, real & keep
+            # As PeriodDoubling._mode_mask: real, or complex inside the circle.
+            values, eligible = spectra.real + 1, (real | (jnp.abs(spectra) < 1)) & keep
         else:
             values, eligible = jnp.abs(spectra) - 1, complex_upper & keep
     else:

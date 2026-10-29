@@ -773,8 +773,11 @@ class PeriodDoubling(_FloquetEvent, Event):
     """A period-doubling (flip) bifurcation of a periodic orbit.
 
     Detection (``scan``): on tracked Floquet multipliers (trivial multiplier
-    excluded), a real ``mu_k`` (``|Im mu_k| <= tolerance`` at both bracket
-    ends) has ``Re mu_k + 1`` change sign. Refinement bisects on the same
+    excluded), ``Re mu_k + 1`` changes sign while ``mu_k`` is real
+    (``|Im mu_k| <= tolerance``) or complex inside the unit circle at each
+    bracket end. Inside the circle ``Re mu_k > -1``, so a pair that turns real
+    and has a member pass ``-1`` within one step is found; a pair outside the
+    circle opens no bracket. Refinement bisects on the same
     tracked mode, correcting each midpoint onto the collocation residual, and
     accepts the result only if the non-trivial multiplier nearest ``-1`` is
     real. See ``docs/superpowers/specs/2026-07-24-floquet-multipliers-design.md``.
@@ -811,7 +814,7 @@ class PeriodDoubling(_FloquetEvent, Event):
 
     @staticmethod
     def _mode_mask(spectra, tol):
-        return np.abs(spectra.imag) <= tol
+        return (np.abs(spectra.imag) <= tol) | (np.abs(spectra) < 1)
 
     @staticmethod
     def _critical(tracked):
