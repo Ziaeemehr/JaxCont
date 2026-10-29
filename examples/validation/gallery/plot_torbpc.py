@@ -106,7 +106,7 @@ result = jc.continuation(
         ds=0.005,
         ds_min=1e-5,
         ds_max=0.02,
-        max_steps=300,
+        max_steps=400,
         # A looser tolerance leaves the orbit too inaccurate to identify
         # the flow mode of the Floquet spectrum.
         newton_tol=1e-8,

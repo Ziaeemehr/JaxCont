@@ -67,7 +67,9 @@ amplitude; start periodic continuation from a seed of finite amplitude.
   BT point (`lorenz84.bt-ft`) is compared.
 - Floquet comparisons remove the trivial multiplier by flow-mode
   (eigenvector) alignment when the bundle supplies vectors, and record the
-  nearest-to-`+1` fallback when it does not.
+  nearest-to-`+1` fallback when it does not. Multipliers are compared
+  absolutely up to `|mu| = 1` and relative to `|mu|` above it, because a
+  multiplier `exp(lambda*T)` carries an error proportional to its size.
 - Hopf coefficients use the MatCont/Kuznetsov convention with unit-norm `q`
   and denominator `2 * omega0`; the standard cubic Hopf has `l1 = -2`.
 - Lorenz-84 runs use a Newton tolerance of `1e-12` and torBPC runs `1e-8`;

@@ -232,3 +232,31 @@ def test_pending_item_delegated_to_a_passing_run_is_information_only(monkeypatch
     assert not promote._covered_elsewhere({**delegated, "reason": "refined BT is compared in a.open"})
     assert not promote._covered_elsewhere({**delegated, "reason": "refined BT is compared in a.missing"})
     assert not promote._covered_elsewhere({"verdict": "PENDING", "reason": "no refined comparison declared"})
+
+
+@pytest.mark.parametrize("level, shift, verdict", [
+    # torBPC: an unstable multiplier near -50, where MatCont and
+    # BifurcationKit differ by 0.033 (relative 6e-4).
+    (-50.0, 0.033, "PASS"),
+    (-50.0, 0.5, "FAIL"),     # relative 1e-2 is a disagreement
+    (0.98, 0.0049, "PASS"),   # |mu| <= 1 keeps the absolute limit
+    (0.98, 0.006, "FAIL"),
+])
+def test_floquet_multipliers_compare_relative_to_their_size(level, shift, verdict):
+    """multiplier_atol is absolute up to |mu| = 1 and relative above: a large
+    multiplier exp(lambda*T) carries an error proportional to its size."""
+    from examples.validation.promotion_metrics import _pairwise
+
+    def curve(samples, offset):
+        rows = [dict(segment_id="s", point_id=str(i), parameter=float(p), state_0=float(p))
+                for i, p in enumerate(samples)]
+        spectra = [dict(segment_id="s", point_id=r["point_id"], real=level + offset,
+                        imag=0, event_index=-1) for r in rows]
+        return dict(branch=rows, spectra=spectra)
+
+    selected = case()
+    selected.update(comparison_window=[0, 1], expected_events=[],
+                    tolerances={"parameter_atol": 1e-4, "state_atol": 1e-4,
+                                "multiplier_atol": 5e-3, "residual_atol": 1e-7})
+    metrics = _pairwise(selected, curve(np.linspace(0, 1, 5), 0), curve(np.linspace(0, 1, 9), shift))
+    assert metrics["sheet_0.spectrum"]["verdict"] == verdict

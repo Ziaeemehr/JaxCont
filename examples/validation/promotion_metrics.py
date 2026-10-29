@@ -186,7 +186,7 @@ def passage_information(data, case):
 def _regular_coordinate(x, y, preferred=None):
     """Maximize range / max(1, magnitude) on both compared sheets."""
     candidates = [k for k in x[0].keys() & y[0].keys()
-                  if k == "parameter" or k.startswith("state_")]
+                  if k == "parameter" or k.startswith("state_") or k == preferred]
     def distinct(rows):
         result = []
         for row in rows:
@@ -250,7 +250,22 @@ def _sheets(data, case=None):
     return result
 
 
-def _spectrum_error(a, b, x, y, query, coordinate="parameter"):
+def _mode_error(va, vb, relative):
+    """Largest matched difference between two spectra.
+
+    ``relative`` (Floquet multipliers, ``multiplier_atol``) divides by
+    ``max(1, |mu|)``: absolute up to the unit circle, relative above it,
+    because a multiplier ``exp(lambda*T)`` carries an error proportional to
+    its size (torBPC: MatCont and BifurcationKit differ by 0.033 at -53).
+    """
+    ii, jj = linear_sum_assignment(abs(va[:, None]-vb[None, :]))
+    difference = abs(va[ii]-vb[jj])
+    if relative:
+        difference = difference / np.maximum(1., np.maximum(abs(va[ii]), abs(vb[jj])))
+    return float(max(difference))
+
+
+def _spectrum_error(a, b, x, y, query, coordinate="parameter", relative=False):
     from examples.validation.artifacts import _unique_spectrum_points
     curves = []
     for data, sheet in ((a, x), (b, y)):
@@ -278,8 +293,7 @@ def _spectrum_error(a, b, x, y, query, coordinate="parameter"):
     for va, vb in zip(*curves):
         if len(va) != len(vb):
             return None
-        ii, jj = linear_sum_assignment(abs(va[:, None]-vb[None, :]))
-        error = max(error, float(max(abs(va[ii]-vb[jj]))))
+        error = max(error, _mode_error(va, vb, relative))
     return error
 
 
@@ -307,8 +321,8 @@ def _pairwise(case, a, b, *, coordinates=None, samples=None):
                            if _limit(k, tol) is not None and k not in ("parameter", "residual_norm")}
                 if not columns:
                     columns = {"parameter"}
-                coordinate, x, y = _regular_coordinate(x, y,
-                    preferred="state_0" if case["canonical_id"] == "cubic.eq-fold" else None)
+                coordinate, x, y = _regular_coordinate(x, y, preferred=case.get(
+                    "comparison_coordinate", "state_0" if case["canonical_id"] == "cubic.eq-fold" else None))
                 xx = x if float(x[0][coordinate]) <= float(x[-1][coordinate]) else x[::-1]
                 yy = y if float(y[0][coordinate]) <= float(y[-1][coordinate]) else y[::-1]
                 if coordinate != "parameter":
@@ -362,8 +376,10 @@ def _pairwise(case, a, b, *, coordinates=None, samples=None):
                         budget=np.full(len(query), tol["radius_atol"]).tolist())
                 spectral_limit = tol.get("spectrum_atol", tol.get("multiplier_atol"))
                 if spectral_limit is not None:
-                    metrics["spectrum"] = _metric(_spectrum_error(a, b, xx, yy, query, coordinate), spectral_limit,
-                                                  "all native modes; no failed modes omitted")
+                    relative = "spectrum_atol" not in tol
+                    metrics["spectrum"] = _metric(_spectrum_error(a, b, xx, yy, query, coordinate, relative), spectral_limit,
+                                                  "all native modes; no failed modes omitted"
+                                                  + ("; relative above |mu| = 1" if relative else ""))
                 cost = max((m["value"] / m["limit"] if m["limit"] else 0.)
                            if m["value"] is not None else 1e100 for m in metrics.values())
                 costs[i, j] = cost
@@ -408,8 +424,7 @@ def _pairwise(case, a, b, *, coordinates=None, samples=None):
             if limit is not None:
                 error = None
                 if len(va) == len(vb) and len(va) and np.all(np.isfinite(va)) and np.all(np.isfinite(vb)):
-                    ii2, jj2 = linear_sum_assignment(abs(va[:,None]-vb[None,:]))
-                    error = max(abs(va[ii2]-vb[jj2]))
+                    error = _mode_error(va, vb, "spectrum_atol" not in tol)
                 result[f"{kind}_{i}.spectrum"] = _metric(error, limit, "all modes, including flow mode")
     return result
 

@@ -384,7 +384,9 @@
         "NS",
         "PD"
       ],
-      "comparison_event_comment": "LPC at -0.584492842 is outside the explicit upper bound -0.5845; retain it as informational native evidence."
+      "comparison_event_comment": "LPC at -0.584492842 is outside the explicit upper bound -0.5845; retain it as informational native evidence.",
+      "comparison_coordinate": "period",
+      "comparison_coordinate_comment": "The period is a solved unknown in every tool, monotone on both sheets and regular at the LPC that ends them. The envelope extrema otherwise chosen carry ~1e-4 sampling error, which the multiplier slope between NS and PD (~26 per unit of state_0_max) turns into ~5e-3; nu has a square-root turn at the LPC, where the sparse MatCont/BifurcationKit series cannot be interpolated (measured 2026-10-29)."
     },
     {
       "id": "MC-LC-003",

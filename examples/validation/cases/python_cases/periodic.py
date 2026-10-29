@@ -263,7 +263,9 @@ def _run_torbpc_jaxcont():
             ds=0.005,
             ds_min=1e-5,
             ds_max=0.02,
-            max_steps=300,
+            # The contract's 300 steps end at nu=-0.707 with this dense
+            # theta=1 sampling; 400 reach p_span's end (-0.75) in 383 steps.
+            max_steps=400,
             # Measured at ntst=25 (2026-10-29): every point converges at 1e-8.
             # At 1e-5 the orbit was too inaccurate to identify the flow mode
             # (trivial multiplier 1.0002, 67 points without a spectrum).
@@ -555,5 +557,5 @@ def produce_torbpc_periodic(*, computed=None):
         expected_event_status={kind:('MISSING' if not events else 'DUPLICATE' if len(events)>1 else 'FOUND' if events[0]['status']=='CONVERGED' else 'FAILED') for kind,events in selected.items()},
         refinement=mesh_refinement(_torbpc_rhs,mesh,result.branch.states[int(result.branch.n_valid)-1],result.branch.params[int(result.branch.n_valid)-1]))
     import platform
-    tables['metadata'].update(runtime_version=platform.python_version(),package_versions={'JaxCont':jc.__version__,'JAX':jax.__version__},precision=str(result.branch.states.dtype),parameter_order=['nu'],scaling={'time':'original','metric':'theta=1 Euclidean collocation coordinates'},seeds={'nu':-.589286291695516,'method':'local Hopf eigenvector'},mesh={'ntst':mesh.ntst,'ncol':mesh.ncol},resolved_controls={'ds':.005,'ds_min':1e-5,'ds_max':.02,'max_steps':300},solver_strategies={'method':'JaxCont PseudoArclength','event_selection':'native event labels; missing labels remain FAIL'})
+    tables['metadata'].update(runtime_version=platform.python_version(),package_versions={'JaxCont':jc.__version__,'JAX':jax.__version__},precision=str(result.branch.states.dtype),parameter_order=['nu'],scaling={'time':'original','metric':'theta=1 Euclidean collocation coordinates'},seeds={'nu':-.589286291695516,'method':'local Hopf eigenvector'},mesh={'ntst':mesh.ntst,'ncol':mesh.ncol},resolved_controls={'ds':.005,'ds_min':1e-5,'ds_max':.02,'max_steps':400},solver_strategies={'method':'JaxCont PseudoArclength','event_selection':'native event labels; missing labels remain FAIL'})
     return tables
