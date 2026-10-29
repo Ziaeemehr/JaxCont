@@ -185,36 +185,15 @@ def test_every_codim2_event_kind_has_a_plot_style():
 # from a point BifurcationKit.jl located far away on the SAME curve --
 # no guess anywhere near the BT is ever supplied.
 #
-# Seed values below are BifurcationKit.jl's own first fold-curve point
-# (`sn_codim2.sol[1]`), printed by examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl:
-#     first point x = [1.3117855253168738, -0.04287499818491644,
-#                      0.18038939415099514, -0.15702758496684757,
-#                      1.5466483725981275]     # (X, Y, Z, U, F)
-#     first point p = 0.04                     # T
-# The curve's augmented state there is (u, F) with T as the externally
-# continued parameter -- exactly jaxcont's fold_curve_problem(..., free=1)
-# convention, where p[0]=F is solved for (p_fixed) and p[1]=T is continued.
-#
-# P_TARGET_FREE is NOT BifurcationKit's full curve endpoint (T=-0.0735).
-# examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl's specialpoint list shows TWO BT
-# points on that curve (T=0.018390565929128334 and T=-0.023705593679238822,
-# from `sp.param`) -- the Lorenz-84 model here is exactly symmetric under
-# (U, T) -> (-U, -T) (U and T enter the RHS only as U**2 and as the U-row's
-# additive +T, so the second BT is this model's own mirror image of the
-# first, at u=(X,Y,Z,-U), p=(F,-T)). Continuing all the way to the
-# endpoint makes the detector correctly report BOTH real BT points (2
-# hits), which would defeat `len(hits) == 1` for reasons that have nothing
-# to do with detector correctness. P_TARGET_FREE = -0.01 stops well short
-# of the second BT (and of BifurcationKit's two ZH points at T ~= 0) while
-# clearing the first BT at T = 0.0209 by a wide margin -- verified
-# empirically to yield exactly one hit, landing on BK_BT_U/BK_BT_P.
-U_SEED = jnp.array([
-    1.3117855253168738, -0.04287499818491644,
-    0.18038939415099514, -0.15702758496684757,
-])
-P_SEED = jnp.array([1.5466483725981275, 0.04])  # (F, T) at the seed
-P_SEED_FREE = 0.04    # T at the seed (first curve point)
-P_TARGET_FREE = -0.01  # T target; see margin note above
+# Preserve the original independent seed from the historical v1 bundle.
+# Stop before the symmetry-related second BT point.
+from tests.reference_bundles import historical_values
+
+_fold_seed = historical_values("fold-seed")
+U_SEED = jnp.array(_fold_seed["U_SEED"])
+P_SEED = jnp.array(_fold_seed["P_SEED"])
+P_SEED_FREE = _fold_seed["P_SEED_FREE"]
+P_TARGET_FREE = -0.01
 
 
 def test_lorenz84_bt_matches_bifurcationkit():

@@ -166,7 +166,7 @@ def test_comparison_page_has_the_six_sections_and_report_table(entry):
     ]
     positions = [text.index(section) for section in sections]
     assert positions == sorted(positions)
-    assert "render_report_table(report)" in text
+    assert "render_report_table(report)" in text or "ReportTable(report)" in text
     assert "save_checked_figure" in text
 
 

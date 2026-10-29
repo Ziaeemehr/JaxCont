@@ -71,7 +71,8 @@ def test_flagship_registry_and_conventions_are_ready_for_review():
     for run in ("eq-f", "fold-ft", "hopf-ft", "bt-ft"):
         case = select_cases(registry, ["lorenz84." + run])[0]
         assert case["system"] == "lorenz84"
-        assert case["evidence_status"] == "PENDING"
+        assert case["evidence_status"] == ({"eq-f": "FAIL", "fold-ft": "FAIL",
+                                            "hopf-ft": "PASS", "bt-ft": "PASS"}[run])
         assert set(case["tool_coverage"]) == {"jaxcont", "matcont", "bifurcationkit"}
         assert case["model_contract"]["review_status"].startswith("REVIEWED")
 

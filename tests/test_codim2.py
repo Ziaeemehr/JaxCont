@@ -510,31 +510,11 @@ def test_codim2_names_are_listed_in_dunder_all():
 # Cross-validation against BifurcationKit.jl v0.5.2
 # --------------------------------------------------------------------------
 #
-# Reference values from an independent BifurcationKit.jl v0.5.2 run -- see
-# examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl. Regenerate with:
-#     julia examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl
-#
-# Route (a): a real applied model neither implementation was tuned for --
-# the Lorenz-84 atmospheric circulation model (already used in
-# examples/validation/regenerate/bifurcationkit/lorenz84_equilibria.jl). BifurcationKit.jl's OWN test
-# suite (test/lorenz84.jl, shipped inside the installed BifurcationKit.jl
-# package tree) independently proves this exact model has a genuine
-# Bogdanov-Takens point, reached by continuing the equilibrium branch in F,
-# then following the detected fold into T with codim-2 detection on. These
-# constants are BifurcationKit's Newton-REFINED point (not the coarser
-# bisection-located one printed first by the script), matching the
-# package's own hardcoded normal-form coefficients (nf.a, nf.b) to 10
-# significant figures.
-#
-# (A first route-(a) attempt used Bazykin's predator-prey model continued
-# in (a, b) from (a,b,c) = (1.0, 0.5, 0.4); it only exposed a transcritical
-# point in that parameter window, no fold/Hopf/BT/GH -- abandoned in favor
-# of Lorenz-84 rather than iterating open-endedly on Bazykin's parameters.)
-BK_BT_U = (
-    1.2256404959862783, -0.03632079327106889,
-    0.197288323112333, -0.12339001198518851,
-)  # (X, Y, Z, U) at the BT point
-BK_BT_P = (1.4467167011153617, 0.020940169683322584)  # (F, T) at the BT point
+# Fresh reviewed BT expectations; the former literals are preserved separately
+# in reference/historical/bifurcationkit/lorenz84 with their original provenance.
+from tests.reference_bundles import reviewed_bt
+
+BK_BT_U, BK_BT_P = reviewed_bt()
 
 _LOR84_ALPHA = 0.25
 _LOR84_BETA = 1.0

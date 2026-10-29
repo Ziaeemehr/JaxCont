@@ -154,19 +154,22 @@ def save_checked_figure(figure, report, path):
     bundle = hashlib.sha256(
         json.dumps(report.reference_hashes, sort_keys=True).encode()
     ).hexdigest()
-    limits = ", ".join(f"{r['limit']:.2g}" for r in report.metrics)
     domain = '; '.join(f"{key}: [{lo:.4g}, {hi:.4g}]" for key, (lo, hi) in report.compared_domain.items())
+    # Reserve a strip below the axes so the footer never overlaps tick labels;
+    # a figure with a comparison summary needs room for both texts.
+    figure.tight_layout(rect=(0, 0.14 if getattr(figure, "_validation_summary", False) else 0.07, 1, 0.97))
     figure.text(
         0.5,
-        -0.035,
+        0.005,
         f"JaxCont {jc.__version__} fresh | "
         + (
-            f"MatCont 7.6 committed | bundle {bundle[:12]}\n"
+            f"MatCont 7.6 committed | bundle {bundle[:12]}"
             if report.reference_hashes
-            else "independent IVP shooting fresh\n"
+            else "independent IVP shooting fresh"
         )
-        + f"Metric limits (table order): {limits}\n{domain}",
+        + (f"\ndata ranges {domain}" if domain else ""),
         ha="center",
+        va="bottom",
         fontsize=7,
     )
     figure.savefig(

@@ -130,3 +130,35 @@ def test_normal_form_without_coefficient_budget_remains_pending(tmp_path):
         (path / "metadata.json").write_text(json.dumps(meta))
     report = manifest(tmp_path, paths, selected)
     assert report["verdict"] == "PENDING"
+
+
+@pytest.mark.parametrize("shift, verdict", [(0.0, "PASS"), (0.01, "FAIL")])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_curve_metrics_evaluate_dense_curve_at_sparse_native_nodes(shift, verdict, reverse):
+    import numpy as np
+    from examples.validation.promotion_metrics import _pairwise
+
+    def curve(samples, offset):
+        rows = [dict(segment_id="s", point_id=str(i), parameter=float(p),
+                     state_0=float(p*p + offset), F=float(p*p + offset))
+                for i, p in enumerate(samples)]
+        spectra = [dict(segment_id="s", point_id=r["point_id"],
+                        real=r["state_0"], imag=0, event_index=-1) for r in rows]
+        return dict(branch=rows, spectra=spectra)
+
+    selected = case()
+    selected.update(comparison_window=[0, 1], expected_events=[])
+    coarse, dense = curve(np.linspace(0, 1, 5), 0), curve(np.linspace(0, 1, 101), shift)
+    left, right = (dense, coarse) if reverse else (coarse, dense)
+    metrics = _pairwise(selected, left, right)
+    for name in ("state_0", "F", "spectrum"):
+        assert metrics[f"sheet_0.{name}"]["verdict"] == verdict
+
+
+def test_window_boundary_contact_is_not_an_extra_sheet():
+    from examples.validation.promotion_metrics import _sheets
+    selected = case()
+    selected["comparison_window"] = [0, 1]
+    data = dict(branch=[dict(segment_id="inward", parameter=p) for p in [1, 0]] +
+                       [dict(segment_id="outward", parameter=p) for p in [1, 2]])
+    assert len(_sheets(data, selected)) == 1

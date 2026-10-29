@@ -9,6 +9,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.interpolate import CubicSpline
 
 from .artifacts import (
     reference_directory,
@@ -137,9 +138,11 @@ def _annotate_summary(
     details: list[str],
     fontsize: float = 9.0,
 ) -> None:
+    # save_checked_figure puts its provenance footer below this text.
+    figure._validation_summary = True
     text = figure.text(
         0.5,
-        0.015,
+        0.06,
         f"Systematic comparison: {status}\n" + "  •  ".join(details),
         ha="center",
         va="bottom",
@@ -957,6 +960,47 @@ __all__ = [
 ]
 
 
+class ReportTable:
+    """The report's metrics as a table that Sphinx-Gallery renders as HTML.
+
+    Leave it as the last expression of a gallery cell; the HTML is produced by
+    ``_repr_html_`` and plain text by ``__repr__``.
+    """
+
+    def __init__(self, report):
+        self.rows = [(r['metric'], r['measured'], r['limit'], 'PASS' if r['passed'] else 'FAIL')
+                     for r in report.metrics]
+        self.status = report.status
+
+    def __repr__(self):
+        width = max(len(row[0]) for row in self.rows)
+        lines = [f"{'Metric':<{width}}  {'Measured':>10}  {'Limit':>10}  Verdict"]
+        lines += [f"{m:<{width}}  {v:>10.3g}  {l:>10.3g}  {ok}" for m, v, l, ok in self.rows]
+        return "\n".join(lines)
+
+    def _repr_html_(self):
+        def row(cells, tag):
+            return "<tr>" + "".join(f"<{tag} style='{style}'>{cell}</{tag}>"
+                                    for cell, style in zip(cells, self._styles)) + "</tr>"
+        body = "".join(row((m, f"{v:.3g}", f"{l:.3g}", ok), "td") for m, v, l, ok in self.rows)
+        return ("<table class='validation-report'>" + row(("Metric", "Measured", "Limit", "Verdict"), "th")
+                + body + "</table>")
+
+    _styles = ("text-align:left", "text-align:right", "text-align:right", "text-align:center")
+
+
+def summarize_report(report):
+    """A one-paragraph takeaway generated from the report, never hand-typed."""
+    worst = max(report.metrics, key=lambda r: r['measured'] / r['limit'] if r['limit'] else 0.0)
+    failed = [r['metric'] for r in report.metrics if not r['passed']]
+    text = (f"Status {report.status}: {len(report.metrics) - len(failed)} of {len(report.metrics)} "
+            f"checks pass. The tightest is {worst['metric']}, measured {worst['measured']:.2g} "
+            f"against a limit of {worst['limit']:.2g} ({worst['measured'] / worst['limit']:.0%} of the budget).")
+    if failed:
+        text += " Failing: " + ", ".join(failed) + "."
+    return text
+
+
 def render_report_table(report):
     """Render measured values, unchanged limits, and verdicts from one report."""
     figure, axis = plt.subplots(figsize=(11, max(2, len(report.metrics) * 0.38)))
@@ -1035,12 +1079,23 @@ def render_comparison(result, report, reference_dir):
             axis.set_xticks(x, list(result.observations['jaxcont_spectrum_errors']))
             label, xlabel = 'event-local Floquet spectrum error', 'MatCont event'
         if case_id != 'MC-LC-002':
-            order = np.argsort(rx)
-            mask = (x >= rx.min()) & (x <= rx.max())
+            # Evaluate the denser series at the sparser one's samples, so the
+            # panel shows disagreement rather than interpolation error.
+            if len(x) >= len(rx):
+                dense_x, dense_y, x, y = x, y, rx, ry
+            else:
+                dense_x, dense_y = rx, ry
+            # A cubic spline: linear interpolation on a curved branch shows
+            # its own O(h^2) error (~1e-4 on the cubic S-curve), not disagreement.
+            knots, first = np.unique(dense_x, return_index=True)
+            mask = (x >= knots.min()) & (x <= knots.max())
             x, y = x[mask], y[mask]
-            errors = np.abs(y - np.interp(x, rx[order], ry[order]))
-    axis.plot(x, errors, 'o-', markersize=3)
-    axis.set(xlabel=xlabel, ylabel=label, title=f'{report.status}: JaxCont fresh − MatCont committed')
+            errors = np.abs(y - CubicSpline(knots, dense_y[first])(x))
+            order = np.argsort(x)
+            x, errors = x[order], errors[order]
+    floor = np.finfo(float).tiny
+    axis.semilogy(x, np.maximum(errors, floor), 'o-', markersize=3)
+    axis.set(xlabel=xlabel, ylabel=label, title=f'{report.status}: |JaxCont fresh − MatCont committed|')
     axis.grid(alpha=0.2)
     error_figure.tight_layout()
     return figure, error_figure

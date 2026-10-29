@@ -1,0 +1,26 @@
+{
+  "source": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/adaptx/matcont/adaptx.cycle-pd-switch",
+  "source_hashes": {
+    "adaptx-base_branch.csv": "sha256:ac75aa7c03df58e553d2be220bf288bd8445c4c13ed9421276f64b9ce84154d1",
+    "adaptx-base_events.csv": "sha256:d884676e0ba407288e557d59c62e57467d3bf84490458044ceed77daaa7ab067",
+    "adaptx-base_metadata.json": "sha256:cd5e9a1beab8474dadffcec56c4fd549637ab22be35e7e26c7a268147c35be3f",
+    "adaptx-base_multipliers.csv": "sha256:a3afd80144ce39f5d396f59e204f15c59b511576dc5b82791e8ee7f3a26c77f7",
+    "adaptx-doubled_branch.csv": "sha256:c7c6fb780b1c44f3b6793f56f745c51b88b229a4379185842d31fee627395fc6",
+    "adaptx-doubled_events.csv": "sha256:c3d91a2598a4f9f31bd77b580de7ba8ef5a493e88ba7c57c36fddbd7229436c0",
+    "adaptx-doubled_metadata.json": "sha256:675206af7b2dc06941233121763ea554d6b908cca7fb58264e1dd9a168aff288",
+    "adaptx-doubled_multipliers.csv": "sha256:ded6ed2e3e47dfc2eca66f1a52b3fc1acd1d7dd19c63ab41f94c56418d973716",
+    "branch.csv": "sha256:2511545437fb9fa28bc970ae82e85334bf008f3303c8fd461160db67d018b12e",
+    "events.csv": "sha256:a53de1b17b97ccd7b8c860f2729a872c8720b8318b0f8884aa0422e40e319a1d",
+    "invocation.json": "sha256:74fe930e66492d484a970bc94b17f7460606fab01af50a05c04cabbe027fb41b",
+    "metadata.json": "sha256:8aba7608e4325b190ad43ff64755988536de7d34e42c7861e4bdad73107d31dd",
+    "orbits.csv": "sha256:b2a3e96274ae7150013ce25c64f05c3142549e364afa02c5adff6f039873fda4",
+    "raw.json": "sha256:fd343c1cdb5cff6db8907d3ccc914bec8c81af0dd807dfdb2d087f45bc5c14bd",
+    "regeneration.log": "sha256:bb8ca90fc68972d148bbbd592ef50c1b1387b1053758915e50e736c125213ece",
+    "run_adaptx_pd.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+    "run_adaptx_pd.stdout.log": "sha256:2845cda2530e4f0aeaa5b0d3dd4e5494ec8ec59774ea28482843b026164f884d",
+    "spectra.csv": "sha256:40ba59dda791a23f6937e23dc623a771a380cca3e6101d26240f3cd90fd237bf"
+  },
+  "omitted": {
+    "raw.json": "Redundant native JSON export; numerical CSV tables and native logs retained byte for byte."
+  }
+}

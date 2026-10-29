@@ -1,0 +1,947 @@
+{
+  "schema_version": 1,
+  "canonical_id": "cubic.eq-fold",
+  "system": "cubic",
+  "reviewer": "Claude (review delegated by owner, 2026-10-28)",
+  "review_date": "2026-10-29",
+  "expected_status": "PASS",
+  "registry_case": {
+    "id": "MC-EQ-001",
+    "title": "Cubic S-curve equilibrium continuation",
+    "support": "supported",
+    "features": [
+      "equilibrium-continuation",
+      "fold"
+    ],
+    "python": "examples.validation.cases.python_cases.equilibrium:run_cubic_fold",
+    "matlab": "run_cubic_fold",
+    "references": [
+      "MC-EQ-001_branch.csv",
+      "MC-EQ-001_events.csv",
+      "MC-EQ-001_multipliers.csv",
+      "MC-EQ-001_metadata.json"
+    ],
+    "manual_source": "Analytic cubic equilibrium folds",
+    "tolerances": {
+      "parameter_atol": 0.0005,
+      "state_atol": 0.0002,
+      "residual_atol": 2e-05,
+      "fold_coefficient_atol": 0.0005,
+      "spectrum_atol": 0.0005
+    },
+    "canonical_id": "cubic.eq-fold",
+    "aliases": [
+      "MC-EQ-001"
+    ],
+    "system": "cubic",
+    "tool_coverage": {
+      "jaxcont": "PENDING",
+      "matcont": "PASS",
+      "bifurcationkit": "PENDING"
+    },
+    "evidence_status": "PASS",
+    "expected_domain": [
+      -1.0,
+      4.17408451642958
+    ],
+    "expected_events": [
+      "LP",
+      "LP"
+    ],
+    "metric_limits": {
+      "parameter_atol": 0.0005,
+      "state_atol": 0.0002,
+      "residual_atol": 2e-05,
+      "fold_coefficient_atol": 0.0005,
+      "spectrum_atol": 0.0005
+    },
+    "required_tools": [
+      "jaxcont",
+      "matcont",
+      "bifurcationkit"
+    ],
+    "bifurcationkit": "cubic_fold.jl",
+    "comparison_window": [
+      -1,
+      1
+    ],
+    "comparison_window_comment": "Shared JaxCont/BifurcationKit window; legacy MatCont continues to 4.17."
+  },
+  "candidates": {
+    "jaxcont": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/cubic/jaxcont/cubic.eq-fold",
+      "hashes": {
+        "branch.csv": "sha256:b83ed23581577bb596194c82dc51cadc478a837a919262666d8c63aca49420ae",
+        "events.csv": "sha256:0343a379e363914763fa84fedb060bb4e98b5c31be638b36abe4c67f71c623ac",
+        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0",
+        "metadata.json": "sha256:eadb3a58ddd67d29588230edc1db743628459c775248d25654b2cd4bb6adad93",
+        "native-result.json": "sha256:7859da6f43013592c41ad230c1a4a8ed480afd7f2ec2aa5e902aed41e0d199b3",
+        "regenerate_jaxcont.py": "sha256:265c05f933b81bc3263922f04104b173d5facf71447f8296cdc297dbd8e297d2",
+        "spectra.csv": "sha256:8e6719ca1a8f0aac92cc26f682c507249eda8e9e6fb3b0914f75e1ee153a53de"
+      },
+      "promotable": true,
+      "command": [
+        "/home/ziaee/envs/jaxcont/bin/python3",
+        "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/regenerate_jaxcont.py"
+      ],
+      "logs": {
+        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0"
+      },
+      "coverage": "unspecified"
+    },
+    "matcont": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/cubic/matcont/cubic.eq-fold",
+      "hashes": {
+        "branch.csv": "sha256:5f24587e4de7c092622f0c8384c50991ed06cc3e9d70754317abb04514469ff5",
+        "conversion-manifest.json": "sha256:8cbc37a3a72785abd72767ae1d6ff2cb86023d150db28ed194557db604850e38",
+        "events.csv": "sha256:61a90c91ed3f3b699719c5402a498f1acbc450470098dcf81475ba290627c13c",
+        "invocation.json": "sha256:2e2c06800d6fd9f1a35b950e12a09f60860502544fdbd38d277829fb231b768a",
+        "legacy/MC-EQ-001_branch.csv": "sha256:6fd76db570bbdbdfdc18b15f1c51bfa06c0ad023e312441ba7dc74dac8d593f1",
+        "legacy/MC-EQ-001_events.csv": "sha256:b680a1f47753dfc04b6a2b8baef728bf8e7f986f54d9e00ec78bd0b29cebd385",
+        "legacy/MC-EQ-001_metadata.json": "sha256:07e6c5121a2095ed8e30f0287d6794ad6f7416778d6f9ea288dfe340c266a21d",
+        "legacy/MC-EQ-001_multipliers.csv": "sha256:dce70687b2ef1e493a800dd078da98a084f2768492d818bcf48192577b979f21",
+        "legacy/invocation.json": "sha256:2e2c06800d6fd9f1a35b950e12a09f60860502544fdbd38d277829fb231b768a",
+        "legacy/regeneration.log": "sha256:0ca7a386c03d557b6854eb5502995e01963e45a958340a91c1f15c99b177ec20",
+        "legacy/run_cubic_fold.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "legacy/run_cubic_fold.stdout.log": "sha256:e25f5963a2c000bed4ea251dffce1e287150f5e96896bfb8464213aa94a1f1b4",
+        "metadata.json": "sha256:5c5ef715d5b970d5c46b72a13acfa820c3642768b1e3a8a27192f34afc0aea1e",
+        "regeneration.log": "sha256:0ca7a386c03d557b6854eb5502995e01963e45a958340a91c1f15c99b177ec20",
+        "run_cubic_fold.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "run_cubic_fold.stdout.log": "sha256:e25f5963a2c000bed4ea251dffce1e287150f5e96896bfb8464213aa94a1f1b4",
+        "spectra.csv": "sha256:dd762229ca7ae592acf0a6bd0e0d24a65e04974c9abd2449ba1cdbae1f63e00d"
+      },
+      "promotable": true,
+      "command": [
+        "/home/ziaee/envs/jaxcont/bin/python3",
+        "-m",
+        "examples.validation.run_validation",
+        "--regenerate",
+        "matcont",
+        "--case",
+        "cubic.eq-fold",
+        "--output-dir",
+        "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/matcont/cubic.eq-fold"
+      ],
+      "logs": {
+        "legacy/regeneration.log": "sha256:0ca7a386c03d557b6854eb5502995e01963e45a958340a91c1f15c99b177ec20",
+        "legacy/run_cubic_fold.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "legacy/run_cubic_fold.stdout.log": "sha256:e25f5963a2c000bed4ea251dffce1e287150f5e96896bfb8464213aa94a1f1b4",
+        "regeneration.log": "sha256:0ca7a386c03d557b6854eb5502995e01963e45a958340a91c1f15c99b177ec20",
+        "run_cubic_fold.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "run_cubic_fold.stdout.log": "sha256:e25f5963a2c000bed4ea251dffce1e287150f5e96896bfb8464213aa94a1f1b4"
+      },
+      "coverage": "unspecified"
+    },
+    "bifurcationkit": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/cubic/bifurcationkit/cubic.eq-fold",
+      "hashes": {
+        "branch.csv": "sha256:0ffe137440c5af723bb9c1de0047cb4f699d0907347f2e2fc815deda81735e96",
+        "cubic_fold.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "cubic_fold.stdout.log": "sha256:6e22d7dd97957f1ee2ee7c15f0c3790b3137a2884932c7e8c2d1b5aa56b31d95",
+        "events.csv": "sha256:cc914c8aaff7d0cd2389c67944c10911e6e5dd7bb4d75fcc45b478d9ee4b5486",
+        "invocation.json": "sha256:bb0ebc210d24d74b2852ccd8da0d6bf0e388bb012dd577fd8252deffb23dc0ce",
+        "metadata.json": "sha256:e657043e53c3146f79d3269815f4c426bb6abe9b1b9f88e3b757390ae25b860e",
+        "regeneration.log": "sha256:25468d71e3c3c471824b58ab3837e7ccbab4b7f9596dc584c15c54b9e44eda1e",
+        "spectra.csv": "sha256:c24ec7b1d4bb944b56d6abd76553d723c9bd119a27ba6f2089a408ee45b5f026"
+      },
+      "promotable": true,
+      "command": [
+        "julia",
+        "--project=/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit",
+        "/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit/cubic_fold.jl",
+        "--case",
+        "cubic.eq-fold",
+        "--output-dir",
+        "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/bifurcationkit/cubic.eq-fold/cubic.eq-fold/bifurcationkit"
+      ],
+      "logs": {
+        "cubic_fold.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "cubic_fold.stdout.log": "sha256:6e22d7dd97957f1ee2ee7c15f0c3790b3137a2884932c7e8c2d1b5aa56b31d95",
+        "regeneration.log": "sha256:25468d71e3c3c471824b58ab3837e7ccbab4b7f9596dc584c15c54b9e44eda1e"
+      },
+      "coverage": "unspecified"
+    }
+  },
+  "independent": {
+    "jaxcont": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 9.296917180545705e-07,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "matcont": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 7.54984963435845e-12,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "bifurcationkit": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 7.94031507211912e-13,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      }
+    }
+  },
+  "pairwise": {
+    "jaxcont--matcont": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0004929433134310823,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.parameter": {
+        "value": 8.651940144321912e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.spectrum": {
+        "value": 2.1316282072803006e-14,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "sheet_1.endpoint_difference": {
+        "value": 0.0004929433134310823,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.parameter": {
+        "value": 2.976429992473939e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.spectrum": {
+        "value": 1.1102230246251565e-15,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "sheet_2.endpoint_difference": {
+        "value": 0.0001754898195047705,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_2.parameter": {
+        "value": 9.296877042097584e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_2.spectrum": {
+        "value": 2.353672812205332e-14,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "LP.count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "LP_0.fold_coefficient": {
+        "value": 7.634495327035751e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "LP_0.parameter": {
+        "value": 1.4717338459036e-11,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "LP_0.spectrum": {
+        "value": 1.5268996447215288e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      },
+      "LP_1.fold_coefficient": {
+        "value": 1.0153928198253226e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "LP_1.parameter": {
+        "value": 1.0769163338864018e-14,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "LP_1.spectrum": {
+        "value": 2.03078552751812e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      }
+    },
+    "jaxcont--bifurcationkit": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0004929433139453376,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.parameter": {
+        "value": 9.002131095559029e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.spectrum": {
+        "value": 1.3322676295501878e-15,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "sheet_1.endpoint_difference": {
+        "value": 0.0004929433139453376,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.parameter": {
+        "value": 2.9632638176568804e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.spectrum": {
+        "value": 2.220446049250313e-16,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "sheet_2.endpoint_difference": {
+        "value": 0.00017548981717674383,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_2.parameter": {
+        "value": 9.714903010937803e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_2.spectrum": {
+        "value": 8.881784197001252e-16,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "LP.count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "LP_0.parameter": {
+        "value": 1.4203083154029628e-11,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "LP_0.spectrum": {
+        "value": 1.7498870241716702e-08,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      },
+      "LP_1.parameter": {
+        "value": 2.3387958236753548e-12,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "LP_1.spectrum": {
+        "value": 3.0585474637412347e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      }
+    },
+    "matcont--bifurcationkit": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 5.142553050063725e-13,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.parameter": {
+        "value": 7.523870415582223e-12,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.spectrum": {
+        "value": 1.9539925233402755e-14,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "sheet_1.endpoint_difference": {
+        "value": 2.3280266603364907e-12,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.parameter": {
+        "value": 4.920508445138694e-13,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.spectrum": {
+        "value": 3.5859228462685246e-15,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "sheet_2.endpoint_difference": {
+        "value": 2.3280266603364907e-12,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_2.parameter": {
+        "value": 6.871614388614944e-12,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_2.spectrum": {
+        "value": 2.353672812205332e-14,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "LP.count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "LP_0.parameter": {
+        "value": 5.142553050063725e-13,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "LP_0.spectrum": {
+        "value": 1.5443985149632455e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      },
+      "LP_1.parameter": {
+        "value": 2.3280266603364907e-12,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "LP_1.spectrum": {
+        "value": 3.2616260164930466e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      }
+    }
+  },
+  "event_information": {
+    "jaxcont": {
+      "outside_window": [],
+      "unrefined_detections": []
+    },
+    "matcont": {
+      "outside_window": [],
+      "unrefined_detections": []
+    },
+    "bifurcationkit": {
+      "outside_window": [],
+      "unrefined_detections": []
+    }
+  },
+  "validation_report": {
+    "canonical_id": "cubic.eq-fold",
+    "coverage": {
+      "jaxcont": "PASS",
+      "matcont": "PASS",
+      "bifurcationkit": "PASS"
+    },
+    "pairwise": {
+      "jaxcont--matcont": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0004929433134310823,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.parameter": {
+          "value": 8.651940144321912e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.spectrum": {
+          "value": 2.1316282072803006e-14,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "sheet_1.endpoint_difference": {
+          "value": 0.0004929433134310823,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.parameter": {
+          "value": 2.976429992473939e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.spectrum": {
+          "value": 1.1102230246251565e-15,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "sheet_2.endpoint_difference": {
+          "value": 0.0001754898195047705,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_2.parameter": {
+          "value": 9.296877042097584e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_2.spectrum": {
+          "value": 2.353672812205332e-14,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "LP.count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "LP_0.fold_coefficient": {
+          "value": 7.634495327035751e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "LP_0.parameter": {
+          "value": 1.4717338459036e-11,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "LP_0.spectrum": {
+          "value": 1.5268996447215288e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        },
+        "LP_1.fold_coefficient": {
+          "value": 1.0153928198253226e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "LP_1.parameter": {
+          "value": 1.0769163338864018e-14,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "LP_1.spectrum": {
+          "value": 2.03078552751812e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        }
+      },
+      "jaxcont--bifurcationkit": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0004929433139453376,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.parameter": {
+          "value": 9.002131095559029e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.spectrum": {
+          "value": 1.3322676295501878e-15,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "sheet_1.endpoint_difference": {
+          "value": 0.0004929433139453376,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.parameter": {
+          "value": 2.9632638176568804e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.spectrum": {
+          "value": 2.220446049250313e-16,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "sheet_2.endpoint_difference": {
+          "value": 0.00017548981717674383,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_2.parameter": {
+          "value": 9.714903010937803e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_2.spectrum": {
+          "value": 8.881784197001252e-16,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "LP.count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "LP_0.parameter": {
+          "value": 1.4203083154029628e-11,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "LP_0.spectrum": {
+          "value": 1.7498870241716702e-08,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        },
+        "LP_1.parameter": {
+          "value": 2.3387958236753548e-12,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "LP_1.spectrum": {
+          "value": 3.0585474637412347e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        }
+      },
+      "matcont--bifurcationkit": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 5.142553050063725e-13,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.parameter": {
+          "value": 7.523870415582223e-12,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.spectrum": {
+          "value": 1.9539925233402755e-14,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "sheet_1.endpoint_difference": {
+          "value": 2.3280266603364907e-12,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.parameter": {
+          "value": 4.920508445138694e-13,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.spectrum": {
+          "value": 3.5859228462685246e-15,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "sheet_2.endpoint_difference": {
+          "value": 2.3280266603364907e-12,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_2.parameter": {
+          "value": 6.871614388614944e-12,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_2.spectrum": {
+          "value": 2.353672812205332e-14,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "LP.count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "LP_0.parameter": {
+          "value": 5.142553050063725e-13,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "LP_0.spectrum": {
+          "value": 1.5443985149632455e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        },
+        "LP_1.parameter": {
+          "value": 2.3280266603364907e-12,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "LP_1.spectrum": {
+          "value": 3.2616260164930466e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        }
+      }
+    },
+    "independent": {
+      "jaxcont": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 9.296917180545705e-07,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "matcont": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 7.54984963435845e-12,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "bifurcationkit": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 7.94031507211912e-13,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        }
+      }
+    },
+    "source_hashes": {
+      "jaxcont": {
+        "branch.csv": "sha256:b83ed23581577bb596194c82dc51cadc478a837a919262666d8c63aca49420ae",
+        "events.csv": "sha256:0343a379e363914763fa84fedb060bb4e98b5c31be638b36abe4c67f71c623ac",
+        "spectra.csv": "sha256:8e6719ca1a8f0aac92cc26f682c507249eda8e9e6fb3b0914f75e1ee153a53de"
+      },
+      "matcont": {
+        "events.csv": "sha256:61a90c91ed3f3b699719c5402a498f1acbc450470098dcf81475ba290627c13c",
+        "spectra.csv": "sha256:dd762229ca7ae592acf0a6bd0e0d24a65e04974c9abd2449ba1cdbae1f63e00d",
+        "branch.csv": "sha256:5f24587e4de7c092622f0c8384c50991ed06cc3e9d70754317abb04514469ff5"
+      },
+      "bifurcationkit": {
+        "branch.csv": "sha256:0ffe137440c5af723bb9c1de0047cb4f699d0907347f2e2fc815deda81735e96",
+        "events.csv": "sha256:cc914c8aaff7d0cd2389c67944c10911e6e5dd7bb4d75fcc45b478d9ee4b5486",
+        "spectra.csv": "sha256:c24ec7b1d4bb944b56d6abd76553d723c9bd119a27ba6f2089a408ee45b5f026"
+      }
+    },
+    "status": "PASS",
+    "report_hash": "sha256:8d5c3501da8659d3262694a71720ca8536042fae874dd4a6693e1cd1a8f12acb"
+  },
+  "verdict": "PASS"
+}

@@ -204,9 +204,7 @@ def test_adaptx_seed_refines_to_a_single_base_cycle():
 def test_adaptx_period_doubling_switch_matches_matcont():
     """A switch from the wrong PD point or onto a retraced orbit must fail.
 
-    The PD expectations are read from a reviewed MatCont v2 bundle once
-    Task 2.12 has promoted it. Before promotion, internal checks run and the
-    external comparison stays explicitly pending. JaxCont
+    The PD expectations are read from the promoted MatCont v2 bundle. JaxCont
     continues ``adaptx``'s limit cycle from its own Hopf-direction seed and
     never consumes MatCont orbit data.
 
@@ -223,9 +221,7 @@ def test_adaptx_period_doubling_switch_matches_matcont():
     assert result.checks["doubled_period_ratio_error"] < 5e-3
     assert result.checks["switch_residual"] < 2e-5
     assert result.checks["genuine_doubled_orbit"]
-    if result.observations.get("reference_status") == "PENDING":
-        assert not case_result_passes("MC-LC-003", result.checks)
-        pytest.skip("Adaptx MatCont bundle awaits owner promotion in Task 2.12; internal switch checks passed")
+    assert result.observations["reference_status"] != "PENDING"
     assert result.checks["pd_parameter_error"] < 2e-3
     assert result.checks["pd_period_error"] < 5e-3
     assert result.checks["switched_parameter_offset_error"] < 1e-5

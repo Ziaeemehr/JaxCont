@@ -1,0 +1,781 @@
+{
+  "schema_version": 1,
+  "canonical_id": "adaptx.cycle-pd-switch",
+  "system": "adaptx",
+  "reviewer": "Claude (review delegated by owner, 2026-10-28)",
+  "review_date": "2026-10-29",
+  "expected_status": "PENDING",
+  "registry_case": {
+    "id": "MC-LC-003",
+    "title": "MatCont adaptx period-doubling branch switch",
+    "support": "supported",
+    "features": [
+      "periodic-orbit",
+      "period-doubling",
+      "branch-switching",
+      "floquet-multipliers"
+    ],
+    "python": "examples.validation.cases.python_cases.pd_switch:run_adaptx_pd_switch",
+    "matlab": "run_adaptx_pd",
+    "references": [],
+    "manual_source": "MatCont 7.6 Testruns/testadapt2.m and TestSystems/adaptx.m (live 2026-08-27 export)",
+    "tolerances": {
+      "parameter_atol": 0.002,
+      "period_atol": 0.005,
+      "residual_atol": 2e-05
+    },
+    "canonical_id": "adaptx.cycle-pd-switch",
+    "aliases": [
+      "MC-LC-003"
+    ],
+    "system": "adaptx",
+    "tool_coverage": {
+      "jaxcont": "PENDING",
+      "bifurcationkit": "PENDING",
+      "matcont": "PENDING"
+    },
+    "evidence_status": "PENDING",
+    "expected_domain": [
+      0.55,
+      0.9
+    ],
+    "expected_events": [
+      "PD"
+    ],
+    "metric_limits": {
+      "parameter_atol": 0.002,
+      "period_atol": 0.005,
+      "residual_atol": 2e-05
+    },
+    "required_tools": [
+      "jaxcont",
+      "matcont",
+      "bifurcationkit"
+    ],
+    "bifurcationkit": "adaptx_pd.jl",
+    "domain_justification": "cases/systems/periodic.json: independently computed before producer implementation",
+    "v2_python": "examples.validation.cases.python_cases.pd_switch:produce_adaptx_periodic",
+    "comparison_window": {
+      "base": [
+        0.55,
+        0.9
+      ],
+      "doubled": [
+        0.57,
+        0.63
+      ]
+    },
+    "comparison_window_comment": "Frozen base and doubled branch contract windows in periodic.json."
+  },
+  "candidates": {
+    "jaxcont": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/adaptx/jaxcont/adaptx.cycle-pd-switch",
+      "hashes": {
+        "branch.csv": "sha256:3f7f9d221c78df0818653e8e1a9ac2ad17b7216cff70f7e95851a435d924b26c",
+        "events.csv": "sha256:206cb765eb12caf98f4e039b927309b2d7e3137a5b97d445c7f976db36eaf8c8",
+        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0",
+        "metadata.json": "sha256:84ce06554cb2ee33d9d7b97a5ac7774c01aa9340a37ac6f51a705ff8740c0676",
+        "orbits.csv": "sha256:dd2a5bca4b611dfd56640ee8f618e0cbfe0a2b059aac5f1a97ee683132058662",
+        "regenerate_jaxcont.py": "sha256:265c05f933b81bc3263922f04104b173d5facf71447f8296cdc297dbd8e297d2",
+        "spectra.csv": "sha256:03c8009f37ad2adbb47b09151ae9dee8b0fbda4f9c3d3f42eb3effe72ee4c8c8"
+      },
+      "promotable": true,
+      "command": [
+        "/home/ziaee/envs/jaxcont/bin/python3",
+        "-"
+      ],
+      "logs": {
+        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0"
+      },
+      "coverage": "unspecified"
+    },
+    "bifurcationkit": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/adaptx/bifurcationkit/adaptx.cycle-pd-switch",
+      "hashes": {
+        "adaptx_pd.stderr.log": "sha256:f601afc1514c1843aa0e5e53a4cbc786f825026af5ee6e3f2c6bf5abe189092f",
+        "adaptx_pd.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "branch.csv": "sha256:17e670648f960e4cadd2b70bb569e03d3776befb1df5911a7350b047873adcc2",
+        "events.csv": "sha256:d2f8ef62d69217b01c07a254161e9a0bb8cdf458e220a86c5b18364cfaa37e35",
+        "invocation.json": "sha256:b8ef9ef9f79655944050f0b8c2651df53e4f79a2b81c95603d8f3acbe87eb854",
+        "metadata.json": "sha256:199f97aeb09ca0f37f0b6f2a037c6a8d354eb2bbe67807f99482c24e44b77847",
+        "orbits.csv": "sha256:5f61e3483f05aab045d0316335b80b6320ae127f8aa45ee1044aec8f9358cae7",
+        "regeneration.log": "sha256:bb8ca90fc68972d148bbbd592ef50c1b1387b1053758915e50e736c125213ece",
+        "spectra.csv": "sha256:55f8caa14c75442587864b704933851622cbaeef92a9789d2b353ed6df029bc5"
+      },
+      "promotable": true,
+      "command": [
+        "julia",
+        "--project=/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit",
+        "/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit/adaptx_pd.jl",
+        "--case",
+        "adaptx.cycle-pd-switch",
+        "--output-dir",
+        "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/bifurcationkit/adaptx.cycle-pd-switch/adaptx.cycle-pd-switch/bifurcationkit"
+      ],
+      "logs": {
+        "adaptx_pd.stderr.log": "sha256:f601afc1514c1843aa0e5e53a4cbc786f825026af5ee6e3f2c6bf5abe189092f",
+        "adaptx_pd.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "regeneration.log": "sha256:bb8ca90fc68972d148bbbd592ef50c1b1387b1053758915e50e736c125213ece"
+      },
+      "coverage": "COMPLETE"
+    },
+    "matcont": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/packaged/adaptx/matcont/adaptx.cycle-pd-switch",
+      "hashes": {
+        "adaptx-base_branch.csv": "sha256:ac75aa7c03df58e553d2be220bf288bd8445c4c13ed9421276f64b9ce84154d1",
+        "adaptx-base_events.csv": "sha256:d884676e0ba407288e557d59c62e57467d3bf84490458044ceed77daaa7ab067",
+        "adaptx-base_metadata.json": "sha256:cd5e9a1beab8474dadffcec56c4fd549637ab22be35e7e26c7a268147c35be3f",
+        "adaptx-base_multipliers.csv": "sha256:a3afd80144ce39f5d396f59e204f15c59b511576dc5b82791e8ee7f3a26c77f7",
+        "adaptx-doubled_branch.csv": "sha256:c7c6fb780b1c44f3b6793f56f745c51b88b229a4379185842d31fee627395fc6",
+        "adaptx-doubled_events.csv": "sha256:c3d91a2598a4f9f31bd77b580de7ba8ef5a493e88ba7c57c36fddbd7229436c0",
+        "adaptx-doubled_metadata.json": "sha256:675206af7b2dc06941233121763ea554d6b908cca7fb58264e1dd9a168aff288",
+        "adaptx-doubled_multipliers.csv": "sha256:ded6ed2e3e47dfc2eca66f1a52b3fc1acd1d7dd19c63ab41f94c56418d973716",
+        "branch.csv": "sha256:2511545437fb9fa28bc970ae82e85334bf008f3303c8fd461160db67d018b12e",
+        "events.csv": "sha256:a53de1b17b97ccd7b8c860f2729a872c8720b8318b0f8884aa0422e40e319a1d",
+        "invocation.json": "sha256:74fe930e66492d484a970bc94b17f7460606fab01af50a05c04cabbe027fb41b",
+        "metadata.json": "sha256:8aba7608e4325b190ad43ff64755988536de7d34e42c7861e4bdad73107d31dd",
+        "orbits.csv": "sha256:b2a3e96274ae7150013ce25c64f05c3142549e364afa02c5adff6f039873fda4",
+        "packaging-provenance.json": "sha256:addbc27120c15ec976e1766ecd293a50df047c4488e06037d28e3de46a0b97f1",
+        "regeneration.log": "sha256:bb8ca90fc68972d148bbbd592ef50c1b1387b1053758915e50e736c125213ece",
+        "run_adaptx_pd.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "run_adaptx_pd.stdout.log": "sha256:2845cda2530e4f0aeaa5b0d3dd4e5494ec8ec59774ea28482843b026164f884d",
+        "spectra.csv": "sha256:40ba59dda791a23f6937e23dc623a771a380cca3e6101d26240f3cd90fd237bf"
+      },
+      "promotable": true,
+      "command": [
+        "/home/ziaee/programms/Matlab/R2024a/bin/matlab",
+        "-batch",
+        "addpath('/home/ziaee/git/JaxCont/examples/validation/regenerate/matcont','/home/ziaee/git/JaxCont/examples/validation/regenerate/matcont/capability_gaps'); run_adaptx_pd('/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/matcont/adaptx.cycle-pd-switch')"
+      ],
+      "logs": {
+        "regeneration.log": "sha256:bb8ca90fc68972d148bbbd592ef50c1b1387b1053758915e50e736c125213ece",
+        "run_adaptx_pd.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "run_adaptx_pd.stdout.log": "sha256:2845cda2530e4f0aeaa5b0d3dd4e5494ec8ec59774ea28482843b026164f884d"
+      },
+      "coverage": "unspecified"
+    }
+  },
+  "independent": {
+    "jaxcont": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "base.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "doubled.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 1.7036829654502872e-06,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "bifurcationkit": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "base.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "doubled.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 2.515446184681025e-12,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "matcont": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "base.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "doubled.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 1.354472090042691e-13,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      }
+    }
+  },
+  "pairwise": {
+    "jaxcont--bifurcationkit": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.period": {
+        "value": 4.940861755287074e-07,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.period": {
+        "value": 3.3197137483398365e-07,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD.count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD_0.parameter": {
+        "value": 2.993424397246258e-10,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD_0.period": {
+        "value": 4.4148684708034125e-11,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD_1.parameter": {
+        "value": 3.1248181153742394e-08,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD_1.period": {
+        "value": 1.1305054670174286e-09,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "jaxcont--matcont": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.period": {
+        "value": 6.264544056833188e-07,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.period": {
+        "value": 1.1301607081293241e-06,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD.count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD_0.parameter": {
+        "value": 7.394647116854003e-10,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD_0.period": {
+        "value": 1.3235634810371266e-10,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD_1.parameter": {
+        "value": 3.120057279204502e-08,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD_1.period": {
+        "value": 1.181039266384687e-09,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "bifurcationkit--matcont": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.period": {
+        "value": 1.6226185373113822e-07,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_1.period": {
+        "value": 1.1000293298479846e-07,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD.count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD_0.parameter": {
+        "value": 4.4012227196077447e-10,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD_0.period": {
+        "value": 8.820766339567854e-11,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD_1.parameter": {
+        "value": 4.760836169737104e-11,
+        "limit": 0.002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "PD_1.period": {
+        "value": 5.0533799367258325e-11,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      }
+    }
+  },
+  "event_information": {
+    "jaxcont": {
+      "outside_window": [],
+      "unrefined_detections": []
+    },
+    "bifurcationkit": {
+      "outside_window": [],
+      "unrefined_detections": []
+    },
+    "matcont": {
+      "outside_window": [],
+      "unrefined_detections": []
+    }
+  },
+  "validation_report": {
+    "canonical_id": "adaptx.cycle-pd-switch",
+    "coverage": {
+      "jaxcont": "PASS",
+      "bifurcationkit": "PASS",
+      "matcont": "PASS"
+    },
+    "pairwise": {
+      "jaxcont--bifurcationkit": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.period": {
+          "value": 4.940861755287074e-07,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.period": {
+          "value": 3.3197137483398365e-07,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD.count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD_0.parameter": {
+          "value": 2.993424397246258e-10,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD_0.period": {
+          "value": 4.4148684708034125e-11,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD_1.parameter": {
+          "value": 3.1248181153742394e-08,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD_1.period": {
+          "value": 1.1305054670174286e-09,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "jaxcont--matcont": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.period": {
+          "value": 6.264544056833188e-07,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.period": {
+          "value": 1.1301607081293241e-06,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD.count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD_0.parameter": {
+          "value": 7.394647116854003e-10,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD_0.period": {
+          "value": 1.3235634810371266e-10,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD_1.parameter": {
+          "value": 3.120057279204502e-08,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD_1.period": {
+          "value": 1.181039266384687e-09,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "bifurcationkit--matcont": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.period": {
+          "value": 1.6226185373113822e-07,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_1.period": {
+          "value": 1.1000293298479846e-07,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD.count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD_0.parameter": {
+          "value": 4.4012227196077447e-10,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD_0.period": {
+          "value": 8.820766339567854e-11,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD_1.parameter": {
+          "value": 4.760836169737104e-11,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "PD_1.period": {
+          "value": 5.0533799367258325e-11,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        }
+      }
+    },
+    "independent": {
+      "jaxcont": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "base.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "doubled.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 1.7036829654502872e-06,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "bifurcationkit": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "base.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "doubled.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 2.515446184681025e-12,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "matcont": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "base.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "doubled.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 1.354472090042691e-13,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        }
+      }
+    },
+    "source_hashes": {
+      "jaxcont": {
+        "branch.csv": "sha256:3f7f9d221c78df0818653e8e1a9ac2ad17b7216cff70f7e95851a435d924b26c",
+        "events.csv": "sha256:206cb765eb12caf98f4e039b927309b2d7e3137a5b97d445c7f976db36eaf8c8",
+        "spectra.csv": "sha256:03c8009f37ad2adbb47b09151ae9dee8b0fbda4f9c3d3f42eb3effe72ee4c8c8",
+        "orbits.csv": "sha256:dd2a5bca4b611dfd56640ee8f618e0cbfe0a2b059aac5f1a97ee683132058662"
+      },
+      "bifurcationkit": {
+        "branch.csv": "sha256:17e670648f960e4cadd2b70bb569e03d3776befb1df5911a7350b047873adcc2",
+        "events.csv": "sha256:d2f8ef62d69217b01c07a254161e9a0bb8cdf458e220a86c5b18364cfaa37e35",
+        "orbits.csv": "sha256:5f61e3483f05aab045d0316335b80b6320ae127f8aa45ee1044aec8f9358cae7",
+        "spectra.csv": "sha256:55f8caa14c75442587864b704933851622cbaeef92a9789d2b353ed6df029bc5"
+      },
+      "matcont": {
+        "branch.csv": "sha256:2511545437fb9fa28bc970ae82e85334bf008f3303c8fd461160db67d018b12e",
+        "events.csv": "sha256:a53de1b17b97ccd7b8c860f2729a872c8720b8318b0f8884aa0422e40e319a1d",
+        "spectra.csv": "sha256:40ba59dda791a23f6937e23dc623a771a380cca3e6101d26240f3cd90fd237bf",
+        "orbits.csv": "sha256:b2a3e96274ae7150013ce25c64f05c3142549e364afa02c5adff6f039873fda4",
+        "adaptx-doubled_events.csv": "sha256:c3d91a2598a4f9f31bd77b580de7ba8ef5a493e88ba7c57c36fddbd7229436c0",
+        "adaptx-base_multipliers.csv": "sha256:a3afd80144ce39f5d396f59e204f15c59b511576dc5b82791e8ee7f3a26c77f7",
+        "adaptx-doubled_multipliers.csv": "sha256:ded6ed2e3e47dfc2eca66f1a52b3fc1acd1d7dd19c63ab41f94c56418d973716",
+        "adaptx-base_events.csv": "sha256:d884676e0ba407288e557d59c62e57467d3bf84490458044ceed77daaa7ab067",
+        "adaptx-doubled_branch.csv": "sha256:c7c6fb780b1c44f3b6793f56f745c51b88b229a4379185842d31fee627395fc6",
+        "adaptx-base_branch.csv": "sha256:ac75aa7c03df58e553d2be220bf288bd8445c4c13ed9421276f64b9ce84154d1"
+      }
+    },
+    "status": "PASS",
+    "report_hash": "sha256:3fd7b332b7f74761177bfcee9953028629fea4e60cbc4eaa5f84acc39a849978"
+  },
+  "verdict": "PASS"
+}

@@ -336,6 +336,14 @@ def _monotone_segments(rows: list[dict[str, Any]], coordinate: str) -> list[list
     return segments
 
 
+def _sparse_native_query(left, right, lower, upper):
+    """Use the sparser in-window grid for symmetric curve comparisons."""
+    a = left[(left >= lower) & (left <= upper)]
+    b = right[(right >= lower) & (right <= upper)]
+    samples = a if len(a) <= len(b) else b
+    return np.unique(samples) if len(samples) else np.unique([lower, upper])
+
+
 def _compare_branch_rows(
     case: dict[str, Any],
     actual_fields: list[str],
@@ -426,14 +434,7 @@ def _compare_branch_rows(
     if actual_x.size == reference_x.size == 1:
         query = np.asarray([lower])
     else:
-        candidates = (
-            np.unique(np.concatenate([actual_x, reference_x])) if require_same_extent else actual_x
-        )
-        if not require_same_extent and case["id"] == "MC-LC-001":
-            candidates = np.unique(np.concatenate([candidates, [reference_x[0], reference_x[-1]]]))
-        query = candidates[(candidates >= lower) & (candidates <= upper)]
-        if query.size > 201:
-            query = np.linspace(lower, upper, 201)
+        query = _sparse_native_query(actual_x, reference_x, lower, upper)
 
     ignored = {"case_id", "point", coordinate, "residual_norm"}
     discrete_columns = {"stable", "unstable_dimension"} & actual_set & reference_set
@@ -646,16 +647,8 @@ def _compare_spectrum_segments(
         raise ValidationMismatch("branch spectra have no overlapping continuation interval")
     if actual_x.size == reference_x.size == 1:
         query = np.asarray([lower])
-    elif require_same_extent:
-        query = np.unique(np.concatenate([actual_x, reference_x]))
-        query = query[(query >= lower) & (query <= upper)]
-        if query.size > 101:
-            query = np.linspace(lower, upper, 101)
     else:
-        query = actual_x[(actual_x >= lower) & (actual_x <= upper)]
-        if query.size > 101:
-            indices = np.linspace(0, query.size - 1, 101).round().astype(int)
-            query = query[indices]
+        query = _sparse_native_query(actual_x, reference_x, lower, upper)
     actual_roots = _interpolate_spectrum_roots(actual_x, actual_values, query)
     reference_roots = _interpolate_spectrum_roots(reference_x, reference_values, query)
     tolerances = case.get("tolerances", {})
@@ -1438,3 +1431,28 @@ def verify_v2_bundles(candidate, reference, tolerances):
                 maximum = max(maximum, diagnostics["max_error"])
                 count += 1
     return {"artifact_count": len(left) - 1, "max_numeric_error": maximum, "sample_count": count}
+
+
+def case_result_payload(case, result):
+    """Expose fresh legacy producer values to the v2 report without file writes."""
+    _, branch, _, events, _, spectra = _case_result_rows(case, result)
+    residual = result.checks.get('max_residual', result.checks.get('max_collocation_residual'))
+    if residual is None:
+        raise ValueError('native residual bound unavailable')
+    for row in branch:
+        row.update(segment_id='native', point_id=str(row['point']),
+                   order=row['point'], status='CONVERGED', residual_norm=residual)
+    for i, row in enumerate(events):
+        nearest = min(branch, key=lambda b: abs(b['parameter'] - row['parameter']))
+        row.update(segment_id='native', point_id=nearest['point_id'], event_id=str(i),
+                   status='CONVERGED', bracket_lower=row['parameter'], bracket_upper=row['parameter'])
+        for key in list(row):
+            if isinstance(row[key], float) and not np.isfinite(row[key]):
+                del row[key]
+    for row in spectra:
+        event = row['event_index']
+        row.update(segment_id='native',
+                   point_id=str(row['point']) if event == -1 else events[event]['point_id'],
+                   event_id='' if event == -1 else str(event))
+    return dict(branch=branch, events=events, spectra=spectra,
+                metadata={'tool': 'jaxcont', 'residual_norm_note': 'native producer maximum residual bound'})

@@ -1,0 +1,77 @@
+-------------------------------------------------------------------------------------------
+FieldTrip is developed by members and collaborators of the Donders Institute for Brain,
+Cognition and Behaviour at Radboud University, Nijmegen, the Netherlands.
+
+                          --------------------------
+                        /                            \
+                     ------------------------------------
+                    /                                    \
+          -------------------------------------------------
+         /                            /\/\/\/\/\ 
+         ---------------------------------------------------
+                  |        F  i  e  l  d  T  r  i  p       |
+                  ------------------------------------------
+                   \                                      /
+                     ------------------------------------
+                          \            /
+                            ----------
+
+Please cite the FieldTrip reference paper when you have used FieldTrip in your study.
+Robert Oostenveld, Pascal Fries, Eric Maris, and Jan-Mathijs Schoffelen. FieldTrip: Open
+Source Software for Advanced Analysis of MEG, EEG, and Invasive Electrophysiological Data.
+Computational Intelligence and Neuroscience, vol. 2011, Article ID 156869, 9 pages, 2011.
+doi:10.1155/2011/156869.
+-------------------------------------------------------------------------------------------
+[Warning: enabling online tracking of FieldTrip usage, see
+http://www.fieldtriptoolbox.org/faq/tracking] 
+ In '/home/ziaee/programms/toolboxes/fieldtrip/utilities/ft_trackusage.m' at line 97
+ In '/home/ziaee/programms/toolboxes/fieldtrip/ft_defaults.m' at line 407
+
+[Warning: could not send tracker information for "startup"] 
+first point found
+tangent vector to first point found
+
+elapsed time  = 0.1 secs
+npoints curve = 201
+first point found
+tangent vector to first point found
+label = LP, x = ( 1.311786 -0.042875 0.180389 -0.157028 1.546648 )
+a=-3.561291e+00
+label = H , x = ( 1.218830 -0.035676 0.198709 -0.245422 1.619658 )
+First Lyapunov coefficient = 8.647346e-01
+label = H , x = ( 1.128964 -0.024970 0.218590 -0.538450 2.467222 )
+First Lyapunov coefficient = -1.348746e-01
+label = H , x = ( 1.118508 -0.023419 0.221031 -0.625318 2.859875 )
+First Lyapunov coefficient = 3.038456e-01
+
+elapsed time  = 0.2 secs
+npoints curve = 201
+first point found
+tangent vector to first point found
+label = BT, x = ( 1.225640 -0.036321 0.197288 -0.123390 1.446717 0.020940 )
+(a,b)=(2.144234e-01, 6.065146e-01)
+label = ZH, x = ( 1.059844 -0.013277 0.235134 -0.020861 1.283419 0.000127 )
+(s,theta,E0)=(1, 3.715145e-01, -1)
+label = CP, x = ( 1.053698 -0.012060 0.236645 0.000000 1.278283 0.000000 )
+c=-7.044436e+00
+label = ZH, x = ( 1.059844 -0.013277 0.235134 0.020861 1.283419 -0.000127 )
+(s,theta,E0)=(1, 3.715145e-01, -1)
+label = BT, x = ( 1.225640 -0.036321 0.197288 0.123390 1.446717 -0.020940 )
+(a,b)=(2.144234e-01, 6.065146e-01)
+
+elapsed time  = 0.3 secs
+npoints curve = 401
+first point found
+tangent vector to first point found
+label = BT, x = ( 1.225640 -0.036321 0.197288 -0.123390 1.446717 0.020940 0.000000 )
+(a,b)=(2.144234e-01, 6.065146e-01)
+label = BT, x = ( 1.225640 -0.036321 0.197288 0.123390 1.446717 -0.020940 0.000000 )
+(a,b)=(2.144234e-01, 6.065146e-01)
+label = GH, x = ( 1.152854 -0.028255 0.213107 0.512917 2.376360 -0.050197 0.476607 )
+l2=1.558014e-01
+label = HH, x = ( 1.101440 -0.020728 0.225067 0.557586 2.533221 -0.026274 0.552375 )
+(p11*p22,theta,delta)=(-1, -3.648551e+00, -1.052986e+00)
+ (THETA,DELTA) = (1.230630e+03, -2.108605e+02)
+
+elapsed time  = 0.6 secs
+npoints curve = 401

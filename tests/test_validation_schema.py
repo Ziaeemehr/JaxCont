@@ -194,3 +194,29 @@ def test_verification_rejects_equation_identity_change(tmp_path):
     (b / "metadata.json").write_text(json.dumps(metadata))
     with pytest.raises(artifacts.ValidationMismatch, match="equation_hash"):
         artifacts.verify_v2_bundles(a, b, {})
+
+
+def _external_literal_assignments(source):
+    """External expectations and seeds must be supplied by bundle readers."""
+    import ast
+    import re
+    violations = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        names = [n.id for target in targets for n in ast.walk(target) if isinstance(n, ast.Name)]
+        if not any(re.match(r'(BK_|bk_|matcont_.*reference|bifurcationkit_|U_SEED$|P_SEED$)', name) for name in names):
+            continue
+        if any(isinstance(n, ast.Constant) and isinstance(n.value, (int, float, complex))
+               for n in ast.walk(node.value)):
+            violations.append(node.lineno)
+    return violations
+
+
+def test_no_hand_copied_external_constants_in_tests():
+    root = Path(__file__).resolve().parent
+    for name in ('test_codim2.py', 'test_curves.py', 'test_hopf_normal_form.py'):
+        assert not _external_literal_assignments((root / name).read_text()), name
+    assert _external_literal_assignments('BK_BT_P = (1.23456789, 0.12345678)')
+    assert not _external_literal_assignments('BK_BT_P = read_bundle()["parameter"]')

@@ -1,0 +1,564 @@
+{
+  "schema_version": 1,
+  "canonical_id": "radial.cycle-floquet",
+  "system": "radial",
+  "reviewer": "Claude (review delegated by owner, 2026-10-28)",
+  "review_date": "2026-10-29",
+  "expected_status": "PASS",
+  "registry_case": {
+    "id": "MC-LC-001",
+    "title": "Analytic radial periodic orbit",
+    "support": "supported",
+    "features": [
+      "periodic-orbit",
+      "collocation",
+      "floquet-multipliers",
+      "stability"
+    ],
+    "python": "examples.validation.cases.python_cases.periodic:run_radial_cycle",
+    "matlab": "run_radial_cycle",
+    "references": [
+      "MC-LC-001_branch.csv",
+      "MC-LC-001_events.csv",
+      "MC-LC-001_multipliers.csv",
+      "MC-LC-001_metadata.json"
+    ],
+    "manual_source": "Analytic polar normal form r'=r(rho-r^2), theta'=1",
+    "tolerances": {
+      "parameter_atol": 0.0005,
+      "period_atol": 0.005,
+      "radius_atol": 0.005,
+      "multiplier_atol": 0.005,
+      "residual_atol": 2e-05
+    },
+    "canonical_id": "radial.cycle-floquet",
+    "aliases": [
+      "MC-LC-001"
+    ],
+    "system": "radial",
+    "tool_coverage": {
+      "jaxcont": "PENDING",
+      "matcont": "PASS",
+      "bifurcationkit": "PENDING"
+    },
+    "evidence_status": "PASS",
+    "expected_domain": [
+      1.00000000022127,
+      1.49927007255111
+    ],
+    "expected_events": [],
+    "metric_limits": {
+      "parameter_atol": 0.0005,
+      "period_atol": 0.005,
+      "radius_atol": 0.005,
+      "multiplier_atol": 0.005,
+      "residual_atol": 2e-05
+    },
+    "required_tools": [
+      "jaxcont",
+      "matcont",
+      "bifurcationkit"
+    ],
+    "bifurcationkit": "radial_cycle.jl",
+    "comparison_window": [
+      1,
+      1.49
+    ],
+    "comparison_window_comment": "Common interval inside legacy MatCont coverage [1,1.499]."
+  },
+  "candidates": {
+    "jaxcont": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/radial/jaxcont/radial.cycle-floquet",
+      "hashes": {
+        "branch.csv": "sha256:1dd29a90ac1087d6d9933892c0c10508edc9f62a0b071bef686c797aa05825b2",
+        "events.csv": "sha256:9c452319d2fe4806d86947a20c50b16ecada67d5bb757426f7e389cd086274f7",
+        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0",
+        "metadata.json": "sha256:448bfe7041372d98f9209b7fe18af6a218066d18a43a288712e90c8f8c58c922",
+        "native-result.json": "sha256:6dd2882cb138f4fc7cae82e4d24ad9563b71227fa7b459aa9eb62a785cd9b68d",
+        "regenerate_jaxcont.py": "sha256:265c05f933b81bc3263922f04104b173d5facf71447f8296cdc297dbd8e297d2",
+        "spectra.csv": "sha256:6c162dcd82a14b12f6b0f2b09f9dec42d19b93abcdc4370ed284843b7551d78e"
+      },
+      "promotable": true,
+      "command": [
+        "/home/ziaee/envs/jaxcont/bin/python3",
+        "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/regenerate_jaxcont.py"
+      ],
+      "logs": {
+        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0"
+      },
+      "coverage": "unspecified"
+    },
+    "matcont": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/radial/matcont/radial.cycle-floquet",
+      "hashes": {
+        "branch.csv": "sha256:154dc42df62d9eb84eb92ec240b04c8a0512a33243cafd3e3af81857d112bca1",
+        "conversion-manifest.json": "sha256:d70e9c983793d3e62df64e5f7531a8faf3019dee055c778074d9401580f7196f",
+        "events.csv": "sha256:96a9e5d088f13c9f89e1e4ac1f2432ec8f11a508dc88dbf406fc12df72a56eb0",
+        "invocation.json": "sha256:8fe5fef8e186d8c579a9c7650a044e2b1211caf0a9a553edc5dbad05b94c068c",
+        "legacy/MC-LC-001_branch.csv": "sha256:e3f15451fbe026c847c32b32efe51b255cddc0a6ba404da06b1d3f773fb96081",
+        "legacy/MC-LC-001_events.csv": "sha256:a9a3de577ffdcd725d081ac1ddf81f1e3c5c11d062e8cfa54efa788db22a3d6b",
+        "legacy/MC-LC-001_metadata.json": "sha256:c880623d708682f33ae48196b8dde8b313af9451e14446242e1e2331ef5ebaa1",
+        "legacy/MC-LC-001_multipliers.csv": "sha256:e9a08a1317c388f7ddb50c9d3a9a03436b5b26cf4367093200a21f2fce256ee8",
+        "legacy/invocation.json": "sha256:8fe5fef8e186d8c579a9c7650a044e2b1211caf0a9a553edc5dbad05b94c068c",
+        "legacy/regeneration.log": "sha256:b21a89ccfba20f6d1354bcab5ec010d6e5285806ff89191e2cc6015a60789cac",
+        "legacy/run_radial_cycle.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "legacy/run_radial_cycle.stdout.log": "sha256:e40954ce08ed051bb83789ef319631b98f6e145186c060974c29873b7228bf91",
+        "metadata.json": "sha256:7d38c607bae64445526c6a55b4f26b64a8cdb13e310983a88c83329ffdd20da4",
+        "regeneration.log": "sha256:b21a89ccfba20f6d1354bcab5ec010d6e5285806ff89191e2cc6015a60789cac",
+        "run_radial_cycle.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "run_radial_cycle.stdout.log": "sha256:e40954ce08ed051bb83789ef319631b98f6e145186c060974c29873b7228bf91",
+        "spectra.csv": "sha256:a61c70f59b380781c0966f2030a3a65e4774fd92d8eba602f184a516a07d237d"
+      },
+      "promotable": true,
+      "command": [
+        "/home/ziaee/envs/jaxcont/bin/python3",
+        "-m",
+        "examples.validation.run_validation",
+        "--regenerate",
+        "matcont",
+        "--case",
+        "radial.cycle-floquet",
+        "--output-dir",
+        "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/matcont/radial.cycle-floquet"
+      ],
+      "logs": {
+        "legacy/regeneration.log": "sha256:b21a89ccfba20f6d1354bcab5ec010d6e5285806ff89191e2cc6015a60789cac",
+        "legacy/run_radial_cycle.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "legacy/run_radial_cycle.stdout.log": "sha256:e40954ce08ed051bb83789ef319631b98f6e145186c060974c29873b7228bf91",
+        "regeneration.log": "sha256:b21a89ccfba20f6d1354bcab5ec010d6e5285806ff89191e2cc6015a60789cac",
+        "run_radial_cycle.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "run_radial_cycle.stdout.log": "sha256:e40954ce08ed051bb83789ef319631b98f6e145186c060974c29873b7228bf91"
+      },
+      "coverage": "unspecified"
+    },
+    "bifurcationkit": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/radial/bifurcationkit/radial.cycle-floquet",
+      "hashes": {
+        "branch.csv": "sha256:e1639978077adbc2537ee3be038e750a2e7d2de70a45f9ec9880dc7f8b638b79",
+        "events.csv": "sha256:e46fdaafaff80252360326b9f31bc2944c046765e830192497ac2cc90e54f452",
+        "invocation.json": "sha256:6b16d4885a5d26cf31791733fe9bc40b30c21067f8bb882d3fb53f11cb3a031d",
+        "metadata.json": "sha256:e567bbc02b767471747060e59679aad488dcfd2849004ca1ef3d31a6669ede00",
+        "orbits.csv": "sha256:4fb526656dc66ca5455d98cbd807fdc5cdc04748c170dc5a36291b4715faf7b4",
+        "radial_cycle.stderr.log": "sha256:f601afc1514c1843aa0e5e53a4cbc786f825026af5ee6e3f2c6bf5abe189092f",
+        "radial_cycle.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "regeneration.log": "sha256:08579eef381d715b8374c4f5f2d2779fdd56f461e4bf0a6956755b55312374ee",
+        "spectra.csv": "sha256:d023fcb2a7c4b347fa82fef7ed46a0b00c352e7f606d7eeee5409c726cd6f63d"
+      },
+      "promotable": true,
+      "command": [
+        "julia",
+        "--project=/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit",
+        "/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit/radial_cycle.jl",
+        "--case",
+        "radial.cycle-floquet",
+        "--output-dir",
+        "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/bifurcationkit/radial.cycle-floquet/radial.cycle-floquet/bifurcationkit"
+      ],
+      "logs": {
+        "radial_cycle.stderr.log": "sha256:f601afc1514c1843aa0e5e53a4cbc786f825026af5ee6e3f2c6bf5abe189092f",
+        "radial_cycle.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "regeneration.log": "sha256:08579eef381d715b8374c4f5f2d2779fdd56f461e4bf0a6956755b55312374ee"
+      },
+      "coverage": "unspecified"
+    }
+  },
+  "independent": {
+    "jaxcont": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 8.129941164725096e-12,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "matcont": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 2.2126989129844787e-10,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 9.28146448586631e-14,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "bifurcationkit": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 7.191288751444605e-15,
+        "limit": 2e-05,
+        "verdict": "PASS",
+        "reason": null
+      }
+    }
+  },
+  "pairwise": {
+    "jaxcont--matcont": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 2.2126989129844787e-10,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.period": {
+        "value": 5.932058400048845e-09,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.radius": {
+        "value": 9.703527805715595e-07,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "Phase 1 observable: maximum absolute sampled coordinate; radius_atol is not a per-axis extrema budget"
+      },
+      "sheet_0.spectrum": {
+        "value": 6.010051302027132e-10,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      }
+    },
+    "jaxcont--bifurcationkit": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.period": {
+        "value": 8.881784197001252e-16,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.radius": {
+        "value": 0.00013332756764894427,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "Phase 1 observable: maximum absolute sampled coordinate; radius_atol is not a per-axis extrema budget"
+      },
+      "sheet_0.spectrum": {
+        "value": 8.467010730494636e-08,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      }
+    },
+    "matcont--bifurcationkit": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 2.2126989129844787e-10,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.period": {
+        "value": 5.9320575118704255e-09,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.radius": {
+        "value": 7.573662397231118e-07,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "Phase 1 observable: maximum absolute sampled coordinate; radius_atol is not a per-axis extrema budget"
+      },
+      "sheet_0.spectrum": {
+        "value": 7.580368468581251e-10,
+        "limit": 0.005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      }
+    }
+  },
+  "event_information": {
+    "jaxcont": {
+      "outside_window": [],
+      "unrefined_detections": []
+    },
+    "matcont": {
+      "outside_window": [],
+      "unrefined_detections": []
+    },
+    "bifurcationkit": {
+      "outside_window": [],
+      "unrefined_detections": []
+    }
+  },
+  "validation_report": {
+    "canonical_id": "radial.cycle-floquet",
+    "coverage": {
+      "jaxcont": "PASS",
+      "matcont": "PASS",
+      "bifurcationkit": "PASS"
+    },
+    "pairwise": {
+      "jaxcont--matcont": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 2.2126989129844787e-10,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.period": {
+          "value": 5.932058400048845e-09,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.radius": {
+          "value": 9.703527805715595e-07,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "Phase 1 observable: maximum absolute sampled coordinate; radius_atol is not a per-axis extrema budget"
+        },
+        "sheet_0.spectrum": {
+          "value": 6.010051302027132e-10,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        }
+      },
+      "jaxcont--bifurcationkit": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.period": {
+          "value": 8.881784197001252e-16,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.radius": {
+          "value": 0.00013332756764894427,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "Phase 1 observable: maximum absolute sampled coordinate; radius_atol is not a per-axis extrema budget"
+        },
+        "sheet_0.spectrum": {
+          "value": 8.467010730494636e-08,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        }
+      },
+      "matcont--bifurcationkit": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 2.2126989129844787e-10,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.period": {
+          "value": 5.9320575118704255e-09,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.radius": {
+          "value": 7.573662397231118e-07,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "Phase 1 observable: maximum absolute sampled coordinate; radius_atol is not a per-axis extrema budget"
+        },
+        "sheet_0.spectrum": {
+          "value": 7.580368468581251e-10,
+          "limit": 0.005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        }
+      }
+    },
+    "independent": {
+      "jaxcont": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 8.129941164725096e-12,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "matcont": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 2.2126989129844787e-10,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 9.28146448586631e-14,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "bifurcationkit": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 7.191288751444605e-15,
+          "limit": 2e-05,
+          "verdict": "PASS",
+          "reason": null
+        }
+      }
+    },
+    "source_hashes": {
+      "jaxcont": {
+        "branch.csv": "sha256:1dd29a90ac1087d6d9933892c0c10508edc9f62a0b071bef686c797aa05825b2",
+        "events.csv": "sha256:9c452319d2fe4806d86947a20c50b16ecada67d5bb757426f7e389cd086274f7",
+        "spectra.csv": "sha256:6c162dcd82a14b12f6b0f2b09f9dec42d19b93abcdc4370ed284843b7551d78e"
+      },
+      "matcont": {
+        "events.csv": "sha256:96a9e5d088f13c9f89e1e4ac1f2432ec8f11a508dc88dbf406fc12df72a56eb0",
+        "spectra.csv": "sha256:a61c70f59b380781c0966f2030a3a65e4774fd92d8eba602f184a516a07d237d",
+        "branch.csv": "sha256:154dc42df62d9eb84eb92ec240b04c8a0512a33243cafd3e3af81857d112bca1"
+      },
+      "bifurcationkit": {
+        "branch.csv": "sha256:e1639978077adbc2537ee3be038e750a2e7d2de70a45f9ec9880dc7f8b638b79",
+        "events.csv": "sha256:e46fdaafaff80252360326b9f31bc2944c046765e830192497ac2cc90e54f452",
+        "orbits.csv": "sha256:4fb526656dc66ca5455d98cbd807fdc5cdc04748c170dc5a36291b4715faf7b4",
+        "spectra.csv": "sha256:d023fcb2a7c4b347fa82fef7ed46a0b00c352e7f606d7eeee5409c726cd6f63d"
+      }
+    },
+    "status": "PASS",
+    "report_hash": "sha256:e152b320ae21f0bdccc18e139791f7ae43488ff19224e17fbc18884ccc524613"
+  },
+  "verdict": "PASS"
+}

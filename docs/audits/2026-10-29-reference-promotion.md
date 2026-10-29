@@ -1,6 +1,8 @@
 # Task 2.12 promotion manifest gate (2026-10-29)
 
-Status: STOPPED at the owner-requested manifest gate. No promotion, registry status rewrite, historical bundle migration, or test constant replacement was performed.
+Current status: Round 3 partially complete; see the Round 3 section for promotions, remaining failures, and verification.
+
+Historical round 1 status: STOPPED at the owner-requested manifest gate. No promotion, registry status rewrite, historical bundle migration, or test constant replacement was performed.
 
 Generated candidates and manifests are under `examples/validation/generated/promotion/`. The numerical producers were run from commit `3dd787c13a76e00e0e5552614ba1772d0259a84d`, in float64 on CPU. The old generated `candidates` and `candidates2` folders were removed. No solver source, pinned environment, legacy reviewed bundle, or tolerance was changed. Nothing was committed.
 
@@ -87,3 +89,70 @@ G3, -m matlab, and -m julia acceptance suites are not run: the owner required st
 - docs/audits/2026-10-29-reference-promotion.md: this handoff.
 
 The pre-existing untracked .clinerules was left untouched. An unrelated untracked benchmarks/contracts.py appeared during the run and was also left untouched. Generated scripts, raw results, logs, and manifests are ignored artifacts, not reviewed reference data.
+
+
+## Round 3
+
+Round 3 is partially complete. No solver source or tolerance changed and no commit was made. Only PASS manifests were promoted, with reviewer `Claude (review delegated by owner, 2026-10-28)` and date 2026-10-29. Existing reviewed bundles remain unchanged.
+
+### Defects, causes, and fixes
+
+- Curve comparisons previously used the union of both grids, interpolating sparse evidence onto dense samples and counting interpolation error as disagreement. Both the promotion/window comparator and the legacy branch/spectrum comparator now evaluate at the sparser tool's native samples inside the shared window, independently for each matched sheet. No synthetic dense grid or decimation is used. Synthetic quadratic curves exercise states, parameters, and spectra in both pair orders: identical curves PASS and a true offset FAILs.
+- The third JaxCont equilibrium sheet is the outward continuation from the seed at F=3.0. Its intersection with the old window was only the endpoint. Boundary-only intersections no longer create comparison sheets. The required two-sheet count is unchanged. The comparison window is now [1.5467, 2.99], strictly below MatCont's upper-sheet endpoint F=2.997528062547353. All independent equilibrium checks now PASS, but pairwise values near the fold still FAIL: JaxCont/MatCont state_0 error 0.00561990697 / 0.0002, spectrum error 0.06070634247 / 0.0005. This run was not promoted.
+- Lorenz84 Hopf FAIL → PASS after correcting interpolation direction (worst spectrum difference 8.9464e-5 / 5e-4). Lorenz84 fold remains FAIL: MatCont's native export has explicit segments 0 and 1 meeting around T=0, whereas the other tools have one sheet. Its chart subdivisions require investigation without rewriting candidate data or merging physical arms. An exploratory in-memory join also leaves MatCont/BifurcationKit state discrepancies above budget; it was not applied.
+- torBPC retains JaxCont FAIL (14 unresolved points, missing PD, residual and sheet-count failures). The independently measured MatCont/BifurcationKit-only manifest also FAILs: spectrum errors 0.02200558488 and 0.05076158314 / 0.005 on the two sheets. Neither external bundle was promoted. The registry explicitly records JaxCont FAIL. The existing strict solver xfail remains.
+- The adaptx MatCont candidate exceeded 10 MiB because `raw.json` duplicated the numerical exports. A separate packaged candidate retains every CSV and native log byte for byte; `packaging-provenance.json` records every original file hash and the omitted redundant raw JSON hash. The original candidate remains intact. The new package was measured again and its PASS manifest promoted under the unchanged size cap.
+
+### Promotion and migration
+
+Ten external bundles were promoted for five runs (MatCont and BifurcationKit for each): cubic.eq-fold, radial.cycle-floquet, adaptx.cycle-pd-switch, lorenz84.hopf-ft, and lorenz84.bt-ft. Every promoted bundle contains its reviewed manifest, original numerical hashes, native commands, and logs. Fresh JaxCont results remain generated evidence.
+
+The BT solver test now reads the reviewed BifurcationKit BT bundle. The original BT values, curve seed, and Hopf coefficient are preserved as explicitly unreviewed historical v1 bundles with source-test hashes and commit provenance; unavailable runtime facts remain unknown. The curve seed and Hopf test read these historical bundles with hash verification. No historical evidence is represented as a fresh promotion. The adaptx PD comparison now requires the promoted MatCont bundle and no longer skips for PENDING.
+
+Offline Lorenz84 tests check the reviewed flagship bundles, missing-tool gate, and alias/canonical selection. The schema suite rejects numeric literals assigned to the migrated external expectation/seed names and checks its detector against synthetic offending and bundle-backed assignments.
+
+### Integration fixes found by verification
+
+Promotion exposed a CLI assumption that every producer returns a v2 payload: cubic and radial still return legacy `CaseResult` objects. A report-only adapter now preserves their native branch/event/spectrum values and identities, using the producer's maximum residual as a conservative residual bound; it does not write or substitute evidence. Registry assertions now distinguish the reviewed PASS runs from measured FAIL runs. The radial legacy CLI independently checks every native reference period against its existing exact-period budget so endpoint corruption cannot escape the sparse comparison grid. The gallery source assertion accepts the concurrent page's public `ReportTable(report)` renderer as well as the older renderer; no page code was changed by Round 3.
+
+### Per-run manifests
+
+| Run | Round 2 / supplied verdict | Round 3 | Promoted |
+|---|---|---|---|
+| adaptx.cycle-pd-switch | PASS | PASS | MatCont, BifurcationKit |
+| adaptx.eq-hopf | PENDING | PENDING | None |
+| adaptx.prc | PENDING | PENDING | None |
+| catalytic.fold-curve | PENDING | PENDING | None |
+| catalytic.hopf-curve | PENDING | PENDING | None |
+| cubic.eq-fold | PASS | PASS | MatCont, BifurcationKit |
+| hopf-normal-form.l1 | PENDING | PENDING | None |
+| lorenz84.bt-ft | PASS | PASS | MatCont, BifurcationKit |
+| lorenz84.eq-f | FAIL | FAIL | None |
+| lorenz84.fold-ft | FAIL | FAIL | None |
+| lorenz84.hopf-ft | FAIL | PASS | MatCont, BifurcationKit |
+| radial.cycle-floquet | PASS | PASS | MatCont, BifurcationKit |
+| torbpc.cycle-lpc-pd-ns | FAIL | FAIL | None |
+
+### Remaining work
+
+Resolve the Lorenz84 fold native segment/chart correspondence and remaining state differences; resolve the equilibrium near-fold interpolation discrepancies without changing tolerances or the required sheets. Re-measure those runs and promote only if PASS. torBPC needs the existing solver proposal plus investigation of external spectrum disagreement before any promotion. Missing adaptx Hopf/PRC and catalytic exporters and the Hopf coefficient convention/budget remain PENDING. Passing runs and historical migration are complete.
+
+Other processes edited gallery/reporting/visualization files during this session; those edits and their temporary sentinel files are outside Round 3's changes and were not modified by this work.
+
+### Verification
+
+Commands use `source ~/envs/jaxcont/bin/activate &&`, `JAX_PLATFORMS=cpu`, closed stdin, and one BLAS/OpenMP thread. Logs are `/tmp/round3-*.log`.
+
+| Final check | Result |
+|---|---|
+| Promotion/report/schema and Lorenz84 tests, x64=0 (plus gallery source checks) | 83 PASS |
+| Promotion/report/schema and Lorenz84 tests, x64=1 | 55 PASS |
+| CLI/registry/offline-suite integration checks, x64=1 | 8 PASS |
+| G1: `JAXCONT_TEST_X64=0 python3 -m pytest -n 8 -q` | 855 PASS, 2 SKIP; exit 0 |
+| G1: `JAXCONT_TEST_X64=1 python3 -m pytest -n 8 -q` | 856 PASS, 1 SKIP; exit 0 |
+
+Initial G1 runs identified the CLI adapter defect, the obsolete PENDING registry assertion, and the concurrent gallery renderer assertion; these were fixed before the final green runs. The first G3 command omitted MATLAB/MatCont environment variables and had three runtime setup errors plus three integration failures (one corruption check and two CLI adapter checks), with the strict torBPC xfail retained. The second G3 process had the correct runtime variables but imported the CLI before the adapter fix, so its two remaining adapter failures were stale; the eight final integration checks pass. A complete G3 run from the final source was then started with all owner-specified runtime paths.
+
+Final G3 command (all runtime paths set as above): `JAXCONT_TEST_X64=1 python3 -m pytest tests/test_matcont_suite.py tests/test_validation_reports.py tests/test_lorenz84_three_tool.py tests/test_periodic_validation.py tests/test_curves.py tests/test_codim2.py -m slow -q` — **24 PASS, 1 strict XFAIL, exit 0**. Log: `/tmp/round3-g3-verified.log`. This full run started after every implementation and integration fix.
+
+Final integrity verification loaded all ten promoted bundles with `require_reviewed=True`, verified every numerical output hash, and enforced the unchanged 10 MiB cap. `git diff --check` passes. No `src/jaxcont` file changed. Final state has green focused tests, both G1 precisions, and G3; the numerical FAIL/PENDING runs in the table remain unpromoted and explicitly unresolved.

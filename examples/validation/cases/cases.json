@@ -30,9 +30,9 @@
       ],
       "system": "cubic",
       "tool_coverage": {
-        "jaxcont": "PENDING",
+        "jaxcont": "PASS",
         "matcont": "PASS",
-        "bifurcationkit": "PENDING"
+        "bifurcationkit": "PASS"
       },
       "evidence_status": "PASS",
       "expected_domain": [
@@ -154,7 +154,7 @@
         "matcont": "PASS",
         "bifurcationkit": "PENDING"
       },
-      "evidence_status": "PASS",
+      "evidence_status": "PENDING",
       "expected_domain": [
         -2.0,
         12.8237400000001
@@ -284,9 +284,9 @@
       ],
       "system": "radial",
       "tool_coverage": {
-        "jaxcont": "PENDING",
+        "jaxcont": "PASS",
         "matcont": "PASS",
-        "bifurcationkit": "PENDING"
+        "bifurcationkit": "PASS"
       },
       "evidence_status": "PASS",
       "expected_domain": [
@@ -347,7 +347,7 @@
       ],
       "system": "torbpc",
       "tool_coverage": {
-        "jaxcont": "PENDING",
+        "jaxcont": "FAIL",
         "matcont": "PASS",
         "bifurcationkit": "PENDING"
       },
@@ -411,11 +411,11 @@
       ],
       "system": "adaptx",
       "tool_coverage": {
-        "jaxcont": "PENDING",
-        "bifurcationkit": "PENDING",
-        "matcont": "PENDING"
+        "jaxcont": "PASS",
+        "bifurcationkit": "PASS",
+        "matcont": "PASS"
       },
-      "evidence_status": "PENDING",
+      "evidence_status": "PASS",
       "expected_domain": [
         0.55,
         0.9
@@ -815,7 +815,7 @@
         "matcont",
         "bifurcationkit"
       ],
-      "evidence_status": "PENDING",
+      "evidence_status": "FAIL",
       "expected_domain": [
         -1.5,
         3.0
@@ -980,9 +980,9 @@
       "bifurcationkit": "lorenz84_equilibria.jl",
       "comparison_window": [
         1.5467,
-        3
+        2.99
       ],
-      "comparison_window_comment": "Both fold arms; F cannot reach the obsolete -1.5 bound past the fold at 1.5466.",
+      "comparison_window_comment": "Both fold arms; upper bound 2.99 is strictly inside MatCont coverage ending at F=2.997528062547353 and the other tools. The fold at F=1.546648 lies below the window.",
       "comparison_expected_events": [
         "H",
         "H",
@@ -1020,7 +1020,7 @@
         "matcont",
         "bifurcationkit"
       ],
-      "evidence_status": "PENDING",
+      "evidence_status": "FAIL",
       "expected_domain": [
         -0.01,
         0.04
@@ -1208,16 +1208,16 @@
         "frequency_atol": 0.0005
       },
       "tool_coverage": {
-        "jaxcont": "PENDING",
-        "matcont": "PENDING",
-        "bifurcationkit": "PENDING"
+        "jaxcont": "PASS",
+        "matcont": "PASS",
+        "bifurcationkit": "PASS"
       },
       "required_tools": [
         "jaxcont",
         "matcont",
         "bifurcationkit"
       ],
-      "evidence_status": "PENDING",
+      "evidence_status": "PASS",
       "expected_domain": [
         -0.01,
         0.04
@@ -1403,16 +1403,16 @@
         "frequency_atol": 0.0005
       },
       "tool_coverage": {
-        "jaxcont": "PENDING",
-        "matcont": "PENDING",
-        "bifurcationkit": "PENDING"
+        "jaxcont": "PASS",
+        "matcont": "PASS",
+        "bifurcationkit": "PASS"
       },
       "required_tools": [
         "jaxcont",
         "matcont",
         "bifurcationkit"
       ],
-      "evidence_status": "PENDING",
+      "evidence_status": "PASS",
       "expected_domain": [
         0.01,
         0.03

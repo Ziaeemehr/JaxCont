@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .artifacts import (
     enrich_generated_metadata,
+    case_result_payload,
     candidate_directory,
     load_bundle,
     verify_v2_bundles,
@@ -330,7 +331,8 @@ def _validate_case(case: dict, reference_dir: Path) -> tuple[bool, dict]:
         }
         if case.get("python"):
             fresh = _load_case_callable(case.get("v2_python", case["python"]))()
-            results["jaxcont"] = fresh if isinstance(fresh, dict) else fresh.artifacts["bundle"]
+            results["jaxcont"] = (fresh if isinstance(fresh, dict) else
+                                  fresh.artifacts.get("bundle") or case_result_payload(case, fresh))
         report = build_validation_report(case, results)
         return report.status == "PASS", {
             "status": report.status,
@@ -350,6 +352,16 @@ def _validate_case(case: dict, reference_dir: Path) -> tuple[bool, dict]:
         validate_equilibrium_artifacts(reference_dir, case["id"])
     elif case["id"] in {"MC-LC-001", "MC-LC-002"}:
         validate_periodic_artifacts(reference_dir, case["id"])
+        if case['id'] == 'MC-LC-001':
+            # This control has an exact period at every native sample, including
+            # endpoint rows outside the pairwise interpolation samples.
+            import csv
+            import math
+            with (bundle_dir / 'MC-LC-001_branch.csv').open(newline='') as stream:
+                if any(abs(float(row['period']) - 2 * math.pi) > case['tolerances']['period_atol']
+                       for row in csv.DictReader(stream)):
+                    raise ValueError('radial reference period exceeds exact period budget')
+
     function = _load_case_callable(case["python"])
     parameters = inspect.signature(function).parameters
     result = function(reference_dir) if "reference_dir" in parameters else function()

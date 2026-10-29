@@ -1,0 +1,4 @@
+┌ Warning: The supplied DiffCache was too small and was enlarged. This incurs allocations
+│         on the first call to `get_tmp`. If few calls to `get_tmp` occur and optimal performance is essential,
+│         consider changing 'N'/chunk size of this DiffCache to 12.
+└ @ PreallocationTools ~/.julia/packages/PreallocationTools/dNQ2d/src/PreallocationTools.jl:566

@@ -5,7 +5,7 @@ is reversed for interpolation; different fold arms are never merged.
 """
 import numpy as np
 from scipy.optimize import linear_sum_assignment
-from .artifacts import _monotone_segments
+from .artifacts import _monotone_segments, _sparse_native_query
 
 def _metric(value, limit, reason=None):
     finite = value is not None and np.isfinite(value)
@@ -163,7 +163,7 @@ def _sheets(data, case=None):
         crossings = [i for i in range(len(sheet)-1) if max(float(sheet[i]["parameter"]),float(sheet[i+1]["parameter"])) >= bounds[0] and min(float(sheet[i]["parameter"]),float(sheet[i+1]["parameter"])) <= bounds[1]]
         if crossings:
             indices += crossings + [i+1 for i in crossings]
-        if indices:
+        if indices and max(float(r["parameter"]) for r in sheet) > bounds[0] and min(float(r["parameter"]) for r in sheet) < bounds[1]:
             clipped = sheet[min(indices):max(indices)+1]
             # A duplicate seed on an outward run is not an additional arm.
             if len(clipped)>1 or case.get("comparison_window",{} ) == {"kind":"point"}:
@@ -260,7 +260,7 @@ def _pairwise(case, a, b):
                     else:
                         continue
                 else:
-                    query = np.unique(np.r_[lo, xp[(xp >= lo) & (xp <= hi)], yp[(yp >= lo) & (yp <= hi)], hi])
+                    query = _sparse_native_query(xp, yp, lo, hi)
                 px = [float(r["parameter"]) for r in x]
                 py = [float(r["parameter"]) for r in y]
                 plow, phigh = p_bounds if p_bounds else (-np.inf,np.inf)

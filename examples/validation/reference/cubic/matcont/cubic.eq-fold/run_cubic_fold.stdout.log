@@ -1,0 +1,39 @@
+-------------------------------------------------------------------------------------------
+FieldTrip is developed by members and collaborators of the Donders Institute for Brain,
+Cognition and Behaviour at Radboud University, Nijmegen, the Netherlands.
+
+                          --------------------------
+                        /                            \
+                     ------------------------------------
+                    /                                    \
+          -------------------------------------------------
+         /                            /\/\/\/\/\ 
+         ---------------------------------------------------
+                  |        F  i  e  l  d  T  r  i  p       |
+                  ------------------------------------------
+                   \                                      /
+                     ------------------------------------
+                          \            /
+                            ----------
+
+Please cite the FieldTrip reference paper when you have used FieldTrip in your study.
+Robert Oostenveld, Pascal Fries, Eric Maris, and Jan-Mathijs Schoffelen. FieldTrip: Open
+Source Software for Advanced Analysis of MEG, EEG, and Invasive Electrophysiological Data.
+Computational Intelligence and Neuroscience, vol. 2011, Article ID 156869, 9 pages, 2011.
+doi:10.1155/2011/156869.
+-------------------------------------------------------------------------------------------
+[Warning: enabling online tracking of FieldTrip usage, see
+http://www.fieldtriptoolbox.org/faq/tracking] 
+ In '/home/ziaee/programms/toolboxes/fieldtrip/utilities/ft_trackusage.m' at line 97
+ In '/home/ziaee/programms/toolboxes/fieldtrip/ft_defaults.m' at line 407
+
+[Warning: could not send tracker information for "startup"] 
+first point found
+tangent vector to first point found
+label = LP, x = ( -1.000001 0.666667 )
+a=1.000001e+00
+label = LP, x = ( 1.000000 -0.666667 )
+a=-9.999999e-01
+
+elapsed time  = 0.1 secs
+npoints curve = 500

@@ -1,0 +1,2 @@
+F,T,bracket_lower,bracket_status,bracket_upper,coefficient_convention,event_id,event_type,first_lyapunov,fold_coefficient,frequency,kind,parameter,point_id,residual_norm,segment_id,state_0,state_1,state_2,state_3,status
+1.4467167011164543,0.020940169683512942,,unknown,,"MatCont 7.6 native normal form, original time, tool-native eigenvector normalization",event_0,BT,,,0,BT,0.020940169683512942,23,2.7755575615628914e-17,0,1.225640495986239,-0.03632079327106525,0.19728832311234112,-0.12339001198633825,REFINED

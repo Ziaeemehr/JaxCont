@@ -4,103 +4,101 @@ Cubic folds: JaxCont and MatCont
 
 The system
 ----------
-The calibration system is :math:`\dot x=p+x-x^3/3`, with scalar state x
-and continuation parameter p. It is the cubic normal form used in the
-committed MatCont ``run_cubic_fold`` driver, with no additional parameters.
+The scalar equation
+
+.. math:: \dot x = p + x - \frac{x^3}{3}
+
+has one state :math:`x` and one parameter :math:`p`. Its equilibria satisfy
+:math:`p = x^3/3 - x`, an S-shaped curve. It is the calibration control of the
+validation suite: the answer is known in closed form, so it checks the
+exporters and the comparison machinery before the harder systems.
 """
 
 # %%
 # What to look for
 # ----------------
-# Expect an S-shaped branch with two LP (fold) points. The outer branches
-# are stable and the middle branch unstable; colour identifies stability.
-# Natural continuation reaches the first turn, whereas pseudo-arclength
-# passes both. The error panel uses x as the monotone coordinate.
+# Plotted as :math:`x` against :math:`p`, the equilibria form an S. The curve
+# turns back at two limit points (LP, folds) where
+# :math:`f_x = 1 - x^2 = 0`, i.e. :math:`x = \pm 1` and
+# :math:`p = \mp 2/3`. The outer two sheets (:math:`|x| > 1`) are stable and
+# the middle sheet between the folds is unstable. A continuation method has to
+# follow the curve around each fold; pseudo-arclength continuation does that.
+# Agreement means the curves coincide and both tools place the LP points at
+# the same :math:`(p, x)`.
 
+# sphinx_gallery_start_ignore
 import argparse
+import sys
 import tempfile
 from pathlib import Path
-import sys
+
 if "__file__" in globals():
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-import jax
-import jax.numpy as jnp
-import numpy as np
-import matplotlib.pyplot as plt
-import jaxcont as jc
-from jaxcont.core.collocation import Collocation
-from jaxcont.problems.periodic import periodic_orbit_problem
-from examples.validation.reporting import make_report, save_checked_figure
-from examples.validation.visualize import render_comparison, render_report_table
-
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated"
-)
+parser.add_argument("--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated")
 options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+# sphinx_gallery_end_ignore
+
+import jax.numpy as jnp
+
+import jaxcont as jc
+from examples.validation.cases.python_cases.equilibrium import run_cubic_fold
+from examples.validation.reporting import make_report, save_checked_figure
+from examples.validation.visualize import ReportTable, render_comparison, summarize_report
 import examples.validation as validation_package
+
 reference_dir = Path(validation_package.__file__).resolve().parent / "reference"
 
 # %%
 # The JaxCont computation
 # -----------------------
-# The following equations, seed, settings, and solve produce the fresh series.
+# The equation, the seed on the lower sheet at :math:`p = -1`, the settings
+# and the solve that produce the fresh JaxCont series.
 
 
-def _cubic_rhs(u, parameter, args):
-    del args
+def cubic(u, p, args):
     x = u[0]
-    return jnp.array([parameter + x - x**3 / 3.0])
+    return jnp.array([p + x - x**3 / 3.0])
 
 
-problem = jc.bif_problem(_cubic_rhs, u0=jnp.array([-2.1038034027355366]), p0=-1.0)
-settings = jc.ContinuationPar(
-    ds=0.01,
-    ds_min=1e-5,
-    ds_max=0.05,
-    max_steps=300,
-    newton_tol=1e-6,
-    compute_stability=True,
-)
-result = jc.continuation(
-    problem,
-    jc.PseudoArclength(),
-    p_span=(-1.0, 1.0),
-    settings=settings,
-    events=[jc.Fold()],
-)
-natural_result = jc.continuation(
-    problem,
-    jc.Natural(),
-    p_span=(-1.0, 1.0),
-    settings=settings,
-)
-from examples.validation.cases.python_cases.equilibrium import run_cubic_fold
+problem = jc.bif_problem(cubic, u0=jnp.array([-2.1038034027355366]), p0=-1.0)
+settings = jc.ContinuationPar(ds=0.01, ds_min=1e-5, ds_max=0.05, max_steps=300,
+                              newton_tol=1e-6, compute_stability=True)
+result = jc.continuation(problem, jc.PseudoArclength(), p_span=(-1.0, 1.0),
+                         settings=settings, events=[jc.Fold()])
+natural = jc.continuation(problem, jc.Natural(), p_span=(-1.0, 1.0), settings=settings)
+case = run_cubic_fold(computed=(result, natural))
 
-case_result = run_cubic_fold(computed=(result, natural_result))
 # %%
 # Comparison figures
 # ------------------
-# JaxCont is computed fresh. MatCont 7.6 is a committed reference series
-# from the bundled MatCont test systems; reference hashes are in the sidecars.
-# The error panel reveals discrepancies hidden by coincident curves.
+# JaxCont is computed fresh; MatCont 7.6 is a committed reference bundle. The
+# top figure overlays the two branches and their LP points. The curves
+# coincide, so the second figure shows the pointwise difference in :math:`p`
+# on a log scale, at the samples of the sparser series along the monotone
+# coordinate :math:`x` (the denser one is evaluated there by a cubic spline,
+# so the panel shows disagreement, not interpolation error).
 
-report = make_report(case_result, reference_dir)
-figures = render_comparison(case_result, report, reference_dir)
-for index, figure in enumerate(figures):
-    save_checked_figure(figure, report, options.output_dir / f"plot_cubic_{index}.png")
+report = make_report(case, reference_dir)
+overlay, error = render_comparison(case, report, reference_dir)
+save_checked_figure(overlay, report, options.output_dir / "plot_cubic_0.png")
+save_checked_figure(error, report, options.output_dir / "plot_cubic_1.png")
 
 # %%
 # Quantitative summary
 # --------------------
-# This table is generated from the same report as the figures and sidecars.
+# Generated from the same report as the figures and their ``.checks.json``
+# sidecars: each metric's measured value, its limit, and the verdict.
 
-summary = render_report_table(report)
-save_checked_figure(summary, report, options.output_dir / "plot_cubic_table.png")
+ReportTable(report)
 
 # %%
 # Takeaway
 # --------
-# The report measures branch, event and spectrum agreement against MatCont.
-# This is a calibration control; agreement here does not establish performance
-# on applied periodic bifurcations.
+
+print(summarize_report(report))
+
+# %%
+# This is a calibration control: agreement here shows the exporters, the
+# event matching and the comparison work, not that harder periodic problems
+# agree. Those are on the other pages of this gallery.

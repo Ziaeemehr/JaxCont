@@ -148,10 +148,8 @@ def test_lyapunov_coefficient_grad_matches_finite_difference():
 
 
 def test_lyapunov_coefficient_matches_bifurcationkit_jl_independent_run():
-    # Independent cross-check against BifurcationKit.jl v0.5.2's own hopf
-    # normal form (examples/validation/regenerate/bifurcationkit/hopf_normal_form.jl, run
-    # 2026-08-04): Hopf at p=5.392241290723402e-7, omega0=1.0, BK's own
-    # normal-form b=-1.7500010784482587, giving l1=b=-1.7500010784482587.
+    # Original BK native coefficient, retained as historical v1 evidence.
+    from tests.reference_bundles import historical_values
     def f(u, p, args):
         x, y = u[0], u[1]
         return jnp.array([
@@ -162,7 +160,7 @@ def test_lyapunov_coefficient_matches_bifurcationkit_jl_independent_run():
     u, p, q1, q2, omega0, _converged = hopf_point(f, jnp.zeros(2), 0.05, tol=1e-10, max_iter=50)
     l1 = lyapunov_coefficient(f, u, p, q1, q2, omega0)
 
-    bk_l1_reference = -1.7500010784482587
+    bk_l1_reference = historical_values("hopf-normal-form")["bk_l1_reference"]
     assert jnp.isclose(float(omega0), 1.0, atol=1e-6)
     assert jnp.isclose(float(l1), bk_l1_reference, atol=1e-4)
 

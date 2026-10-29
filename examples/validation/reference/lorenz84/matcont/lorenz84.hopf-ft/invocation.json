@@ -1,0 +1,14 @@
+{
+  "command": [
+    "/home/ziaee/envs/jaxcont/bin/python3",
+    "-m",
+    "examples.validation.run_validation",
+    "--regenerate",
+    "matcont",
+    "--case",
+    "lorenz84.hopf-ft",
+    "--output-dir",
+    "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/matcont/lorenz84.hopf-ft"
+  ],
+  "returncode": 0
+}

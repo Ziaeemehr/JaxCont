@@ -1,0 +1,109 @@
+{
+  "canonical_id": "adaptx.cycle-pd-switch",
+  "chart_status": "completed",
+  "command": [
+    "julia",
+    "--project=/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit",
+    "/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit/adaptx_pd.jl",
+    "--case",
+    "adaptx.cycle-pd-switch",
+    "--output-dir",
+    "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/bifurcationkit/adaptx.cycle-pd-switch/adaptx.cycle-pd-switch/bifurcationkit"
+  ],
+  "conventions": {
+    "time": "original"
+  },
+  "conversion_chain": [],
+  "driver_hash": "sha256:91fe14a97504248d248ce5d2693e3344383c8307e3fb1f2aaf74a975918a3e38",
+  "equation_hash": "sha256:91fe14a97504248d248ce5d2693e3344383c8307e3fb1f2aaf74a975918a3e38",
+  "generated_utc": "2026-10-29T00:59:08Z",
+  "generator_revision": "3dd787c13a76e00e0e5552614ba1772d0259a84d",
+  "lock_hash": "sha256:134daaa75d8b8f9905b1c7afc9b4ae1fa3602dd6d03e4ec1600000bdddb3bb29",
+  "mesh": {
+    "doubled_ntst": 40,
+    "ncol": 4,
+    "ntst": 20
+  },
+  "output_hashes": {
+    "branch.csv": "sha256:17e670648f960e4cadd2b70bb569e03d3776befb1df5911a7350b047873adcc2",
+    "events.csv": "sha256:d2f8ef62d69217b01c07a254161e9a0bb8cdf458e220a86c5b18364cfaa37e35",
+    "orbits.csv": "sha256:5f61e3483f05aab045d0316335b80b6320ae127f8aa45ee1044aec8f9358cae7",
+    "spectra.csv": "sha256:55f8caa14c75442587864b704933851622cbaeef92a9789d2b353ed6df029bc5"
+  },
+  "package_versions": {
+    "BifurcationKit": "0.8.8",
+    "CSV": "1.2.0",
+    "JSON": "1.13.0"
+  },
+  "parameter_order": [
+    "alpha",
+    "beta"
+  ],
+  "platform": {
+    "blas": "LBTConfig([ILP64] libopenblas64_.so)",
+    "cpu": "sapphirerapids",
+    "os": "Linux"
+  },
+  "precision": "float64",
+  "resolved_controls": {
+    "ds": 0.01,
+    "ds_max": 0.02,
+    "ds_min": 1e-05,
+    "event_bisection_inversions": 16,
+    "max_steps": 300,
+    "newton_atol": 1e-10,
+    "tol_bisection_eigenvalue": 0
+  },
+  "review_date": "2026-10-29",
+  "reviewed": true,
+  "reviewer": "Claude (review delegated by owner, 2026-10-28)",
+  "runtime_version": "1.13.3",
+  "scaling": {
+    "arclength": "BK PALC theta=0.5: state weight 0.5/n; parameter weight 0.5",
+    "time": "original"
+  },
+  "schema_version": 2,
+  "seeds": {
+    "alpha": 1.1,
+    "beta": 1,
+    "equilibrium": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "hopf": 0.9999999599992179
+  },
+  "solver_strategies": {
+    "event_selection": "type and parameter window",
+    "method": "BifurcationKit PALC"
+  },
+  "source_hashes": {
+    "adaptx_pd.jl": "sha256:91fe14a97504248d248ce5d2693e3344383c8307e3fb1f2aaf74a975918a3e38",
+    "export.jl": "sha256:c9d7f64f7e16e4829b8af9894b4449e56fbbb0c02403f028d749cdde77fe27b3",
+    "periodic_export.jl": "sha256:4863e113ed6355ae28b4274d074bacb2e46c82208a356efa23b2de23f03a892c",
+    "periodic.json": "sha256:8b5912313fddceacd04f7d990968c8a959d6ca8d9c1aceec9330a09ebfc9809f"
+  },
+  "tool": "bifurcationkit",
+  "refinement": {
+    "coarse": {
+      "independent_dense_defect": 4.71455112886765e-07,
+      "independent_interval_closure": 4.67427208050708e-11
+    },
+    "coarse_ntst": 20,
+    "fine": {
+      "independent_dense_defect": 1.451399006622417e-08,
+      "independent_interval_closure": 1.4516721158486234e-12
+    },
+    "fine_ntst": 40,
+    "parameter": 0.55,
+    "period_difference": 3.339870602303563e-10
+  },
+  "noncomparability_reasons": [
+    "Native BK PALC state metric differs from JaxCont collocation layout and MatCont Euclidean coordinates"
+  ],
+  "hopf_period": 6.283185244346508,
+  "hopf_alpha": 0.9999999599992179,
+  "comparable": false,
+  "period_ratio": 2.0000031641859093,
+  "coverage_status": "COMPLETE"
+}

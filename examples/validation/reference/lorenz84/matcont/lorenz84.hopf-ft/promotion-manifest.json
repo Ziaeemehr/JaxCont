@@ -1,0 +1,891 @@
+{
+  "schema_version": 1,
+  "canonical_id": "lorenz84.hopf-ft",
+  "system": "lorenz84",
+  "reviewer": "Claude (review delegated by owner, 2026-10-28)",
+  "review_date": "2026-10-29",
+  "expected_status": "PENDING",
+  "registry_case": {
+    "id": "lorenz84.hopf-ft",
+    "canonical_id": "lorenz84.hopf-ft",
+    "aliases": [],
+    "system": "lorenz84",
+    "title": "Extended Lorenz-84 hopf-ft",
+    "support": "supported",
+    "features": [
+      "codim2"
+    ],
+    "python": "examples.validation.cases.python_cases.lorenz84:run_hopf",
+    "matlab": "run_lorenz84_codim2",
+    "references": [],
+    "manual_source": "Reviewed Lorenz-84 contract; candidates awaiting Task 2.12 review",
+    "tolerances": {
+      "parameter_atol": 0.0005,
+      "state_atol": 0.0002,
+      "residual_atol": 1e-07,
+      "spectrum_atol": 0.0005,
+      "frequency_atol": 0.0005
+    },
+    "tool_coverage": {
+      "jaxcont": "PENDING",
+      "matcont": "PENDING",
+      "bifurcationkit": "PENDING"
+    },
+    "required_tools": [
+      "jaxcont",
+      "matcont",
+      "bifurcationkit"
+    ],
+    "evidence_status": "PENDING",
+    "expected_domain": [
+      -0.01,
+      0.04
+    ],
+    "expected_events": [],
+    "model_contract": {
+      "state_order": [
+        "X",
+        "Y",
+        "Z",
+        "U"
+      ],
+      "parameter_order": [
+        "F",
+        "T"
+      ],
+      "time": "original nondimensional time; no time rescaling",
+      "jacobian": "rows are RHS components; columns follow X,Y,Z,U",
+      "frequency": "angular frequency in radians per original time unit",
+      "fold_label": "LP (BK fold aliases normalized by the exporter)",
+      "hopf_label": "H (BK hopf aliases normalized by the exporter)",
+      "bt_label": "BT; two small eigenvalues and geometric nullity one",
+      "normal_forms": "record tool-native definition and eigenvector normalization; no implicit l1 conversion",
+      "arclength": "record physical metric and state/parameter weights per tool",
+      "chart_boundary": "Hopf chart termination near BT is a boundary, not a BT detection",
+      "symmetry": "(U,T) -> (-U,-T); select positive-T BT by window",
+      "review_status": "REVIEWED (Claude review 1, 2026-10-28)",
+      "constants": {
+        "alpha": 0.25,
+        "beta": 1.0,
+        "gamma": 0.987,
+        "delta": 1.04,
+        "G": 0.25
+      },
+      "f_sweep": {
+        "fixed_T": 0.04,
+        "bounds": [
+          -1.5,
+          3.0
+        ],
+        "seed_F": 3.0,
+        "seed_state": [
+          2.9787004394953343,
+          -0.03868302503393752,
+          0.058232737694740085,
+          -0.02105288273117459
+        ],
+        "seed_policy": "Newton-correct at F=3,T=0.04 before continuation",
+        "both_directions": true,
+        "ds": 0.002,
+        "ds_max": 0.05,
+        "max_steps_per_direction": 200,
+        "newton_atol": 1e-12,
+        "source": "historical lorenz84_equilibria.jl (Julia 02)",
+        "comparison_domain": "clip each sheet to bounds before matching",
+        "expected_events": [
+          {
+            "kind": "LP",
+            "window": {
+              "F": [
+                1.5,
+                1.58
+              ]
+            }
+          },
+          {
+            "kind": "H",
+            "window": {
+              "F": [
+                1.59,
+                1.65
+              ]
+            }
+          },
+          {
+            "kind": "H",
+            "window": {
+              "F": [
+                2.4,
+                2.55
+              ]
+            }
+          },
+          {
+            "kind": "H",
+            "window": {
+              "F": [
+                2.8,
+                2.95
+              ]
+            }
+          }
+        ]
+      },
+      "codim2": {
+        "parameter_order": [
+          "F",
+          "T"
+        ],
+        "free_parameter": "T",
+        "T_bounds": [
+          -0.1,
+          3.2
+        ],
+        "ds": -0.001,
+        "ds_min": 1e-05,
+        "ds_max": 0.015,
+        "max_steps": 30,
+        "expected_T_domain": [
+          -0.01,
+          0.04
+        ],
+        "source": "historical lorenz84_codim2.jl; shared positive-T BT chart"
+      },
+      "event_windows": {
+        "fold_seed": {
+          "F": [
+            1.5,
+            1.58
+          ],
+          "T": [
+            0.039,
+            0.041
+          ]
+        },
+        "hopf_seed": {
+          "F": [
+            1.59,
+            1.65
+          ],
+          "T": [
+            0.039,
+            0.041
+          ]
+        },
+        "bt_positive_T": {
+          "F": [
+            1.4,
+            1.5
+          ],
+          "T": [
+            0.01,
+            0.03
+          ]
+        }
+      },
+      "domain_coordinate": "T",
+      "coverage_note": "BT is a refined point selected in a window; Hopf may terminate at a chart boundary, which cannot pass full-domain publication"
+    },
+    "metric_limits": {
+      "parameter_atol": 0.0005,
+      "state_atol": 0.0002,
+      "residual_atol": 1e-07,
+      "spectrum_atol": 0.0005,
+      "frequency_atol": 0.0005
+    },
+    "bifurcationkit": "lorenz84_codim2.jl",
+    "comparison_window": [
+      0.022,
+      0.04
+    ],
+    "comparison_window_comment": "Shared Hopf chart clear of the BT boundary and unrefined BK endpoint."
+  },
+  "candidates": {
+    "jaxcont": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/lorenz84/jaxcont/lorenz84.hopf-ft",
+      "hashes": {
+        "branch.csv": "sha256:1c61a29d6b342257e5f11b1ece074436af7efc198e2df7e0dad663209b62e34d",
+        "events.csv": "sha256:1108f2ef0e3272c0f63a97c6e70bfbc51cdcfb570d73d8d3aafefe801eb80e72",
+        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0",
+        "metadata.json": "sha256:151cde4dc4fb9c0ebca17b64b909d954df06a44cb61d16a68790ca976fb8174e",
+        "regenerate_jaxcont.py": "sha256:265c05f933b81bc3263922f04104b173d5facf71447f8296cdc297dbd8e297d2",
+        "spectra.csv": "sha256:7d78f039260799ca57a6fe9fd115c587cf84966b173740b9ad67945c141a2eb1"
+      },
+      "promotable": true,
+      "command": [
+        "/home/ziaee/envs/jaxcont/bin/python3",
+        "-"
+      ],
+      "logs": {
+        "generation.log": "sha256:e9544075413ad4c238e2e8b5ade260e824d20d6d51798e43bc18ff6bbb988dc0"
+      },
+      "coverage": "COMPLETE"
+    },
+    "matcont": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/lorenz84/matcont/lorenz84.hopf-ft",
+      "hashes": {
+        "branch.csv": "sha256:35f175d44f8f623190d0c969093c2400c8cc9cc0edd38cd98a84c74c6bcb9cc5",
+        "events.csv": "sha256:0a5202f4092d3aaa96379091d092cb1b42594cb3f5b0174249facb88ff3324b8",
+        "invocation.json": "sha256:7092343376b3aa173bf7754dee896ae3e90eaa78024690e314b0a2732b219ea2",
+        "metadata.json": "sha256:e5a9397887b72e0b2d044affc0811b32e336689490c08fbaf4a58f32438dec07",
+        "native.json": "sha256:c21012b6ec52bd2b430b090de8385e94dc3a5c137aafc472f6bdcda4284c3d38",
+        "raw.json": "sha256:7309f310f0c7bfc2e869dcb60efcd7434b55a0e85264256eb84ea58872ddf57b",
+        "regeneration.log": "sha256:b58a8ba86f43a12f16d4acab7da961dbac7f9063064c46d4559e98072223e118",
+        "run_lorenz84_codim2.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "run_lorenz84_codim2.stdout.log": "sha256:5fdd06163877e71e07e0c5a9dfe55ae0d33c6a8a53e33bc3692a427ba7e6ae16",
+        "spectra.csv": "sha256:693b62d2f9aa383db0365f797695e60f34f934b12efb4dbaeb71460138f2f8bd"
+      },
+      "promotable": true,
+      "command": [
+        "/home/ziaee/programms/Matlab/R2024a/bin/matlab",
+        "-batch",
+        "addpath('/home/ziaee/git/JaxCont/examples/validation/regenerate/matcont','/home/ziaee/git/JaxCont/examples/validation/regenerate/matcont/capability_gaps'); run_lorenz84_codim2('/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/matcont/lorenz84.hopf-ft')"
+      ],
+      "logs": {
+        "regeneration.log": "sha256:b58a8ba86f43a12f16d4acab7da961dbac7f9063064c46d4559e98072223e118",
+        "run_lorenz84_codim2.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+        "run_lorenz84_codim2.stdout.log": "sha256:5fdd06163877e71e07e0c5a9dfe55ae0d33c6a8a53e33bc3692a427ba7e6ae16"
+      },
+      "coverage": "COMPLETE"
+    },
+    "bifurcationkit": {
+      "path": "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/lorenz84/bifurcationkit/lorenz84.hopf-ft",
+      "hashes": {
+        "branch.csv": "sha256:ef373c8202376487ff9bd32f3f7b909869d11ee77e6da921024ff51f3b944207",
+        "events.csv": "sha256:ee339cca9b2313c3667ed4c956cc7b1b81937ae37cc663bf73e20933493847a3",
+        "invocation.json": "sha256:6f8275fea3b3f52764a2116d07c18844fdb5d744924a226718ee9cf425702f90",
+        "lorenz84_codim2.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "lorenz84_codim2.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "metadata.json": "sha256:a9a7d87fb50b13369307c18dd03dc1229d3e27a35bd2fd98a5aac213a6c590fb",
+        "regeneration.log": "sha256:b58a8ba86f43a12f16d4acab7da961dbac7f9063064c46d4559e98072223e118",
+        "spectra.csv": "sha256:ad80a46a2f2dcd749ce9d9521080fea73094a456984480f75554bae4ae7c2cd9"
+      },
+      "promotable": true,
+      "command": [
+        "julia",
+        "--project=/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit",
+        "/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl",
+        "--case",
+        "lorenz84.hopf-ft",
+        "--output-dir",
+        "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/bifurcationkit/lorenz84.hopf-ft/lorenz84.hopf-ft/bifurcationkit"
+      ],
+      "logs": {
+        "lorenz84_codim2.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "lorenz84_codim2.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "regeneration.log": "sha256:b58a8ba86f43a12f16d4acab7da961dbac7f9063064c46d4559e98072223e118"
+      },
+      "coverage": "COMPLETE"
+    }
+  },
+  "independent": {
+    "jaxcont": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 5.551115123125783e-16,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "matcont": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 7.632783294297951e-17,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "bifurcationkit": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 1.2755074774162267e-13,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      }
+    }
+  },
+  "pairwise": {
+    "jaxcont--matcont": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.F": {
+        "value": 3.274217042426031e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.T": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_0": {
+        "value": 1.8195414861477133e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_1": {
+        "value": 1.8175348410337522e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_2": {
+        "value": 3.8535992319399526e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_3": {
+        "value": 5.285911738289739e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.spectrum": {
+        "value": 3.0156515315659875e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      }
+    },
+    "jaxcont--bifurcationkit": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.F": {
+        "value": 2.961133532397575e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.T": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_0": {
+        "value": 1.5433422322352897e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_1": {
+        "value": 1.5246093099108293e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_2": {
+        "value": 3.258739599831806e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_3": {
+        "value": 4.29099743143313e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.spectrum": {
+        "value": 3.0212008168246635e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      }
+    },
+    "matcont--bifurcationkit": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.F": {
+        "value": 6.202352364770292e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.T": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_0": {
+        "value": 3.052783845047813e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_1": {
+        "value": 2.988479815280165e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_2": {
+        "value": 6.429910346106293e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_3": {
+        "value": 8.108235701520528e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.spectrum": {
+        "value": 8.946403666916835e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      }
+    }
+  },
+  "event_information": {
+    "jaxcont": {
+      "outside_window": [
+        {
+          "F": "1.4467167011153617",
+          "T": "0.020940169683322598",
+          "bracket_lower": "0.020940169683322598",
+          "bracket_upper": "0.020940169683322598",
+          "event_id": "bt0",
+          "event_type": "BT",
+          "kind": "BT",
+          "order": "48",
+          "parameter": "0.020940169683322598",
+          "point_id": "48",
+          "residual_norm": "5.551115123125783e-17",
+          "segment_id": "hopf",
+          "state_0": "1.2256404959862783",
+          "state_1": "-0.0363207932710689",
+          "state_2": "0.19728832311233294",
+          "state_3": "-0.12339001198518858",
+          "status": "CONVERGED",
+          "unstable_dimension": "2"
+        }
+      ],
+      "unrefined_detections": []
+    },
+    "matcont": {
+      "outside_window": [
+        {
+          "F": "1.4467167011164543",
+          "T": "0.020940169683512942",
+          "bracket_lower": "",
+          "bracket_status": "unknown",
+          "bracket_upper": "",
+          "coefficient_convention": "MatCont 7.6 native normal form, original time, tool-native eigenvector normalization",
+          "event_id": "event_0",
+          "event_type": "BT",
+          "first_lyapunov": "",
+          "fold_coefficient": "",
+          "frequency": "0",
+          "kind": "BT",
+          "parameter": "0.020940169683512942",
+          "point_id": "23",
+          "residual_norm": "2.7755575615628914e-17",
+          "segment_id": "0",
+          "state_0": "1.225640495986239",
+          "state_1": "-0.03632079327106525",
+          "state_2": "0.19728832311234112",
+          "state_3": "-0.12339001198633825",
+          "status": "REFINED"
+        }
+      ],
+      "unrefined_detections": []
+    },
+    "bifurcationkit": {
+      "outside_window": [
+        {
+          "F": "1.4471638980091805",
+          "T": "0.021017905930167148",
+          "bracket_lower": "0.021017905930167148",
+          "bracket_upper": "0.02145875743728744",
+          "event_id": "e1",
+          "event_type": "BT",
+          "kind": "BT",
+          "native_label": "bt",
+          "native_status": "guess",
+          "order": "13",
+          "parameter": "0.021017905930167148",
+          "point_id": "13",
+          "residual_norm": "2.0816681711721685e-17",
+          "segment_id": "H",
+          "state_0": "1.225624410343011",
+          "state_1": "-0.03631929582422127",
+          "state_2": "0.19729166476695212",
+          "state_3": "-0.12385966043118044",
+          "status": "GUESS",
+          "unstable_dimension": "2"
+        }
+      ],
+      "unrefined_detections": []
+    }
+  },
+  "validation_report": {
+    "canonical_id": "lorenz84.hopf-ft",
+    "coverage": {
+      "jaxcont": "PASS",
+      "matcont": "PASS",
+      "bifurcationkit": "PASS"
+    },
+    "pairwise": {
+      "jaxcont--matcont": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.F": {
+          "value": 3.274217042426031e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.T": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_0": {
+          "value": 1.8195414861477133e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_1": {
+          "value": 1.8175348410337522e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_2": {
+          "value": 3.8535992319399526e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_3": {
+          "value": 5.285911738289739e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.spectrum": {
+          "value": 3.0156515315659875e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        }
+      },
+      "jaxcont--bifurcationkit": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.F": {
+          "value": 2.961133532397575e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.T": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_0": {
+          "value": 1.5433422322352897e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_1": {
+          "value": 1.5246093099108293e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_2": {
+          "value": 3.258739599831806e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_3": {
+          "value": 4.29099743143313e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.spectrum": {
+          "value": 3.0212008168246635e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        }
+      },
+      "matcont--bifurcationkit": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.F": {
+          "value": 6.202352364770292e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.T": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_0": {
+          "value": 3.052783845047813e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_1": {
+          "value": 2.988479815280165e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_2": {
+          "value": 6.429910346106293e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_3": {
+          "value": 8.108235701520528e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.spectrum": {
+          "value": 8.946403666916835e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        }
+      }
+    },
+    "independent": {
+      "jaxcont": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 5.551115123125783e-16,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "matcont": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 7.632783294297951e-17,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "bifurcationkit": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 1.2755074774162267e-13,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        }
+      }
+    },
+    "source_hashes": {
+      "jaxcont": {
+        "branch.csv": "sha256:1c61a29d6b342257e5f11b1ece074436af7efc198e2df7e0dad663209b62e34d",
+        "events.csv": "sha256:1108f2ef0e3272c0f63a97c6e70bfbc51cdcfb570d73d8d3aafefe801eb80e72",
+        "spectra.csv": "sha256:7d78f039260799ca57a6fe9fd115c587cf84966b173740b9ad67945c141a2eb1"
+      },
+      "matcont": {
+        "branch.csv": "sha256:35f175d44f8f623190d0c969093c2400c8cc9cc0edd38cd98a84c74c6bcb9cc5",
+        "events.csv": "sha256:0a5202f4092d3aaa96379091d092cb1b42594cb3f5b0174249facb88ff3324b8",
+        "spectra.csv": "sha256:693b62d2f9aa383db0365f797695e60f34f934b12efb4dbaeb71460138f2f8bd"
+      },
+      "bifurcationkit": {
+        "branch.csv": "sha256:ef373c8202376487ff9bd32f3f7b909869d11ee77e6da921024ff51f3b944207",
+        "events.csv": "sha256:ee339cca9b2313c3667ed4c956cc7b1b81937ae37cc663bf73e20933493847a3",
+        "spectra.csv": "sha256:ad80a46a2f2dcd749ce9d9521080fea73094a456984480f75554bae4ae7c2cd9"
+      }
+    },
+    "status": "PASS",
+    "report_hash": "sha256:3555f73196e94a338ea43ba1f40caf383e024afe4280248e822606bfba9c3796"
+  },
+  "verdict": "PASS"
+}
