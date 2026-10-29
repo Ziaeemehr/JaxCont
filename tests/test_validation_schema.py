@@ -14,7 +14,7 @@ def make_bundle(path, *, tool="matcont"):
     path.mkdir(parents=True)
     files = {
         "branch.csv": "segment_id,point_id,order,parameter,state_0,residual_norm,unstable_dimension,status\ns,0,0,0,1,0,0,CONVERGED\ns,1,1,1,2,0,0,CONVERGED\n",
-        "events.csv": "event_id,event_type,status,segment_id,point_id,parameter,bracket_lower,bracket_upper\ne,LP,CONVERGED,s,0,0,0,1\n",
+        "events.csv": "event_id,event_type,status,segment_id,point_id,parameter,bracket_lower,bracket_upper,residual_norm\ne,LP,CONVERGED,s,0,0,0,1,0\n",
         "spectra.csv": "segment_id,point_id,event_id,kind,mode_id,real,imag,logabs,phase,trivial_mode_method\ns,0,,EIGENVALUE,0,-1,0,0,3.141592653589793,not-applicable\n",
     }
     for name, value in files.items():

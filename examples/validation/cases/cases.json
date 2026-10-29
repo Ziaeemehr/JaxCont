@@ -25,6 +25,7 @@
         "spectrum_atol": 0.0005
       },
       "canonical_id": "cubic.eq-fold",
+      "state_dimension": 1,
       "aliases": [
         "MC-EQ-001"
       ],
@@ -146,6 +147,7 @@
         "spectrum_atol": 0.0005
       },
       "canonical_id": "adaptx.eq-hopf",
+      "state_dimension": 3,
       "aliases": [
         "MC-EQ-003"
       ],
@@ -462,6 +464,8 @@
         "segment": "doubled",
         "min_half_period_difference": 0.001
       },
+      "independent_defect_atol": 2e-05,
+      "independent_defect_comment": "Review R2-04 (2026-10-29): independent integration/closure diagnostics must not exceed the case's residual budget; measured maxima: JaxCont 1.1e-6, BifurcationKit 5.6e-7, MatCont 2.0e-9.",
       "doubled_shape_comment": "A base orbit traversed twice has half-period difference ~0; the legacy MatCont test uses the same 1e-3 floor (measured maxima: MatCont 0.564, BifurcationKit 0.633)."
     },
     {
@@ -803,6 +807,7 @@
     {
       "id": "lorenz84.eq-f",
       "canonical_id": "lorenz84.eq-f",
+      "state_dimension": 4,
       "aliases": [],
       "system": "lorenz84",
       "title": "Extended Lorenz-84 eq-f",
@@ -1009,6 +1014,7 @@
     {
       "id": "lorenz84.fold-ft",
       "canonical_id": "lorenz84.fold-ft",
+      "state_dimension": 4,
       "comparison_passage": "first",
       "aliases": [],
       "system": "lorenz84",
@@ -1211,6 +1217,7 @@
     {
       "id": "lorenz84.hopf-ft",
       "canonical_id": "lorenz84.hopf-ft",
+      "state_dimension": 4,
       "aliases": [],
       "system": "lorenz84",
       "title": "Extended Lorenz-84 hopf-ft",
@@ -1406,6 +1413,7 @@
     {
       "id": "lorenz84.bt-ft",
       "canonical_id": "lorenz84.bt-ft",
+      "state_dimension": 4,
       "aliases": [],
       "system": "lorenz84",
       "title": "Extended Lorenz-84 bt-ft",

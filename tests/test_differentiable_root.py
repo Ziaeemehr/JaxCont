@@ -155,6 +155,18 @@ def test_checked_root_floor_is_per_equation():
         assert not bool(converged)
 
 
+def test_checked_root_floor_ignores_unrelated_large_coordinates():
+    """Review R2-01: a large, already solved coordinate must not relax an
+    equation that does not depend on it (x[1]**2 + 1 = 0 has no real root)."""
+    import jax
+    from jaxcont.solvers.implicit import differentiable_root_checked
+    t = 1e16 if jnp.asarray(0.).dtype == jnp.float64 else 1e8
+    G = lambda x, t: jnp.array([x[0] - t, x[1] ** 2 + 1])
+    for solve in (differentiable_root_checked, jax.jit(differentiable_root_checked, static_argnums=0)):
+        _, converged = solve(G, jnp.array([t, .5]), jnp.asarray(t))
+        assert not bool(converged)
+
+
 def test_checked_root_floor_still_accepts_a_badly_scaled_equation_beside_a_regular_one():
     """The per-equation floor keeps the L2-F2 behaviour for the scaled equation."""
     from jaxcont.solvers.implicit import differentiable_root_checked

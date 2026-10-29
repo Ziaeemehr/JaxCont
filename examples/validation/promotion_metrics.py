@@ -73,6 +73,19 @@ def _independent(case, data):
     for column in required:
         if any(r.get(column) in (None, "") for r in inside):
             metrics[f"missing.{column}"] = _metric(None, 0, "required applicable column is missing")
+    # Required evidence comes from the case contract, not from what a tool
+    # happens to export (review R2-03): every state component of the
+    # declared dimension, and every budgeted diagnostic that applies to an
+    # event's kind. Absent evidence is PENDING (never PASS); invalid present
+    # values fail through the finiteness scan below.
+    for k in range(case.get("state_dimension", 0)):
+        if any(r.get(f"state_{k}") in (None, "") for r in inside):
+            metrics[f"missing.state_{k}"] = _metric(None, None, f"state_{k} of the declared dimension not exported")
+    for column in ("fold_coefficient", "first_lyapunov", "frequency"):
+        if tol.get(column + "_atol") is None:
+            continue
+        if any(applicable(column, e) and e.get(column) in (None, "") for e in events):
+            metrics[f"event.missing.{column}"] = _metric(None, None, f"{column} not exported for an applicable event")
     if case["canonical_id"] == "lorenz84.eq-f":
         bounds = window(case)
         metrics["required_sheet_count"] = _metric(abs(len(sheets)-2),0)
@@ -117,6 +130,10 @@ def _independent(case, data):
     # points (review B-01).
     for name, records in (("residual", inside), ("event_residual", events)):
         values = [r.get("residual_norm") for r in records if r.get("residual_norm") not in (None, "")]
+        if name == "event_residual" and len(values) != len(records):
+            # A refined event without its residual is missing evidence (R2-02).
+            metrics[name] = _metric(None, None, "refined event residual not exported")
+            continue
         if not values or (name == "residual" and len(values) != len(records)):
             continue
         values = np.abs(np.asarray(values, dtype=float))
@@ -138,6 +155,16 @@ def _independent(case, data):
                     or (m.get("event_id") and str(m["event_id"]) in compared_events))
     if nonfinite:
         metrics["spectra_finite"] = _metric(None, 0, f"{nonfinite} nonfinite modes at compared points")
+    # Independent integration and closure diagnostics are gated where the case
+    # declares a budget (review R2-04); nonfinite values always fail.
+    defect_limit = case.get("independent_defect_atol")
+    if defect_limit is not None:
+        values = [r[k] for r in inside + events for k in r
+                  if (k.startswith("independent_") or k == "closure") and r[k] not in (None, "")]
+        values = np.abs(np.asarray(values, dtype=float))
+        if len(values):
+            metrics["independent_defect"] = (_metric(float(values.max()), defect_limit) if np.all(np.isfinite(values))
+                                             else _metric(None, defect_limit, "nonfinite independent diagnostic"))
     # A period-doubled branch must be a genuine doubling, not the base orbit
     # traversed twice: its half-period difference must reach the declared
     # minimum somewhere on the branch (it vanishes at the PD point itself).
@@ -400,6 +427,23 @@ def _interval_allowance(sparse, nodes, change):
     return local[interval]
 
 
+def _native_node_metric(xp, xa, yp, ya, lo, hi, query, limit, what, rtol=0., interpolate=None):
+    """Bidirectional check at every native node of either tool between the
+    query nodes, against the other tool's interpolant (review B-04, R2-05)."""
+    interpolate = interpolate or _cubic
+    differences, allowances = [], []
+    for (dp, dv), (sp, sv) in (((xp, xa), (yp, ya)), ((yp, ya), (xp, xa))):
+        nodes = (dp >= lo) & (dp <= hi) & ~np.isin(dp, query)
+        if np.any(nodes) and len(sp) > 1:
+            full = interpolate(sp, sv, dp[nodes])
+            half = interpolate(*_half_grid(sp, sv), dp[nodes])
+            differences.append(np.maximum(abs(full - dv[nodes]) - rtol * np.maximum(abs(full), abs(dv[nodes])), 0.))
+            allowances.append(_interval_allowance(sp, dp[nodes], full - half))
+    if not differences:
+        return None
+    return _dense_node_metric(np.concatenate(differences), limit, np.concatenate(allowances), what)
+
+
 def _dense_node_metric(differences, limit, allowance, what):
     """Compare at each tool's own nodes between the query nodes (review B-04).
 
@@ -502,19 +546,10 @@ def _pairwise(case, a, b, *, coordinates=None, samples=None):
                     # The query nodes cannot see a disagreement between them;
                     # compare at every other native node of either tool,
                     # against the other tool's interpolant (order-free).
-                    differences, allowances = [], []
-                    for (dp, dv), (sp, sv) in (((xp, xa), (yp, ya)), ((yp, ya), (xp, xa))):
-                        nodes = (dp >= lo) & (dp <= hi) & ~np.isin(dp, query)
-                        if np.any(nodes) and len(sp) > 1:
-                            full = _cubic(sp, sv, dp[nodes])
-                            half = _cubic(*_half_grid(sp, sv), dp[nodes])
-                            differences.append(np.maximum(abs(full - dv[nodes]) - tol.get("rtol", 0.) * np.maximum(abs(full), abs(dv[nodes])), 0.))
-                            allowances.append(_interval_allowance(sp, dp[nodes], full - half))
-                    if differences:
-                        dense = _dense_node_metric(np.concatenate(differences), _limit(column, tol),
-                                                   np.concatenate(allowances), column)
-                        if dense is not None:
-                            metrics[f"{column}.dense_nodes"] = dense
+                    dense = _native_node_metric(xp, xa, yp, ya, lo, hi, query, _limit(column, tol),
+                                                column, tol.get("rtol", 0.))
+                    if dense is not None:
+                        metrics[f"{column}.dense_nodes"] = dense
                     curves[column] = dict(coordinate=coordinate, x=query.tolist(),
                         error=abs(av-bv).tolist(), limit=_limit(column, tol),
                         budget=(_limit(column, tol) + tol.get("rtol", 0.)*np.maximum(abs(av),abs(bv))).tolist())
@@ -523,6 +558,10 @@ def _pairwise(case, a, b, *, coordinates=None, samples=None):
                         return np.array([max(abs(float(v)) for k,v in r.items() if k.startswith("state_")) for r in rows])
                     av, bv = np.interp(query,xp,radius(xx)), np.interp(query,yp,radius(yy))
                     metrics["radius"] = _metric(np.max(abs(av-bv)), tol["radius_atol"], "Phase 1 observable: maximum absolute sampled coordinate; radius_atol is not a per-axis extrema budget")
+                    dense = _native_node_metric(xp, radius(xx), yp, radius(yy), lo, hi, query, tol["radius_atol"],
+                                                "radius", interpolate=lambda c, v, q: np.interp(q, c, v))
+                    if dense is not None:
+                        metrics["radius.dense_nodes"] = dense
                     curves["radius"] = dict(coordinate=coordinate, x=query.tolist(),
                         error=abs(av-bv).tolist(), limit=tol["radius_atol"],
                         budget=np.full(len(query), tol["radius_atol"]).tolist())

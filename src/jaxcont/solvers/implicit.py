@@ -120,14 +120,14 @@ def differentiable_root_checked(
     r = G(x_star, theta)
     if tol is None:
         # The default tolerance is absolute, but even the correctly rounded
-        # root of a badly scaled equation has residual ~ eps * |J_i| * |x|;
-        # each equation may use its own rounding floor (Jacobian row, small
-        # safety factor), and only the excess over it must meet the default
-        # tolerance, so one huge row cannot relax another (review A-01). With
-        # zero floors this is the plain criterion. An explicit tol stays strict.
+        # root of a badly scaled equation has residual ~ eps * sum_j |J_ij| |x_j|;
+        # each equation may use its own rounding floor (from the coordinates
+        # it depends on, small safety factor), and only the excess over it must
+        # meet the default tolerance, so neither a huge row nor a huge unrelated
+        # coordinate can relax another equation (review A-01, R2-01). With zero
+        # floors this is the plain criterion. An explicit tol stays strict.
         jacobian = jax.lax.stop_gradient(jax.jacfwd(lambda x: G(x, theta))(x_star))
-        floor = (16 * jnp.finfo(x_star.dtype).eps * jnp.linalg.norm(jacobian, axis=-1)
-                 * (1 + jnp.linalg.norm(x_star)))
+        floor = 16 * jnp.finfo(x_star.dtype).eps * (jnp.abs(jacobian) @ (1 + jnp.abs(x_star)))
         residual = jnp.linalg.norm(jnp.maximum(jnp.abs(r) - floor, 0))
         tol_ = default_tol(x_star.dtype)
     else:

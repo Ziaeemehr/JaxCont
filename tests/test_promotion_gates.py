@@ -19,6 +19,10 @@ REFERENCE = Path(__file__).resolve().parents[1] / "examples" / "validation" / "r
 def _report(case_id, damage):
     case = deepcopy(select_cases(load_registry(), [case_id])[0])
     data = load_bundle(REFERENCE / case["system"] / "matcont" / case_id)
+    for row in data["events"]:
+        # MatCont's cubic export has no event residual (itself PENDING, R2-02);
+        # complete the control so each test isolates its own damage.
+        row.setdefault("residual_norm", 1e-12)
     tools = {tool: deepcopy(data) for tool in case["tool_coverage"]}
     case["tool_coverage"] = {tool: "PASS" for tool in tools}
     assert build_validation_report(case, tools).status == "PASS"
@@ -42,6 +46,11 @@ def _missing_state_component(data):
             row.pop("state_3", None)
 
 
+def _missing_event_residual(data):
+    for row in data["events"]:
+        row.pop("residual_norm", None)
+
+
 def _blank_fold_coefficients(data):
     for row in data["events"]:
         row["fold_coefficient"] = ""
@@ -62,9 +71,16 @@ def _non_numeric_coefficient(data):
     data["events"][0]["fold_coefficient"] = "not-a-number"
 
 
+def _large_independent_defect(data):
+    for row in data["branch"] + data["events"]:
+        if "independent_shooting_defect" in row:
+            row["independent_shooting_defect"] = 100.0
+
+
 @pytest.mark.parametrize("case_id, damage, status", [
     ("cubic.eq-fold", _nan_residual_after_a_finite_one, "FAIL"),          # B-01
     ("cubic.eq-fold", _large_event_residual, "FAIL"),                     # B-01
+    ("lorenz84.fold-ft", _missing_event_residual, "PENDING"),             # R2-02
     # B-02: a value one tool does not export is missing evidence (PENDING,
     # never PASS); a value that is present but not a number fails.
     ("lorenz84.eq-f", _missing_state_component, "PENDING"),
@@ -72,8 +88,9 @@ def _non_numeric_coefficient(data):
     ("cubic.eq-fold", _non_numeric_coefficient, "FAIL"),
     ("adaptx.cycle-pd-switch", _nan_spectra, "FAIL"),                     # B-03
     ("adaptx.cycle-pd-switch", _base_orbit_traversed_twice, "FAIL"),      # B-03
-], ids=["nan-residual", "event-residual", "missing-state", "blank-coefficient",
-        "non-numeric-coefficient", "nan-spectra", "not-doubled"])
+    ("adaptx.cycle-pd-switch", _large_independent_defect, "FAIL"),        # R2-04
+], ids=["nan-residual", "event-residual", "missing-event-residual", "missing-state", "blank-coefficient",
+        "non-numeric-coefficient", "nan-spectra", "not-doubled", "independent-defect"])
 def test_damaged_evidence_never_passes_the_shared_gate(case_id, damage, status):
     assert _report(case_id, damage).status == status
 
@@ -170,3 +187,44 @@ def test_the_verdict_does_not_depend_on_the_tool_order():
     b = _synthetic([.1, .2, .5, .8, .9], value=lambda p: 100 * (p - .25) * (p - .5) * (p - .75))
     statuses = {build_validation_report(case, dict(zip("ab", order))).status for order in ((a, b), (b, a))}
     assert statuses == {"FAIL"}
+
+
+@pytest.mark.parametrize("case_id, damage", [
+    ("lorenz84.eq-f", _missing_state_component),
+    ("cubic.eq-fold", _blank_fold_coefficients),
+], ids=["state", "coefficient"])
+def test_evidence_every_tool_omits_is_not_passed(case_id, damage):
+    """Review R2-03: when every tool omits a required value, the case contract
+    (state_dimension, budgeted event diagnostics) still requires it."""
+    case = deepcopy(select_cases(load_registry(), [case_id])[0])
+    data = load_bundle(REFERENCE / case["system"] / "matcont" / case_id)
+    for row in data["events"]:
+        row.setdefault("residual_norm", 1e-12)
+    damage(data)
+    tools = {tool: deepcopy(data) for tool in case["tool_coverage"]}
+    case["tool_coverage"] = {tool: "PASS" for tool in tools}
+    assert build_validation_report(case, tools).status == "PENDING"
+
+
+def test_a_radius_spike_between_sparse_nodes_fails_in_both_orders():
+    """Review R2-05: radial's radius observable gets the native-node check too."""
+    case = deepcopy(select_cases(load_registry(), ["radial.cycle-floquet"])[0])
+    case["tool_coverage"] = {"a": "PASS", "b": "PASS"}
+    lo, hi = case["comparison_window"] if isinstance(case["comparison_window"], list) else (1., 1.49)
+
+    def curve(grid, spike=None):
+        rows = [dict(segment_id="s", point_id=str(i), parameter=float(p), period=2 * np.pi,
+                     state_0_max=1.0, state_0_min=-1.0, state_1_max=1.0, state_1_min=-1.0,
+                     residual_norm=0.0, status="CONVERGED") for i, p in enumerate(grid)]
+        if spike is not None:
+            rows[spike]["state_0_max"] = 100.0
+        spectra = [dict(segment_id="s", point_id=r["point_id"], event_id="", real=v, imag=0.)
+                   for r in rows for v in (1.0, 0.5)]
+        return dict(branch=rows, events=[], spectra=spectra, metadata={})
+
+    from examples.validation.promotion_metrics import _pairwise
+    sparse = curve(np.linspace(lo, hi, 3))
+    dense = curve(np.linspace(lo, hi, 11), spike=4)  # between sparse nodes
+    for left, right in ((sparse, dense), (dense, sparse)):
+        metrics = _pairwise(case, left, right)
+        assert metrics["sheet_0.radius.dense_nodes"]["verdict"] == "FAIL"

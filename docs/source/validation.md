@@ -59,9 +59,16 @@ amplitude; start periodic continuation from a seed of finite amplitude.
 ## Comparison policy
 
 - Branches are compared over a declared window, on the first passage from
-  the shared seed, against a well-conditioned monotone coordinate (or
-  arclength near folds), with the denser series interpolated (PCHIP) at the
-  sparser series' samples.
+  the shared seed, against a monotone coordinate (a case may declare it,
+  e.g. the period for torBPC; otherwise the best-scaled one, or arclength
+  near folds). The denser series is interpolated (cubic spline) at the
+  sparser series' samples, and every other native node of either tool is
+  compared against the other tool's interpolant. A difference there that
+  only the sparse series' own interpolation error (estimated by dropping
+  every other node) can explain is PENDING; a larger one fails.
+- Evidence the case requires (its state dimension, residuals, budgeted
+  event diagnostics) that a tool does not export is PENDING, never PASS; a
+  value that is present but not finite fails.
 - Events are matched one-to-one by type and location. BifurcationKit's
   codimension-two curve events have native status `guess`; only the refined
   BT point (`lorenz84.bt-ft`) is compared.
