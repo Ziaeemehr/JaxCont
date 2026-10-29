@@ -40,8 +40,10 @@ for k=1:numel(events)
   mode=struct('segment_id',b.segment_id,'point_id',b.point_id,'event_id',e.event_id,'kind','EIGENVALUE','mode_id',j-1,'real',real(ev(j)),'imag',imag(ev(j)),'logabs',log(abs(ev(j))),'phase',angle(ev(j)),'trivial_mode_method','not_applicable');
   modes(end+1)=mode;
  end
- e.frequency=0;
- if strcmp(events(k).kind,'H'),osc=ev(imag(ev)>0);[~,critical]=min(abs(real(osc)));e.frequency=imag(osc(critical));end
+ % The frequency of the critical +-i*omega pair where one exists (H, GH, ZH);
+ % NaN, not a placeholder 0, for events without one (review round 2).
+ e.frequency=NaN;
+ if any(strcmp(events(k).kind,{'H','GH','ZH'})),osc=ev(imag(ev)>0);[~,critical]=min(abs(real(osc)));e.frequency=imag(osc(critical));end
  e.fold_coefficient=NaN;e.first_lyapunov=NaN;
  original=find(arrayfun(@(a) strcmp(strtrim(a.label),events(k).kind)&&abs(raw(5,a.index)-events(k).parameters.F)<1e-8,s),1);
  % MatCont 7.6 sout does not expose localization brackets. Preserve an

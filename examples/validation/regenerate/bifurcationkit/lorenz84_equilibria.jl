@@ -17,7 +17,10 @@ const LOR_PAR=(F=3.,T=.04)
 function lorenz_branch()
     prob=BK.BifurcationProblem(Lor,LOR_SEED,LOR_PAR,(@optic _.F); J=jac_Lor,
         record_from_solution=(x,p;k...)->(X=x[1],Y=x[2],Z=x[3],U=x[4]))
-    opts=ContinuationPar(p_min=-1.5,p_max=3.,ds=.002,dsmax=.05,max_steps=200,nev=4,
+    # dsmax .01, not the contract .05: at .05 BK sampled 57 points and its
+    # interpolation could not support the state/spectrum budgets near the
+    # fold (review round 2, 2026-10-29); 1000 steps keep the full F range.
+    opts=ContinuationPar(p_min=-1.5,p_max=3.,ds=.002,dsmax=.01,max_steps=1000,nev=4,
         detect_bifurcation=3,n_inversion=6,max_bisection_steps=55,save_sol_every_step=1,
         newton_options=NewtonPar(tol=1e-12,max_iterations=25))
     corrected=BK.solve(prob,Newton(),opts.newton_options;normN=norminf)
@@ -52,7 +55,7 @@ function export_lorenz_eq(case,output)
     end
     samples=[Dict("state"=>u,"F"=>p.F,"T"=>p.T,"rhs"=>Lor(u,p),"jacobian"=>[collect(r) for r in eachrow(jac_Lor(u,p))]) for (u,p) in (([1.,.2,-.3,.1],(F=2.,T=.04)),(LOR_SEED,LOR_PAR))]
     open(joinpath(output,"samples.json"),"w") do io; JSON.print(io,samples,2); end
-    export_bundle(case,output,rows,events,spectra;driver=@__FILE__,controls=Dict("ds"=>.002,"ds_max"=>.05,"max_steps_per_direction"=>200,"newton_atol"=>1e-12,"bounds"=>[-1.5,3.],"both_directions"=>true),
+    export_bundle(case,output,rows,events,spectra;driver=@__FILE__,controls=Dict("ds"=>.002,"ds_max"=>.01,"max_steps_per_direction"=>1000,"newton_atol"=>1e-12,"bounds"=>[-1.5,3.],"both_directions"=>true),
         seeds=Dict("state"=>LOR_SEED,"F"=>3.,"T"=>.04),conventions=Dict("comparison_domain"=>"clip each sheet to F bounds before matching","time"=>"original","frequency"=>"angular frequency"))
 end
 if abspath(PROGRAM_FILE)==@__FILE__

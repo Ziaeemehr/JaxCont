@@ -135,7 +135,14 @@ def produce(case_id, *, computed=None):
                 p = e.info["p"]
                 nearest=min(rows, key=lambda r: abs(r["T"]-float(p[1])))
                 label = labels[e.kind]
-                events.append(_event(_row(e.u, *p, "fold", int(nearest["point_id"]), p[1]), label, f"{label.lower()}{len(events)}"))
+                row = _row(e.u, *p, "fold", int(nearest["point_id"]), p[1])
+                extra = {}
+                if label == "ZH":
+                    # The +-i*omega pair of the Jacobian at the refined point.
+                    u = np.array([row[f"state_{i}"] for i in range(4)])
+                    jac = np.asarray(model.lorenz84_jacobian(u, float(p[0]), (*model.FIXED_ARGS[:-1], float(p[1]))))
+                    extra["frequency"] = float(np.max(np.abs(np.linalg.eigvals(jac).imag)))
+                events.append(_event(row, label, f"{label.lower()}{len(events)}", **extra))
     elif case_id == "lorenz84.hopf-ft":
         if computed is not None:
             result = computed["hopf"]

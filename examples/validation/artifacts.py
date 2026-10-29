@@ -1487,10 +1487,17 @@ def case_result_payload(case, result):
     for row in branch:
         row.update(segment_id='native', point_id=str(row['point']),
                    order=row['point'], status='CONVERGED', residual_norm=residual)
+    native_events = result.artifacts.get('events', [])
     for i, row in enumerate(events):
         nearest = min(branch, key=lambda b: abs(b['parameter'] - row['parameter']))
         row.update(segment_id='native', point_id=nearest['point_id'], event_id=str(i),
                    status='CONVERGED', bracket_lower=row['parameter'], bracket_upper=row['parameter'])
+        # The refined event's own state and residual, when the producer has them.
+        native = native_events[i] if i < len(native_events) else {}
+        for j, value in enumerate(native.get('state', [])):
+            row[f'state_{j}'] = float(value)
+        if native.get('residual_norm') is not None:
+            row['residual_norm'] = float(native['residual_norm'])
         for key in list(row):
             if isinstance(row[key], float) and not np.isfinite(row[key]):
                 del row[key]

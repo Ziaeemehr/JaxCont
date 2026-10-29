@@ -129,6 +129,9 @@ def run_cubic_fold(*, computed=None) -> CaseResult:
                     "parameter": parameter,
                     "state": [state],
                     "fold_coefficient": coefficient,
+                    # The refined point's own residual, for the v2 report.
+                    "residual_norm": float(jnp.max(jnp.abs(
+                        _cubic_rhs(jnp.array([state]), parameter, None)))),
                 }
                 for (state, parameter, _), coefficient in zip(actual, coefficients)
             ],

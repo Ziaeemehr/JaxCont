@@ -58,6 +58,16 @@ events = table(repmat({case_id}, nevent, 1), event_index, event_type, ...
     event_point, event_parameter, frequency, fold_coefficient, first_lyapunov, ...
     'VariableNames', {'case_id', 'event_index', 'event_type', 'point', ...
     'parameter', 'frequency', 'fold_coefficient', 'first_lyapunov'});
+% The located event's own state and residual (review round 2): the v2 gate
+% compares event states and requires event residuals.
+event_residual = zeros(nevent, 1);
+for k = 1:nevent
+    event_residual(k) = norm(rhs(x(1:nstate, event_struct(k).index), event_parameter(k)), inf);
+end
+events.residual_norm = event_residual;
+for j = 1:nstate
+    events.(sprintf('state_%d', j - 1)) = x(j, [event_struct.index])';
+end
 writetable(events, fullfile(output_dir, [case_id '_events.csv']));
 
 spectrum_case = {};
