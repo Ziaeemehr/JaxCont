@@ -30,7 +30,7 @@ options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([
 options.output_dir.mkdir(parents=True, exist_ok=True)
 
 # %%
-from jaxcont.bifurcations.curves import CurveLayout, unpack_fold_curve
+from jaxcont.bifurcations.curves import CurveLayout, unpack_minimal_fold_curve
 
 
 def rhs(u, p, args):
@@ -50,7 +50,7 @@ result = jc.continuation(
     events=[jc.BogdanovTakens(raw_f=rhs, free=1, curve="fold")],
 )
 layout: CurveLayout = problem.curve_layout
-unpacked = [unpack_fold_curve(row, n=layout.n) for row in result.branch.states]
+unpacked = [unpack_minimal_fold_curve(row, n=layout.n) for row in result.branch.states]
 solved = np.array([float(row[1]) for row in unpacked])
 # %%
 # Plot both parameters rather than interpreting the augmented state as an orbit.
