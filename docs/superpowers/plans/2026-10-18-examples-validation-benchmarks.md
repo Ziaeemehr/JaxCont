@@ -71,7 +71,7 @@ with the best scorecard; ties go to the later loop.
 |---|---|---|
 | G1 | `JAXCONT_TEST_X64=0 python3 -m pytest -n 8` and `JAXCONT_TEST_X64=1 python3 -m pytest -n 8` | green |
 | G2 | `python3 -m pytest tests/test_offline_examples.py -m 'slow or not slow' -q` | every entry in `examples/tutorials` and `examples/validation/gallery` runs with MATLAB/Julia hidden |
-| G3 | `JAXCONT_TEST_X64=1 python3 -m pytest tests/test_matcont_suite.py tests/test_validation_reports.py tests/test_lorenz84_three_tool.py tests/test_periodic_validation.py tests/test_curves.py tests/test_codim2.py -m slow` | green; torBPC xfail strict |
+| G3 | `JAXCONT_TEST_X64=1 python3 -m pytest tests/test_matcont_suite.py tests/test_validation_reports.py tests/test_lorenz84_three_tool.py tests/test_periodic_validation.py tests/test_curves.py tests/test_codim2.py -m 'slow and not matlab and not julia'` | green; torBPC xfail strict (runtime tests run in G8) |
 | G4 | `python3 scripts/build_validation_figures.py --output-dir /tmp/jaxcont-evidence --check` | every figure has a sidecar that agrees with its report |
 | G5 | `JAXCONT_DOCS_EXECUTE_GALLERY=1 JAX_PLATFORMS=cpu MPLBACKEND=Agg python3 -m sphinx -E -a -W --keep-going -b html docs/source /tmp/jaxcont-html` on a clean tree with MATLAB/Julia hidden | no warnings; no gallery source outside the two configured roots is executed or listed |
 | G6 | `python3 scripts/check_docs.py --snippets --changelog 0.5.0 --ledger docs/audits/2026-10-18-loop-N.md` | snippets run; every changelog entry has a disposition; ledger closed |

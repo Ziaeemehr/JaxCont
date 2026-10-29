@@ -436,6 +436,7 @@ def torbpc_result(matcont_generated_dir):
 
 
 @pytest.mark.slow
+@pytest.mark.matlab  # torbpc_result regenerates the MatCont run through MATLAB
 def test_torbpc_known_disagreements_are_explicit_failures(torbpc_result):
     checks = torbpc_result.checks
 
