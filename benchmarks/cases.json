@@ -209,6 +209,7 @@
       "accuracy_limits": {
         "parameter_atol": 0.002,
         "period_atol": 0.005,
+        "multiplier_atol": 0.005,
         "residual_atol": 2e-05
       }
     },
@@ -228,6 +229,7 @@
       "accuracy_limits": {
         "parameter_atol": 0.002,
         "period_atol": 0.005,
+        "multiplier_atol": 0.005,
         "residual_atol": 2e-05
       }
     },
@@ -253,6 +255,7 @@
         "period_atol": 0.005,
         "extrema_atol": 0.005,
         "multiplier_atol": 0.005,
+        "multiplier_rtol": 0.005,
         "residual_atol": 1e-07
       }
     },
@@ -275,6 +278,7 @@
         "period_atol": 0.005,
         "extrema_atol": 0.005,
         "multiplier_atol": 0.005,
+        "multiplier_rtol": 0.005,
         "residual_atol": 1e-07
       }
     }

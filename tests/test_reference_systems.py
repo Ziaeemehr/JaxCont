@@ -71,8 +71,10 @@ def test_flagship_registry_and_conventions_are_ready_for_review():
     for run in ("eq-f", "fold-ft", "hopf-ft", "bt-ft"):
         case = select_cases(registry, ["lorenz84." + run])[0]
         assert case["system"] == "lorenz84"
-        # All four flagship runs agree in all three tools (Task 2.12).
-        assert case["evidence_status"] == "PASS"
+        # The flagship runs agree in all three tools (Task 2.12); eq-f is
+        # PENDING because the sparse BifurcationKit series cannot support the
+        # budgets between its nodes near the fold (review B-04).
+        assert case["evidence_status"] == ("PENDING" if run == "eq-f" else "PASS")
         assert set(case["tool_coverage"]) == {"jaxcont", "matcont", "bifurcationkit"}
         assert case["model_contract"]["review_status"].startswith("REVIEWED")
 

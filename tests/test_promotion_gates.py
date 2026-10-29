@@ -142,3 +142,16 @@ def test_a_sparse_series_too_coarse_for_the_budget_is_unresolved_not_passed():
     sparse = _synthetic(np.linspace(0, 1, 6), value=wiggle)
     dense = _synthetic(np.linspace(0, 1, 201), value=wiggle)
     assert _pairwise(_CASE, sparse, dense)["sheet_0.state_1.dense_nodes"]["verdict"] == "PENDING"
+
+
+def test_a_pending_item_delegated_to_a_passing_run_does_not_leave_the_tool_pending():
+    """lorenz84.fold-ft: BifurcationKit's BT is an unrefined guess whose
+    refined point is compared in lorenz84.bt-ft (PASS); that delegated item
+    must not keep the tool's coverage, and with it the case, PENDING."""
+    case = select_cases(load_registry(), ["lorenz84.fold-ft"])[0]
+    tools = {tool: load_bundle(REFERENCE / "lorenz84" / tool / "lorenz84.fold-ft")
+             for tool in ("matcont", "bifurcationkit")}
+    tools["jaxcont"] = deepcopy(tools["matcont"])  # a passing stand-in for the fresh run
+    report = build_validation_report(case, tools)
+    assert report.coverage["bifurcationkit"] == "PASS"
+    assert report.status == "PASS"
