@@ -81,6 +81,9 @@ def _independent(case, data):
     for k in range(case.get("state_dimension", 0)):
         if any(r.get(f"state_{k}") in (None, "") for r in inside):
             metrics[f"missing.state_{k}"] = _metric(None, None, f"state_{k} of the declared dimension not exported")
+        # Refined event states too (review R3-01).
+        if any(e.get(f"state_{k}") in (None, "") for e in events):
+            metrics[f"event.missing.state_{k}"] = _metric(None, None, f"event state_{k} of the declared dimension not exported")
     for column in ("fold_coefficient", "first_lyapunov", "frequency"):
         if tol.get(column + "_atol") is None:
             continue
@@ -159,10 +162,14 @@ def _independent(case, data):
     # declares a budget (review R2-04); nonfinite values always fail.
     defect_limit = case.get("independent_defect_atol")
     if defect_limit is not None:
-        values = [r[k] for r in inside + events for k in r
-                  if (k.startswith("independent_") or k == "closure") and r[k] not in (None, "")]
-        values = np.abs(np.asarray(values, dtype=float))
-        if len(values):
+        def diagnostics(row):
+            return [row[k] for k in row if (k.startswith("independent_") or k == "closure") and row[k] not in (None, "")]
+        values = np.abs(np.asarray([v for r in inside + events for v in diagnostics(r)], dtype=float))
+        # Producers sample the branch, but every refined event and at least
+        # one branch point must carry the diagnostic (review R3-02).
+        if not any(diagnostics(r) for r in inside) or not all(diagnostics(e) for e in events):
+            metrics["independent_defect"] = _metric(None, None, "independent diagnostics not exported")
+        elif len(values):
             metrics["independent_defect"] = (_metric(float(values.max()), defect_limit) if np.all(np.isfinite(values))
                                              else _metric(None, defect_limit, "nonfinite independent diagnostic"))
     # A period-doubled branch must be a genuine doubling, not the base orbit

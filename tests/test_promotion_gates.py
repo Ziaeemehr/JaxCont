@@ -228,3 +228,38 @@ def test_a_radius_spike_between_sparse_nodes_fails_in_both_orders():
     for left, right in ((sparse, dense), (dense, sparse)):
         metrics = _pairwise(case, left, right)
         assert metrics["sheet_0.radius.dense_nodes"]["verdict"] == "FAIL"
+
+
+def _without_event_state(data):
+    for row in data["events"]:
+        row.pop("state_0", None)
+
+
+def _without_independent_diagnostics(data):
+    for row in data["branch"] + data["events"]:
+        for key in [k for k in row if k.startswith("independent_") or k == "closure"]:
+            del row[key]
+
+
+@pytest.mark.parametrize("case_id, damage", [
+    ("cubic.eq-fold", _without_event_state),                 # R3-01
+    ("lorenz84.eq-f", _without_event_state),                 # R3-01, one component
+    ("adaptx.cycle-pd-switch", _without_independent_diagnostics),  # R3-02
+], ids=["cubic-event-state", "lorenz84-event-state", "adaptx-independent"])
+def test_required_evidence_every_tool_omits_from_events_is_not_passed(case_id, damage):
+    case = deepcopy(select_cases(load_registry(), [case_id])[0])
+    data = load_bundle(REFERENCE / case["system"] / "matcont" / case_id)
+    damage(data)
+    tools = {tool: deepcopy(data) for tool in case["tool_coverage"]}
+    case["tool_coverage"] = {tool: "PASS" for tool in tools}
+    assert build_validation_report(case, tools).status == "PENDING"
+
+
+def test_recorded_tool_overrides_match_the_bundles_that_use_them():
+    """Review R3-03: a tool's deviation from the shared controls is declared in
+    the registry and equals what its committed bundle records."""
+    import json
+    case = select_cases(load_registry(), ["lorenz84.eq-f"])[0]
+    controls = json.loads((REFERENCE / "lorenz84" / "bifurcationkit" / "lorenz84.eq-f" / "metadata.json").read_text())["resolved_controls"]
+    for key, value in case["tool_overrides"]["bifurcationkit"].items():
+        assert controls[key] == value

@@ -95,6 +95,9 @@ amplitude; start periodic continuation from a seed of finite amplitude.
   compared against the other tool's interpolant. A difference there that
   only the sparse series' own interpolation error (estimated by dropping
   every other node) can explain is PENDING; a larger one fails.
+- Every tool runs the case's shared controls, except where the registry
+  records a reviewed `tool_overrides` entry with its reason (denser
+  BifurcationKit sampling on `lorenz84.eq-f`, more JaxCont steps on torBPC).
 - Evidence the case requires (its state dimension, residuals, budgeted
   event diagnostics) that a tool does not export is PENDING, never PASS; a
   value that is present but not finite fails.

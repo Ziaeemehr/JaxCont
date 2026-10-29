@@ -345,6 +345,12 @@
         "residual_atol": 1e-07
       },
       "canonical_id": "torbpc.cycle-lpc-pd-ns",
+      "tool_overrides": {
+        "jaxcont": {
+          "max_steps": 400
+        }
+      },
+      "tool_overrides_comment": "Reviewed 2026-10-29: the contract's 300 steps end at nu=-0.707 with JaxCont's dense theta=1 sampling; 400 reach p_span's end (-0.75) in 383 steps.",
       "aliases": [
         "MC-LC-002"
       ],
@@ -806,6 +812,13 @@
     {
       "id": "lorenz84.eq-f",
       "canonical_id": "lorenz84.eq-f",
+      "tool_overrides": {
+        "bifurcationkit": {
+          "ds_max": 0.01,
+          "max_steps_per_direction": 1000
+        }
+      },
+      "tool_overrides_comment": "Reviewed 2026-10-30 (R3-03): at the shared ds_max .05 BifurcationKit sampled 57 points and its interpolation could not support the state/spectrum budgets near the fold; .01 with 1000 steps gives 234 points over the same F range.",
       "state_dimension": 4,
       "aliases": [],
       "system": "lorenz84",
