@@ -2,6 +2,8 @@
 
 import copy
 
+import pytest
+
 from benchmarks import reporting
 from benchmarks.contracts import controls_record, load_cases
 
@@ -95,3 +97,41 @@ def test_docs_page_matches_the_reviewed_records():
     """docs/source/benchmarks.md is generated; regenerate with `python3 -m benchmarks.reporting --docs`."""
     assert reporting.DOCS_PAGE.read_text() == reporting.render_docs()
     assert not list(reporting.REVIEWED.glob("*.json")) or reporting.check(reporting.load(reporting.REVIEWED)) == []
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf"), -1.0])
+def test_invalid_accuracy_is_rejected_by_check_and_table(value):
+    from benchmarks.run_benchmarks import eligible
+
+    bad = _record("matcont")
+    bad["accuracy"]["parameter_atol"] = value
+    bad["eligible_for_cross_tool"] = False
+    assert not eligible(bad, CASE.accuracy_limits)
+    assert any("invalid accuracy" in p for p in reporting.check([bad]))
+    assert not reporting.comparison([_record("jaxcont"), bad])["comparable"]
+    text = reporting.render_markdown([_record("jaxcont"), bad])
+    assert "No cross-tool table" in text
+    assert "| tool | first call median" not in text
+
+
+@pytest.mark.parametrize("field", ["resolved_controls", "points", "versions", "first_call", "warm", "startup"])
+def test_reported_aggregates_must_match_retained_replicates(field):
+    record = _record("matcont")
+    record["replicates"] = {}
+    for stage in ("first_call", "warm"):
+        record["replicates"][stage] = [
+            dict(seconds=seconds, status="MEASURED", points=120,
+                 accuracy=copy.deepcopy(record["accuracy"]), versions=record["versions"].copy(),
+                 controls=copy.deepcopy(record["resolved_controls"]), startup_seconds=1.0 + .1 * i)
+            for i, seconds in enumerate(record[stage]["samples"])]
+    assert reporting.check([record]) == []
+    if field == "resolved_controls":
+        record[field]["ds"] *= 2
+    elif field == "points":
+        record[field] = {"first_call": 3, "warm": [3]}
+    elif field == "versions":
+        record[field] = {"matcont": "2"}
+    else:
+        record[field] = _summary([v * 2 for v in record[field]["samples"]])
+    assert any("retained replicates" in p for p in reporting.check([record]))
+    assert not reporting.comparison([_record("jaxcont"), record])["comparable"]

@@ -158,6 +158,11 @@ Reverse mode through the default ``loop="while"`` engine raises a clear
 with both. Corrector iterations are not differentiated: a converged root
 carries the implicit-function derivative.
 
+Under ``jit`` and ``vmap``, branch arrays have fixed-size buffers with zero
+padding. Index the endpoint with ``branch.n_valid - 1``; indexing ``[-1]``
+can select padding. This example returns NaN when seed failure leaves no valid
+point, so a failed solve cannot masquerade as a zero endpoint.
+
 .. code-block:: python
 
    def endpoint(a, loop):
@@ -165,7 +170,9 @@ carries the implicit-function derivative.
                              u0=jnp.array([1.0]), p0=1.0, args=a)
        run = jc.continuation(prob, p_span=(1.0, 2.0),
                              settings=jc.ContinuationPar(ds=0.05, max_steps=40, loop=loop))
-       return run.branch.states[-1, 0]
+       branch = run.branch
+       return jnp.where(branch.n_valid > 0,
+                        branch.states[jnp.maximum(branch.n_valid - 1, 0), 0], jnp.nan)
 
 
    gradient = jax.grad(lambda a: endpoint(a, "scan"))(0.1)

@@ -58,9 +58,23 @@ def test_normalized_decimals_ignore_representation_but_not_value():
                                  "matcont": _controls(ds=0.0100000001)}).comparable
 
 
-def test_nonfinite_controls_are_never_equal():
-    nan = float("nan")
-    assert not compare_controls({"jaxcont": _controls(ds=nan), "matcont": _controls(ds=nan)}).comparable
+@pytest.mark.parametrize("invalid", [float("nan"), float("inf"), -float("inf")])
+@pytest.mark.parametrize("name", [
+    "newton_atol", "newton_rtol", "newton_max_iter", "event_atol", "ds", "ds_min", "ds_max",
+    "max_steps", "direction", "state_weight", "parameter_weight", "ntst", "ncol", "bounds0", "bounds1",
+])
+@pytest.mark.parametrize("position", ["baseline", "other", "both"])
+def test_nonfinite_controls_are_never_equal(invalid, name, position):
+    override = {name: invalid}
+    if name.startswith("bounds"):
+        bounds = [-1., 1.]
+        bounds[int(name[-1])] = invalid
+        override = {"bounds": tuple(bounds)}
+    bad = _controls(**override)
+    result = compare_controls({"jaxcont": bad if position != "other" else _controls(),
+                               "matcont": bad if position != "baseline" else _controls()})
+    assert not result.comparable
+    assert any(m.field == ("bounds" if name.startswith("bounds") else name) for m in result.mismatches)
 
 
 def test_unresolved_or_unrepresentable_control_is_not_comparable():

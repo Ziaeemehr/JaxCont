@@ -20,7 +20,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from benchmarks.accuracy import measure
+from benchmarks.accuracy import branch_residual, measure
 from benchmarks.contracts import ResolvedControls, StageTiming, controls_record, load_cases
 
 
@@ -99,7 +99,7 @@ def accuracy(case, result) -> dict:
             states.setdefault(kind, []).append(float(jnp.ravel(event.u)[0]))
     rhs, _, _, args = _system(case.canonical_id)
     branch = result.branch
-    residual = max(float(jnp.max(jnp.abs(rhs(u, p, args)))) for u, p in zip(branch.states, branch.params))
+    residual = branch_residual(branch.states, branch.params, lambda u, p: rhs(u, p, args))
     return measure(case, events, residual, states)
 
 
@@ -131,7 +131,11 @@ def worker(benchmark_id, mode, repetitions, warmups):
         result = synchronize(solve())
         seconds = time.perf_counter() - start
         # The point count shows every repetition did the same work.
-        print(json.dumps({"stage": "warm", "seconds": seconds, "points": int(result.branch.n_valid)}), flush=True)
+        print(json.dumps({"stage": "warm", "seconds": seconds, "points": int(result.branch.n_valid),
+                          "controls": controls_record(resolved_controls(case, problem, settings)),
+                          "accuracy": accuracy(case, result),
+                          "versions": {"jaxcont": jc.__version__, "jax": jax.__version__,
+                                       "x64": bool(jax.config.x64_enabled)}}), flush=True)
 
 
 if __name__ == "__main__":

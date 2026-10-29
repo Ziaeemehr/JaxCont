@@ -25,7 +25,6 @@ The committed series is MatCont's full LPC/PD/NS branch, without trimming.
 # each located event. JaxCont uses the external tools' mesh (ntst=25) and
 # compares its refined events, not the nearest branch samples.
 
-# sphinx_gallery_start_ignore
 import argparse
 import sys
 import tempfile
@@ -35,11 +34,10 @@ if "__file__" in globals():
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 parser = argparse.ArgumentParser()
 parser.add_argument("--output-dir", type=Path, default=Path(tempfile.gettempdir()) / "jaxcont" / "generated")
-options = parser.parse_args() if __name__ == "__main__" else parser.parse_args([])
+options = parser.parse_args() if __name__ == "__main__" and "__file__" in globals() else parser.parse_args([])
 # The Newton tolerance 1e-8 requires double precision in either gallery mode.
 import jax
 jax.config.update("jax_enable_x64", True)
-# sphinx_gallery_end_ignore
 
 import jax.numpy as jnp
 import numpy as np

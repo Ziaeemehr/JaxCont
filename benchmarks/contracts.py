@@ -69,6 +69,14 @@ def _normalized(value: Any) -> Any:
     return value
 
 
+def _finite_control(value):
+    if isinstance(value, Decimal):
+        return value.is_finite()
+    if isinstance(value, tuple):
+        return all(_finite_control(item) for item in value)
+    return True
+
+
 @dataclass(frozen=True)
 class Mismatch:
     """``tool`` used ``value`` for ``field`` where ``baseline_tool`` used ``baseline_value``."""
@@ -108,9 +116,12 @@ def compare_controls(resolved: Mapping[str, Optional[ResolvedControls]]) -> Comp
     mismatches = []
     for control in fields(ResolvedControls):
         expected = _normalized(getattr(baseline, control.name))
+        if not _finite_control(expected):
+            mismatches.append(Mismatch(control.name, tools[0], getattr(baseline, control.name)))
         for tool in tools[1:]:
             value = getattr(resolved[tool], control.name)
-            if _normalized(value) != expected:
+            normalized = _normalized(value)
+            if not _finite_control(normalized) or normalized != expected:
                 mismatches.append(Mismatch(control.name, tool, value, tools[0], getattr(baseline, control.name)))
     if mismatches:
         return Comparability(False, tuple(mismatches), "resolved controls differ")

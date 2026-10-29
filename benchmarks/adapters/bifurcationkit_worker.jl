@@ -48,6 +48,6 @@ else
         run_once()
     end
     for _ in 1:repetitions
-        emit("warm", false)
+        emit("warm", true)
     end
 end

@@ -26,7 +26,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from benchmarks.accuracy import eligible
 from benchmarks.contracts import load_cases
+from benchmarks.replicates import problems as replicate_problems, worst_accuracy
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "benchmarks" / "results" / "raw"
@@ -85,16 +87,16 @@ def run_worker(tool, benchmark_id, mode, timeout, extra=(), clock=time.perf_coun
                 process.kill()
                 process.wait()
                 raise TimeoutError(f"{tool} {benchmark_id} {mode} exceeded {timeout} s")
-        if process.wait() != 0 or startup is None:
+        try:
+            returncode = process.wait(timeout=max(0.0, deadline - clock()))
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            raise TimeoutError(f"{tool} {benchmark_id} {mode} exceeded {timeout} s") from None
+        if returncode != 0 or startup is None:
             stderr.seek(0)
             raise RuntimeError(f"{tool} {benchmark_id} {mode} failed: {stderr.read()[-2000:]}")
     return startup, records
-
-
-def eligible(row, limits):
-    """A row enters cross-tool tables only if every accuracy limit is measured and met."""
-    accuracy = row.get("accuracy") or {}
-    return all(accuracy.get(metric) is not None and accuracy[metric] <= limit for metric, limit in limits.items())
 
 
 def summarize(samples):
@@ -112,14 +114,15 @@ def benchmark(benchmark_id, tool):
               "python": sys.version.split()[0], "timer": "time.perf_counter", "accuracy_limits": dict(case.accuracy_limits)}
     if tool in PENDING_TOOLS:
         return record | {"status": "PENDING", "reason": PENDING_TOOLS[tool]}
+    replicates = {"first_call": [], "warm": []}
     try:
-        startups, first_calls, accuracy, controls = [], [], None, None
+        startups, first_calls = [], []
         for _ in range(sampling.first_calls):
             startup, (row,) = run_worker(tool, benchmark_id, "first_call", sampling.timeout_seconds)
+            row = {"status": "MEASURED", **row, "startup_seconds": startup}
+            replicates["first_call"].append(row)
             startups.append(startup)
             first_calls.append(row["seconds"])
-            accuracy, controls, versions = row["accuracy"], row["controls"], row.get("versions")
-            first_points = row.get("points")
         _, warm = run_worker(tool, benchmark_id, "warm", sampling.timeout_seconds,
                              ("--repetitions", str(sampling.warm_repetitions), "--warmups", str(sampling.untimed_warmups)))
     except NotImplementedError as exc:
@@ -127,10 +130,18 @@ def benchmark(benchmark_id, tool):
     except RuntimeError as exc:
         if "NotImplementedError" in str(exc):
             return record | {"status": "PENDING", "reason": str(exc).splitlines()[-1]}
-        return record | {"status": "FAILED", "reason": str(exc)}
+        return record | {"status": "FAILED", "reason": str(exc), "replicates": replicates}
     except TimeoutError as exc:
         # A failure is a recorded outcome, never a timing and never a crash of the sweep.
-        return record | {"status": "FAILED", "reason": str(exc)}
+        return record | {"status": "FAILED", "reason": str(exc), "replicates": replicates}
+    replicates["warm"] = [{"status": "MEASURED", **row} for row in warm]
+    record["replicates"] = replicates
+    issues = replicate_problems(replicates, case)
+    if issues:
+        return record | {"status": "FAILED", "reason": "; ".join(issues), "eligible_for_cross_tool": False}
+    accuracy = worst_accuracy(replicates, case.accuracy_limits)
+    first = replicates["first_call"][0]
+    controls, versions, first_points = first["controls"], first["versions"], first["points"]
     warm_seconds = [row["seconds"] for row in warm]
     # Every timed repetition must do the same work as the first call.
     points = {"first_call": first_points, "warm": sorted({row.get("points") for row in warm}, key=str)}

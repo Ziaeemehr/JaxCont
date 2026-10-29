@@ -36,7 +36,7 @@ class _FakeProcess:
         type(self).launched += 1
         self.stdout = io.StringIO('READY\n{"seconds": 0.5, "accuracy": {}, "controls": {}}\n')
 
-    def wait(self):
+    def wait(self, timeout=None):
         return 0
 
     def kill(self):
@@ -80,7 +80,7 @@ def test_silent_hung_worker_times_out(monkeypatch):
 
 def test_worker_failure_is_an_error_not_a_timing(monkeypatch):
     class Failing(_FakeProcess):
-        def wait(self):
+        def wait(self, timeout=None):
             return 1
     monkeypatch.setattr(harness.subprocess, "Popen", Failing)
     with pytest.raises(RuntimeError, match="failed"):
@@ -103,6 +103,9 @@ def test_warm_keeps_callable_identity_and_resets_seed(monkeypatch, capsys):
 
     monkeypatch.setattr(adapter, "_case", lambda benchmark_id: None)
     monkeypatch.setattr(adapter, "build", fake_build)
+    monkeypatch.setattr(adapter, "accuracy", lambda *args: {})
+    monkeypatch.setattr(adapter, "resolved_controls", lambda *args: None)
+    monkeypatch.setattr(adapter, "controls_record", lambda *args: {})
     adapter.worker("x", "warm", repetitions=4, warmups=2)
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == "READY" and len(lines) == 1 + 4
@@ -162,3 +165,71 @@ def test_failed_run_is_recorded_not_raised(monkeypatch):
     monkeypatch.setattr(harness, "run_worker", boom)
     record = harness.benchmark("cubic.eq-fold/fixed", "jaxcont")
     assert record["status"] == "FAILED" and "exceeded" in record["reason"] and "warm" not in record
+
+
+def test_worker_closing_stdout_still_has_a_deadline(monkeypatch):
+    import subprocess
+    import sys
+
+    real_popen, children = subprocess.Popen, []
+
+    def start(*args, **kwargs):
+        process = real_popen([sys.executable, "-c",
+                              "import os,time; print('READY',flush=True); os.close(1); time.sleep(1.2)"],
+                             **kwargs)
+        children.append(process)
+        return process
+
+    monkeypatch.setattr(harness.subprocess, "Popen", start)
+    with pytest.raises(TimeoutError, match="exceeded"):
+        harness.run_worker("jaxcont", "x", "first_call", 0.2)
+    assert children[0].poll() is not None
+
+
+@pytest.mark.parametrize("stage,index,change", [
+    ("first_call", 0, "points"), ("first_call", 2, "controls"),
+    ("first_call", 1, "versions"), ("first_call", 0, "status"),
+    ("warm", 0, "points"), ("warm", 1, "controls"),
+])
+def test_every_timed_replicate_must_do_consistent_work(monkeypatch, stage, index, change):
+    record = _replicate_benchmark(monkeypatch, stage, index, change)
+    assert record["status"] == "FAILED"
+    assert record["reason"]
+    assert "first_call" not in record  # No successful timing summary for invalid work.
+    assert record["replicates"][stage][index][change] != record["replicates"][stage][-1][change]
+
+
+@pytest.mark.parametrize("stage", ["first_call", "warm"])
+def test_accuracy_uses_worst_replicate_not_last(monkeypatch, stage):
+    record = _replicate_benchmark(monkeypatch, stage, 0, "accuracy")
+    assert record["status"] == "MEASURED"
+    assert not record["eligible_for_cross_tool"]
+    assert record["accuracy"]["parameter_atol"] == 100.
+    assert len(record["replicates"]["first_call"]) == 5
+    assert len(record["replicates"]["warm"]) == 20
+
+
+def _replicate_benchmark(monkeypatch, stage, index, change):
+    from benchmarks.contracts import controls_record, load_cases
+    case = next(c for c in load_cases() if c.benchmark_id == "cubic.eq-fold/fixed")
+    counters = {"first_call": 0, "warm": 0}
+
+    def row(mode):
+        i = counters[mode]
+        counters[mode] += 1
+        value = dict(seconds=.01, points=120, accuracy={k: 0. for k in case.accuracy_limits},
+                     controls=controls_record(case.controls), versions={"tool": "1"}, status="MEASURED")
+        if mode == stage and i == index:
+            if change == "accuracy":
+                value[change]["parameter_atol"] = 100.
+            elif change == "controls":
+                value[change]["ds"] = 2.
+            else:
+                value[change] = {"points": 3, "versions": {"tool": "2"}, "status": "FAILED"}[change]
+        return value
+
+    def run(tool, benchmark_id, mode, *args):
+        return .1, [row(mode) for _ in range(1 if mode == "first_call" else case.sampling.warm_repetitions)]
+
+    monkeypatch.setattr(harness, "run_worker", run)
+    return harness.benchmark(case.benchmark_id, "jaxcont")
