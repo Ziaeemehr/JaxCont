@@ -15,6 +15,7 @@ hooks provide fixed-shape detection under JAX transforms.
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import (
@@ -28,6 +29,7 @@ from typing import (
 
 import jax
 import jax.numpy as jnp
+import equinox as eqx
 import numpy as np
 from jax import Array, jacfwd
 
@@ -142,9 +144,11 @@ class Fold(Event):
         # fold_point expects f(u, p, args) (3-arg, per fold_solve.py); `rhs`
         # here is the 2-arg (u, p) -> Array callable used throughout this
         # module (matches api.py's rhs2), so adapt with an ignored 3rd arg.
-        u_bif, p_bif, null_vector, converged = fold_point(
-            lambda u, p, _args: rhs(u, p),
-            u_guess, p_guess, tol=tolerance, max_iter=max_iterations,
+        f, args, solve = _bound(rhs, fold_point)
+        # Arrays, not Python scalars: a compiled solver treats scalars as static.
+        u_bif, p_bif, null_vector, converged = solve(
+            f, u_guess, jnp.asarray(p_guess, u_guess.dtype), args=args,
+            tol=tolerance, max_iter=max_iterations,
         )
         # A bracket sign-change is not a convergence guarantee: a failed
         # solve is reported as a failed hit, never as a located fold.
@@ -178,8 +182,45 @@ def _branch_spectra(points: Sequence[BranchPoint]) -> Optional[np.ndarray]:
     return track_modes(np.stack([np.asarray(pt.eigenvalues) for pt in points]))
 
 
+class BoundRHS:
+    """``rhs(u, p) = f(u, p, args)`` with ``f`` and ``args`` kept apart.
+
+    ``detect_events`` hands refinement this instead of a fresh closure, so the
+    eager point solvers can be compiled once per ``f`` (``equinox.filter_jit``
+    keys on ``f``'s identity and treats the arrays of ``args`` as inputs) and
+    reused for every bracket and every later call. Any other callable is
+    refined uncompiled, as before.
+    """
+
+    __slots__ = ("f", "args")
+
+    def __init__(self, f, args):
+        self.f, self.args = f, args
+
+    def __call__(self, u, p):
+        return self.f(u, p, self.args)
+
+
+def _jacobian(f, u, p, args):
+    return jacfwd(lambda uu: f(uu, p, args))(u)
+
+
+# Keyed on the solver and looked up at call time, so a solver replaced on this
+# module (as tests do) is the one that runs.
+_compiled = functools.cache(eqx.filter_jit)
+
+
+def _bound(rhs, solver):
+    """``(f, args, solver)``: ``solver`` compiled and cached for a ``BoundRHS``, else uncompiled with an adapter."""
+    if isinstance(rhs, BoundRHS):
+        return rhs.f, rhs.args, _compiled(solver)
+    return (lambda u, p, _args: rhs(u, p)), None, solver
+
+
 def _jacobian_eigenvalues(rhs, u, p) -> np.ndarray:
-    return np.asarray(jnp.linalg.eigvals(jacfwd(lambda uu: rhs(uu, p))(u)))
+    f, args, jacobian_of = _bound(rhs, _jacobian)
+    jacobian = jacobian_of(f, u, jnp.asarray(p, u.dtype), args)
+    return np.asarray(jnp.linalg.eigvals(jacobian))
 
 
 @dataclass(frozen=True)
@@ -233,14 +274,15 @@ class Hopf(Event):
     ) -> EventHit:
         u_guess = (left.u + right.u) / 2
         p_guess = (left.p + right.p) / 2
-        u, p, q1, q2, omega0, converged = hopf_point(
-            lambda u, p, _args: rhs(u, p), u_guess, p_guess,
-            tol=tolerance, max_iter=max_iterations,
-            eigenvalue=None if mode is None else (mode.left[mode.column] + mode.right[mode.column]) / 2,
+        f, args, solve = _bound(rhs, hopf_point)
+        seed = None if mode is None else jnp.asarray((mode.left[mode.column] + mode.right[mode.column]) / 2)
+        u, p, q1, q2, omega0, converged = solve(
+            f, u_guess, jnp.asarray(p_guess, u_guess.dtype), args=args,
+            tol=tolerance, max_iter=max_iterations, eigenvalue=seed,
         )
         l1 = None
         if self.classify:
-            l1 = lyapunov_coefficient(lambda u, p, _args: rhs(u, p), u, p, q1, q2, omega0)
+            l1 = _bound(rhs, lyapunov_coefficient)[2](f, u, p, q1, q2, omega0, args=args)
         l1_info = {} if l1 is None else {"l1": float(l1)}
         # A converged extended-system solve can still be no Hopf point: a
         # non-finite p/l1/omega0 or omega0 <= 0 (a genuine Hopf point has a
@@ -525,10 +567,10 @@ def detect_events(
 
     def bracket_inputs(left):
         if step_update is None:
-            return rhs, args
+            return (rhs if f is None else BoundRHS(f, args)), args
         u = jnp.asarray(left.u)
         b_args = step_update(args, u, jnp.asarray(left.p, u.dtype))
-        return (lambda uu, pp: f(uu, pp, b_args)), b_args
+        return BoundRHS(f, b_args), b_args
 
     hits: list[EventHit] = []
     starts: dict[int, int] = {}

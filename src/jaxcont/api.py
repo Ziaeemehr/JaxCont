@@ -17,8 +17,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
+import functools
 from typing import Any, Callable, Literal, Optional
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -565,6 +567,14 @@ def _periodic_spectrum(problem: BifProblem, strategy, states, params, valid=None
     )
 
 
+@functools.cache
+def _branch_eigenvalues_compiled():
+    """Compiled once per (f, eigen solver): an eager vmap would retrace f on every call."""
+    from jaxcont.core.scan_continuation import branch_eigenvalues
+
+    return eqx.filter_jit(branch_eigenvalues)
+
+
 def _branch_spectra(problem, settings, events, solvers, states, params, valid=None):
     """``(eigenvalues, stability, trivial_index, floquet_logabs, floquet_converged)``."""
     from jaxcont.core.scan_continuation import branch_eigenvalues
@@ -584,7 +594,7 @@ def _branch_spectra(problem, settings, events, solvers, states, params, valid=No
     if valid is not None:
         states = jnp.where(valid[:, None], states, states[0])
         params = jnp.where(valid, params, params[0])
-    eigenvalues = branch_eigenvalues(
+    eigenvalues = _branch_eigenvalues_compiled()(
         problem.f, states, params, problem.args, eigen_solver=solvers.eigen
     )
     stability = jnp.all(jnp.real(eigenvalues) < 0.0, axis=1)
