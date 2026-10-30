@@ -9,7 +9,7 @@ from jaxcont.core.continuation import ContinuationProblem, ContinuationSolution
 
 
 def _eps_J():
-    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+    return float(jnp.finfo(jnp.float64).eps)
 
 
 
@@ -70,9 +70,9 @@ def test_continuation_solution_get_point():
     )
     
     state, param = solution.get_point(1)
-    # Measured |error| x32/x64: 0/0; linear scalar root half, unit conditioning.
+    # Measured |error|: 0; linear scalar root half, unit conditioning.
     assert jnp.allclose(state, jnp.array([0.5]), atol=0, rtol=16 * _eps_J())
-    # Measured |error| x32/x64: 0/0; linear scalar root half, unit conditioning.
+    # Measured |error|: 0; linear scalar root half, unit conditioning.
     assert jnp.isclose(param, 0.5, atol=0, rtol=16 * _eps_J())
 
 

@@ -34,7 +34,7 @@ def test_switch_lands_on_the_pitchfork_second_branch():
     new_prob = branch_switch(_pitchfork, event, ds=0.05)
     # u = +-sqrt(p) -- sign is a genuine ambiguity (SVD's arbitrary sign
     # convention), so check magnitude only.
-    # Measured absolute error: x32=0, x64=0; analytic branch u = +/-sqrt(p).
+    # Measured absolute error: 0; analytic branch u = +/-sqrt(p).
     assert abs(float(new_prob.u0[0])) == pytest.approx(
         float(jnp.sqrt(jnp.abs(new_prob.p0))), rel=32 * float(jnp.finfo(new_prob.u0.dtype).eps), abs=0
     )
@@ -43,8 +43,8 @@ def test_switch_lands_on_the_pitchfork_second_branch():
     # The seed must actually be a valid equilibrium, not just "off the
     # trivial branch".
     residual = _pitchfork(new_prob.u0, new_prob.p0, None)
-    # Measured residual: x32=0, x64=0; default switching Newton tolerance.
-    assert float(jnp.max(jnp.abs(residual))) < (1e-9 if jax.config.x64_enabled else 1e-5)
+    # Measured residual: 0; default switching Newton tolerance.
+    assert float(jnp.max(jnp.abs(residual))) < (1e-9)
 
     # And it must be continuable: continuing further should stay on
     # u != 0 (the new branch), not snap back onto the trivial one.
@@ -59,11 +59,11 @@ def test_switch_lands_on_the_transcritical_second_branch():
     event = _find_bp(_transcritical, jnp.array([0.0]), -0.5, (-0.5, 0.5))
     new_prob = branch_switch(_transcritical, event, ds=0.05)
     # second branch: u = p
-    # Measured absolute error: x32=3.73e-9, x64=6.94e-18.
+    # Measured absolute error: 6.94e-18.
     assert float(new_prob.u0[0]) == pytest.approx(float(new_prob.p0), rel=32 * float(jnp.finfo(new_prob.u0.dtype).eps), abs=0)
     residual = _transcritical(new_prob.u0, new_prob.p0, None)
-    # Measured residual: x32=0, x64=0; default switching Newton tolerance.
-    assert float(jnp.max(jnp.abs(residual))) < (1e-9 if jax.config.x64_enabled else 1e-5)
+    # Measured residual: 0; default switching Newton tolerance.
+    assert float(jnp.max(jnp.abs(residual))) < (1e-9)
 
 
 def test_branch_switch_rejects_a_non_branch_point_event():
@@ -90,7 +90,7 @@ def test_branch_switch_is_differentiable_in_args():
     finite_diff = (new_branch_start_state(b0 + eps) - new_branch_start_state(b0 - eps)) / (2 * eps)
 
     assert jnp.isfinite(analytic)
-    # Measured error: x32=0, x64=0; u=ds is constant, so only FD roundoff remains.
+    # Measured error: 0; u=ds is constant, so only FD roundoff remains.
     assert float(jnp.abs(analytic - finite_diff)) < 32 * jnp.finfo(b0.dtype).eps * 0.05 / eps
 
 
@@ -130,9 +130,9 @@ def test_branch_switch_vmap_batches_over_a_second_parameter():
     lane_atol = 8 * float(jnp.finfo(bs.dtype).eps)
     for i, b in enumerate(bs):
         serial_u, serial_p = switch_for_b(float(b))
-        # Measured u difference across all four lanes: x32=0, x64=0.
+        # Measured u difference across all four lanes: 0.
         assert float(batched[0][i]) == pytest.approx(float(serial_u), rel=0, abs=lane_atol)
-        # Measured p difference across all four lanes: x32=0, x64=0.
+        # Measured p difference across all four lanes: 0.
         assert float(batched[1][i]) == pytest.approx(float(serial_p), rel=0, abs=lane_atol)
 
 
@@ -188,24 +188,23 @@ def test_branch_switch_grad_when_augmented_jacobian_depends_on_args():
     def f(u, p, a):
         return jnp.array([u[0] * (p - u[0]), u[1] - a * u[0]])
 
-    with jax.enable_x64():
-        u = jnp.zeros(2)
-        p = jnp.array(0.0)
-        incoming = jnp.array([0.0, 0.0, 1.0])
-        event = EventHit(kind="branch_point", u=u, p=p, index=(0, 1),
-                         info={"tangent": incoming})
+    u = jnp.zeros(2)
+    p = jnp.array(0.0)
+    incoming = jnp.array([0.0, 0.0, 1.0])
+    event = EventHit(kind="branch_point", u=u, p=p, index=(0, 1),
+                     info={"tangent": incoming})
 
-        def tangent(a):
-            return _switching_tangent(f, u, p, incoming, a, 2)[0]
+    def tangent(a):
+        return _switching_tangent(f, u, p, incoming, a, 2)[0]
 
-        def seed(a):
-            return branch_switch(f, event, args=a, ds=0.05).u0[0]
+    def seed(a):
+        return branch_switch(f, event, args=a, ds=0.05).u0[0]
 
-        a = jnp.array(0.7)
-        for value in (tangent, seed):
-            derivative = jax.grad(value)(a)
-            h = 1e-5
-            central = (value(a + h) - value(a - h)) / (2 * h)
-            assert jnp.isfinite(derivative)
-            # Measured max error: x32-run=x64-run=1.71e-11 (explicit x64); h^2=1e-10.
-            assert jnp.allclose(derivative, central, rtol=0, atol=1e-9)
+    a = jnp.array(0.7)
+    for value in (tangent, seed):
+        derivative = jax.grad(value)(a)
+        h = 1e-5
+        central = (value(a + h) - value(a - h)) / (2 * h)
+        assert jnp.isfinite(derivative)
+        # Measured max error: 1.71e-11; h^2=1e-10.
+        assert jnp.allclose(derivative, central, rtol=0, atol=1e-9)

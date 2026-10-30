@@ -58,7 +58,7 @@ def test_first_call_uses_fresh_process(monkeypatch):
         startup, records = harness.run_worker("jaxcont", "x", "first_call", 60, clock=_clock(0.0, 0.1, 0.4, 0.5))
         assert records == [{"seconds": 0.5, "accuracy": {}, "controls": {}}]
     assert _FakeProcess.launched == 2
-    # Measured absolute error: x32=0, x64=0; launch -> READY uses Python floats.
+    # Measured absolute error: 0; launch -> READY uses Python floats.
     assert startup == pytest.approx(0.4, rel=8 * np.finfo(float).eps, abs=0)
 
 

@@ -13,7 +13,7 @@ import pytest
 import jaxcont as jc
 
 def _eps_J():
-    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+    return float(jnp.finfo(jnp.float64).eps)
 
 
 
@@ -52,14 +52,14 @@ def test_round_trip_preserves_all_fields(tmp_path):
     sol.save(str(path))
     loaded = jc.ContinuationSolution.load(str(path))
 
-    # Measured |error| x32/x64: 0/0; binary persistence preserves values exactly.
+    # Measured |error|: 0; binary persistence preserves values exactly.
     assert jnp.allclose(loaded.states, sol.states, atol=0, rtol=0)
-    # Measured |error| x32/x64: 0/0; binary persistence preserves values exactly.
+    # Measured |error|: 0; binary persistence preserves values exactly.
     assert jnp.allclose(loaded.parameters, sol.parameters, atol=0, rtol=0)
-    # Measured |error| x32/x64: 0/0; binary persistence preserves values exactly.
+    # Measured |error|: 0; binary persistence preserves values exactly.
     assert jnp.allclose(loaded.eigenvalues, sol.eigenvalues, atol=0, rtol=0)
     assert jnp.array_equal(loaded.stability, sol.stability)
-    # Measured |error| x32/x64: 0/0; binary persistence preserves values exactly.
+    # Measured |error|: 0; binary persistence preserves values exactly.
     assert jnp.allclose(loaded.tangent_vectors, sol.tangent_vectors, atol=0, rtol=0)
     assert loaded.state_names == sol.state_names
     assert loaded.param_name == sol.param_name
@@ -68,12 +68,12 @@ def test_round_trip_preserves_all_fields(tmp_path):
     assert len(loaded.bifurcations) == 1
     bif = loaded.bifurcations[0]
     assert bif["type"] == "fold"
-    # Measured |error| x32/x64: 0/0; JSON roundtrip of Python numeric literals.
+    # Measured |error|: 0; JSON roundtrip of Python numeric literals.
     assert bif['parameter'] == pytest.approx(0.9, abs=0, rel=8 * np.finfo(float).eps)
     assert bif["index"] == 2
-    # Measured |error| x32/x64: 2.38e-09/0; JSON roundtrip preserves the source JAX dtype rounding.
+    # Measured |error|: 0; JSON roundtrip preserves the source JAX dtype rounding.
     assert bif['state'] == pytest.approx([0.19], abs=0, rel=8 * _eps_J())
-    # Measured |error| x32/x64: 0/0; JSON roundtrip of Python numeric literals.
+    # Measured |error|: 0; JSON roundtrip of Python numeric literals.
     assert bif['null_vector'] == pytest.approx([1.0, 0.0], abs=0, rel=8 * np.finfo(float).eps)
 
 
@@ -93,7 +93,7 @@ def test_round_trip_with_none_optional_fields_does_not_raise(tmp_path):
     assert loaded.eigenvalues is None
     assert loaded.stability is None
     assert loaded.tangent_vectors is None
-    # Measured |error| x32/x64: 0/0; binary persistence preserves values exactly.
+    # Measured |error|: 0; binary persistence preserves values exactly.
     assert jnp.allclose(loaded.states, sol.states, atol=0, rtol=0)
 
     assert loaded.bifurcations == []

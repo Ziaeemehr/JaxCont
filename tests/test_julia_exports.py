@@ -1,6 +1,5 @@
 """Native Julia candidate exports, explicitly opt in to runtime execution."""
 import json
-import os
 from pathlib import Path
 import numpy as np
 import pytest
@@ -46,7 +45,7 @@ def test_native_exports(case,script):
     if case=='radial.cycle-floquet':
         check_radial_modes(bundle)
         assert (output/'orbits.csv').is_file()
-        # Measured |error| x32/x64: 2.33e-14/2.33e-14; native float64 Newton stopping tolerance 1e-12.
+        # Measured |error|: 2.33e-14; native float64 Newton stopping tolerance 1e-12.
         assert max((float(r['residual_norm']) for r in bundle['branch'])) < 1e-11
 
 @pytest.mark.julia
@@ -59,7 +58,7 @@ def test_codim2_export_preserves_parameter_order_and_event_identity(case):
     assert bundle['metadata']['chart_status']
     if case.endswith('bt-ft'):
         point=select_event(bundle['events'],'BT',{'F':[1.40,1.50], 'T':[.01,.03]})
-        # Measured |error| x32/x64: 5.55e-17/5.55e-17; native float64 Newton stopping tolerance 1e-12.
+        # Measured |error|: 5.55e-17; native float64 Newton stopping tolerance 1e-12.
         assert float(point['residual_norm']) < 1e-11
         assert int(point['geometric_nullity'])==1
 
@@ -71,12 +70,12 @@ def check_radial_modes(bundle):
     for point in bundle['branch']:
         selected=[r for r in modes if r['point_id']==point['point_id'] and int(r['is_trivial'])]
         assert len(selected)==1
-        # Measured |error| x32/x64: 8.1e-15/8.1e-15; native radial flow alignment, accumulated float64 roundoff.
+        # Measured |error|: 8.1e-15; native radial flow alignment, accumulated float64 roundoff.
         assert float(selected[0]['flow_alignment']) > 1 - 512 * np.finfo(float).eps
 
 
 def run_periodic_native(case, script):
-    output=ROOT/'examples/validation/generated/candidates'/('periodic-test-x'+os.environ.get('JAXCONT_TEST_X64','0'))/case/'bifurcationkit'
+    output=ROOT/'examples/validation/generated/candidates'/'periodic-test'/case/'bifurcationkit'
     result=run_julia(JULIA/script,['--case',case,'--output-dir',str(output)],600,log_dir=output)
     assert 'soft scope' not in result.stderr.lower()
     bundle=load_bundle(output,case_id=case,tool='bifurcationkit')
@@ -92,20 +91,20 @@ def run_periodic_native(case, script):
 def test_pd_export_has_base_and_doubled_orbit_identity():
     bundle=run_periodic_native('adaptx.cycle-pd-switch','adaptx_pd.jl')
     assert {r['segment_id'] for r in bundle['branch']}=={'base','doubled'}
-    # Measured |error| x32/x64: 3.16e-06/3.16e-06; native fixed-mesh doubled/base period discretization.
+    # Measured |error|: 3.16e-06; native fixed-mesh doubled/base period discretization.
     assert abs(bundle['metadata']['period_ratio'] - 2) < 0.0001
     doubled=[r for r in bundle['branch'] if r['segment_id']=='doubled']
     assert max(float(r['half_period_difference']) for r in doubled)>1e-3
     pd=[e for e in bundle['events'] if e['event_type']=='PD' and e['segment_id']=='base']
     assert len(pd)==1
     critical=[complex(float(m['real']),float(m['imag'])) for m in bundle['spectra'] if m['event_id']==pd[0]['event_id']]
-    # Measured |error| x32/x64: 1e-08/1e-08; native PD multiplier, fixed mesh and Newton budget.
+    # Measured |error|: 1e-08; native PD multiplier, fixed mesh and Newton budget.
     assert sum((abs(z + 1) < 1e-06 for z in critical)) == 1
     window=json.loads((ROOT/'examples/validation/cases/systems/periodic.json').read_text())['adaptx']['doubled_pd_window']
     dp=[e for e in bundle['events'] if e['event_type']=='PD' and e['segment_id']=='doubled' and window[0]<=float(e['parameter'])<=window[1]]
     assert len(dp)==1
     dm=[complex(float(m['real']),float(m['imag'])) for m in bundle['spectra'] if m['event_id']==dp[0]['event_id']]
-    # Measured |error| x32/x64: 1.01e-08/1.01e-08; native PD multiplier, fixed mesh and Newton budget.
+    # Measured |error|: 1.01e-08; native PD multiplier, fixed mesh and Newton budget.
     assert sum((abs(z + 1) < 1e-06 for z in dm)) == 1
 
 

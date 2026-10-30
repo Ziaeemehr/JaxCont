@@ -46,7 +46,7 @@ def _pd_event():
 
 
 # An explicit value differing from the dtype default (1e-9 / 1e-5) and reachable in that precision.
-_EXPLICIT = 1e-8 if jnp.asarray(0.0).dtype == jnp.float64 else 2e-5
+_EXPLICIT = 1e-8
 
 
 @pytest.mark.parametrize("refine_tol", [None, _EXPLICIT])

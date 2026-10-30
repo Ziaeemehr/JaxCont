@@ -23,7 +23,7 @@ from jaxcont.stability.floquet import (
 )
 
 def _eps_J():
-    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+    return float(jnp.finfo(jnp.float64).eps)
 
 
 
@@ -69,7 +69,7 @@ def test_monodromy_matrix_matches_interval_propagators_scan():
     D_np, E_np, _, _ = collocation_matrices(ncol)
     D, E = jnp.asarray(D_np), jnp.asarray(E_np)
     mesh_states = prob.u0[: ntst * n].reshape(ntst, n)
-    coll_states = prob.u0[ntst * n : ntst * n + ntst * ncol * n].reshape(ntst, ncol, n)
+    coll_states = prob.u0[ntst * n: ntst * n + ntst * ncol * n].reshape(ntst, ncol, n)
     T = prob.u0[-1]
 
     M_all = interval_propagators(_rhs, D, E, h, mesh_states, coll_states, T, prob.p0)
@@ -79,7 +79,7 @@ def test_monodromy_matrix_matches_interval_propagators_scan():
         lambda carry, M: (M @ carry, None), jnp.eye(n), M_all
     )
     Phi_direct = monodromy_matrix(_rhs, D, E, h, mesh_states, coll_states, T, prob.p0)
-    # Measured |error| x32/x64: 0/0; identical interval product recurrence at unit scale.
+    # Measured |error|: 0; identical interval product recurrence at unit scale.
     assert jnp.max(jnp.abs(Phi_from_blocks - Phi_direct)) < 8 * _eps_J()
 
 
@@ -88,9 +88,9 @@ def test_floquet_multipliers_matches_closed_form_at_rho_1():
     multipliers, trivial_idx = floquet_multipliers(_rhs, mesh, prob.u0, prob.p0)
     got = jnp.sort(jnp.abs(multipliers))
     expected = jnp.sort(jnp.array([np.exp(-4 * np.pi), 1.0]))
-    # Measured: trivial |mu - 1| = 4e-15 (float64) / 5e-6 (float32); the small
+    # Measured: trivial |mu - 1| = 4e-15; the small
     # multiplier's relative error is 4e-6, the ntst=10 discretization error.
-    trivial_atol = 1e-12 if got.dtype == jnp.float64 else 1e-5
+    trivial_atol = 1e-12
     assert abs(float(got[1]) - 1.0) < trivial_atol
     assert abs(float(got[0]) / float(expected[0]) - 1.0) < 1e-5
 
@@ -122,7 +122,7 @@ def test_branch_floquet_multipliers_matches_per_point_calls():
         floquet_multipliers(_rhs, mesh, prob1.u0, prob1.p0)[1],
         floquet_multipliers(_rhs, mesh, prob2.u0, prob2.p0)[1],
     ]))
-    # Measured |error| x32/x64: 0/0; batched/individual spectra roundoff.
+    # Measured |error|: 0; batched/individual spectra roundoff.
     assert jnp.allclose(jnp.sort(jnp.abs(batched), axis=1), jnp.sort(jnp.abs(individual), axis=1), atol=64 * _eps_J(), rtol=0)
 
 
@@ -165,7 +165,7 @@ def test_floquet_multiplier_derivatives_keep_eigensolver_path(monkeypatch):
             lambda u, p, args: jnp.array([1., 0.]), mesh,
             jnp.array([1., 0., 1., 0., 1.]), p, ProductFloquet())
         return jnp.real(values[1 - index])
-    # Measured |error| x32/x64: 0/0; diagonal analytic multiplier derivative.
+    # Measured |error|: 0; diagonal analytic multiplier derivative.
     assert jnp.allclose(jax.grad(transverse)(jnp.array(1.00001)), 1.0, atol=0, rtol=16 * _eps_J())
 
 
@@ -173,7 +173,7 @@ def test_floquet_multiplier_derivatives_keep_eigensolver_path(monkeypatch):
 
 
 def _eps():
-    return float(jnp.finfo(jnp.asarray(0.0).dtype).eps)
+    return float(jnp.finfo(jnp.float64).eps)
 
 
 def _circle_on_mesh(ntst, ncol):
@@ -252,7 +252,7 @@ def _transverse_problem(blocks, p0, shift=0.0):
     mesh = Collocation(ntst=10, ncol=4)
     rhs = _transverse_rhs(blocks)
     prob = periodic_orbit_problem(rhs, jnp.asarray(u), jnp.asarray(t), _T, p0, mesh,
-                                  args=jnp.asarray(shift, jnp.asarray(0.).dtype))
+                                  args=jnp.asarray(shift, jnp.float64))
     return prob, mesh, rhs
 
 
@@ -374,18 +374,18 @@ def test_floquet_event_override_detection_and_refinement(monkeypatch):
         assert np.all(trivial[schur] != 5)
         # Branch reporting follows the bundle strategy.
         np.testing.assert_array_equal(branch.trivial_index, trivial[bundle])
-        # Measured |error| x32/x64: 2.38e-07/1.33e-15; same Floquet strategy across compiled paths.
+        # Measured |error|: 1.33e-15; same Floquet strategy across compiled paths.
         np.testing.assert_allclose(branch.eigenvalues, np.asarray(own[bundle].values), atol=128 * _eps_J(), rtol=0)
         # Scan inputs: PD sees the override spectrum, both NS see the bundle's.
         assert len(log["scanned"]) == 3
         for raw, strategy in zip(log["scanned"], (override, bundle, bundle)):
-            # Measured |error| x32/x64: 2.38e-07/1.33e-15; same Floquet strategy across compiled paths.
+            # Measured |error|: 1.33e-15; same Floquet strategy across compiled paths.
             np.testing.assert_allclose(raw, np.asarray(own[strategy].values), atol=128 * _eps_J(), rtol=0)
         for candidate, strategy in zip(result.event_candidates, (override, bundle, bundle)):
             assert int(np.asarray(candidate.bracket_mask).sum()) in (1, 2)
             raw = np.asarray(own[strategy].values)
             perm = np.asarray(candidate.permutation)
-            # Measured |error| x32/x64: 2.38e-07/1.33e-15; same Floquet strategy across compiled paths.
+            # Measured |error|: 1.33e-15; same Floquet strategy across compiled paths.
             np.testing.assert_allclose(candidate.spectra, np.take_along_axis(raw, perm, 1), atol=128 * _eps_J(), rtol=0)
             # Raw-column exclusion uses the event strategy's trivial index.
             flow = perm == trivial[strategy][:, None]
@@ -541,7 +541,7 @@ def test_flow_in_a_unit_multiplier_pair_is_resolved(monkeypatch):
     too). The flow lies in the pair's plane but along neither eigenvector,
     so the trivial multiplier is the pair member nearest 1."""
     import pytest
-    angle = 1e-5 if jnp.asarray(0.).dtype == jnp.float64 else 1e-3
+    angle = 1e-5
     for strategy in (PeriodicSchur(), ProductFloquet()):
         spectrum = _spectrum_with_factor(monkeypatch, _rotation_factor(angle, 0.5), strategy)
         assert bool(spectrum.converged)
@@ -560,10 +560,7 @@ def test_flow_in_a_plane_of_distinct_multipliers_stays_unresolved(monkeypatch):
     # Real multipliers 1 and 0.986 with eigenvectors (1, 1, 0) and (1, -1, 0):
     # the flow e0 is in their plane and along neither (torBPC point 41 at
     # newton_tol=1e-5).
-    # float32 counts |log mu| <= 10*sqrt(1e-5) = 0.032 as 1 (the flow-direction
-    # limit), so there the second multiplier sits just outside that limit.
-    from jaxcont.utils.precision import default_tol
-    second = min(0.986, float(np.exp(-3 * 10 * np.sqrt(default_tol(jnp.asarray(0.).dtype)))))
+    second = 0.986
     basis = jnp.array([[1., 1., 0.], [1., -1., 0.], [0., 0., 1.]])
     real_pair = basis @ jnp.diag(jnp.array([1., second, 0.5])) @ jnp.linalg.inv(basis)
     for factor in (far_pair, real_pair):
@@ -577,11 +574,11 @@ def test_flow_alignment_memory_grows_quadratically():
     """Review R1-04: the pair fallback must not materialize (n, n^2) arrays;
     its compiled temporaries grow like n^2 (x4 per doubling), not n^3 (x8)."""
     from jaxcont.stability.floquet import _aligned
-    dtype = jnp.result_type(jnp.asarray(0.), jnp.complex64)
+    dtype = jnp.complex128
 
     def temporaries(n):
         compiled = jax.jit(_aligned).lower(
-            jax.ShapeDtypeStruct((n, n), dtype), jax.ShapeDtypeStruct((n,), jnp.asarray(0.).dtype),
+            jax.ShapeDtypeStruct((n, n), dtype), jax.ShapeDtypeStruct((n,), jnp.float64),
             jax.ShapeDtypeStruct((n,), dtype)).compile()
         return compiled.memory_analysis().temp_size_in_bytes
 

@@ -17,9 +17,9 @@ from jaxcont.core.scan_continuation import Status, natural_scan, pseudo_arclengt
 from jaxcont.solvers.protocols import Dense
 
 def _eps_J():
-    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+    return float(jnp.finfo(jnp.float64).eps)
 
-_POINT_ATOL = 1e-9 if jnp.asarray(0.).dtype == jnp.float64 else 1e-5
+_POINT_ATOL = 1e-9
 
 
 
@@ -70,9 +70,9 @@ class TestBifProblem:
     def test_at_override_is_functional(self):
         prob = jc.bif_problem(pitchfork, u0=jnp.array([0.1]), p0=0.5)
         prob2 = prob.at(p0=0.8)
-        # Measured |error| x32/x64: 0/0; scalar assignment at its dtype precision.
+        # Measured |error|: 0; scalar assignment at its dtype precision.
         assert float(prob2.p0) == pytest.approx(0.8, abs=0, rel=8 * _eps_J())
-        # Measured |error| x32/x64: 0/0; scalar assignment at its dtype precision.
+        # Measured |error|: 0; scalar assignment at its dtype precision.
         assert float(prob.p0) == pytest.approx(0.5, abs=0, rel=8 * _eps_J())  # original unchanged
 
     def test_at_keep_sentinel_preserves_args(self):
@@ -84,14 +84,14 @@ class TestBifProblem:
         prob = jc.bif_problem(pitchfork, u0=jnp.array([0.2]), p0=0.7)
         rhs = prob.as_rhs(0.7)
         u = jnp.array([0.2])
-        # Measured |error| x32/x64: 0/0; same inputs and exact copy/evaluation.
+        # Measured |error|: 0; same inputs and exact copy/evaluation.
         assert jnp.allclose(rhs(u), pitchfork(u, 0.7, None), atol=0, rtol=0)
 
     def test_pytree_roundtrip(self):
         prob = jc.bif_problem(pitchfork, u0=jnp.array([0.1]), p0=0.5)
         leaves, treedef = jax.tree_util.tree_flatten(prob)
         prob2 = jax.tree_util.tree_unflatten(treedef, leaves)
-        # Measured |error| x32/x64: 0/0; same inputs and exact copy/evaluation.
+        # Measured |error|: 0; same inputs and exact copy/evaluation.
         assert jnp.allclose(prob2.u0, prob.u0, atol=0, rtol=0)
         assert float(prob2.p0) == float(prob.p0)
 
@@ -147,11 +147,11 @@ class TestFolds:
             events=[jc.Fold()],
         )
         # branch turns around at the fold: parameter should not exceed ~0
-        # Measured positive ceiling excess x32/x64: 0/0; saddle-node equation p=-u^2, explicit Newton residual 1e-6.
+        # Measured positive ceiling excess: 0; saddle-node equation p=-u^2, explicit Newton residual 1e-6.
         assert float(sol.branch.params.max()) < 1e-6
         folds = [e for e in sol.events if e.kind == "fold"]
         assert len(folds) >= 1
-        # Measured |error| x32/x64: 3.36e-06/0; fold constraint location, default Newton budget with tenfold margin.
+        # Measured |error|: 0; fold constraint location, default Newton budget with tenfold margin.
         assert abs(folds[0].p) < 0.0001  # true fold at p = 0
         assert folds[0].info["method"] == "extended_system"
 
@@ -167,7 +167,7 @@ class TestHopf:
         )
         hopf = [event for event in sol.events if event.kind == "hopf"]
         assert len(hopf) == 1
-        # Measured |error| x32/x64: 3.73e-09/3.47e-18; analytic Hopf parameter, default Newton budget.
+        # Measured |error|: 3.47e-18; analytic Hopf parameter, default Newton budget.
         assert abs(hopf[0].p) < _POINT_ATOL
         assert hopf[0].info["method"] == "extended_system"
 
@@ -184,11 +184,11 @@ class TestDifferentiableFold:
     def test_fold_location(self):
         u, p, v, _converged = jc.fold_point(self._f, jnp.array([0.4]), jnp.array(0.2),
                                 jnp.array(1.0))
-        # Measured |error| x32/x64: 0/0; analytic root, default Newton budget.
+        # Measured |error|: 0; analytic root, default Newton budget.
         assert float(u[0]) == pytest.approx(0.5, abs=_POINT_ATOL, rel=0)
-        # Measured |error| x32/x64: 0/0; analytic root, default Newton budget.
+        # Measured |error|: 0; analytic root, default Newton budget.
         assert float(p) == pytest.approx(0.25, abs=_POINT_ATOL, rel=0)
-        # Measured |error| x32/x64: 0/0; analytic root, default Newton budget.
+        # Measured |error|: 0; analytic root, default Newton budget.
         assert abs(float(v[0])) == pytest.approx(1.0, abs=_POINT_ATOL, rel=0)
 
     def test_reverse_mode_grad_matches_analytic(self):
@@ -196,7 +196,7 @@ class TestDifferentiableFold:
                                              jnp.array(0.2), th)
         for theta in (1.0, 2.5):
             g = jax.grad(pstar)(jnp.array(theta))
-            # Measured |error| x32/x64: 0/0; analytic implicit sensitivity of well-conditioned normal form.
+            # Measured |error|: 0; analytic implicit sensitivity of well-conditioned normal form.
             assert float(g) == pytest.approx(theta / 2.0, abs=0, rel=32 * _eps_J())
 
     def test_vector_parameter_jacobian(self):
@@ -209,9 +209,9 @@ class TestDifferentiableFold:
             lambda x: jc.fold_parameter(f2, jnp.array([0.4]), jnp.array(0.2), x)
         )(ab)
         # d/da = a/(2b) = 0.25 ; d/db = -a^2/(4b^2) = -0.0625
-        # Measured |error| x32/x64: 0/0; analytic implicit sensitivity of well-conditioned normal form.
+        # Measured |error|: 0; analytic implicit sensitivity of well-conditioned normal form.
         assert float(J[0]) == pytest.approx(0.25, abs=0, rel=32 * _eps_J())
-        # Measured |error| x32/x64: 0/0; analytic implicit sensitivity of well-conditioned normal form.
+        # Measured |error|: 0; analytic implicit sensitivity of well-conditioned normal form.
         assert float(J[1]) == pytest.approx(-0.0625, abs=0, rel=32 * _eps_J())
 
 
@@ -370,7 +370,7 @@ def test_invalid_seed_is_newton_corrected_not_silently_accepted():
         prob, p_span=(0.0, 0.5), settings=jc.ContinuationPar(max_steps=20),
     )
     assert result.branch.n_valid >= 1
-    # Measured |error| x32/x64: 0/0; analytic root, default Newton budget.
+    # Measured |error|: 0; analytic root, default Newton budget.
     assert float(result.branch.states[0, 0]) == pytest.approx(1.0, abs=_POINT_ATOL, rel=0)
     assert _max_residual(f, result.branch.states, result.branch.params) < 1e-5
 
@@ -396,7 +396,7 @@ def test_seed_correction_failure_falls_back_to_finite_u0(scan_fn):
         jnp.array(1e-8), 5, jnp.array(50),
     )
     assert bool(jnp.all(jnp.isfinite(result.states[0])))
-    # Measured |error| x32/x64: 0/0; same inputs and exact copy/evaluation.
+    # Measured |error|: 0; same inputs and exact copy/evaluation.
     assert jnp.allclose(result.states[0], u0, atol=0, rtol=0)
     assert not bool(result.converged[0])
 
@@ -501,7 +501,7 @@ class TestBothside:
         )
         folds = [e for e in sol.events if e.kind == "fold"]
         assert len(folds) == 1
-        # Measured |error| x32/x64: 3.36e-06/0; fold constraint location, default Newton budget with tenfold margin.
+        # Measured |error|: 0; fold constraint location, default Newton budget with tenfold margin.
         assert folds[0].p == pytest.approx(0.0, abs=0.0001, rel=0)
 
     def test_raises_under_vmap(self):
@@ -563,7 +563,7 @@ def test_grad_wrt_args_through_engine_forward():
     a = jnp.array(2.0)
     n = int(run(a).n_valid)
     assert n > 3
-    # Measured |error| x32/x64: 0/0; analytic implicit sensitivity of well-conditioned normal form.
+    # Measured |error|: 0; analytic implicit sensitivity of well-conditioned normal form.
     assert float(jax.jacfwd(observable)(a)) == pytest.approx(float(n), rel=32 * _eps_J(), abs=0)
 
 
@@ -586,11 +586,11 @@ def test_mixed_array_and_callable_args_cache_and_match_reference():
     assert pseudo_arclength_scan._cache_size() == size
     ref = jc.bif_problem(lambda u, p, a: u ** 2 + p * 1.0, u0=jnp.array([1.0]), p0=-1.0)
     r3 = run(ref)
-    # Measured |error| x32/x64: 0/0; same inputs and exact copy/evaluation.
+    # Measured |error|: 0; same inputs and exact copy/evaluation.
     assert jnp.allclose(r1.branch.states, r2.branch.states, atol=0, rtol=0)
-    # Measured |error| x32/x64: 0/0; same inputs and exact copy/evaluation.
+    # Measured |error|: 0; same inputs and exact copy/evaluation.
     assert jnp.allclose(r1.branch.states, r3.branch.states, atol=0, rtol=0)
-    # Measured |error| x32/x64: 0/0; same inputs and exact copy/evaluation.
+    # Measured |error|: 0; same inputs and exact copy/evaluation.
     assert jnp.allclose(r1.branch.params, r3.branch.params, atol=0, rtol=0)
 
 
@@ -731,7 +731,7 @@ def test_scan_applies_step_update_to_the_seed_and_each_accepted_step():
     )
     n = int(res.n_valid)
     assert n == 6
-    # Measured |error| x32/x64: 0/0; analytic solver protocol or forward/reverse consistency.
+    # Measured |error|: 0; analytic solver protocol or forward/reverse consistency.
     np.testing.assert_allclose(np.asarray(res.states[:n, 0]), 2.0 + np.arange(n), rtol=16 * _eps_J(), atol=0)
 
 
@@ -743,7 +743,7 @@ def test_step_update_sees_full_args_and_keeps_compile_cache():
     )
     settings = jc.ContinuationPar(ds=0.1, ds_max=0.1, max_steps=4, compute_stability=False)
     res = jc.continuation(prob, jc.Natural(), p_span=(0.0, 1.0), settings=settings)
-    # Measured |error| x32/x64: 0/0; analytic solver protocol or forward/reverse consistency.
+    # Measured |error|: 0; analytic solver protocol or forward/reverse consistency.
     np.testing.assert_allclose(np.asarray(res.branch.states[:, 0]), 2.0 * (1.0 + np.arange(5)), rtol=16 * _eps_J(), atol=0)
     size = natural_scan._cache_size()
     jc.continuation(prob, jc.Natural(), p_span=(0.0, 1.0), settings=settings)
@@ -781,7 +781,7 @@ def test_grad_through_scan_loop(alg):
     a = jnp.array(1.3)
     expected = jax.jacfwd(lambda a: _loop_objective(a, 'while', alg))(a)
     actual = jax.grad(lambda a: _loop_objective(a, 'scan', alg))(a)
-    # Measured |error| x32/x64: 2.98e-08/5.55e-17; AD consistency with unit state scale.
+    # Measured |error|: 5.55e-17; AD consistency with unit state scale.
     np.testing.assert_allclose(actual, expected, rtol=64 * _eps_J(), atol=0)
 
 
@@ -796,7 +796,7 @@ def test_continuation_loop_jit_vmap(alg, loop):
     values = jnp.array([0.8, 1.3])
     actual = jax.jit(jax.vmap(lambda a: _loop_objective(a, loop, alg)))(values)
     expected = jnp.stack([_loop_objective(a, loop, alg) for a in values])
-    # Measured |error| x32/x64: 0/0; analytic solver protocol or forward/reverse consistency.
+    # Measured |error|: 0; analytic solver protocol or forward/reverse consistency.
     np.testing.assert_allclose(actual, expected, rtol=16 * _eps_J(), atol=0)
 
 
@@ -823,13 +823,13 @@ def test_scan_loop_preserves_status_and_step_update(engine, case):
                   max_attempts=2 if case == 'attempts' else 12)
     before, after = engine(**kwargs), scan(**kwargs)
     for x, y in zip(before, after):
-        # Measured |error| x32/x64: 0/0; analytic solver protocol or forward/reverse consistency.
+        # Measured |error|: 0; analytic solver protocol or forward/reverse consistency.
         np.testing.assert_allclose(x, y, rtol=16 * _eps_J(), equal_nan=True, atol=0)
 
 
 def test_scan_forward_derivative_matches_while():
     a = jnp.array(1.3)
-    # Measured |error| x32/x64: 0/0; analytic solver protocol or forward/reverse consistency.
+    # Measured |error|: 0; analytic solver protocol or forward/reverse consistency.
     np.testing.assert_allclose(jax.jacfwd(lambda a: _loop_objective(a, 'scan'))(a), jax.jacfwd(lambda a: _loop_objective(a, 'while'))(a), rtol=16 * _eps_J(), atol=0)
 
 
@@ -844,6 +844,6 @@ def test_scan_step_update_changes_next_corrector_only_after_acceptance():
         0.1, 0.001, 0.1, 1e-5, 2, 4, Dense(), False, 8,
     )
     # The seed refreshes args to 1; the first accept refreshes it to 2.
-    # Measured |error| x32/x64: 1.91e-07/0; linear recurrence roundoff.
+    # Measured |error|: 0; linear recurrence roundoff.
     np.testing.assert_allclose(result.states[:, 0], [0, 1.1, 2.2], rtol=16 * _eps_J(), atol=0)
     assert int(result.n_attempts) == 2

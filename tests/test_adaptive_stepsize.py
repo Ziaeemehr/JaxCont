@@ -91,7 +91,7 @@ class TestAdaptiveStepsizeBasics:
 
         n = sol.branch.n_valid
         step_rtol = 8 * jnp.finfo(sol.branch.params.dtype).eps
-        # Measured bound violation: x32=0, x64=0; clipping only needs roundoff slack.
+        # Measured bound violation: 0; clipping only needs roundoff slack.
         for info in sol._solution.convergence_info[:n]:
             assert info["ds"] >= ds_min * (1 - step_rtol), f"Step size {info['ds']} below minimum {ds_min}"
 
@@ -109,7 +109,7 @@ class TestAdaptiveStepsizeBasics:
 
         n = sol.branch.n_valid
         step_rtol = 8 * jnp.finfo(sol.branch.params.dtype).eps
-        # Measured excess above ds_max: x32=7.45e-10, x64=0.
+        # Measured excess above ds_max: 0.
         for info in sol._solution.convergence_info[:n]:
             assert info["ds"] <= ds_max * (1 + step_rtol), f"Step size {info['ds']} above maximum {ds_max}"
 
@@ -232,13 +232,13 @@ class TestAdaptiveStepsizeAlgorithm:
     def test_adapt_stepsize_halve_on_failure(self):
         """Test step size halving on convergence failure."""
         new_ds = _adapt_ds(jnp.array(0.05), 20, jnp.array(False), 0.001, 0.1)
-        # Measured absolute error: x32=3.73e-10, x64=0.
+        # Measured absolute error: 0.
         assert jnp.isclose(new_ds, 0.025, rtol=8 * jnp.finfo(new_ds.dtype).eps, atol=0), "Step size should be halved on failure"
 
     def test_adapt_stepsize_stable_on_moderate_convergence(self):
         """Test step size remains stable for moderate convergence."""
         new_ds = _adapt_ds(jnp.array(0.03), 4, jnp.array(True), 0.001, 0.1)
-        # Measured absolute error: x32=6.71e-10, x64=0.
+        # Measured absolute error: 0.
         assert jnp.isclose(new_ds, 0.03, rtol=8 * jnp.finfo(new_ds.dtype).eps, atol=0), "Step size should remain stable for moderate convergence"
 
     def test_adapt_stepsize_fixed_mode_still_shrinks_on_failure(self):
@@ -306,9 +306,9 @@ class TestStepsizeConvergenceInfo:
         assert len(step_sizes) > 0, "Should have convergence info"
         assert all(s > 0 for s in step_sizes), "All step sizes should be positive"
         step_rtol = 8 * jnp.finfo(sol.branch.params.dtype).eps
-        # Measured bound violation: x32=0, x64=0.
+        # Measured bound violation: 0.
         assert all(s >= 0.005 * (1 - step_rtol) for s in step_sizes), "Step sizes should respect minimum"
-        # Measured excess above 0.1: x32=1.49e-9, x64=0.
+        # Measured excess above 0.1: 0.
         assert all(s <= 0.1 * (1 + step_rtol) for s in step_sizes), "Step sizes should respect maximum"
 
 

@@ -17,7 +17,7 @@ from jaxcont.bifurcations.modes import crossings
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic_args import PeriodicArgs
 
-_POINT_ATOL = 1e-9 if jnp.asarray(0.).dtype == jnp.float64 else 1e-5
+_POINT_ATOL = 1e-9
 
 
 
@@ -53,7 +53,7 @@ def test_distinct_hopf_modes_in_one_bracket():
     ])
     hits = detect_events([Hopf()], params, states, None, spectra, rhs, ds=.2)
     good = sorted(h.p for h in hits if h.status == "validated")
-    # Measured |error| x32/x64: 2.31e-09/3.47e-18; analytic event, default Newton budget.
+    # Measured |error|: 3.47e-18; analytic event, default Newton budget.
     assert good == pytest.approx([-0.02, 0.02], abs=_POINT_ATOL, rel=0)
 
 
@@ -68,7 +68,7 @@ def test_bothside_shared_seed_hopf_has_one_owner():
         events=[Hopf()],
     )
     assert len(result.events) == 1
-    # Measured |error| x32/x64: 9.31e-10/1.73e-18; analytic event, default Newton budget.
+    # Measured |error|: 1.73e-18; analytic event, default Newton budget.
     assert result.events[0].p == pytest.approx(0.0, abs=_POINT_ATOL, rel=0)
 
 

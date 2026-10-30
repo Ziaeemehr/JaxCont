@@ -18,7 +18,7 @@ from jaxcont.core.scan_continuation import Status
                         "lorenz84.eq-f/fixed", "lorenz84.eq-f/adaptive"])
 def lanes(request):
     case = next(c for c in load_cases() if c.benchmark_id == request.param)
-    tol = 1e-9 if jax.config.x64_enabled else 1e-6
+    tol = 1e-9
     case = replace(case, controls=replace(case.controls, max_steps=60, newton_atol=tol))
     inputs, single = batching.build_lanes(case, 4)
     return case, inputs, single
@@ -72,7 +72,7 @@ def test_failed_lane_counts_in_denominator():
     assert record["valid_points"] == [2, 1, 3, 0]
     assert record["lanes_total"] == 4 and record["lanes_ok"] == 1
     assert record["success_fraction"] == 0.25
-    # Measured absolute error: x32=0, x64=0; this is Python float division.
+    # Measured absolute error: 0; this is Python float division.
     assert record["throughput"] == pytest.approx(2 / 3, rel=8 * np.finfo(float).eps, abs=0)
 
 
@@ -108,7 +108,7 @@ def test_peak_memory_labels_fallback_and_unavailable(monkeypatch, device_peak, r
 def test_lane_mismatch_marks_the_row(monkeypatch):
     case = next(c for c in load_cases() if c.benchmark_id == "cubic.eq-fold/fixed")
     case = replace(case, controls=replace(case.controls, max_steps=5,
-                                          newton_atol=1e-9 if jax.config.x64_enabled else 1e-6),
+                                          newton_atol=1e-9),
                    sampling=replace(case.sampling, warm_repetitions=1, untimed_warmups=0))
     make_batch = batching.make_batch
 

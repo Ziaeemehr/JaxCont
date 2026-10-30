@@ -55,9 +55,9 @@ def test_registered_hopf_case_renders_spectral_pass_figure(
     assert any("H" in label for label in labels)
     for axis in figure.axes:
         artists = {artist.get_label(): artist for artist in axis.collections}
-        # Measured |error| x32/x64: 2.44e-07/6.38e-16; analytic Hopf marker, Newton and stored reference budget.
+        # Measured |error|: 6.38e-16; analytic Hopf marker, Newton and stored reference budget.
         np.testing.assert_allclose(np.asarray(artists['JaxCont H'].get_offsets()[0], dtype=float), [hopf_parameter, 0.0], atol=1e-05, rtol=0)
-        # Measured |error| x32/x64: 2.26e-06/2.26e-06; independent native Hopf marker with stored interpolation uncertainty.
+        # Measured |error|: 2.26e-06; independent native Hopf marker with stored interpolation uncertainty.
         np.testing.assert_allclose(np.asarray(artists['MatCont 7.6 H'].get_offsets()[0], dtype=float), [hopf_parameter, 0.0], atol=5e-05, rtol=0)
     spectral_lines = {line.get_label(): line for line in figure.axes[1].lines}
     for solver in (
@@ -484,24 +484,24 @@ def test_radial_overlay_filters_native_samples_before_y_autoscaling(tmp_path):
         line.get_label(): line for line in figure.axes[2].lines
     }
 
-    # Measured |error| x32/x64: 0/0; literal plot data and axis bounds at host precision.
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
     assert amplitude_lines['JaxCont minimum'].get_xdata() == pytest.approx([1.2, 1.4], abs=0, rel=8 * np.finfo(float).eps)
-    # Measured |error| x32/x64: 0/0; literal plot data and axis bounds at host precision.
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
     assert amplitude_lines['JaxCont minimum'].get_ydata() == pytest.approx([-1.2, -1.4], abs=0, rel=8 * np.finfo(float).eps)
-    # Measured |error| x32/x64: 0/0; literal plot data and axis bounds at host precision.
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
     assert amplitude_lines['MatCont 7.6 maximum'].get_xdata() == pytest.approx([1.1, 1.3, 1.5], abs=0, rel=8 * np.finfo(float).eps)
-    # Measured |error| x32/x64: 0/0; literal plot data and axis bounds at host precision.
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
     assert amplitude_lines['MatCont 7.6 maximum'].get_ydata() == pytest.approx([1.1, 1.3, 1.5], abs=0, rel=8 * np.finfo(float).eps)
-    # Measured |error| x32/x64: 0/0; literal plot data and axis bounds at host precision.
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
     assert period_lines['JaxCont period'].get_ydata() == pytest.approx([6.2, 6.4], abs=0, rel=8 * np.finfo(float).eps)
-    # Measured |error| x32/x64: 0/0; literal plot data and axis bounds at host precision.
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
     assert period_lines['MatCont 7.6 period'].get_ydata() == pytest.approx([6.1, 6.3, 6.5], abs=0, rel=8 * np.finfo(float).eps)
-    # Measured |error| x32/x64: 0/0; literal plot data and axis bounds at host precision.
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
     assert multiplier_lines['JaxCont nontrivial multiplier'].get_ydata() == pytest.approx([0.2, 0.3], abs=0, rel=8 * np.finfo(float).eps)
-    # Measured |error| x32/x64: 0/0; literal plot data and axis bounds at host precision.
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
     assert multiplier_lines['MatCont 7.6 nontrivial multiplier'].get_ydata() == pytest.approx([0.21, 0.25, 0.31], abs=0, rel=8 * np.finfo(float).eps)
     for axis in figure.axes:
-        # Measured |error| x32/x64: 0/0; literal plot data and axis bounds at host precision.
+        # Measured |error|: 0; literal plot data and axis bounds at host precision.
         assert axis.get_xlim() == pytest.approx((1.1, 1.5), abs=0, rel=8 * np.finfo(float).eps)
         assert max(abs(bound) for bound in axis.get_ylim()) < 10.0
 

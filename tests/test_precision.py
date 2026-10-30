@@ -23,18 +23,16 @@ def test_scan_float32_inputs_under_x64():
         return p * u - u**3
 
     f32 = jnp.float32
-    with jax.enable_x64(True):
-        res = pseudo_arclength_scan(
-            f, None, jnp.array([0.1], f32), jnp.array(0.5, f32), jnp.array(1.5, f32),
-            None, jnp.array(0.05, f32), jnp.array(1e-5, f32), jnp.array(0.2, f32),
-            jnp.array(1e-6, f32), 20, jnp.array(20),
-        )
+    res = pseudo_arclength_scan(
+        f, None, jnp.array([0.1], f32), jnp.array(0.5, f32), jnp.array(1.5, f32),
+        None, jnp.array(0.05, f32), jnp.array(1e-5, f32), jnp.array(0.2, f32),
+        jnp.array(1e-6, f32), 20, jnp.array(20),
+    )
     assert res.states.dtype == jnp.float32
     assert res.params.dtype == jnp.float32
 
 
 def test_newton_tol_none_resolves_by_dtype():
-    import jax
     import jaxcont as jc
 
     assert jc.ContinuationPar().newton_tol is None
@@ -49,10 +47,7 @@ def test_newton_tol_none_resolves_by_dtype():
     )
     assert result.branch.states.shape[0] > 5
     resid = jnp.abs(result.branch.states[:, 0] ** 2 + result.branch.params)
-    if jax.config.jax_enable_x64:
-        assert float(jnp.max(resid)) < 1e-9
-    else:
-        assert float(jnp.max(resid)) < 1e-4
+    assert float(jnp.max(resid)) < 1e-9
 
 
 def test_solver_tol_none_resolves_by_dtype():
@@ -68,14 +63,11 @@ EVENT_ALPHA = 0.0  # exact PD/NS parameter of the fixtures
 
 
 def test_pd_ns_refine_locates_event_tightly_in_float64():
-    import pytest
     import jaxcont as jc
     from tests.test_period_doubling_neimark_sacker import BETA_NS, BETA_PD, _sweep
 
-    if not is_x64():
-        pytest.skip("float64-only accuracy check")
     for beta, cls in ((BETA_PD, jc.PeriodDoubling), (BETA_NS, jc.NeimarkSacker)):
         sol = _sweep(beta, cls, span=(-0.05, 0.05))
         assert len(sol.events) == 1
-        # Measured |error| x32/x64: 3.35e-10/3.35e-10; float64-only periodic event, Newton/bisection and Gauss mesh budget.
+        # Measured |error|: 3.35e-10; float64-only periodic event, Newton/bisection and Gauss mesh budget.
         assert abs(sol.events[0].p - EVENT_ALPHA) < 1e-08

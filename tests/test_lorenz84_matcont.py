@@ -5,7 +5,6 @@ from pathlib import Path
 import subprocess
 import tempfile
 import numpy as np
-from jax import enable_x64
 import pytest
 from examples.validation.cases.systems import lorenz84 as contract
 
@@ -24,9 +23,9 @@ def native():
     try:
         result = subprocess.run([matlab, '-batch', command], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=600, env=env)
     except subprocess.TimeoutExpired as exc:
-        (OUT / ('lorenz84-matcont-x' + os.environ.get('JAXCONT_TEST_X64', '0') + '.log')).write_bytes((exc.stdout or b'') + (exc.stderr or b''))
+        (OUT / 'lorenz84-matcont.log').write_bytes((exc.stdout or b'') + (exc.stderr or b''))
         pytest.fail('MATLAB timed out; see generated/candidates/lorenz84-matcont-test.log')
-    (OUT / ('lorenz84-matcont-x' + os.environ.get('JAXCONT_TEST_X64', '0') + '.log')).write_text(result.stdout + result.stderr)
+    (OUT / 'lorenz84-matcont.log').write_text(result.stdout + result.stderr)
     assert result.returncode == 0, result.stdout + result.stderr
     return {run: json.loads((OUT / run / 'matcont/native.json').read_text()) for run in ('lorenz84.eq-f','lorenz84.fold-ft','lorenz84.hopf-ft','lorenz84.bt-ft')}
 
@@ -34,7 +33,7 @@ def native():
 def test_flagship_exports_all_four_runs(native):
     for run, data in native.items():
         assert data['states'] and data['parameters']
-        # Measured |error| x32/x64: 6.66e-16/6.66e-16; native float64 Newton stopping tolerance 1e-12.
+        # Measured |error|: 6.66e-16; native float64 Newton stopping tolerance 1e-12.
         assert max(np.atleast_1d(data['residuals'])) < 1e-11
     assert native['lorenz84.hopf-ft']['parameters'][-1][1] < .04
     assert native['lorenz84.fold-ft']['parameters'][-1][1] < .04
@@ -73,19 +72,17 @@ def test_refined_events_preserve_spectra_residuals_and_native_platform(native):
             modes = [m for m in raw['spectra'] if m['event_id'] == event['event_id']]
             assert len(modes) == 4
             assert {m['mode_id'] for m in modes} == set(range(4))
-            # Measured |error| x32/x64: 5.55e-17/5.55e-17; native float64 Newton stopping tolerance 1e-12.
+            # Measured |error|: 5.55e-17; native float64 Newton stopping tolerance 1e-12.
             assert event['residual_norm'] < 1e-11
             assert event['parameter'] == event['F' if run.endswith('eq-f') else 'T']
             assert event['bracket_status'] in ('native', 'unknown')
             if event['bracket_status'] == 'unknown':
                 assert event['bracket_lower'] is None and event['bracket_upper'] is None
             state = np.array([event[f'state_{i}'] for i in range(4)])
-            # Near BT, float32 Jacobian rounding splits the double zero eigenvalue.
-            # Compare the external float64 result against the float64 contract.
-            with enable_x64():
-                expected = np.linalg.eigvals(np.asarray(contract.lorenz84_jacobian(state, event['F'], (*contract.CONSTANTS, event['T'])), dtype=float))
+            # Near BT, compare spectra in float64 to preserve the double zero eigenvalue.
+            expected = np.linalg.eigvals(np.asarray(contract.lorenz84_jacobian(state, event['F'], (*contract.CONSTANTS, event['T'])), dtype=float))
             actual = np.array([complex(m['real'], m['imag']) for m in modes])
-            # Measured |error| x32/x64: 4.56e-09/4.56e-09; native versus contract spectra, double-zero eigenvalue conditioning.
+            # Measured |error|: 4.56e-09; native versus contract spectra, double-zero eigenvalue conditioning.
             np.testing.assert_allclose(np.sort_complex(actual), np.sort_complex(expected), atol=1e-07, rtol=0)
         platform = raw['metadata']['platform']
         assert platform['os'] and platform['cpu'] and platform['blas']

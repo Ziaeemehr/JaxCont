@@ -56,7 +56,7 @@ def test_bordered_system_simple():
     assert converged, "Solver should converge"
     assert jnp.linalg.norm(f_val) < 1e-6, "Should satisfy f(u, p) = 0"
     assert abs(g_val) < 1e-6, "Should satisfy arclength constraint"
-    # Measured absolute error: x32=0, x64=0; match the Newton residual tolerance.
+    # Measured absolute error: 0; match the Newton residual tolerance.
     assert jnp.isclose(u_corr[0], p_corr, rtol=0, atol=1e-6), "Should have u = p"
 
 
@@ -134,9 +134,9 @@ def test_bordered_system_2d():
     assert converged, "Solver should converge"
     assert jnp.linalg.norm(f_val) < 1e-6, "Should satisfy f(u, p) = 0"
     assert abs(g_val) < 1e-6, "Should satisfy arclength constraint"
-    # Measured absolute error: x32=0, x64=0; match the Newton residual tolerance.
+    # Measured absolute error: 0; match the Newton residual tolerance.
     assert jnp.isclose(u_corr[0], u_corr[1], rtol=0, atol=1e-6), "Should have x = y"
-    # Measured absolute error: x32=0, x64=0; match the Newton residual tolerance.
+    # Measured absolute error: 0; match the Newton residual tolerance.
     assert jnp.isclose(u_corr[0] + u_corr[1], p_corr, rtol=0, atol=1e-6), "Should have x + y = p"
 
 
@@ -224,6 +224,6 @@ def test_bordered_system_block_elimination():
     delta_u_direct = solution_direct[:n]
     delta_p_direct = solution_direct[n]
 
-    # Measured absolute error: x32=0, x64=2.22e-16; roundoff between two linear solves.
+    # Measured absolute error: 2.22e-16; roundoff between two linear solves.
     assert jnp.isclose(delta_p, delta_p_direct, rtol=32 * jnp.finfo(delta_p.dtype).eps, atol=0), "delta_p should match"
     assert jnp.allclose(delta_u, delta_u_direct, atol=1e-10), "delta_u should match"

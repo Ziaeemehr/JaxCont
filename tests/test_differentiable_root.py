@@ -12,7 +12,7 @@ from jaxcont.solvers.implicit import differentiable_root
 
 
 def _eps_J():
-    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+    return float(jnp.finfo(jnp.float64).eps)
 
 
 
@@ -25,8 +25,8 @@ def test_root_matches_analytic():
     x0 = jnp.array([1.0])
     theta = jnp.array(4.0)
     x_star = differentiable_root(_G_scalar, x0, theta)
-    # Measured |error| x32/x64: 0/2.22e-15; Newton root, unit conditioning.
-    assert float(x_star[0]) == pytest.approx(2.0, abs=1e-06 if not jax.config.x64_enabled else 1e-09, rel=0)
+    # Measured |error|: 2.22e-15; Newton root, unit conditioning.
+    assert float(x_star[0]) == pytest.approx(2.0, abs=1e-09, rel=0)
 
 
 def test_reverse_mode_grad_matches_analytic():
@@ -39,7 +39,7 @@ def test_reverse_mode_grad_matches_analytic():
         theta = jnp.array(theta_val)
         g = jax.grad(root)(theta)
         expected = 1.0 / (2.0 * jnp.sqrt(theta))
-        # Measured |error| x32/x64: 0/2.78e-16; analytic implicit derivative, well-conditioned roots.
+        # Measured |error|: 2.78e-16; analytic implicit derivative, well-conditioned roots.
         assert float(g) == pytest.approx(float(expected), abs=0, rel=64 * _eps_J())
 
 
@@ -63,7 +63,7 @@ def test_vector_theta_jacobian_matches_analytic():
     # G_x = 2x - a ; G_a = -x ; G_b = 1 ; dx/da = x/(2x-a) ; dx/db = -1/(2x-a)
     Gx = 2.0 * float(x_star) - float(theta[0])
     expected = jnp.array([float(x_star) / Gx, -1.0 / Gx])
-    # Measured |error| x32/x64: 0/0; implicit derivative evaluated at the same root.
+    # Measured |error|: 0; implicit derivative evaluated at the same root.
     assert jnp.allclose(J, expected, atol=0, rtol=16 * _eps_J())
 
 
@@ -83,7 +83,7 @@ def test_callable_seed_theta_dependent():
         assert float(x_star) == pytest.approx(float(jnp.sqrt(theta)), abs=1e-6)
         g = jax.grad(root)(theta)
         expected = 1.0 / (2.0 * jnp.sqrt(theta))
-        # Measured |error| x32/x64: 1.49e-08/2.78e-16; analytic implicit derivative, well-conditioned roots.
+        # Measured |error|: 2.78e-16; analytic implicit derivative, well-conditioned roots.
         assert float(g) == pytest.approx(float(expected), abs=0, rel=64 * _eps_J())
 
 
@@ -116,7 +116,7 @@ def test_scan_natural_corrector_reverse_mode_matches_forward():
     reverse = jax.jit(lambda a: total(a, 'scan'))
     a = jnp.array(1.4)
     np_expected = jax.jacfwd(forward)(a)
-    # Measured |error| x32/x64: 0/2.22e-16; forward/reverse implicit derivative consistency.
+    # Measured |error|: 2.22e-16; forward/reverse implicit derivative consistency.
     assert jnp.allclose(jax.grad(reverse)(a), np_expected, rtol=16 * _eps_J(), atol=0)
 
 
@@ -148,7 +148,7 @@ def test_checked_root_floor_is_per_equation():
     another. x[1]**2 + 1 = 0 has no real root, whatever theta * x[0] does."""
     import jax
     from jaxcont.solvers.implicit import differentiable_root_checked
-    theta = 1e16 if jnp.asarray(0.).dtype == jnp.float64 else 1e8
+    theta = 1e16
     G = lambda x, t: jnp.array([t * x[0], x[1] ** 2 + 1])
     for solve in (differentiable_root_checked, jax.jit(differentiable_root_checked, static_argnums=0)):
         _, converged = solve(G, jnp.array([0., .5]), jnp.asarray(theta))
@@ -160,7 +160,7 @@ def test_checked_root_floor_ignores_unrelated_large_coordinates():
     equation that does not depend on it (x[1]**2 + 1 = 0 has no real root)."""
     import jax
     from jaxcont.solvers.implicit import differentiable_root_checked
-    t = 1e16 if jnp.asarray(0.).dtype == jnp.float64 else 1e8
+    t = 1e16
     G = lambda x, t: jnp.array([x[0] - t, x[1] ** 2 + 1])
     for solve in (differentiable_root_checked, jax.jit(differentiable_root_checked, static_argnums=0)):
         _, converged = solve(G, jnp.array([t, .5]), jnp.asarray(t))

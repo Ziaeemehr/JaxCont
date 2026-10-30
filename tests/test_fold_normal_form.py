@@ -11,7 +11,7 @@ from jaxcont.bifurcations.fold_normal_form import fold_coefficient
 
 
 def _eps_J():
-    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+    return float(jnp.finfo(jnp.float64).eps)
 
 
 
@@ -27,22 +27,22 @@ def _fold_1d(u, p, args):
 
 def test_fold_coefficient_matches_exact_value_of_quadratic_normal_form():
     a = fold_coefficient(_fold_1d, jnp.zeros(1), jnp.zeros(2), jnp.ones(1))
-    # Measured |error| x32/x64: 0/0; analytic quadratic fold coefficient.
+    # Measured |error|: 0; analytic quadratic fold coefficient.
     assert jnp.isclose(float(a), 1.0, atol=0, rtol=32 * _eps_J())
 
 
 def test_fold_coefficient_flips_sign_with_the_quadratic_term():
     a = fold_coefficient(_fold_1d, jnp.zeros(1), jnp.zeros(2), jnp.ones(1), -1.0)
-    # Measured |error| x32/x64: 0/0; analytic quadratic fold coefficient.
+    # Measured |error|: 0; analytic quadratic fold coefficient.
     assert jnp.isclose(float(a), -1.0, atol=0, rtol=32 * _eps_J())
 
 
 def test_fold_coefficient_scales_linearly_with_the_quadratic_term():
     a2 = fold_coefficient(_fold_1d, jnp.zeros(1), jnp.zeros(2), jnp.ones(1), 2.0)
     a5 = fold_coefficient(_fold_1d, jnp.zeros(1), jnp.zeros(2), jnp.ones(1), 5.0)
-    # Measured |error| x32/x64: 0/0; analytic quadratic fold coefficient.
+    # Measured |error|: 0; analytic quadratic fold coefficient.
     assert jnp.isclose(float(a2), 2.0, atol=0, rtol=32 * _eps_J())
-    # Measured |error| x32/x64: 0/0; analytic quadratic fold coefficient.
+    # Measured |error|: 0; analytic quadratic fold coefficient.
     assert jnp.isclose(float(a5), 5.0, atol=0, rtol=32 * _eps_J())
 
 
@@ -60,7 +60,7 @@ def test_fold_coefficient_handles_multidimensional_left_null_vector():
     a = fold_coefficient(
         _fold_2d, jnp.zeros(2), jnp.zeros(2), jnp.array([1.0, 0.0]), 3.0
     )
-    # Measured |error| x32/x64: 0/0; analytic quadratic fold coefficient.
+    # Measured |error|: 0; analytic quadratic fold coefficient.
     assert jnp.isclose(float(a), 3.0, atol=0, rtol=32 * _eps_J())
 
 

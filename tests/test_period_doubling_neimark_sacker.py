@@ -126,7 +126,7 @@ def test_period_doubling_refine_result_satisfies_collocation_residual():
     i = hit.index[0]
     bracket_args = prob.step_update(prob.args, sol.branch.states[i], sol.branch.params[i])
     residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), bracket_args)
-    # Measured |error| x32/x64: 8.05e-07/2.68e-12; periodic correction Newton budget.
+    # Measured |error|: 2.68e-12; periodic correction Newton budget.
     assert float(jnp.abs(residual).max()) < 1e-05
 
 
@@ -146,7 +146,7 @@ def test_neimark_sacker_refine_result_satisfies_collocation_residual():
     i = hit.index[0]
     bracket_args = prob.step_update(prob.args, sol.branch.states[i], sol.branch.params[i])
     residual = prob.f(hit.u, jnp.asarray(hit.p, hit.u.dtype), bracket_args)
-    # Measured |error| x32/x64: 8.05e-07/2.68e-12; periodic correction Newton budget.
+    # Measured |error|: 2.68e-12; periodic correction Newton budget.
     assert float(jnp.abs(residual).max()) < 1e-05
 
 

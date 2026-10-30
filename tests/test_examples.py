@@ -12,9 +12,9 @@ import numpy as np
 import pytest
 
 def _eps_J():
-    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+    return float(jnp.finfo(jnp.float64).eps)
 
-_POINT_ATOL = 1e-9 if jnp.asarray(0.).dtype == jnp.float64 else 1e-5
+_POINT_ATOL = 1e-9
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,9 +36,9 @@ def test_cubic_fold_has_two_folds(lesson):
     m = lesson(1)
     events = [e for e in m["result"].events if e.kind == "fold"]
     assert len(events) == 2
-    # Measured |error| x32/x64: 1.99e-08/1.41e-11; analytic folds, default Newton budget.
+    # Measured |error|: 1.41e-11; analytic folds, default Newton budget.
     np.testing.assert_allclose(sorted((e.p for e in events)), [-2 / 3, 2 / 3], atol=_POINT_ATOL, rtol=0)
-    # Measured positive ceiling excess x32/x64: 0/0; analytic natural-branch fold ceiling, explicit Newton budget.
+    # Measured positive ceiling excess: 0; analytic natural-branch fold ceiling, explicit Newton budget.
     assert np.max(m['natural'].branch.params) < 2 / 3 + 1e-5
 
 
@@ -65,7 +65,7 @@ def test_vanderpol_figure_shows_stability_crossing(lesson):
     b = m["result"].branch
     assert np.all(np.asarray(b.stable)[np.asarray(b.params) < -0.1])
     assert not np.any(np.asarray(b.stable)[np.asarray(b.params) > 0.1])
-    # Measured |error| x32/x64: 1.24e-10/4.42e-19; analytic Hopf parameter, default Newton budget.
+    # Measured |error|: 4.42e-19; analytic Hopf parameter, default Newton budget.
     assert abs(next((e.p for e in m['result'].events if e.kind == 'hopf'))) < _POINT_ATOL
 
 
@@ -82,7 +82,7 @@ def test_neural_mass_figure_contains_corrected_equilibria(lesson):
 
 def test_two_parameter_figure_matches_exact_fold_curve(lesson):
     m = lesson(6)
-    # Measured |error| x32/x64: 2.38e-07/2.31e-08; exact fold curve, explicit Newton budget.
+    # Measured |error|: 2.31e-08; exact fold curve, explicit Newton budget.
     np.testing.assert_allclose(m['solved'], 3 + (m['result'].branch.params + 1) ** 2 / 4, atol=1e-05, rtol=0)
 
 
@@ -93,17 +93,17 @@ def test_vmap_sweep_matches_serial_valid_points(lesson):
         mask = np.asarray(m["result"].branch.valid[i])
         serial_mask = np.ones(serial.n_valid, dtype=bool)
         assert int(mask.sum()) == serial.n_valid
-        # Measured |error| x32/x64: 8.94e-08/4.44e-16; serial/vmap consistency at unit scale.
+        # Measured |error|: 4.44e-16; serial/vmap consistency at unit scale.
         np.testing.assert_allclose(m['result'].branch.params[i][mask], serial.params[serial_mask], atol=32 * _eps_J(), rtol=0)
-        # Measured |error| x32/x64: 1.19e-07/2.22e-16; serial/vmap consistency at unit scale.
+        # Measured |error|: 2.22e-16; serial/vmap consistency at unit scale.
         np.testing.assert_allclose(m['result'].branch.states[i][mask], serial.states[serial_mask], atol=32 * _eps_J(), rtol=0)
 
 
 def test_fold_gradient_figure_matches_analytic_sensitivity(lesson):
     m = lesson(8)
-    # Measured |error| x32/x64: 0/0; analytic derivative of a quadratic fold parameter.
+    # Measured |error|: 0; analytic derivative of a quadratic fold parameter.
     np.testing.assert_allclose(m['gradients'], m['thetas'] / 2, atol=0, rtol=32 * _eps_J())
-    # Measured |error| x32/x64: 0/0; analytic fold parameter, default Newton budget.
+    # Measured |error|: 0; analytic fold parameter, default Newton budget.
     np.testing.assert_allclose(m['folds'], m['thetas'] ** 2 / 4, atol=_POINT_ATOL, rtol=0)
 
 
@@ -113,9 +113,9 @@ def test_periodic_tutorials_have_positive_period_and_amplitude(lesson, number):
     problem = m.get("problem", m.get("prob"))
     if number == 16:
         assert np.all(np.asarray(m["result"].branch.states)[:, -1] > 0)
-        # Measured |error| x32/x64: 1.19e-07/5.24e-08; Gauss collocation ntst=10 ncol=4 plus Newton error.
+        # Measured |error|: 5.24e-08; Gauss collocation ntst=10 ncol=4 plus Newton error.
         np.testing.assert_allclose(m['radii'], np.sqrt(m['parameters']), atol=max(_POINT_ATOL, 1e-06), rtol=0)
-        # Measured |error| x32/x64: 1.79e-07/8.83e-08; Gauss collocation ntst=10 ncol=4 plus Newton error.
+        # Measured |error|: 8.83e-08; Gauss collocation ntst=10 ncol=4 plus Newton error.
         np.testing.assert_allclose(m['radius_derivatives'], 1 / (2 * np.sqrt(m['parameters'])), atol=max(_POINT_ATOL, 1e-06), rtol=0)
         return
     assert float(problem.u0[-1]) > 0
@@ -142,9 +142,9 @@ def test_periodic_tutorials_have_positive_period_and_amplitude(lesson, number):
         fd = (response(1.01) - response(0.99)) / 0.02
         np.testing.assert_allclose(m["dZ"], fd, atol=2e-3)
     else:
-        # Measured |error| x32/x64: 3.66e-06/3.35e-10; analytic periodic event, mesh and bisection/Newton budget.
-        assert abs(m['event'].p) < (0.0001 if not jax.config.x64_enabled else 1e-08)
-        # Measured |error| x32/x64: 1.45e-05/1.35e-09; fixed-mesh orbit comparison, collocation and Newton budget.
+        # Measured |error|: 3.35e-10; analytic periodic event, mesh and bisection/Newton budget.
+        assert abs(m['event'].p) < (1e-08)
+        # Measured |error|: 1.35e-09; fixed-mesh orbit comparison, collocation and Newton budget.
         assert m['max_error'] < 0.0005
 
 
@@ -162,10 +162,10 @@ def test_phase_plane_figures_bracket_hopf(lesson):
 
 def test_pd_switch_period_ratio_near_two(lesson):
     m = lesson(14)
-    # Measured |error| x32/x64: 4e-07/1.89e-09; doubled Gauss period ratio, accumulation and mesh truncation.
+    # Measured |error|: 1.89e-09; doubled Gauss period ratio, accumulation and mesh truncation.
     assert abs(float(m['switched'].u0[-1]) / m['T_EXACT'] - 2) < max(128 * _eps_J(), 1e-07)
-    # Measured |error| x32/x64: 7.24e-06/1.7e-09; Gauss cycle amplitude, Newton conditioning and mesh truncation.
-    np.testing.assert_allclose(m['amps'], np.sqrt(m['alphas']), atol=0.0001 if not jax.config.x64_enabled else 1e-07, rtol=0)
+    # Measured |error|: 1.7e-09; Gauss cycle amplitude, Newton conditioning and mesh truncation.
+    np.testing.assert_allclose(m['amps'], np.sqrt(m['alphas']), atol=1e-07, rtol=0)
     orbit = np.asarray(m["switched"].u0[:80]).reshape(20, 4)
     centered = orbit - orbit.mean(axis=0)
     assert np.max(np.abs(centered[:10] - centered[10:])) > 0.1

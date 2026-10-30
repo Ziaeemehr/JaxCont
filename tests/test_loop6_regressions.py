@@ -12,16 +12,12 @@ import jaxcont as jc
 from jaxcont.stability.periodic_schur import periodic_spectrum
 
 def _eps_J():
-    return float(jnp.finfo(jnp.asarray(0.).dtype).eps)
+    return float(jnp.finfo(jnp.float64).eps)
 
-_POINT_ATOL = 1e-9 if jnp.asarray(0.).dtype == jnp.float64 else 1e-5
+_POINT_ATOL = 1e-9
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-
-
-def _dtype():
-    return jnp.float64 if jax.config.x64_enabled else jnp.float32
 
 
 # ---------------------------------------------------------------------------
@@ -30,14 +26,14 @@ def _dtype():
 
 def _repeated_factors(t):
     """Cyclic product ``diag(2 e^t, 2, 0.5)``: a repeated pair at ``t = 0``."""
-    dt = _dtype()
+    dt = jnp.float64
     scale = jnp.array([2.0, 2.0, 0.5], dt) * jnp.stack([jnp.exp(t), jnp.ones_like(t), jnp.ones_like(t)])
     return jnp.stack([jnp.diag(scale), jnp.eye(3, dtype=dt) + 0.0 * t])
 
 
 @pytest.mark.parametrize('compiled', [False, True])
 def test_repeated_multiplier_reverse_mode_is_nan(compiled):
-    t = jnp.asarray(0.0, _dtype())
+    t = jnp.asarray(0.0, jnp.float64)
     logabs = lambda t: periodic_spectrum(_repeated_factors(t))[1]
     transform = jax.jit if compiled else (lambda g: g)
     grad_sum = transform(jax.grad(lambda t: jnp.sum(logabs(t))))(t)
@@ -47,13 +43,13 @@ def test_repeated_multiplier_reverse_mode_is_nan(compiled):
     grad_simple = transform(jax.grad(lambda t: logabs(t)[simple]))(t)
     assert float(grad_simple) == 0.0
     # Away from the collision the derivative of log|det| is one.
-    t1 = jnp.asarray(1e-3, _dtype())
-    # Measured |error| x32/x64: 0/0; simple eigenvalue derivative or forward/reverse consistency.
+    t1 = jnp.asarray(1e-3, jnp.float64)
+    # Measured |error|: 0; simple eigenvalue derivative or forward/reverse consistency.
     np.testing.assert_allclose(transform(jax.grad(lambda t: jnp.sum(logabs(t))))(t1), 1.0, rtol=32 * _eps_J(), atol=0)
 
 
 def test_repeated_multiplier_phase_reverse_mode_is_nan():
-    t = jnp.asarray(0.0, _dtype())
+    t = jnp.asarray(0.0, jnp.float64)
     phase = lambda t: periodic_spectrum(_repeated_factors(t))[0]
     grad = jax.grad(lambda t: jnp.sum(jnp.imag(phase(t))))(t)
     assert bool(jnp.isnan(grad))
@@ -63,7 +59,7 @@ def test_branch_repeated_multiplier_reverse_mode_is_nan():
     from jaxcont.core.collocation import Collocation
     from jaxcont.problems.periodic import periodic_orbit_problem
 
-    dt = _dtype()
+    dt = jnp.float64
 
     def rhs(u, p, c):
         x, y, z, w = u
@@ -113,18 +109,18 @@ def test_final_nonfinite_trial_keeps_reverse_gradient(alg):
     from jaxcont.core.scan_continuation import Status
 
     loss = _sqrt_branch_loss(alg)
-    a = jnp.asarray(1.0, _dtype())
+    a = jnp.asarray(1.0, jnp.float64)
     _, status = jax.jit(loss)(a)
     assert int(status) == int(Status.NONFINITE)
     reverse = jax.jit(jax.grad(lambda a: loss(a)[0]))(a)
     forward = jax.jit(jax.jacfwd(lambda a: loss(a)[0]))(a)
     assert bool(jnp.isfinite(reverse))
-    # Measured |error| x32/x64: 0/8.88e-16; simple eigenvalue derivative or forward/reverse consistency.
+    # Measured |error|: 8.88e-16; simple eigenvalue derivative or forward/reverse consistency.
     np.testing.assert_allclose(reverse, forward, rtol=32 * _eps_J(), atol=0)
     if isinstance(alg, jc.Natural):
         # Fixed parameter grid 0, 0.1, ..., 0.9: d/da = sum sqrt(0.95 - p).
         expected = np.sum(np.sqrt(0.95 - 0.1 * np.arange(10)))
-        # Measured |error| x32/x64: 5.21e-07/8.88e-16; analytic sensitivity accumulated along Newton-corrected branch.
+        # Measured |error|: 8.88e-16; analytic sensitivity accumulated along Newton-corrected branch.
         np.testing.assert_allclose(reverse, expected, rtol=10 * _POINT_ATOL, atol=0)
 
 
@@ -140,7 +136,7 @@ def test_corrector_reverse_mode_ignores_rejected_trial():
                                            p_safe=jnp.array(0.0))
         return jnp.where(converged, u[0], 0.0)
 
-    a = jnp.asarray(1.0, _dtype())
+    a = jnp.asarray(1.0, jnp.float64)
     assert float(jax.grad(rejected)(a)) == 0.0
 
 
@@ -156,7 +152,7 @@ def _shifted_bt(u, p, args):
 def _bt_problem(**kwargs):
     from jaxcont.bifurcations.curves import hopf_curve_problem
 
-    dt = _dtype()
+    dt = jnp.float64
     return hopf_curve_problem(_shifted_bt, jnp.array([.6, -.4], dt), jnp.array([.29, 1.3], dt),
                               **kwargs)
 
@@ -221,11 +217,11 @@ def test_traced_theta_is_accepted():
         return jnp.array([p - u[0] ** 2])
 
     def end(theta):
-        problem = jc.bif_problem(g, jnp.array([1.0], _dtype()), 1.0)
+        problem = jc.bif_problem(g, jnp.array([1.0], jnp.float64), 1.0)
         settings = jc.ContinuationPar(ds=.05, max_steps=4, theta=theta, compute_stability=False)
         return jc.continuation(problem, p_span=(1.0, 0.0), settings=settings).branch.params
 
-    assert bool(jnp.all(jnp.isfinite(jax.jit(end)(jnp.asarray(0.5, _dtype())))))
+    assert bool(jnp.all(jnp.isfinite(jax.jit(end)(jnp.asarray(0.5, jnp.float64)))))
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +307,7 @@ def test_natural_final_step_is_clipped_to_p_end():
     def f(u, p, a):
         return jnp.array([u[0] - jnp.sqrt(1.02 - p)])
 
-    problem = jc.bif_problem(f, jnp.array([np.sqrt(1.02)], _dtype()), 0.0)
+    problem = jc.bif_problem(f, jnp.array([np.sqrt(1.02)], jnp.float64), 0.0)
     for loop in ('while', 'scan'):
         settings = jc.ContinuationPar(ds=0.1, ds_max=0.1, max_steps=40, adaptive=False,
                                       compute_stability=False, loop=loop)
@@ -319,7 +315,7 @@ def test_natural_final_step_is_clipped_to_p_end():
         assert r.status == 'reached_end'
         assert float(r.branch.params[-1]) == 1.0
         assert len(r.branch.params) == 11
-    backward = jc.continuation(jc.bif_problem(f, jnp.array([np.sqrt(1.02 - 0.75)], _dtype()), 0.75),
+    backward = jc.continuation(jc.bif_problem(f, jnp.array([np.sqrt(1.02 - 0.75)], jnp.float64), 0.75),
                                jc.Natural(), p_span=(0.75, 0.0),
                                settings=jc.ContinuationPar(ds=0.1, ds_max=0.1, max_steps=40,
                                                            adaptive=False, compute_stability=False))
@@ -341,11 +337,11 @@ def test_low_frequency_minimal_seed_is_accepted():
     from jaxcont.bifurcations.curves import hopf_curve_problem
     from jaxcont.utils.precision import default_tol
 
-    dt = _dtype()
-    s = 1e-5 if jax.config.x64_enabled else 1e-3
+    dt = jnp.float64
+    s = 1e-5
     problem = hopf_curve_problem(_scaled_bt(s), jnp.array([.6, -.4], dt), jnp.array([.29, 1.3], dt))
     # The floor follows the seed frequency, omega_seed = s * sqrt(0.2).
-    # Measured |error| x32/x64: 1.19e-13/0; closed-form seed frequency floor roundoff.
+    # Measured |error|: 0; closed-form seed frequency floor roundoff.
     np.testing.assert_allclose(problem.args.omega_floor, default_tol(dt) ** 0.5 * s * np.sqrt(0.2), rtol=64 * _eps_J(), atol=0)
     r = jc.continuation(problem, jc.PseudoArclength(), p_span=(1.3, 1.25), settings=_BT_SETTINGS)
     assert r.status == 'reached_end'
@@ -356,8 +352,8 @@ def test_low_frequency_minimal_curve_terminates_near_bt(alg):
     from jaxcont.bifurcations.codim2_events import BogdanovTakens
     from jaxcont.bifurcations.curves import hopf_curve_problem
 
-    dt = _dtype()
-    s = 1e-4 if jax.config.x64_enabled else 1e-2
+    dt = jnp.float64
+    s = 1e-4
     f = _scaled_bt(s)
     problem = hopf_curve_problem(f, jnp.array([.6, -.4], dt), jnp.array([.29, 1.3], dt))
     r = jc.continuation(problem, alg, p_span=(1.3, 1.0), settings=_BT_SETTINGS,
@@ -372,7 +368,7 @@ def test_low_frequency_minimal_curve_terminates_near_bt(alg):
 def test_minimal_seed_below_floor_names_other_charts():
     from jaxcont.bifurcations.curves import hopf_curve_problem
 
-    dt = _dtype()
+    dt = jnp.float64
     # A seed exactly at the BT point has zero frequency.
     with pytest.raises(ValueError, match="formulation='extended' or formulation='bt'"):
         hopf_curve_problem(_shifted_bt, jnp.array([.7, -.4], dt), jnp.array([.3, 1.2], dt))
@@ -406,7 +402,7 @@ def test_stiff_mode_does_not_change_minimal_hopf_scale(K):
     from jaxcont.bifurcations.codim2_events import BogdanovTakens
     from jaxcont.bifurcations.curves import hopf_curve_problem
 
-    dt = _dtype()
+    dt = jnp.float64
 
     def f(u, p, a):
         return jnp.concatenate([_shifted_bt(u[:2], p, a), -K * u[2:]])
@@ -421,10 +417,10 @@ def test_stiff_mode_does_not_change_minimal_hopf_scale(K):
     assert abs(float(q[-1]) - 1.2) < 1e-3
     # Exact Hopf curve: trace q - 1.2 + x = 0 and omega**2 = -2 x.
     x = X[:, 0] - .7
-    tol = 1e-5 if jax.config.x64_enabled else 1e-4
-    # Measured |error| x32/x64: 5.96e-08/1.11e-16; defining trace/frequency equations, Newton and rounding budget.
+    tol = 1e-5
+    # Measured |error|: 1.11e-16; defining trace/frequency equations, Newton and rounding budget.
     assert float(jnp.max(jnp.abs(q - 1.2 + x))) < 1e-05
-    # Measured |error| x32/x64: 2.79e-07/6.97e-15; defining trace/frequency equations, Newton and rounding budget.
+    # Measured |error|: 6.97e-15; defining trace/frequency equations, Newton and rounding budget.
     assert float(jnp.max(jnp.abs(X[:, 4] ** 2 + 2 * x))) < 1e-05
 
 
@@ -432,7 +428,7 @@ def test_fast_brusselator_hopf_curve_is_unchanged():
     """Seed frequency 2 > 1: the border equations stay unscaled (as at 7eb53f1)."""
     from jaxcont.bifurcations.curves import hopf_curve_problem
 
-    dt = _dtype()
+    dt = jnp.float64
 
     def bru(u, p, a):
         x, y = u
@@ -442,10 +438,10 @@ def test_fast_brusselator_hopf_curve_is_unchanged():
     settings = jc.ContinuationPar(ds=.01, ds_max=.05, max_steps=60, compute_stability=False)
     r = jc.continuation(problem, jc.Natural(), p_span=(2.0, 3.0), settings=settings)
     assert r.status == 'reached_end'
-    assert len(r.branch.params) == (47 if jax.config.x64_enabled else 24)
+    assert len(r.branch.params) == (47)
     # Hopf curve b = 1 + a**2 at x = a, y = b/a, omega = a.
     np.testing.assert_allclose(r.branch.states[-1], [3.0, 10 / 3, 10.0, 3.0],
-                               rtol=1e-6 if jax.config.x64_enabled else 1e-5)
+                               rtol=1e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -459,7 +455,7 @@ def test_slow_seed_reports_terminated_bt(alg, d):
     from jaxcont.bifurcations.curves import hopf_curve_problem
     from jaxcont.bifurcations.events import detect_events
 
-    dt = _dtype()
+    dt = jnp.float64
     q0 = 1.2 + d
     problem = hopf_curve_problem(_shifted_bt, jnp.array([.7 - d, -.4], dt),
                                  jnp.array([.3 - d * d, q0], dt))
