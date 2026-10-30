@@ -21,6 +21,7 @@ from jaxcont.core.collocation import (
 from jaxcont.problems.periodic_args import PeriodicArgs
 from jaxcont.solvers.implicit import differentiable_root
 from jaxcont.solvers.protocols import Dense, LinearSolver
+from jaxcont.utils.precision import as_float64
 
 PyTree = Any
 
@@ -45,6 +46,8 @@ def prc_curve(
     per-interval propagator blocks ``interval_propagators`` builds for
     ``monodromy_matrix``: ``Z_i = M_i^T @ Z_{i+1}``. ``U``/``raw_f`` follow
     the same conventions as ``stability.floquet.floquet_multipliers``."""
+    U, p = as_float64((U, p))
+    args = as_float64(args, scalars=False)
     ntst, ncol = mesh.ntst, mesh.ncol
     n = (U.shape[-1] - 1) // (ntst * (1 + ncol))
     h = 1.0 / ntst
@@ -88,6 +91,8 @@ def branch_prc(
 ) -> Array:
     """Vectorized (vmap) iPRC curves along a stored periodic branch --
     the PRC analogue of ``stability.floquet.branch_floquet_multipliers``."""
+    states, params = as_float64((states, params))
+    args = as_float64(args, scalars=False)
     def at(U, p):
         return prc_curve(raw_f, mesh, U, p, linear_solver, args=args)
 

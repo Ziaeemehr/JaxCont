@@ -23,12 +23,11 @@ collocation settings, and the plotted observables visible.
 
 # %%
 # Set up the output directory and imports. Figures stay open for the
-# Sphinx-Gallery matplotlib scraper. Select precision with JAX_ENABLE_X64.
+# Sphinx-Gallery matplotlib scraper. JaxCont runs in float64 (import jaxcont enables it).
 
 import argparse
 import tempfile
 from pathlib import Path
-import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -48,9 +47,8 @@ from jaxcont.core.collocation import Collocation
 from jaxcont.utils.precision import default_tol
 from jaxcont.problems.periodic import periodic_orbit_problem
 
-# A smaller float32 system avoids stagnation of the seed Newton solve.
-# Float64 uses the refined mesh needed to resolve the Floquet flow mode.
-NTST, NCOL, N_STATE = (40, 6, 2) if jax.config.x64_enabled else (20, 4, 2)
+# The refined mesh resolves the Floquet flow mode.
+NTST, NCOL, N_STATE = 40, 6, 2
 A = 1.0
 
 

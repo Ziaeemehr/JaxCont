@@ -259,8 +259,7 @@ The full procedure is in ``docs/RELEASING.md``. In short:
 
 1. Update the version in ``src/jaxcont/_version.py``, ``CITATION.cff`` and
    ``CHANGELOG.md``.
-2. Run the test suite in both precisions (``JAXCONT_TEST_X64=0`` and ``1``)
-   and build the docs.
+2. Run the test suite (float64; JaxCont is float64 only) and build the docs.
 3. Run the **Publish distribution** workflow (``.github/workflows/publish.yml``),
    first for TestPyPI, then for PyPI. It builds the sdist and wheel, installs
    the built wheel in a clean job and runs the default test suite against it

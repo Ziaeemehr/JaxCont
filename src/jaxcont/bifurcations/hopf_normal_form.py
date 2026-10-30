@@ -45,6 +45,7 @@ import jax.numpy as jnp
 from jax import Array, jacfwd, jvp, lax
 
 from jaxcont.solvers.implicit import differentiable_root_checked
+from jaxcont.utils.precision import as_float64
 
 PyTree = Any
 
@@ -160,6 +161,8 @@ def hopf_point(
     system residual actually reached ``tol`` -- see
     :func:`jaxcont.solvers.implicit.differentiable_root_checked`.
     """
+    u_guess, p_guess = as_float64((u_guess, p_guess))
+    args = as_float64(args, scalars=False)
     u_guess = jnp.asarray(u_guess)
     n = u_guess.shape[0]
     p_guess = jnp.asarray(p_guess, u_guess.dtype)

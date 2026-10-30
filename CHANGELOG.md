@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- JaxCont is float64 only. `import jaxcont` turns on `jax_enable_x64` when
+  it is off and warns once (`jaxcont.PrecisionWarning`); the setting is
+  global. `JAXCONT_NO_AUTO_X64=1` keeps it off, and entry points then raise
+  `RuntimeError`. Float32 inputs are converted to float64 at the entry
+  points. Tests and CI run in float64 only.
+
 - `floquet_multipliers` and `branch_floquet_multipliers` take a Floquet
   strategy `floquet_solver` in place of the positional matrix `eigen_solver`;
   pass `ProductFloquet(eigen_solver)` to keep a custom solver and its order.

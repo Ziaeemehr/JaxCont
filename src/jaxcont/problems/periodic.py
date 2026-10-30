@@ -16,7 +16,7 @@ from jaxcont.api import BifProblem
 from jaxcont.core.collocation import Collocation, collocation_matrices
 from jaxcont.problems.periodic_args import PeriodicArgs
 from jaxcont.solvers.implicit import differentiable_root_checked
-from jaxcont.utils.precision import default_tol
+from jaxcont.utils.precision import default_tol, as_float64
 
 PyTree = Any
 
@@ -137,6 +137,8 @@ def periodic_orbit_problem(
     ``events=[jc.Fold()]`` detects folds of cycles with a tangent-based scan
     and extended-system refinement.
     """
+    u_trajectory, t_trajectory = as_float64((u_trajectory, t_trajectory))
+    args = as_float64(args, scalars=False)
     ntst, ncol = mesh.ntst, mesh.ncol
     n = u_trajectory.shape[-1]
     period_ok = period0 > 0

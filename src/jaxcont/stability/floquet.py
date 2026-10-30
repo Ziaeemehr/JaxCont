@@ -28,7 +28,7 @@ from jaxcont.core.collocation import (
 )
 from jaxcont.solvers.protocols import DenseEigen, EigenSolver
 from jaxcont.stability.periodic_schur import periodic_spectrum_modes
-from jaxcont.utils.precision import default_tol
+from jaxcont.utils.precision import default_tol, as_float64
 
 PyTree = Any
 
@@ -252,6 +252,8 @@ def floquet_spectrum(
     ``RuntimeError`` when the spectrum did not converge; traced evaluation
     returns the failed status instead.
     """
+    U, p = as_float64((U, p))
+    args = as_float64(args, scalars=False)
     strategy = _default_strategy() if floquet_solver is None else floquet_solver
     return _require_converged(_point_spectrum(strategy, raw_f, mesh, U, p, args))
 
@@ -266,6 +268,8 @@ def floquet_multipliers(
     args: PyTree = None,
 ) -> tuple[Array, Array]:
     """``(multipliers, trivial_index)`` at one point; see ``floquet_spectrum``."""
+    U, p = as_float64((U, p))
+    args = as_float64(args, scalars=False)
     spectrum = floquet_spectrum(raw_f, mesh, U, p, floquet_solver, args=args)
     return spectrum.values, spectrum.trivial_index
 
@@ -284,6 +288,8 @@ def branch_floquet_multipliers(
     -- the periodic-orbit analogue of
     ``core.scan_continuation.branch_eigenvalues``. Eager evaluation raises
     ``RuntimeError`` if any point did not converge."""
+    states, params = as_float64((states, params))
+    args = as_float64(args, scalars=False)
     strategy = _default_strategy() if floquet_solver is None else floquet_solver
     spectrum = _require_converged(_branch_spectrum(strategy, raw_f, mesh, states, params, args))
     return spectrum.values, spectrum.trivial_index

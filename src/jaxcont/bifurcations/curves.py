@@ -29,7 +29,7 @@ from jaxcont.bifurcations.hopf_normal_form import (
 )
 from jaxcont.bifurcations.hopf_normal_form import _pack as _hopf_pack
 from jaxcont.bifurcations.hopf_normal_form import hopf_point
-from jaxcont.utils.precision import default_tol
+from jaxcont.utils.precision import default_tol, as_float64
 
 PyTree = Any
 
@@ -151,6 +151,8 @@ def fold_curve_problem(
 
     Measured residual floor at refined seed: 2.4e-7 (float32).
     """
+    u_guess, p_guess = as_float64((u_guess, p_guess))
+    args = as_float64(args, scalars=False)
     if formulation not in ("minimal", "extended"):
         raise ValueError("formulation must be minimal or extended")
     u_guess = jnp.asarray(u_guess)
@@ -340,6 +342,8 @@ def hopf_curve_problem(
     Measured residual floor at refined seed: 5.96e-8 (float32).
     GPU: No precision fix (TF32) needed; CPU and GPU numerics match at newton_tol=1e-5.
     """
+    u_guess, p_guess = as_float64((u_guess, p_guess))
+    args = as_float64(args, scalars=False)
     if formulation not in ("minimal", "extended", "bt"):
         raise ValueError("formulation must be minimal, extended or bt")
     u_guess = jnp.asarray(u_guess)

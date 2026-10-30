@@ -41,7 +41,7 @@ from jaxcont.core.continuation import ContinuationSolution
 from jaxcont.solvers.protocols import Dense, DenseEigen, EigenSolver, LinearSolver
 from jaxcont.stability import floquet as _floquet
 from jaxcont.stability.floquet import FloquetSpectrum, PeriodicSchur, ProductFloquet
-from jaxcont.utils.precision import default_tol
+from jaxcont.utils.precision import default_tol, as_float64
 
 __all__ = [
     "BP",
@@ -189,6 +189,8 @@ def bif_problem(
     ``plot_continuation`` and friends) -- purely cosmetic, no effect on the
     numerics.
     """
+    u0, p0 = as_float64((u0, p0))
+    args = as_float64(args, scalars=False)
     u0 = jnp.asarray(u0)
     if state_names is not None and len(state_names) != len(u0):
         raise ValueError(

@@ -4,7 +4,7 @@ Migrating from 0.4 to 0.5
 This page shows, for each user-visible breaking change in 0.5.0, the old
 form and the new one. The complete list, including internal changes, is in
 the changelog. The "after" examples on this page run as written, one after
-the other, in float32 and float64.
+the other (in float64, which ``import jaxcont`` enables; see below).
 
 .. code-block:: python
 
@@ -42,6 +42,22 @@ Removed classes: use ``bif_problem`` and ``continuation``
    assert result.status == "reached_end"
 
 Installation diagnostics remain in ``jaxcont.utils.config``.
+
+float64 only
+------------
+
+0.4 ran in whatever precision JAX was set to. 0.5 computes in float64 only:
+``import jaxcont`` turns on ``jax_enable_x64`` if it is off and warns once
+(``jaxcont.PrecisionWarning``). Enable it yourself first to silence the
+warning:
+
+.. code-block:: python
+
+   import jax
+   jax.config.update("jax_enable_x64", True)
+
+``JAXCONT_NO_AUTO_X64=1`` keeps the global setting untouched; JaxCont entry
+points then raise ``RuntimeError``. Float32 inputs are converted to float64.
 
 Tolerances follow the precision
 -------------------------------

@@ -58,7 +58,7 @@ subprocess.Popen = guarded_popen
     env.update(
         JAX_PLATFORMS="cpu",
         MPLBACKEND="Agg",
-        JAX_ENABLE_X64=os.environ.get("JAXCONT_TEST_X64", "0"),
+        JAX_ENABLE_X64="1",
         MPLCONFIGDIR=str(tmp_path / "mpl"),
         PYTHONPATH=os.pathsep.join([str(guard), str(ROOT), str(ROOT / "src")]),
     )

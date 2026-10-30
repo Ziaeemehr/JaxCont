@@ -8,6 +8,11 @@ compilation for exceptional performance.
 
 from jaxcont._version import __version__
 
+# float64 only: turn on jax_enable_x64 before any submodule creates an array.
+from jaxcont.utils.precision import PrecisionWarning, ensure_x64 as _ensure_x64
+
+_ensure_x64()
+
 __author__ = "Abolfazl Ziaeemehr"
 __license__ = "MIT"
 
@@ -133,6 +138,7 @@ __all__ = [
     "Event",
     "EventHit",
     "FloquetSpectrum",
+    "PrecisionWarning",
     "Fold",
     "GeneralizedHopf",
     "Hopf",

@@ -107,24 +107,24 @@ reverse-mode example through a whole continuation is in :doc:`migration`.
 Precision
 ---------
 
-For analysis work, enable 64-bit arithmetic before importing anything else
-from JAX or ``jaxcont``:
+JaxCont computes in ``float64`` only; every comparison with MatCont and
+BifurcationKit is float64, and float32 roundoff is too coarse for its
+periodic-orbit, Floquet and codimension-two results. ``import jaxcont``
+therefore turns on JAX's 64-bit mode if it is off and warns once
+(``jaxcont.PrecisionWarning``) that it did. The setting is global: it also
+makes the rest of your JAX code default to 64-bit. To avoid the warning,
+enable it yourself before importing anything else from JAX:
 
 .. code-block:: python
 
    import jax
    jax.config.update("jax_enable_x64", True)
 
-Single precision (``float32``, the JAX default) uses half the memory and is
-usually faster on GPUs; JaxCont has no reviewed float32-versus-float64 timing,
-so measure your own workload. Its roundoff limits how tightly Newton's method can converge,
-so residuals stall around ``1e-6`` and bifurcation points are located less
-accurately. JaxCont never changes this setting itself; the choice is yours.
-
-Tolerances follow the dtype automatically. ``ContinuationPar.newton_tol``
-and the ``tol`` arguments of the solvers default to ``None``, which means
-``1e-9`` for ``float64`` and ``1e-5`` for ``float32``. Pass a number to
-override it.
+To keep JAX's float32 default instead, set ``JAXCONT_NO_AUTO_X64=1``; JaxCont
+entry points then raise ``RuntimeError`` rather than compute in float32.
+Floating inputs created as float32 are converted to float64 at the entry
+points. ``ContinuationPar.newton_tol`` and the solvers' ``tol`` default to
+``None``, which means ``1e-9``; pass a number to override it.
 
 Next steps
 ----------

@@ -17,7 +17,7 @@ shows the computed domain, including the reachable fold and Hopf events.
 
 # %%
 # Set up the output directory and imports. Figures stay open for the
-# Sphinx-Gallery matplotlib scraper. Select precision with JAX_ENABLE_X64.
+# Sphinx-Gallery matplotlib scraper. JaxCont runs in float64 (import jaxcont enables it).
 
 import argparse
 import tempfile

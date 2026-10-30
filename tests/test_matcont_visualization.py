@@ -99,7 +99,6 @@ def test_registered_radial_cycle_renders_three_panel_pass_figure(tmp_path):
     )
 
 
-@pytest.mark.float64_only  # torBPC's Newton tolerance 1e-8
 def test_registered_torbpc_renderer_reports_pass(tmp_path):
     from examples.validation.visualize import render_periodic_overlay
 
@@ -794,7 +793,7 @@ def _gallery_environment(repository, tmp_path):
         {
             "JAX_PLATFORMS": "cpu",
             "MPLBACKEND": "Agg",
-            "JAX_ENABLE_X64": os.environ.get("JAXCONT_TEST_X64", "0"),
+            "JAX_ENABLE_X64": "1",
             "MPLCONFIGDIR": str(tmp_path / "mpl"),
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONPATH": os.pathsep.join(
