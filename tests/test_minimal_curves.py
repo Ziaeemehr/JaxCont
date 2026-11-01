@@ -327,8 +327,8 @@ def test_minimal_curve_decoding_events_and_plotting():
         points.append(BranchPoint(p=q, u=X, curve_layout=layout))
     assert event.scan(points) == []
     ax = plot_two_parameter_diagram([(result, "hopf")])
-    # Measured |error|: 0; exact plot copy or binary-exact fixed steps.
-    np.testing.assert_allclose(ax.lines[0].get_ydata(), [2, 1.9375, 1.75, 1.4375, 1], atol=0, rtol=0)
+    # Measured |error|: 1.11e-16 (macOS arm64); plotted values carry Newton roundoff.
+    np.testing.assert_allclose(ax.lines[0].get_ydata(), [2, 1.9375, 1.75, 1.4375, 1], atol=0, rtol=16 * _eps_J())
     plt.close(ax.figure)
 
 

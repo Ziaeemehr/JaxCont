@@ -3,6 +3,7 @@
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -43,7 +44,8 @@ def test_selected_marker_missing_runtime_fails(monkeypatch, tmp_path):
 def test_timeout_and_nonzero_exit_keep_logs(tmp_path, monkeypatch):
     from examples.validation.regenerate.bifurcationkit.runner import run_julia
 
-    monkeypatch.setenv("JULIA_BIN", "/bin/false")
+    # Any existing executable passes the lookup; subprocess.run is patched below.
+    monkeypatch.setenv("JULIA_BIN", sys.executable)
     script = tmp_path / "smoke.jl"
     script.write_text("")
     with pytest.raises(RuntimeError, match="exited 7"):
