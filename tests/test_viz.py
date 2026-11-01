@@ -4,6 +4,10 @@ import warnings
 
 import matplotlib
 
+def _eps_J():
+    return float(jnp.finfo(jnp.float64).eps)
+
+
 matplotlib.use("Agg")
 
 import jax.numpy as jnp
@@ -439,11 +443,15 @@ def test_evaluate_field_shapes_and_values():
     assert F.shape == (5, 5, 2)
     assert isinstance(F, np.ndarray)
     # X varies along columns, Y along rows (matplotlib's "xy" indexing).
-    np.testing.assert_allclose(X[0, :], np.linspace(-1.0, 1.0, 5))
-    np.testing.assert_allclose(Y[:, 0], np.linspace(-2.0, 2.0, 5))
+    # Measured |error|: 0; exact plot data/grid copy.
+    np.testing.assert_allclose(X[0, :], np.linspace(-1.0, 1.0, 5), atol=0, rtol=0)
+    # Measured |error|: 0; exact plot data/grid copy.
+    np.testing.assert_allclose(Y[:, 0], np.linspace(-2.0, 2.0, 5), atol=0, rtol=0)
     # F must equal the right-hand side evaluated pointwise.
-    np.testing.assert_allclose(F[..., 0], Y - X, atol=1e-6)
-    np.testing.assert_allclose(F[..., 1], -X - Y, atol=1e-6)
+    # Measured |error|: 0; linear vector field at binary-exact grid coordinates.
+    np.testing.assert_allclose(F[..., 0], Y - X, atol=0, rtol=min(16 * _eps_J(), 1e-07))
+    # Measured |error|: 0; linear vector field at binary-exact grid coordinates.
+    np.testing.assert_allclose(F[..., 1], -X - Y, atol=0, rtol=min(16 * _eps_J(), 1e-07))
 
 
 def test_state_names_falls_back_when_problem_has_none():
@@ -466,7 +474,8 @@ def test_plot_nullclines_zero_set_matches_analytic_lines():
     X, Y, F = _evaluate_field(problem, 0.0, (-2.0, 2.0), (-2.0, 2.0), resolution=41)
 
     on_diagonal = np.isclose(X, Y)
-    assert np.all(np.abs(F[..., 0][on_diagonal]) < 1e-6)
+    # Measured |error|: 0; exact linear nullcline on grid, roundoff at unit scale.
+    assert np.all(np.abs(F[..., 0][on_diagonal]) < 8 * _eps_J())
     on_antidiagonal = np.isclose(X, -Y)
     assert np.all(np.abs(F[..., 1][on_antidiagonal]) < 1e-6)
 
@@ -523,7 +532,8 @@ def test_plot_vector_field_normalizes_arrows_to_unit_length():
     lengths = np.hypot(quiver.U, quiver.V)
     finite = lengths[np.isfinite(lengths)]
     # Every arrow is unit length except at the origin, where the field is zero.
-    assert np.all((np.abs(finite - 1.0) < 1e-6) | (finite < 1e-12))
+    # Measured |error|: 0; zero-length quiver entries, host unit-scale roundoff; unit bound retained.
+    assert np.all((np.abs(finite - 1.0) < 1e-06) | (finite < 8 * np.finfo(float).eps))
 
 
 def test_plot_vector_field_unnormalized_keeps_true_magnitudes():
@@ -606,7 +616,8 @@ def test_equilibria_at_returns_both_sides_of_a_fold():
     assert states.shape == (2, 2)
     found = np.sort(states[:, 0])
     np.testing.assert_allclose(found, [-np.sqrt(0.5), np.sqrt(0.5)], atol=1e-3)
-    np.testing.assert_allclose(states[:, 1], [0.0, 0.0], atol=1e-6)
+    # Measured |error|: 0; decoupled state component is exactly zero.
+    np.testing.assert_allclose(states[:, 1], [0.0, 0.0], atol=0, rtol=0)
 
 
 def test_equilibria_at_marks_the_positive_branch_unstable():
@@ -708,8 +719,10 @@ def test_plot_trajectory_integrates_toward_the_stable_spiral():
     assert returned_fig is fig
     line = ax.get_lines()[0]
     xs, ys = line.get_xdata(), line.get_ydata()
-    np.testing.assert_allclose([xs[0], ys[0]], [1.5, 0.0], atol=1e-6)
-    assert np.hypot(xs[-1], ys[-1]) < 1e-4
+    # Measured |error|: 0; trajectory initial-state copying.
+    np.testing.assert_allclose([xs[0], ys[0]], [1.5, 0.0], atol=0, rtol=min(16 * _eps_J(), 1e-07))
+    # Measured |error|: 3.12e-09; finite-time analytic decay r=1.5*exp(-20), integration allowance.
+    assert np.hypot(xs[-1], ys[-1]) < 20 * 1.5 * np.exp(-20)
 
 
 def test_plot_trajectory_accepts_a_precomputed_array():
@@ -719,8 +732,10 @@ def test_plot_trajectory_accepts_a_precomputed_array():
     plot_trajectory(states, ax=ax, arrow=False)
 
     line = ax.get_lines()[0]
-    np.testing.assert_allclose(line.get_xdata(), states[:, 0])
-    np.testing.assert_allclose(line.get_ydata(), states[:, 1])
+    # Measured |error|: 0; exact plot data/grid copy.
+    np.testing.assert_allclose(line.get_xdata(), states[:, 0], atol=0, rtol=0)
+    # Measured |error|: 0; exact plot data/grid copy.
+    np.testing.assert_allclose(line.get_ydata(), states[:, 1], atol=0, rtol=0)
 
 
 def test_plot_trajectory_rejects_mixing_the_two_calling_forms():

@@ -14,12 +14,12 @@ import matplotlib
 import numpy as np
 import pytest
 
-from examples.MatCont.python_cases import CaseResult
+from examples.validation.cases.python_cases import CaseResult
 
 matplotlib.use("Agg")
 
 _REPOSITORY = Path(__file__).resolve().parents[1]
-_REFERENCE_DIR = _REPOSITORY / "examples" / "MatCont" / "reference"
+_REFERENCE_DIR = _REPOSITORY / "examples" / "validation" / "reference"
 
 
 def _write_rows(path, fieldnames, rows):
@@ -37,7 +37,7 @@ def test_registered_hopf_case_renders_spectral_pass_figure(
     case_id, hopf_parameter, tmp_path
 ):
     """Hopf views compare stability crossings as well as flat equilibria."""
-    from examples.MatCont.visualize import render_equilibrium_overlay
+    from examples.validation.visualize import render_equilibrium_overlay
 
     output = tmp_path / f"{case_id}.png"
     figure = render_equilibrium_overlay(case_id, output_path=output)
@@ -55,21 +55,10 @@ def test_registered_hopf_case_renders_spectral_pass_figure(
     assert any("H" in label for label in labels)
     for axis in figure.axes:
         artists = {artist.get_label(): artist for artist in axis.collections}
-        np.testing.assert_allclose(
-            np.asarray(artists["JaxCont H"].get_offsets()[0], dtype=float),
-            [hopf_parameter, 0.0],
-            atol=5e-4,
-            rtol=0.0,
-        )
-        np.testing.assert_allclose(
-            np.asarray(
-                artists["MatCont 7.6 H"].get_offsets()[0],
-                dtype=float,
-            ),
-            [hopf_parameter, 0.0],
-            atol=5e-4,
-            rtol=0.0,
-        )
+        # Measured |error|: 6.38e-16; analytic Hopf marker, Newton and stored reference budget.
+        np.testing.assert_allclose(np.asarray(artists['JaxCont H'].get_offsets()[0], dtype=float), [hopf_parameter, 0.0], atol=1e-05, rtol=0)
+        # Measured |error|: 2.26e-06; independent native Hopf marker with stored interpolation uncertainty.
+        np.testing.assert_allclose(np.asarray(artists['MatCont 7.6 H'].get_offsets()[0], dtype=float), [hopf_parameter, 0.0], atol=5e-05, rtol=0)
     spectral_lines = {line.get_label(): line for line in figure.axes[1].lines}
     for solver in (
         "JaxCont spectral abscissa",
@@ -87,7 +76,7 @@ def test_registered_hopf_case_renders_spectral_pass_figure(
 
 def test_registered_radial_cycle_renders_three_panel_pass_figure(tmp_path):
     """The periodic overlay compares all three radial diagnostics."""
-    from examples.MatCont.visualize import render_periodic_overlay
+    from examples.validation.visualize import render_periodic_overlay
 
     output = tmp_path / "radial.png"
     figure = render_periodic_overlay(
@@ -110,18 +99,18 @@ def test_registered_radial_cycle_renders_three_panel_pass_figure(tmp_path):
     )
 
 
-def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
-    from examples.MatCont.visualize import render_periodic_overlay
+def test_registered_torbpc_renderer_reports_pass(tmp_path):
+    from examples.validation.visualize import render_periodic_overlay
 
     figure = render_periodic_overlay(
         "MC-LC-002", output_path=tmp_path / "torbpc.png"
     )
     summary = " ".join(text.get_text() for text in figure.texts)
 
-    assert "Systematic comparison: FAIL (known limitation)" in summary
+    assert "Systematic comparison: PASS" in summary
     assert "multiplier" in summary
-    assert "critical-signature proxy parameter discrepancies" in summary
-    assert "missing correctly located event types PD" in summary
+    assert "event parameter errors" in summary
+    assert "missing correctly located event types none" in summary
     assert "event errors" not in summary
     assert (tmp_path / "torbpc.png").is_file()
     assert len(figure.axes) == 3
@@ -134,9 +123,9 @@ def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
     }
     for event_type in ("LPC", "NS", "PD"):
         assert f"MatCont 7.6 {event_type}" in labels
-        assert f"JaxCont near {event_type}" in labels
-    assert {"JaxCont detected LPC", "JaxCont detected NS"} <= labels
-    assert "JaxCont detected PD" not in labels
+        # The spectrum at the located event, the one the case compares.
+        assert f"JaxCont at {event_type}" in labels
+        assert f"JaxCont detected {event_type}" in labels
 
     parameter_labels = {
         label
@@ -145,15 +134,15 @@ def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
     }
     spectrum_labels = set(figure.axes[2].get_legend_handles_labels()[1])
     assert not any(
-        label.startswith("JaxCont near") for label in parameter_labels
+        label.startswith(("JaxCont near", "JaxCont at")) for label in parameter_labels
     )
     assert not any(
         label.startswith("JaxCont detected") for label in spectrum_labels
     )
     assert {
-        "JaxCont near LPC",
-        "JaxCont near NS",
-        "JaxCont near PD",
+        "JaxCont at LPC",
+        "JaxCont at NS",
+        "JaxCont at PD",
     } <= spectrum_labels
 
     amplitude_markers = {
@@ -176,8 +165,8 @@ def test_registered_torbpc_renderer_reports_known_failure(tmp_path):
 
 @pytest.fixture(scope="module")
 def cubic_registered_case():
-    from examples.MatCont.python_cases.equilibrium import run_cubic_fold
-    from examples.MatCont.registry import load_registry
+    from examples.validation.cases.python_cases.equilibrium import run_cubic_fold
+    from examples.validation.registry import load_registry
 
     case = next(
         case for case in load_registry()["cases"] if case["id"] == "MC-EQ-001"
@@ -189,7 +178,7 @@ def test_equilibrium_renderer_reports_failed_producer_predicate(
     monkeypatch, cubic_registered_case
 ):
     """A MatCont match cannot override a failed producer self-check."""
-    from examples.MatCont import visualize
+    from examples.validation import visualize
 
     case, result = cubic_registered_case
     failed_result = replace(
@@ -219,7 +208,7 @@ def test_equilibrium_renderer_turns_numerical_mismatch_into_diagnostic(
     monkeypatch, cubic_registered_case
 ):
     """A numerical mismatch must remain drawable for diagnosis."""
-    from examples.MatCont import visualize
+    from examples.validation import visualize
 
     case, result = cubic_registered_case
     shifted_states = np.asarray(result.artifacts["states"]).copy()
@@ -250,7 +239,7 @@ def test_equilibrium_renderer_keeps_missing_artifacts_exceptional(
     monkeypatch, tmp_path, cubic_registered_case
 ):
     """Diagnostic FAIL handling must not hide a missing structural artifact."""
-    from examples.MatCont import visualize
+    from examples.validation import visualize
 
     case, result = cubic_registered_case
     monkeypatch.setattr(
@@ -270,7 +259,7 @@ def test_equilibrium_renderer_rejects_family_before_running_producer(
     monkeypatch,
 ):
     """An invalid family must not execute an unrelated registered producer."""
-    from examples.MatCont import visualize
+    from examples.validation import visualize
 
     producer_called = False
 
@@ -298,7 +287,7 @@ def test_hopf_overlay_rejects_missing_event_spectrum(
     tmp_path, missing_source, message
 ):
     """A missing Hopf spectrum must not become a fabricated zero marker."""
-    from examples.MatCont.visualize import plot_equilibrium_overlay
+    from examples.validation.visualize import plot_equilibrium_overlay
 
     _write_rows(
         tmp_path / "MC-EQ-002_branch.csv",
@@ -411,7 +400,7 @@ def test_hopf_overlay_rejects_missing_event_spectrum(
 
 def test_radial_overlay_filters_native_samples_before_y_autoscaling(tmp_path):
     """Out-of-domain sentinels must not flatten any radial comparison panel."""
-    from examples.MatCont.visualize import plot_radial_cycle_overlay
+    from examples.validation.visualize import plot_radial_cycle_overlay
 
     branch_rows = [
         {
@@ -495,38 +484,31 @@ def test_radial_overlay_filters_native_samples_before_y_autoscaling(tmp_path):
         line.get_label(): line for line in figure.axes[2].lines
     }
 
-    assert amplitude_lines["JaxCont minimum"].get_xdata() == pytest.approx(
-        [1.2, 1.4]
-    )
-    assert amplitude_lines["JaxCont minimum"].get_ydata() == pytest.approx(
-        [-1.2, -1.4]
-    )
-    assert amplitude_lines["MatCont 7.6 maximum"].get_xdata() == pytest.approx(
-        [1.1, 1.3, 1.5]
-    )
-    assert amplitude_lines["MatCont 7.6 maximum"].get_ydata() == pytest.approx(
-        [1.1, 1.3, 1.5]
-    )
-    assert period_lines["JaxCont period"].get_ydata() == pytest.approx(
-        [6.2, 6.4]
-    )
-    assert period_lines["MatCont 7.6 period"].get_ydata() == pytest.approx(
-        [6.1, 6.3, 6.5]
-    )
-    assert multiplier_lines[
-        "JaxCont nontrivial multiplier"
-    ].get_ydata() == pytest.approx([0.2, 0.3])
-    assert multiplier_lines[
-        "MatCont 7.6 nontrivial multiplier"
-    ].get_ydata() == pytest.approx([0.21, 0.25, 0.31])
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
+    assert amplitude_lines['JaxCont minimum'].get_xdata() == pytest.approx([1.2, 1.4], abs=0, rel=8 * np.finfo(float).eps)
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
+    assert amplitude_lines['JaxCont minimum'].get_ydata() == pytest.approx([-1.2, -1.4], abs=0, rel=8 * np.finfo(float).eps)
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
+    assert amplitude_lines['MatCont 7.6 maximum'].get_xdata() == pytest.approx([1.1, 1.3, 1.5], abs=0, rel=8 * np.finfo(float).eps)
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
+    assert amplitude_lines['MatCont 7.6 maximum'].get_ydata() == pytest.approx([1.1, 1.3, 1.5], abs=0, rel=8 * np.finfo(float).eps)
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
+    assert period_lines['JaxCont period'].get_ydata() == pytest.approx([6.2, 6.4], abs=0, rel=8 * np.finfo(float).eps)
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
+    assert period_lines['MatCont 7.6 period'].get_ydata() == pytest.approx([6.1, 6.3, 6.5], abs=0, rel=8 * np.finfo(float).eps)
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
+    assert multiplier_lines['JaxCont nontrivial multiplier'].get_ydata() == pytest.approx([0.2, 0.3], abs=0, rel=8 * np.finfo(float).eps)
+    # Measured |error|: 0; literal plot data and axis bounds at host precision.
+    assert multiplier_lines['MatCont 7.6 nontrivial multiplier'].get_ydata() == pytest.approx([0.21, 0.25, 0.31], abs=0, rel=8 * np.finfo(float).eps)
     for axis in figure.axes:
-        assert axis.get_xlim() == pytest.approx((1.1, 1.5))
+        # Measured |error|: 0; literal plot data and axis bounds at host precision.
+        assert axis.get_xlim() == pytest.approx((1.1, 1.5), abs=0, rel=8 * np.finfo(float).eps)
         assert max(abs(bound) for bound in axis.get_ylim()) < 10.0
 
 
 def test_equilibrium_overlay_draws_both_branches_and_event_sources(tmp_path):
     """The overlay must retain both solver curves and event markers."""
-    from examples.MatCont.visualize import plot_equilibrium_overlay
+    from examples.validation.visualize import plot_equilibrium_overlay
 
     _write_rows(
         tmp_path / "MC-EQ-001_branch.csv",
@@ -620,7 +602,7 @@ def test_equilibrium_overlay_resolves_matcont_event_state_from_branch_point(
     tmp_path,
 ):
     """MatCont event artifacts resolve their state from branch rows."""
-    from examples.MatCont.visualize import plot_equilibrium_overlay
+    from examples.validation.visualize import plot_equilibrium_overlay
 
     _write_rows(
         tmp_path / "MC-EQ-001_branch.csv",
@@ -678,12 +660,12 @@ def test_equilibrium_overlay_resolves_matcont_event_state_from_branch_point(
 
 def test_render_case_overlay_reuses_registered_case_and_writes_png(tmp_path):
     """The renderer must execute the registered JaxCont case."""
-    from examples.MatCont.visualize import render_case_overlay
+    from examples.validation.visualize import render_case_overlay
 
     reference_dir = (
         Path(__file__).resolve().parents[1]
         / "examples"
-        / "MatCont"
+        / "validation"
         / "reference"
     )
     output_path = tmp_path / "mc-eq-001-overlay.png"
@@ -708,7 +690,7 @@ def test_render_case_overlay_reuses_registered_case_and_writes_png(tmp_path):
 
 def test_equilibrium_overlay_limits_view_to_shared_parameter_domain(tmp_path):
     """A longer run from one package must not look like branch disagreement."""
-    from examples.MatCont.visualize import plot_equilibrium_overlay
+    from examples.validation.visualize import plot_equilibrium_overlay
 
     _write_rows(
         tmp_path / "MC-EQ-001_branch.csv",
@@ -753,7 +735,7 @@ def test_equilibrium_overlay_limits_view_to_shared_parameter_domain(tmp_path):
 
 def test_equilibrium_overlay_accepts_domain_labels_and_title(tmp_path):
     """A gallery figure must use model-specific labels."""
-    from examples.MatCont.visualize import plot_equilibrium_overlay
+    from examples.validation.visualize import plot_equilibrium_overlay
 
     _write_rows(
         tmp_path / "MC-EQ-001_branch.csv",
@@ -811,6 +793,7 @@ def _gallery_environment(repository, tmp_path):
         {
             "JAX_PLATFORMS": "cpu",
             "MPLBACKEND": "Agg",
+            "JAX_ENABLE_X64": "1",
             "MPLCONFIGDIR": str(tmp_path / "mpl"),
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONPATH": os.pathsep.join(
@@ -821,27 +804,12 @@ def _gallery_environment(repository, tmp_path):
     return environment
 
 
-@pytest.mark.parametrize(
-    ("script_name", "image_name"),
-    [
-        ("example_16_matcont_cubic_overlay.py", "matcont_cubic_overlay.png"),
-        (
-            "example_17_matcont_vanderpol_overlay.py",
-            "matcont_vanderpol_overlay.png",
-        ),
-        (
-            "example_18_matcont_adaptive_control_overlay.py",
-            "matcont_adaptive_control_overlay.png",
-        ),
-        (
-            "example_19_matcont_radial_cycle_overlay.py",
-            "matcont_radial_cycle_overlay.png",
-        ),
-        ("example_20_matcont_torbpc_overlay.py", "matcont_torbpc_overlay.png"),
-    ],
-)
+@pytest.mark.parametrize("script_name", [
+    "plot_cubic.py", "plot_vanderpol.py", "plot_adaptx.py", "plot_radial.py",
+    "plot_torbpc.py", "plot_prc_shooting.py",
+])
 def test_gallery_example_runs_from_outside_repository_root(
-    tmp_path, script_name, image_name
+    tmp_path, script_name
 ):
     """Sphinx-Gallery execution must work outside the repository root."""
     repository = Path(__file__).resolve().parents[1]
@@ -850,13 +818,69 @@ def test_gallery_example_runs_from_outside_repository_root(
     environment = _gallery_environment(repository, tmp_path)
 
     completed = subprocess.run(
-        [sys.executable, str(repository / "examples" / script_name)],
+        [sys.executable, str(repository / "examples/validation/gallery" / script_name), "--output-dir", str(tmp_path / "generated")],
         cwd=tmp_path,
         env=environment,
         text=True,
         capture_output=True,
-        timeout=300,
+        timeout=900,
     )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert (tmp_path / "images" / image_name).is_file()
+    assert list((tmp_path / "generated").glob("*.png"))
+    assert not (tmp_path / "images").exists()
+
+
+def test_registered_torbpc_renderer_reports_a_failure(tmp_path, monkeypatch):
+    """Review R1-03: the FAIL rendering stays covered in both precisions.
+    A controlled result (MatCont's own series standing in for JaxCont, with
+    no located PD and an out-of-budget multiplier) needs no orbit solve."""
+    from examples.validation.cases.python_cases import CaseResult
+    from examples.validation.cases.python_cases import periodic
+    from examples.validation.visualize import render_periodic_overlay
+
+    def failing(reference_dir):
+        reference = periodic.load_torbpc_reference(reference_dir)
+        rows = reference["branch"]
+        parameters = np.array([float(r["parameter"]) for r in rows])
+        periods = np.array([float(r["period"]) for r in rows])
+        orbits = np.stack([np.array([[float(r[f"state_{j}_{side}"]) for j in range(3)]
+                                     for side in ("min", "max")]) for r in rows])
+        by_point = {}
+        for m in reference["multiplier_rows"]:
+            if m["event_type"].strip() == "BRANCH":
+                by_point.setdefault(int(m["point"]), []).append(complex(float(m["real"]), float(m["imag"])))
+        multipliers = np.array([by_point[int(r["point"])][:3] for r in rows])
+        events = {e["event_type"].strip(): float(e["parameter"]) for e in reference["events"]}
+        checks = {
+            "jaxcont_lpc_parameter_error": 0.0, "jaxcont_ns_parameter_error": 0.0,
+            "jaxcont_pd_parameter_error": 0.0, "jaxcont_max_period_error": 0.0,
+            "jaxcont_max_extrema_error": 0.0, "jaxcont_max_multiplier_error": 0.04,
+            "jaxcont_critical_multipliers_match": False,
+            "jaxcont_missing_event_types": ["PD"], "all_comparisons_pass": False,
+        }
+        return CaseResult(
+            case_id="MC-LC-002", checks=checks,
+            observations={"jaxcont_events": [{"kind": "fold", "parameter": events["LPC"]},
+                                             {"kind": "neimark_sacker", "parameter": events["NS"]}],
+                          "jaxcont_located_event_types": ["LPC", "NS"]},
+            artifacts={"branch": rows, "events": reference["events"],
+                       "multipliers": reference["multiplier_rows"],
+                       "jaxcont_parameters": parameters,
+                       "jaxcont_states": np.c_[np.zeros((len(rows), 1)), periods],
+                       "jaxcont_orbits": orbits, "jaxcont_multipliers": multipliers},
+        )
+
+    monkeypatch.setattr(periodic, "run_torbpc_cycle", failing)
+    figure = render_periodic_overlay("MC-LC-002", output_path=tmp_path / "torbpc.png")
+    summary = " ".join(text.get_text() for text in figure.texts)
+    assert "Systematic comparison: FAIL" in summary
+    assert "missing correctly located event types PD" in summary
+    assert "multiplier 4.00e-02" in summary
+    assert (tmp_path / "torbpc.png").is_file()
+    labels = {label for axis in figure.axes for label in axis.get_legend_handles_labels()[1]}
+    assert {"JaxCont detected LPC", "JaxCont detected NS"} <= labels
+    assert "JaxCont detected PD" not in labels
+    # Without a spectrum at the located event the nearest sample is drawn,
+    # and the label says so.
+    assert {"JaxCont near LPC", "JaxCont near NS", "JaxCont near PD"} <= labels

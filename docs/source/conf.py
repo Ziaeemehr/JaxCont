@@ -53,21 +53,13 @@ execute_gallery = (
 )
 
 sphinx_gallery_conf = {
-    'examples_dirs': '../../examples',
-    'gallery_dirs': 'auto_examples',
-    # examples/MatCont/{artifacts,compare,registry,run_validation,validation,
-    # visualize}.py are the validation suite's library modules, not narrated
-    # example scripts -- sphinx-gallery lists every .py file it finds
-    # regardless of filename_pattern (that only gates execution), so without
-    # this they turn into title-less gallery pages and break the
-    # `fail_on_warning` build.
-    'ignore_pattern': (
-        r'(^|/)(__init__|check_installation|profile_continuation'
-        r'|artifacts|compare|registry|run_validation|validation|visualize)\.py$'
-    ),
-    'filename_pattern': r'/(example_|demo_)',
+    'examples_dirs': ['../../examples/tutorials', '../../examples/validation/gallery'],
+    'gallery_dirs': ['auto_tutorials', 'auto_validation'],
+    'filename_pattern': r'/plot_',
+    'ignore_pattern': r'(^|/)(?!plot_)[^/]+\.py$',
     'within_subsection_order': 'FileNameSortKey',
     'plot_gallery': execute_gallery,
+    'run_stale_examples': execute_gallery,
     'abort_on_example_error': True,
     'download_all_examples': True,
 }
@@ -113,6 +105,8 @@ templates_path = ['_templates']
 # directories to ignore when looking for source files.
 exclude_patterns = [
     '_build',
+    'auto_examples/**',
+    *(['sg_execution_times.rst'] if not execute_gallery else []),
     'Thumbs.db',
     '.DS_Store',
     '**.ipynb_checkpoints',
@@ -298,7 +292,7 @@ def _build_technical_presentation(app):
     if shutil.which('latexmk') is None or shutil.which('make') is None:
         _presentation_logger.info(
             'latexmk/make not found -- skipping technical presentation PDF build; '
-            'presentation.md will link to a missing file.'
+            'presentation.md will show the LaTeX source link.'
         )
         return
 
@@ -326,3 +320,39 @@ def _build_technical_presentation(app):
 
 def setup(app):
     app.connect('builder-inited', _build_technical_presentation)
+    app.connect('build-finished', _write_gallery_redirects)
+    app.connect('source-read', _presentation_availability)
+
+
+def _write_gallery_redirects(app, exception):
+    """Preserve all numbered example URLs from the durable migration map."""
+    if exception is not None or app.builder.format != 'html':
+        return
+    import html
+    import json
+    from pathlib import Path
+    mapping = json.loads((Path(app.srcdir) / 'examples-migration.json').read_text())
+    redirects = mapping['gallery_redirects'] + [
+        {'old_url': 'auto_examples/index.html', 'new_url': 'auto_tutorials/index.html'},
+        {'old_url': 'auto_examples/demo_jit_speedup.html',
+         'new_url': 'auto_tutorials/plot_07_vmap_sweep.html'}
+    ]
+    for redirect in redirects:
+        target = '../' + redirect['new_url']
+        page = Path(app.outdir) / redirect['old_url']
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text('<!doctype html><meta http-equiv="refresh" content="0; url=' +
+                        html.escape(target, quote=True) + '"><a href="' +
+                        html.escape(target, quote=True) + '">Moved example</a>')
+
+
+def _presentation_availability(app, docname, source):
+    """Render the source link when optional PDF tooling produced no slides."""
+    from pathlib import Path
+    if docname != 'presentation' or (Path(app.srcdir) / '_static/jaxcont_technical_presentation.pdf').exists():
+        return
+    start = source[0].index('[**Download the slides (PDF)**]')
+    end = source[0].index('The PDF is built', start)
+    source[0] = (source[0][:start] +
+                 'The optional slides PDF was not built in this environment. '
+                 'The LaTeX source is linked below.\n\n' + source[0][end:])

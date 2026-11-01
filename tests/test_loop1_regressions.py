@@ -17,6 +17,9 @@ from jaxcont.bifurcations.modes import crossings
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic_args import PeriodicArgs
 
+_POINT_ATOL = 1e-9
+
+
 
 def test_bp_rejects_coarsely_bracketed_scalar_fold():
     hit = BP().refine(
@@ -50,7 +53,8 @@ def test_distinct_hopf_modes_in_one_bracket():
     ])
     hits = detect_events([Hopf()], params, states, None, spectra, rhs, ds=.2)
     good = sorted(h.p for h in hits if h.status == "validated")
-    assert good == pytest.approx([-.02, .02], abs=2e-5)
+    # Measured |error|: 3.47e-18; analytic event, default Newton budget.
+    assert good == pytest.approx([-0.02, 0.02], abs=_POINT_ATOL, rel=0)
 
 
 def test_bothside_shared_seed_hopf_has_one_owner():
@@ -64,7 +68,8 @@ def test_bothside_shared_seed_hopf_has_one_owner():
         events=[Hopf()],
     )
     assert len(result.events) == 1
-    assert result.events[0].p == pytest.approx(0., abs=2e-5)
+    # Measured |error|: 1.73e-18; analytic event, default Newton budget.
+    assert result.events[0].p == pytest.approx(0.0, abs=_POINT_ATOL, rel=0)
 
 
 @pytest.mark.parametrize("engine", [jc.Natural(), jc.PseudoArclength()])

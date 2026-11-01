@@ -13,6 +13,12 @@ import jaxcont as jc
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 
+def _eps_J():
+    return float(jnp.finfo(jnp.float64).eps)
+
+_POINT_ATOL = 1e-9
+
+
 
 def _rhs(u, p, args):
     x, y = u[0], u[1]
@@ -204,8 +210,10 @@ def test_periodic_branch_survives_reversal_of_the_cycle():
     assert np.max(np.linalg.norm(steps, axis=1)) <= 0.2
     last = np.asarray(sol.branch.states[-1])
     mesh_states = last[: ntst * 3].reshape(ntst, 3)
-    np.testing.assert_allclose(last[-1], 2 * np.pi, rtol=1e-4)
-    np.testing.assert_allclose(np.linalg.norm(mesh_states, axis=1), 1.0, atol=1e-4)
+    # Measured |error|: 5.94e-09; Gauss ntst=10 ncol=4 analytic circle period.
+    np.testing.assert_allclose(last[-1], 2 * np.pi, rtol=max(32 * _eps_J(), 1e-07), atol=0)
+    # Measured |error|: 1.76e-08; Gauss circle radius, Newton and mesh error.
+    np.testing.assert_allclose(np.linalg.norm(mesh_states, axis=1), 1.0, atol=max(_POINT_ATOL, 1e-06), rtol=0)
     # Reversed sense of rotation: x * y' - y * x' < 0 around the cycle.
     x, y = mesh_states[:, 0], mesh_states[:, 1]
     assert np.all(x * np.roll(y, -1) - y * np.roll(x, -1) < 0)

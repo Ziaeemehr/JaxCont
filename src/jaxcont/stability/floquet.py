@@ -17,6 +17,7 @@ from typing import Any, Callable, NamedTuple, Optional
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 
 from jaxcont.core.collocation import (
@@ -27,7 +28,7 @@ from jaxcont.core.collocation import (
 )
 from jaxcont.solvers.protocols import DenseEigen, EigenSolver
 from jaxcont.stability.periodic_schur import periodic_spectrum_modes
-from jaxcont.utils.precision import default_tol
+from jaxcont.utils.precision import default_tol, as_float64
 
 PyTree = Any
 
@@ -38,7 +39,9 @@ class ProductFloquet:
 
     ``eigen_solver`` (a matrix ``EigenSolver``) fixes the multiplier order and
     the derivative path. Forming ``Phi`` loses multipliers much smaller than
-    the largest one to roundoff. Status is false only for non-finite values.
+    the largest one to roundoff. Status is false for non-finite values and when
+    no eigenvector resolves the flow direction (the trivial multiplier cannot
+    be identified); eager public calls then raise ``RuntimeError``.
     """
 
     eigen_solver: EigenSolver = DenseEigen()
@@ -84,12 +87,20 @@ def _orbit(mesh: Collocation, U: Array):
     return jnp.asarray(D_np), jnp.asarray(E_np), 1.0 / ntst, mesh_states, coll_states, U[-1]
 
 
-def _aligned(vectors: Array, flow: Array) -> tuple[Array, Array]:
+def _aligned(vectors: Array, flow: Array, log_multipliers: Array | None = None) -> tuple[Array, Array]:
     """Select a reconstructed column only if it represents the flow direction.
 
     The normalized projection residual permits discretization error while
     rejecting physical modes that merely overlap a missing flow mode.
     Complex phase and column/flow scaling do not change the test.
+
+    With ``log_multipliers`` (complex ``log`` of the multipliers, column
+    order), a flow along no single column is still resolved when it lies in
+    the plane of two columns whose multipliers are both 1 to the same
+    tolerance: next to a Hopf point the monodromy is nearly the identity on
+    that plane, so its computed eigenvectors are arbitrary there (torBPC at
+    ``ntst=25``: ``0.999995 +/- 1.7e-5j``). The trivial index is then the pair
+    member nearest 1.
     """
     norms = jnp.linalg.norm(vectors, axis=0)
     flow_norm = jnp.linalg.norm(flow)
@@ -101,9 +112,32 @@ def _aligned(vectors: Array, flow: Array) -> tuple[Array, Array]:
     residual = jnp.where(usable, residual, jnp.inf)
     column = jnp.argmin(residual)
     # Coarse collocation can rotate the flow mode beyond the solve tolerance.
-    ok = ((residual[column] <= 10 * jnp.sqrt(default_tol(flow.real.dtype)))
-          & (flow_norm > 0) & jnp.isfinite(flow_norm))
-    return column, ok
+    limit = 10 * jnp.sqrt(default_tol(flow.real.dtype))
+    flow_ok = (flow_norm > 0) & jnp.isfinite(flow_norm)
+    ok = (residual[column] <= limit) & flow_ok
+    if log_multipliers is None or vectors.shape[1] < 2:
+        return column, ok
+    # Projection of the unit flow onto span(u_i, u_j) for every pair, from
+    # the Gram matrix and the overlaps alone (O(n^2) memory, review R1-04):
+    # |P f|^2 = (|f_i|^2 + |f_j|^2 - 2 Re(conj(f_i) g_ij f_j)) / (1 - |g_ij|^2).
+    m = vectors.shape[1]
+    safe_vectors = jnp.where(usable[None, :], unit_vectors, 0)
+    gram = jnp.conj(safe_vectors).T @ safe_vectors
+    gram_det = 1 - jnp.abs(gram) ** 2
+    fi, fj = overlap[:, None], overlap[None, :]
+    projected = ((jnp.abs(fi) ** 2 + jnp.abs(fj) ** 2 - 2 * jnp.real(jnp.conj(fi) * gram * fj))
+                 / jnp.where(gram_det > limit, gram_det, 1))
+    plane_residual = jnp.sqrt(jnp.maximum(1 - projected, 0))
+    at_one = jnp.abs(log_multipliers) <= limit
+    upper = jnp.asarray(np.triu(np.ones((m, m), bool), 1))
+    plane_ok = (upper & usable[:, None] & usable[None, :] & (gram_det > limit)
+                & at_one[:, None] & at_one[None, :] & jnp.isfinite(plane_residual))
+    plane_residual = jnp.where(plane_ok, plane_residual, jnp.inf)
+    pair = jnp.argmin(plane_residual)
+    i, j = pair // m, pair % m
+    nearer = jnp.where(jnp.abs(log_multipliers[i]) <= jnp.abs(log_multipliers[j]), i, j)
+    use_pair = ~ok & (plane_residual.reshape(-1)[pair] <= limit) & flow_ok
+    return jnp.where(use_pair, nearer, column), ok | use_pair
 
 
 def _product_spectrum(strategy, raw_f, mesh, U, p, args):
@@ -111,7 +145,8 @@ def _product_spectrum(strategy, raw_f, mesh, U, p, args):
     Phi = monodromy_matrix(raw_f, D, E, h, mesh_states, coll_states, T, p, args)
     # Mode identity is discrete; multiplier derivatives use the supplied solver.
     reference, vectors = jnp.linalg.eig(jax.lax.stop_gradient(Phi))
-    column, ok = _aligned(vectors, jax.lax.stop_gradient(raw_f(mesh_states[0], p, args)))
+    column, ok = _aligned(vectors, jax.lax.stop_gradient(raw_f(mesh_states[0], p, args)),
+                          jnp.log(reference.astype(jnp.result_type(reference, jnp.complex64))))
     values = strategy.eigen_solver(Phi)
     values = values.astype(jnp.result_type(values, jnp.complex64))
     trivial = jnp.argmin(jnp.abs(values - reference[column]))
@@ -130,8 +165,10 @@ def _schur_spectrum(strategy, raw_f, mesh, U, p, args):
         factors, max_sweeps=strategy.max_sweeps)
     # Reconstructed phase-zero right eigenvectors, not Schur vectors, carry
     # the flow identity.
+    log_multipliers = jax.lax.stop_gradient(
+        logabs + 1j * jnp.angle(phase)).astype(jnp.result_type(phase, jnp.complex64))
     trivial, ok = _aligned(jax.lax.stop_gradient(right),
-                           jax.lax.stop_gradient(raw_f(mesh_states[0], p, args)))
+                           jax.lax.stop_gradient(raw_f(mesh_states[0], p, args)), log_multipliers)
     converged = converged & ok
     # Failed lanes use finite surrogates so masked gradients stay zero.
     safe_logabs = jnp.where(converged, logabs, 0)
@@ -210,9 +247,13 @@ def floquet_spectrum(
     ``ProductFloquet(eigen_solver)``; ``None`` selects ``DEFAULT_FLOQUET``,
     the same default as ``Solvers.floquet``. The trivial index selects the right
     eigenvector most aligned with ``raw_f(x0, p, args)``, never the value
-    nearest ``+1``. Eager evaluation raises ``RuntimeError`` when the spectrum
-    did not converge; traced evaluation returns the failed status instead.
+    nearest ``+1`` alone (a pair of multipliers at 1 whose plane holds the
+    flow resolves to its member nearest 1). Eager evaluation raises
+    ``RuntimeError`` when the spectrum did not converge; traced evaluation
+    returns the failed status instead.
     """
+    U, p = as_float64((U, p))
+    args = as_float64(args, scalars=False)
     strategy = _default_strategy() if floquet_solver is None else floquet_solver
     return _require_converged(_point_spectrum(strategy, raw_f, mesh, U, p, args))
 
@@ -227,6 +268,8 @@ def floquet_multipliers(
     args: PyTree = None,
 ) -> tuple[Array, Array]:
     """``(multipliers, trivial_index)`` at one point; see ``floquet_spectrum``."""
+    U, p = as_float64((U, p))
+    args = as_float64(args, scalars=False)
     spectrum = floquet_spectrum(raw_f, mesh, U, p, floquet_solver, args=args)
     return spectrum.values, spectrum.trivial_index
 
@@ -245,6 +288,8 @@ def branch_floquet_multipliers(
     -- the periodic-orbit analogue of
     ``core.scan_continuation.branch_eigenvalues``. Eager evaluation raises
     ``RuntimeError`` if any point did not converge."""
+    states, params = as_float64((states, params))
+    args = as_float64(args, scalars=False)
     strategy = _default_strategy() if floquet_solver is None else floquet_solver
     spectrum = _require_converged(_branch_spectrum(strategy, raw_f, mesh, states, params, args))
     return spectrum.values, spectrum.trivial_index

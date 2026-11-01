@@ -4,14 +4,17 @@ A beginner-friendly, 16:9 Beamer deck for **JaxCont v0.4.0** walks
 through continuation fundamentals, the public API, periodic orbits and
 Floquet stability, Hopf refinement, direct codimension-two point solvers,
 seeded two-parameter fold/Hopf curves, visualization, phase-response curves,
-release migration contracts, and validation evidence. The validation gallery
-shows all five MatCont visual comparisons while preserving the systematic
-`MC-LC-002` failure and its experimental capability boundary.
+release migration contracts, and validation evidence as of that release,
+including the systematic `MC-LC-002` failure and its experimental capability
+boundary. The deck describes v0.4.0; the current comparison pages are in the
+{doc}`auto_validation/index` and the current status of every case is on the
+{doc}`validation` page.
 
 The deck distinguishes released **v0.4.0 capabilities** from **future work —
 not implemented**. PRC/dPRC and fold/Hopf two-parameter continuation are
 included in the v0.4.0 capability surface. LPC/PD/NS detection is explicitly
-marked experimental while the strict `MC-LC-002` comparison remains failing.
+marked experimental in that release, while the strict `MC-LC-002` comparison
+was failing; it passes since the Floquet fixes after v0.4.0.
 
 [**Download the slides (PDF)**](_static/jaxcont_technical_presentation.pdf)
 

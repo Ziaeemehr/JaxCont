@@ -20,10 +20,13 @@ The core module contains the fundamental continuation algorithms:
   JIT-compiled, ``vmap``-safe pseudo-arclength continuation; passes fold
   points
 
-Both engines are whole-loop ``lax.while_loop`` implementations over
-fixed-size buffers, dispatched from the public API via the
-``jc.Natural()`` / ``jc.PseudoArclength()`` algorithm dataclasses in
-``api.py``.
+Both engines run over fixed-size buffers and are dispatched from the public
+API via the ``jc.Natural()`` / ``jc.PseudoArclength()`` algorithm
+dataclasses in ``api.py``. ``ContinuationPar(loop="while")`` (the default)
+selects the ``lax.while_loop`` engines above; ``loop="scan"`` selects
+``pseudo_arclength_lax_scan`` / ``natural_lax_scan``, masked ``lax.scan``
+loops with static iteration and attempt bounds that support reverse-mode
+differentiation.
 
 Problems Module
 ^^^^^^^^^^^^^^^
@@ -36,12 +39,15 @@ Defines different types of continuation problems:
 Bifurcations Module
 ^^^^^^^^^^^^^^^^^^^
 
-Handles bifurcation detection and analysis:
+Handles bifurcation detection and analysis (``bifurcations/events.py``,
+``bifurcations/codim2_events.py``):
 
-- ``BifurcationDetector``: Main detection engine
-- ``FoldBifurcation``: Fold/saddle-node bifurcations
-- ``HopfBifurcation``: Hopf bifurcations  
-- ``PeriodDoublingBifurcation``: Period-doubling bifurcations
+- ``Fold``, ``Hopf`` and ``BP``: equilibrium events
+- ``PeriodDoubling`` and ``NeimarkSacker``: periodic-orbit events (Floquet
+  multipliers on tracked modes)
+- ``BogdanovTakens``, ``ZeroHopf``, ``DoubleHopf``, ``Cusp`` and
+  ``GeneralizedHopf``: codimension-two events on fold and Hopf curves
+- ``Event``: the protocol all of them implement (see below)
 
 Design Principles
 -----------------
@@ -63,9 +69,11 @@ fully JIT-compiled whole-loop function in ``core/scan_continuation.py``, in
 the style of ``pseudo_arclength_scan``/``natural_scan``:
 
 1. Write a new ``*_scan()`` function in ``core/scan_continuation.py``. It
-   should take a pure ``f(u, p) -> residual``, the starting/target
-   parameters, step-size bounds, tolerance, and static ``max_steps``, and run
-   a single ``lax.while_loop`` over fixed-size output buffers, returning a
+   should take ``f(u, p, args) -> residual``, the static ``step_update``
+   (or ``None``), the starting/target parameters, the dynamic ``args``,
+   step-size bounds, tolerance and static ``max_steps`` (and, for the
+   ``loop="scan"`` variant, the static attempt bound ``max_attempts``), and
+   run over fixed-size output buffers, returning a
    :class:`~jaxcont.core.scan_continuation.ScanResult`. Follow the existing
    split of a predictor/corrector helper (see ``_newton_correct`` /
    ``_natural_correct``) plus an adaptive step-size helper (``_adapt_ds``)
@@ -79,11 +87,22 @@ the style of ``pseudo_arclength_scan``/``natural_scan``:
 Adding a Bifurcation Type
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1. Create a new class in ``bifurcations/``
-2. Implement ``test_function()`` and ``detect()`` methods
-3. Add to ``BifurcationDetector``
-4. Write tests
-5. Document the mathematics
+An event is any object implementing the ``Event`` protocol in
+``bifurcations/events.py``; nothing is registered centrally, users pass it in
+``continuation(..., events=[...])``.
+
+1. Create a frozen dataclass with a ``kind`` string.
+2. Implement detection with one of two hooks: ``test_function(point)``, a
+   scalar whose sign change between consecutive points opens a bracket (as
+   ``Fold`` and ``Cusp`` do), or ``scan(points)``, which returns the brackets
+   with a mode identity (as the spectral events do, on tracked modes). For
+   traced runs (``jit``/``vmap``), also implement ``scan_arrays(data, args)``
+   returning fixed-shape candidates.
+3. Implement ``refine(left, right, index, rhs, *, tolerance,
+   max_iterations)``, returning a validated ``EventHit``, or a hit with
+   ``status="failed"`` and a ``reason`` when the bracket is not a real event.
+4. Write tests, including a rejected (non-event) bracket.
+5. Document the mathematics.
 
 Code Organization
 -----------------
@@ -108,9 +127,11 @@ Test individual components:
 
 .. code-block:: python
 
-   def test_equilibrium_correction():
-       import jaxcont as jc
+   import jax.numpy as jnp
+   import jaxcont as jc
 
+
+   def test_equilibrium_correction():
        prob = jc.bif_problem(lambda u, p, args: u**2 - p,
                              u0=jnp.array([1.0]), p0=4.0)
        result = jc.continuation(prob, jc.Natural(), p_span=(4.0, 5.0))
@@ -123,18 +144,24 @@ Test complete workflows:
 
 .. code-block:: python
 
-   def test_pitchfork_continuation():
-       import jaxcont as jc
+   def cubic_rhs(u, p, args):
+       return jnp.array([p + u[0] - u[0] ** 3 / 3])
 
-       prob = jc.bif_problem(pitchfork_rhs, u0=u0, p0=p0)
+
+   def test_cubic_folds():
+       prob = jc.bif_problem(cubic_rhs, u0=jnp.array([-2.1038034027355366]), p0=-1.0)
        result = jc.continuation(
-           prob, jc.PseudoArclength(), p_span=(-1, 2),
-           settings=jc.ContinuationPar(),
-           events=[jc.Fold(), jc.Hopf()],
+           prob, jc.PseudoArclength(), p_span=(-1.0, 1.0),
+           settings=jc.ContinuationPar(ds=0.01, max_steps=600),
+           events=[jc.Fold()],
        )
-       solution = result._solution
-       assert solution.n_points > 10
-       assert any(b['type'] == 'fold' for b in solution.bifurcations)
+       assert result.status == "reached_end"
+       folds = sorted(float(e.p) for e in result.events if e.kind == "fold")
+       assert jnp.allclose(jnp.array(folds), jnp.array([-2 / 3, 2 / 3]), atol=1e-6)
+
+
+   test_equilibrium_correction()
+   test_cubic_folds()
 
 Performance Optimization
 ------------------------
@@ -149,8 +176,10 @@ JAX's JIT compilation can significantly speed up computations:
    from jax import jit
 
    @jit
-   def compute_residual(u, param):
-       return rhs(u, param)
+   def compute_residual(u, p):
+       return cubic_rhs(u, p, None)
+
+   compute_residual(jnp.array([1.0]), 0.5)
 
 However, be careful with:
 
@@ -183,6 +212,8 @@ Common Issues
 **Tracer Errors**
 
 If you see "Abstract tracer value encountered", you're mixing JAX arrays with Python control flow:
+
+.. illustrative
 
 .. code-block:: python
 
@@ -224,12 +255,16 @@ Build docs locally:
 Release Process
 ---------------
 
-1. Update version in ``pyproject.toml``
-2. Update ``CHANGELOG.md``
-3. Run full test suite
-4. Build and test package
-5. Tag release in git
-6. Push to PyPI
+The full procedure is in ``docs/RELEASING.md``. In short:
+
+1. Update the version in ``src/jaxcont/_version.py``, ``CITATION.cff`` and
+   ``CHANGELOG.md``.
+2. Run the test suite (float64; JaxCont is float64 only) and build the docs.
+3. Run the **Publish distribution** workflow (``.github/workflows/publish.yml``),
+   first for TestPyPI, then for PyPI. It builds the sdist and wheel, installs
+   the built wheel in a clean job and runs the default test suite against it
+   in both precisions before anything is uploaded.
+4. Tag the published commit (``vX.Y.Z``) and create the GitHub release.
 
 Continuous Integration
 ----------------------

@@ -71,7 +71,7 @@ The fixed-shape scan result can be transformed directly. Here each value of
    print(branches.states.shape)  # (256, 121, 1)
 
 ``n_valid`` records how many slots are valid for each fixed-size result. See
-:doc:`auto_examples/example_06_vmap_sweep` for timing and plotting.
+:doc:`auto_tutorials/plot_07_vmap_sweep` for batching and plotting.
 
 Differentiate a fold location
 -----------------------------
@@ -96,36 +96,40 @@ differentiation, so its output supports reverse-mode AD:
    print(fold_p(theta))             # 0.25
    print(jax.grad(fold_p)(theta))   # 0.5
 
-Use ``jax.jacfwd`` for sensitivities through the whole-loop scan itself;
-reverse-mode differentiation through JAX's dynamic ``lax.while_loop`` is not
-supported. :doc:`auto_examples/example_07_differentiable` demonstrates both
-paths and a gradient-based inverse-design loop.
+Forward mode (``jax.jacfwd``, ``jax.jvp``) works through a whole
+continuation with either loop option. Reverse mode (``jax.grad``) needs
+``ContinuationPar(loop="scan")``, a bounded ``lax.scan``; through the default
+``loop="while"`` it raises ``ValueError``. See :doc:`migration` and
+:doc:`transformations`. :doc:`auto_tutorials/plot_08_differentiable`
+differentiates an isolated fold solve (``jc.fold_parameter``); the
+reverse-mode example through a whole continuation is in :doc:`migration`.
 
 Precision
 ---------
 
-For analysis work, enable 64-bit arithmetic before importing anything else
-from JAX or ``jaxcont``:
+JaxCont computes in ``float64`` only; every comparison with MatCont and
+BifurcationKit is float64, and float32 roundoff is too coarse for its
+periodic-orbit, Floquet and codimension-two results. ``import jaxcont``
+therefore turns on JAX's 64-bit mode if it is off and warns once
+(``jaxcont.PrecisionWarning``) that it did. The setting is global: it also
+makes the rest of your JAX code default to 64-bit. To avoid the warning,
+enable it yourself before importing anything else from JAX:
 
 .. code-block:: python
 
    import jax
    jax.config.update("jax_enable_x64", True)
 
-Single precision (``float32``, the JAX default) is faster and uses less
-memory, but its roundoff limits how tightly Newton's method can converge,
-so residuals stall around ``1e-6`` and bifurcation points are located less
-accurately. JaxCont never changes this setting itself; the choice is yours.
-
-Tolerances follow the dtype automatically. ``ContinuationPar.newton_tol``
-and the ``tol`` arguments of the solvers default to ``None``, which means
-``1e-9`` for ``float64`` and ``1e-5`` for ``float32``. Pass a number to
-override it.
+To keep JAX's float32 default instead, set ``JAXCONT_NO_AUTO_X64=1``; JaxCont
+entry points then raise ``RuntimeError`` rather than compute in float32.
+Floating inputs created as float32 are converted to float64 at the entry
+points. ``ContinuationPar.newton_tol`` and the solvers' ``tol`` default to
+``None``, which means ``1e-9``; pass a number to override it.
 
 Next steps
 ----------
 
-Browse the generated :doc:`auto_examples/index` and :doc:`api/index`.
+Browse the generated :doc:`auto_tutorials/index` and :doc:`api/index`.
 
 Explicit curve layouts
 ----------------------
@@ -165,7 +169,39 @@ Slice a batched result pytree before refining outside the trace::
 Use the corresponding unbatched problem and the same solver bundle as detection.
 Refinement applies the problem's ``step_update`` at each bracket's left point,
 then validates locality and deduplicates adjacent roots. Candidates alone do
-not certify a bifurcation. Bothside continuation remains eager only.
+not certify a bifurcation.
+
+Both directions from one seed
+-----------------------------
+
+``ContinuationPar(bothside=True)`` continues from ``problem.p0`` toward both
+ends of ``p_span`` in one call: one leg toward each bound, each with its own
+``max_steps`` / ``max_attempts`` budget. The legs are stitched into one branch
+(backward leg reversed, the shared seed once, then the forward leg), and
+events are detected once on that assembled branch, so an event at the seed is
+reported once. A leg whose bound equals ``p0`` is skipped; a zero-length
+``p_span`` raises ``ValueError``. ``result.status`` reports the first leg that
+did not reach its end. ``bothside`` is eager only: under ``jax.jit`` or
+``jax.vmap`` it raises ``NotImplementedError``; run one direction per traced
+call instead.
+
+.. code-block:: python
+
+   import jax.numpy as jnp
+   import jaxcont as jc
+
+
+   def rotation(u, p, args):
+       x, y = u
+       return jnp.array([p * x - y, x + p * y])
+
+
+   both = jc.continuation(
+       jc.bif_problem(rotation, u0=jnp.zeros(2), p0=0.0), p_span=(-0.5, 0.5),
+       settings=jc.ContinuationPar(bothside=True, ds=0.02, max_steps=40),
+       events=[jc.Hopf()],
+   )
+   assert len(both.events) == 1
 
 Detection masks and assignment permutations have stopped gradients; derivatives
 at a crossing or spectral degeneracy are not promised. Smooth branch outputs

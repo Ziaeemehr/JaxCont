@@ -1,0 +1,326 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JaxCont reference bundle v2 metadata",
+  "type": "object",
+  "required": [
+    "canonical_id",
+    "command",
+    "conversion_chain",
+    "driver_hash",
+    "equation_hash",
+    "generated_utc",
+    "generator_revision",
+    "lock_hash",
+    "mesh",
+    "output_hashes",
+    "package_versions",
+    "parameter_order",
+    "platform",
+    "precision",
+    "resolved_controls",
+    "review_date",
+    "reviewed",
+    "reviewer",
+    "runtime_version",
+    "scaling",
+    "schema_version",
+    "seeds",
+    "solver_strategies",
+    "tool"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "tool": {
+      "enum": [
+        "matcont",
+        "bifurcationkit",
+        "jaxcont"
+      ]
+    },
+    "canonical_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "output_hashes": {
+      "type": "object",
+      "required": [
+        "branch.csv",
+        "events.csv",
+        "spectra.csv"
+      ],
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      }
+    },
+    "reviewed": {
+      "type": "boolean"
+    },
+    "runtime_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "precision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generator_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "review_date": {
+      "type": "string",
+      "minLength": 1
+    },
+    "equation_hash": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "driver_hash": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "lock_hash": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "package_versions": {
+      "oneOf": [
+        {
+          "type": "object",
+          "minProperties": 1
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "scaling": {
+      "oneOf": [
+        {
+          "type": "object",
+          "minProperties": 1
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "seeds": {
+      "oneOf": [
+        {
+          "type": "object",
+          "minProperties": 1
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "mesh": {
+      "oneOf": [
+        {
+          "type": "object",
+          "minProperties": 1
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "resolved_controls": {
+      "oneOf": [
+        {
+          "type": "object",
+          "minProperties": 1
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "solver_strategies": {
+      "oneOf": [
+        {
+          "type": "object",
+          "minProperties": 1
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "platform": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "os",
+            "cpu",
+            "blas"
+          ]
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "parameter_order": {
+      "oneOf": [
+        {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "command": {
+      "oneOf": [
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "generated_utc": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "date-time"
+        },
+        {
+          "const": "unknown"
+        }
+      ]
+    },
+    "conversion_chain": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "source_hashes",
+          "output_hashes",
+          "source_schema",
+          "target_schema",
+          "canonical_id"
+        ]
+      }
+    }
+  },
+  "description": "Metadata contract. load_bundle additionally verifies output bytes, CSV columns, identities and linkages. Unknown historical provenance requires a conversion chain; it never grants review.",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "conversion_chain": {
+            "maxItems": 0
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "equation_hash": {
+            "not": {
+              "const": "unknown"
+            }
+          },
+          "driver_hash": {
+            "not": {
+              "const": "unknown"
+            }
+          },
+          "package_versions": {
+            "not": {
+              "const": "unknown"
+            }
+          },
+          "platform": {
+            "not": {
+              "const": "unknown"
+            }
+          },
+          "scaling": {
+            "not": {
+              "const": "unknown"
+            }
+          },
+          "seeds": {
+            "not": {
+              "const": "unknown"
+            }
+          },
+          "mesh": {
+            "not": {
+              "const": "unknown"
+            }
+          },
+          "resolved_controls": {
+            "not": {
+              "const": "unknown"
+            }
+          },
+          "solver_strategies": {
+            "not": {
+              "const": "unknown"
+            }
+          },
+          "parameter_order": {
+            "not": {
+              "const": "unknown"
+            }
+          },
+          "command": {
+            "not": {
+              "const": "unknown"
+            }
+          },
+          "generated_utc": {
+            "not": {
+              "const": "unknown"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

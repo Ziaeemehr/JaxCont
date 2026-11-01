@@ -114,3 +114,16 @@ docs/_templates/
 # task-observer skill's log -- written into the repo root by the skill
 # itself instead of its own workspace folder; not project content.
 skill-observations/
+
+docs/source/auto_tutorials/
+docs/source/auto_validation/
+
+# Writable overlay for the pinned Julia environment
+.julia-depot/
+
+# Raw benchmark records (only reviewed records are committed)
+benchmarks/results/raw/
+
+# Local agent tooling
+.omc/
+.clinerules

@@ -1,0 +1,19 @@
+{
+  "source_hashes": {
+    "MC-EQ-001_metadata.json": "sha256:c02cef92049f6c208247accb66c067190bfb43a052d66211fadff1eb937018d0",
+    "MC-EQ-001_multipliers.csv": "sha256:dce70687b2ef1e493a800dd078da98a084f2768492d818bcf48192577b979f21",
+    "MC-EQ-001_branch.csv": "sha256:6fd76db570bbdbdfdc18b15f1c51bfa06c0ad023e312441ba7dc74dac8d593f1",
+    "invocation.json": "sha256:bc863400f1f3927b7989ae2a3e1f552d4b28fbcd28b7905b718d8ff0cedffca3",
+    "run_cubic_fold.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "run_cubic_fold.stdout.log": "sha256:77a86c80e296b4758d8a4f3a258478967c0fa00afde003853415119b26d0c00b",
+    "MC-EQ-001_events.csv": "sha256:8630a0b7f66268ad3112e73ce23deb784e2a03fb3384465284c942ce51280b74"
+  },
+  "output_hashes": {
+    "spectra.csv": "sha256:dd762229ca7ae592acf0a6bd0e0d24a65e04974c9abd2449ba1cdbae1f63e00d",
+    "events.csv": "sha256:d2e8903d2cd83865c68d93af5fcc4d8354d8d83c4427c87b8dbc03418a2ccfba",
+    "branch.csv": "sha256:5f24587e4de7c092622f0c8384c50991ed06cc3e9d70754317abb04514469ff5"
+  },
+  "source_schema": 1,
+  "target_schema": 2,
+  "canonical_id": "cubic.eq-fold"
+}

@@ -1,0 +1,119 @@
+{
+  "runtime_version": "24.1.0.2537033 (R2024a)",
+  "package_versions": {
+    "MatCont": "7.6"
+  },
+  "precision": "float64",
+  "parameter_order": [
+    "alpha",
+    "beta"
+  ],
+  "scaling": {
+    "time": "original",
+    "metric": "MatCont Euclidean collocation coordinates"
+  },
+  "seeds": {
+    "hopf_alpha": 1.0000000068123096,
+    "state": [
+      0,
+      0,
+      0
+    ],
+    "beta": 1
+  },
+  "mesh": {
+    "ntst": 20,
+    "ncol": 4,
+    "doubled_ntst": 40
+  },
+  "resolved_controls": {
+    "InitStepsize": 0.01,
+    "MinStepsize": 1e-05,
+    "MaxStepsize": 0.02,
+    "MaxCorrIters": 25,
+    "MaxNewtonIters": [],
+    "MaxTestIters": [],
+    "MoorePenrose": [],
+    "SymDerivative": [],
+    "SymDerivativeP": [],
+    "Increment": [],
+    "FunTolerance": 1e-09,
+    "VarTolerance": 1e-09,
+    "TestTolerance": 1e-07,
+    "Singularities": 1,
+    "MaxNumPoints": 500,
+    "Backward": [],
+    "CheckClosed": [],
+    "TestFunctions": [],
+    "WorkSpace": [],
+    "Locators": [],
+    "Adapt": 0,
+    "IgnoreSingularity": [],
+    "ActiveParams": [],
+    "Multipliers": 1,
+    "Eigenvalues": [],
+    "Userfunctions": [],
+    "UserfunctionsInfo": [],
+    "PRC": [],
+    "dPRC": [],
+    "Input": [],
+    "ActiveUParams": [],
+    "ActiveSParams": [],
+    "ActiveSParam": [],
+    "TSearchOrder": []
+  },
+  "solver_strategies": {
+    "method": "MatCont pseudo-arclength",
+    "event_selection": "type and computed window"
+  },
+  "comparable": false,
+  "noncomparability_reasons": [
+    "MatCont collocation coordinate norm differs from JaxCont quadrature layout"
+  ],
+  "period_ratio": 2,
+  "pd_alpha": 0.630302005376679,
+  "doubled_pd_alpha": 0.5796298405166362,
+  "hopf_alpha": 1.0000000068123096,
+  "hopf_period": 6.283185317880335,
+  "platform": {
+    "os": "Linux 6.17.0-1033-oem",
+    "cpu": "GLNXA64",
+    "blas": "Intel(R) oneAPI Math Kernel Library Version 2023.2-Product Build 20230613 for Intel(R) 64 architecture applications (CNR branch AVX512_E1)",
+    "source": "MATLAB native runtime"
+  },
+  "command": [
+    "/home/ziaee/programms/Matlab/R2024a/bin/matlab",
+    "-batch",
+    "addpath('/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/matcont','/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/matcont/capability_gaps'); run_adaptx_pd('/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/staging/matcont/adaptx.cycle-pd-switch')"
+  ],
+  "source_hashes": {
+    "lorenz84_seed.m": "sha256:9ad4913b5af4335dfeee5d7dba7e2792754de68e8ed0e36d5aaeff27063d55fa",
+    "lorenz84_native.m": "sha256:27b5abc4fb7eae300594d6c5226d721a7bf870922962c831990c9cb1594e764a",
+    "export_cycle_run.m": "sha256:aece2644948cb26934d4195a9be98f55585878fd8704f762696aaa5b91708900",
+    "periodic.json": "sha256:8b5912313fddceacd04f7d990968c8a959d6ca8d9c1aceec9330a09ebfc9809f"
+  },
+  "schema_version": 2,
+  "canonical_id": "adaptx.cycle-pd-switch",
+  "tool": "matcont",
+  "equation_hash": "sha256:99b6752df15d5b35f60b7c9dedb82e65129060bab622317a00bd8e80f3749a4a",
+  "driver_hash": "sha256:92a702ca8a389138e525b49d75b170683bed12bccd75922cf2b02e36907fed65",
+  "lock_hash": "unknown",
+  "generated_utc": "2026-10-29T23:02:50.104060+00:00",
+  "generator_revision": "5c92ca020b4ca47700a698399740bb6649dbc88f",
+  "output_hashes": {
+    "branch.csv": "sha256:2511545437fb9fa28bc970ae82e85334bf008f3303c8fd461160db67d018b12e",
+    "events.csv": "sha256:43158d0db1ec11628c1bcd0c60d9bca095f53ea7400e4766a604b9a47533ee64",
+    "spectra.csv": "sha256:40ba59dda791a23f6937e23dc623a771a380cca3e6101d26240f3cd90fd237bf",
+    "orbits.csv": "sha256:b2a3e96274ae7150013ce25c64f05c3142549e364afa02c5adff6f039873fda4",
+    "adaptx-doubled_multipliers.csv": "sha256:ded6ed2e3e47dfc2eca66f1a52b3fc1acd1d7dd19c63ab41f94c56418d973716",
+    "adaptx-doubled_branch.csv": "sha256:c7c6fb780b1c44f3b6793f56f745c51b88b229a4379185842d31fee627395fc6",
+    "adaptx-doubled_events.csv": "sha256:c3d91a2598a4f9f31bd77b580de7ba8ef5a493e88ba7c57c36fddbd7229436c0",
+    "adaptx-base_events.csv": "sha256:d884676e0ba407288e557d59c62e57467d3bf84490458044ceed77daaa7ab067",
+    "adaptx-base_branch.csv": "sha256:ac75aa7c03df58e553d2be220bf288bd8445c4c13ed9421276f64b9ce84154d1",
+    "adaptx-base_multipliers.csv": "sha256:a3afd80144ce39f5d396f59e204f15c59b511576dc5b82791e8ee7f3a26c77f7"
+  },
+  "reviewed": true,
+  "reviewer": "Claude (review delegated by owner, 2026-10-30)",
+  "review_date": "2026-10-30",
+  "conversion_chain": []
+}

@@ -1,0 +1,1264 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "old_path": "examples/BifurcationKit/01_pitchfork.jl",
+      "new_paths": [
+        "examples/validation/regenerate/bifurcationkit/cubic_fold.jl"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "bifurcationkit.cubic_fold"
+      ]
+    },
+    {
+      "old_path": "examples/BifurcationKit/02_lorenz84.jl",
+      "new_paths": [
+        "examples/validation/regenerate/bifurcationkit/lorenz84_equilibria.jl"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "bifurcationkit.lorenz84_equilibria"
+      ]
+    },
+    {
+      "old_path": "examples/BifurcationKit/03_neural_mass.jl",
+      "new_paths": [
+        "examples/validation/regenerate/bifurcationkit/neural_mass.jl"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "bifurcationkit.neural_mass"
+      ]
+    },
+    {
+      "old_path": "examples/BifurcationKit/04_hopf_normal_form.jl",
+      "new_paths": [
+        "examples/validation/regenerate/bifurcationkit/hopf_normal_form.jl"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "bifurcationkit.hopf_normal_form"
+      ]
+    },
+    {
+      "old_path": "examples/BifurcationKit/05_codim2.jl",
+      "new_paths": [
+        "examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "bifurcationkit.lorenz84_codim2"
+      ]
+    },
+    {
+      "old_path": "examples/GALLERY_HEADER.rst",
+      "new_paths": [
+        "examples/tutorials/GALLERY_HEADER.rst",
+        "examples/validation/gallery/GALLERY_HEADER.rst"
+      ],
+      "verdict": "rewrite",
+      "coverage_ids": [
+        "gallery"
+      ],
+      "rationale": "Separate lessons from comparison evidence."
+    },
+    {
+      "old_path": "examples/MatCont/GALLERY_HEADER.txt",
+      "new_paths": [],
+      "verdict": "drop",
+      "coverage_ids": [
+        "gallery"
+      ],
+      "rationale": "Validation helpers are not a gallery root."
+    },
+    {
+      "old_path": "examples/MatCont/README.md",
+      "new_paths": [
+        "examples/validation/README.md"
+      ],
+      "verdict": "rewrite",
+      "coverage_ids": [
+        "validation"
+      ],
+      "rationale": "Replace stale capability claims with the current registry and offline usage."
+    },
+    {
+      "old_path": "examples/MatCont/__init__.py",
+      "new_paths": [
+        "examples/validation/__init__.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/artifacts.py",
+      "new_paths": [
+        "examples/validation/artifacts.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/cases.json",
+      "new_paths": [
+        "examples/validation/cases/cases.json"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/compare.py",
+      "new_paths": [
+        "examples/validation/compare.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/generated/.gitignore",
+      "new_paths": [
+        "examples/validation/generated/.gitignore"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/export_cycle_run.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/export_cycle_run.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.export_cycle_run"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/export_equilibrium_run.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/export_equilibrium_run.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.export_equilibrium_run"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/export_prc_run.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/export_prc_run.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.export_prc_run"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/run_adaptive_control.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/run_adaptive_control.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_adaptive_control"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/run_cubic_fold.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/run_cubic_fold.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_cubic_fold"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/run_prc_dprc.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/run_prc_dprc.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_prc_dprc"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/run_radial_cycle.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/run_radial_cycle.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_radial_cycle"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/run_supported.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/run_supported.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_supported"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/run_torbpc_cycle.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/run_torbpc_cycle.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_torbpc_cycle"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/run_vanderpol_hopf.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/run_vanderpol_hopf.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_vanderpol_hopf"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/setup_matcont.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/setup_matcont.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.setup_matcont"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/systems/adaptive_control.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/systems/adaptive_control.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.adaptive_control"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/systems/cubic_fold.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/systems/cubic_fold.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.cubic_fold"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/systems/radial_cycle_system.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/systems/radial_cycle_system.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.radial_cycle_system"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/systems/vanderpol_hopf.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/systems/vanderpol_hopf.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.vanderpol_hopf"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/unsupported/run_bratu_branch_switching.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/capability_gaps/run_bratu_branch_switching.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_bratu_branch_switching"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/unsupported/run_connecting_orbits.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/capability_gaps/run_connecting_orbits.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_connecting_orbits"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/unsupported/run_general_bvp_continuation.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/templates/run_general_bvp_continuation.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_general_bvp_continuation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/unsupported/run_heteroclinic_continuation.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/templates/run_heteroclinic_continuation.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_heteroclinic_continuation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/unsupported/run_two_parameter_fold_curve.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/run_two_parameter_fold_curve.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_two_parameter_fold_curve"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/unsupported/run_two_parameter_hopf_curve.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/run_two_parameter_hopf_curve.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_two_parameter_hopf_curve"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/unsupported/run_two_parameter_lpc_curve.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/capability_gaps/run_two_parameter_lpc_curve.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_two_parameter_lpc_curve"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/unsupported/run_two_parameter_ns_curve.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/capability_gaps/run_two_parameter_ns_curve.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_two_parameter_ns_curve"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/matlab/unsupported/run_two_parameter_pd_curve.m",
+      "new_paths": [
+        "examples/validation/regenerate/matcont/capability_gaps/run_two_parameter_pd_curve.m"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "matcont.run_two_parameter_pd_curve"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/python_cases/__init__.py",
+      "new_paths": [
+        "examples/validation/cases/python_cases/__init__.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/python_cases/codim2.py",
+      "new_paths": [
+        "examples/validation/cases/python_cases/codim2.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/python_cases/codim2_curves.py",
+      "new_paths": [
+        "examples/validation/cases/python_cases/codim2_curves.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/python_cases/equilibrium.py",
+      "new_paths": [
+        "examples/validation/cases/python_cases/equilibrium.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/python_cases/pd_switch.py",
+      "new_paths": [
+        "examples/validation/cases/python_cases/pd_switch.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/python_cases/periodic.py",
+      "new_paths": [
+        "examples/validation/cases/python_cases/periodic.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/python_cases/prc.py",
+      "new_paths": [
+        "examples/validation/cases/python_cases/prc.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/python_cases/transforms.py",
+      "new_paths": [
+        "examples/validation/cases/python_cases/transforms.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-EQ-001_branch.csv",
+      "new_paths": [
+        "examples/validation/reference/cubic/matcont/MC-EQ-001/MC-EQ-001_branch.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-EQ-001"
+      ],
+      "old_sha256": "13c738a51c7451846711b321a10ff0ade816497b06f9dd23adbac0aaa3f0d3b3",
+      "new_sha256": "13c738a51c7451846711b321a10ff0ade816497b06f9dd23adbac0aaa3f0d3b3"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-EQ-001_events.csv",
+      "new_paths": [
+        "examples/validation/reference/cubic/matcont/MC-EQ-001/MC-EQ-001_events.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-EQ-001"
+      ],
+      "old_sha256": "b680a1f47753dfc04b6a2b8baef728bf8e7f986f54d9e00ec78bd0b29cebd385",
+      "new_sha256": "b680a1f47753dfc04b6a2b8baef728bf8e7f986f54d9e00ec78bd0b29cebd385"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-EQ-001_metadata.json",
+      "new_paths": [
+        "examples/validation/reference/cubic/matcont/MC-EQ-001/MC-EQ-001_metadata.json"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-EQ-001"
+      ],
+      "old_sha256": "44325b892b3dde40e454ef804e06a41706141d5f7737f62475c4649299463920",
+      "new_sha256": "44325b892b3dde40e454ef804e06a41706141d5f7737f62475c4649299463920"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-EQ-001_multipliers.csv",
+      "new_paths": [
+        "examples/validation/reference/cubic/matcont/MC-EQ-001/MC-EQ-001_multipliers.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-EQ-001"
+      ],
+      "old_sha256": "f236a806b19323a25849f23b9d681e39f6cf1615d003128490bd6c1ee2f73221",
+      "new_sha256": "f236a806b19323a25849f23b9d681e39f6cf1615d003128490bd6c1ee2f73221"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-EQ-002_branch.csv",
+      "new_paths": [
+        "examples/validation/reference/vanderpol/matcont/MC-EQ-002/MC-EQ-002_branch.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-EQ-002"
+      ],
+      "old_sha256": "6610e6fb08a105cd7f11005b8b35683b2a4a1dfdd5472306cd93bd1752720ed4",
+      "new_sha256": "6610e6fb08a105cd7f11005b8b35683b2a4a1dfdd5472306cd93bd1752720ed4"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-EQ-002_events.csv",
+      "new_paths": [
+        "examples/validation/reference/vanderpol/matcont/MC-EQ-002/MC-EQ-002_events.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-EQ-002"
+      ],
+      "old_sha256": "573d3b78981818c12508a0fceb87f382a2e8c4311c6ffd4b5ac1443d3b725aae",
+      "new_sha256": "573d3b78981818c12508a0fceb87f382a2e8c4311c6ffd4b5ac1443d3b725aae"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-EQ-002_metadata.json",
+      "new_paths": [
+        "examples/validation/reference/vanderpol/matcont/MC-EQ-002/MC-EQ-002_metadata.json"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-EQ-002"
+      ],
+      "old_sha256": "d16407b877a7a86782b33de9229b5dac6f68d7e38fbde7f725b26e1f86e3428e",
+      "new_sha256": "d16407b877a7a86782b33de9229b5dac6f68d7e38fbde7f725b26e1f86e3428e"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-EQ-002_multipliers.csv",
+      "new_paths": [
+        "examples/validation/reference/vanderpol/matcont/MC-EQ-002/MC-EQ-002_multipliers.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-EQ-002"
+      ],
+      "old_sha256": "1fe152760e241020e0f2feabf4f230d1f12c4694060d82b0fa5ffcc9f5f9e945",
+      "new_sha256": "1fe152760e241020e0f2feabf4f230d1f12c4694060d82b0fa5ffcc9f5f9e945"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-EQ-003_branch.csv",
+      "new_paths": [
+        "examples/validation/reference/adaptx/matcont/MC-EQ-003/MC-EQ-003_branch.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-EQ-003"
+      ],
+      "old_sha256": "556ea2cc7fa9729b9bec9d72c5ccc5a76fefd8244771e10a7129712ba9d19faf",
+      "new_sha256": "556ea2cc7fa9729b9bec9d72c5ccc5a76fefd8244771e10a7129712ba9d19faf"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-EQ-003_events.csv",
+      "new_paths": [
+        "examples/validation/reference/adaptx/matcont/MC-EQ-003/MC-EQ-003_events.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-EQ-003"
+      ],
+      "old_sha256": "24ab11cbbf655888617a81c52d2a08aed00c11fd36c52fefaf8227d63cf4e1ae",
+      "new_sha256": "24ab11cbbf655888617a81c52d2a08aed00c11fd36c52fefaf8227d63cf4e1ae"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-EQ-003_metadata.json",
+      "new_paths": [
+        "examples/validation/reference/adaptx/matcont/MC-EQ-003/MC-EQ-003_metadata.json"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-EQ-003"
+      ],
+      "old_sha256": "9dcb3133eea17b8fda22fd163d85ddad9d60530578e163394a94590ac4c517d1",
+      "new_sha256": "9dcb3133eea17b8fda22fd163d85ddad9d60530578e163394a94590ac4c517d1"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-EQ-003_multipliers.csv",
+      "new_paths": [
+        "examples/validation/reference/adaptx/matcont/MC-EQ-003/MC-EQ-003_multipliers.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-EQ-003"
+      ],
+      "old_sha256": "ca6c3a9101f681eaa2651ae17a94762485734cae33fc8ba8e5f7bc6ee96ee54c",
+      "new_sha256": "ca6c3a9101f681eaa2651ae17a94762485734cae33fc8ba8e5f7bc6ee96ee54c"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-LC-001_branch.csv",
+      "new_paths": [
+        "examples/validation/reference/radial/matcont/MC-LC-001/MC-LC-001_branch.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-LC-001"
+      ],
+      "old_sha256": "c1374540dc62fe2a15bff80b02c467bc21d8d284970da1c05cf76579be7abf94",
+      "new_sha256": "c1374540dc62fe2a15bff80b02c467bc21d8d284970da1c05cf76579be7abf94"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-LC-001_events.csv",
+      "new_paths": [
+        "examples/validation/reference/radial/matcont/MC-LC-001/MC-LC-001_events.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-LC-001"
+      ],
+      "old_sha256": "a9a3de577ffdcd725d081ac1ddf81f1e3c5c11d062e8cfa54efa788db22a3d6b",
+      "new_sha256": "a9a3de577ffdcd725d081ac1ddf81f1e3c5c11d062e8cfa54efa788db22a3d6b"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-LC-001_metadata.json",
+      "new_paths": [
+        "examples/validation/reference/radial/matcont/MC-LC-001/MC-LC-001_metadata.json"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-LC-001"
+      ],
+      "old_sha256": "46e9ad421eca8015d86b7bf89c43570bf874e94b56825dc8c97bb26cadd6e56d",
+      "new_sha256": "46e9ad421eca8015d86b7bf89c43570bf874e94b56825dc8c97bb26cadd6e56d"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-LC-001_multipliers.csv",
+      "new_paths": [
+        "examples/validation/reference/radial/matcont/MC-LC-001/MC-LC-001_multipliers.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-LC-001"
+      ],
+      "old_sha256": "e402cd0d3f440ef1913ac33ab601c021855ca16eeaf2fc0c6aa8937e19b7dd6b",
+      "new_sha256": "e402cd0d3f440ef1913ac33ab601c021855ca16eeaf2fc0c6aa8937e19b7dd6b"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-LC-002_branch.csv",
+      "new_paths": [
+        "examples/validation/reference/torbpc/matcont/MC-LC-002/MC-LC-002_branch.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-LC-002"
+      ],
+      "old_sha256": "d4acd514a4530846064aa5f5baf4b6ae5cc0fc95cd57648da2ac80887fc8bc43",
+      "new_sha256": "d4acd514a4530846064aa5f5baf4b6ae5cc0fc95cd57648da2ac80887fc8bc43"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-LC-002_events.csv",
+      "new_paths": [
+        "examples/validation/reference/torbpc/matcont/MC-LC-002/MC-LC-002_events.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-LC-002"
+      ],
+      "old_sha256": "595ac619e40977bf277e4b7500967c3cb459ab117bdc72571ac536bc7b555d30",
+      "new_sha256": "595ac619e40977bf277e4b7500967c3cb459ab117bdc72571ac536bc7b555d30"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-LC-002_metadata.json",
+      "new_paths": [
+        "examples/validation/reference/torbpc/matcont/MC-LC-002/MC-LC-002_metadata.json"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-LC-002"
+      ],
+      "old_sha256": "d649d065e06dfe7fd093b06411a34ab0f0cc8c89b9395ffd04db5f68f15c0a6f",
+      "new_sha256": "d649d065e06dfe7fd093b06411a34ab0f0cc8c89b9395ffd04db5f68f15c0a6f"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-LC-002_multipliers.csv",
+      "new_paths": [
+        "examples/validation/reference/torbpc/matcont/MC-LC-002/MC-LC-002_multipliers.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-LC-002"
+      ],
+      "old_sha256": "9cc1e14301bb4dd7a1ece649fc6e247f453a63c7617f882a36ee89c192bd2659",
+      "new_sha256": "9cc1e14301bb4dd7a1ece649fc6e247f453a63c7617f882a36ee89c192bd2659"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-PRC-001_metadata.json",
+      "new_paths": [
+        "examples/validation/reference/adaptx/matcont/MC-PRC-001/MC-PRC-001_metadata.json"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-PRC-001"
+      ],
+      "old_sha256": "17aeaad606865473531e6892c658f7218bc71d75f4076442ea674fdc01f822e5",
+      "new_sha256": "17aeaad606865473531e6892c658f7218bc71d75f4076442ea674fdc01f822e5"
+    },
+    {
+      "old_path": "examples/MatCont/reference/MC-PRC-001_prc.csv",
+      "new_paths": [
+        "examples/validation/reference/adaptx/matcont/MC-PRC-001/MC-PRC-001_prc.csv"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "MC-PRC-001"
+      ],
+      "old_sha256": "8ca758347c7ec398b6d991912336a5bfd6d786ea268ef55c85367599ffa39316",
+      "new_sha256": "8ca758347c7ec398b6d991912336a5bfd6d786ea268ef55c85367599ffa39316"
+    },
+    {
+      "old_path": "examples/MatCont/registry.py",
+      "new_paths": [
+        "examples/validation/registry.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/run_validation.py",
+      "new_paths": [
+        "examples/validation/run_validation.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/validation.py",
+      "new_paths": [
+        "examples/validation/validation.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/MatCont/visualize.py",
+      "new_paths": [
+        "examples/validation/visualize.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "validation"
+      ]
+    },
+    {
+      "old_path": "examples/__init__.py",
+      "new_paths": [
+        "examples/__init__.py"
+      ],
+      "verdict": "rewrite",
+      "coverage_ids": [
+        "examples"
+      ]
+    },
+    {
+      "old_path": "examples/check_installation.py",
+      "new_paths": [
+        "scripts/check_installation.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "check_installation"
+      ]
+    },
+    {
+      "old_path": "examples/demo_jit_speedup.py",
+      "new_paths": [
+        "benchmarks/run_benchmarks.py"
+      ],
+      "verdict": "drop",
+      "coverage_ids": [
+        "benchmarks"
+      ],
+      "rationale": "Replace the toy timing claim with accuracy-qualified workloads."
+    },
+    {
+      "old_path": "examples/example_01_pitchfork.py",
+      "new_paths": [
+        "examples/tutorials/plot_01_cubic_fold.py"
+      ],
+      "verdict": "merge",
+      "coverage_ids": [
+        "cubic.eq-fold"
+      ],
+      "rationale": "Combine the two-fold cubic lesson with natural versus PALC continuation."
+    },
+    {
+      "old_path": "examples/example_02_lorenz.py",
+      "new_paths": [
+        "examples/tutorials/plot_03_lorenz84.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "lorenz84.eq-f"
+      ]
+    },
+    {
+      "old_path": "examples/example_03_van_der_pol.py",
+      "new_paths": [
+        "examples/tutorials/plot_04_vanderpol_equilibrium.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "vanderpol.eq-degenerate-hopf"
+      ]
+    },
+    {
+      "old_path": "examples/example_04_continuation_methods.py",
+      "new_paths": [
+        "examples/tutorials/plot_01_cubic_fold.py"
+      ],
+      "verdict": "merge",
+      "coverage_ids": [
+        "cubic.eq-fold"
+      ],
+      "rationale": "Combine the two-fold cubic lesson with natural versus PALC continuation."
+    },
+    {
+      "old_path": "examples/example_05_neural_mass.py",
+      "new_paths": [
+        "examples/tutorials/plot_05_neural_mass.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "neural-mass.eq"
+      ]
+    },
+    {
+      "old_path": "examples/example_06_vmap_sweep.py",
+      "new_paths": [
+        "examples/tutorials/plot_07_vmap_sweep.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "jax.transforms"
+      ]
+    },
+    {
+      "old_path": "examples/example_07_differentiable.py",
+      "new_paths": [
+        "examples/tutorials/plot_08_differentiable.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "jax.transforms"
+      ]
+    },
+    {
+      "old_path": "examples/example_08_period_doubling.py",
+      "new_paths": [
+        "examples/tutorials/plot_13_period_doubling.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "analytic.pd"
+      ]
+    },
+    {
+      "old_path": "examples/example_09_neimark_sacker.py",
+      "new_paths": [
+        "examples/tutorials/plot_15_neimark_sacker.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "analytic.ns"
+      ]
+    },
+    {
+      "old_path": "examples/example_10_van_der_pol_limit_cycle.py",
+      "new_paths": [
+        "examples/tutorials/plot_09_vanderpol_cycle.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "vanderpol.cycle"
+      ]
+    },
+    {
+      "old_path": "examples/example_11_brusselator_limit_cycle.py",
+      "new_paths": [
+        "examples/tutorials/plot_10_brusselator_cycle.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "brusselator.cycle"
+      ]
+    },
+    {
+      "old_path": "examples/example_12_fitzhugh_nagumo_phase_plane.py",
+      "new_paths": [
+        "examples/tutorials/plot_11_phase_plane.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "phase-plane"
+      ]
+    },
+    {
+      "old_path": "examples/example_13_phase_response_curve.py",
+      "new_paths": [
+        "examples/tutorials/plot_12_prc.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "adaptx.prc"
+      ]
+    },
+    {
+      "old_path": "examples/example_14_prc_shooting_validation.py",
+      "new_paths": [
+        "examples/validation/cases/python_cases/shooting.py",
+        "examples/validation/gallery/plot_prc_shooting.py"
+      ],
+      "verdict": "split",
+      "coverage_ids": [
+        "shooting.prc-check"
+      ],
+      "rationale": "Separate the unchanged shooting checker from its comparison page."
+    },
+    {
+      "old_path": "examples/example_15_two_parameter_diagram.py",
+      "new_paths": [
+        "examples/tutorials/plot_06_two_parameter.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "analytic.codim2"
+      ]
+    },
+    {
+      "old_path": "examples/example_16_matcont_cubic_overlay.py",
+      "new_paths": [
+        "examples/validation/gallery/plot_cubic.py"
+      ],
+      "verdict": "merge",
+      "coverage_ids": [
+        "cubic.eq-fold"
+      ],
+      "rationale": "Consolidate overlays into one comparison page per system, retaining failure diagnostics."
+    },
+    {
+      "old_path": "examples/example_17_matcont_vanderpol_overlay.py",
+      "new_paths": [
+        "examples/validation/gallery/plot_vanderpol.py"
+      ],
+      "verdict": "merge",
+      "coverage_ids": [
+        "vanderpol.eq-degenerate-hopf"
+      ],
+      "rationale": "Consolidate overlays into one comparison page per system, retaining failure diagnostics."
+    },
+    {
+      "old_path": "examples/example_18_matcont_adaptive_control_overlay.py",
+      "new_paths": [
+        "examples/validation/gallery/plot_adaptx.py"
+      ],
+      "verdict": "merge",
+      "coverage_ids": [
+        "adaptx.eq-hopf",
+        "adaptx.cycle-pd-switch",
+        "adaptx.prc"
+      ],
+      "rationale": "Consolidate overlays into one comparison page per system, retaining failure diagnostics."
+    },
+    {
+      "old_path": "examples/example_19_matcont_radial_cycle_overlay.py",
+      "new_paths": [
+        "examples/validation/gallery/plot_radial.py"
+      ],
+      "verdict": "merge",
+      "coverage_ids": [
+        "radial.cycle-floquet"
+      ],
+      "rationale": "Consolidate overlays into one comparison page per system, retaining failure diagnostics."
+    },
+    {
+      "old_path": "examples/example_20_matcont_torbpc_overlay.py",
+      "new_paths": [
+        "examples/validation/gallery/plot_torbpc.py"
+      ],
+      "verdict": "merge",
+      "coverage_ids": [
+        "torbpc.cycle-lpc-pd-ns"
+      ],
+      "rationale": "Consolidate overlays into one comparison page per system, retaining failure diagnostics."
+    },
+    {
+      "old_path": "examples/example_21_pitchfork_branch_switch.py",
+      "new_paths": [
+        "examples/tutorials/plot_02_pitchfork_switch.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "pitchfork.switch"
+      ]
+    },
+    {
+      "old_path": "examples/example_22_period_doubling_switch.py",
+      "new_paths": [
+        "examples/tutorials/plot_14_pd_switch.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "adaptx.cycle-pd-switch"
+      ]
+    },
+    {
+      "old_path": "examples/example_23_periodic_vmap_grad.py",
+      "new_paths": [
+        "examples/tutorials/plot_16_periodic_transforms.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "jax.transforms"
+      ]
+    },
+    {
+      "old_path": "examples/profile_continuation.py",
+      "new_paths": [
+        "scripts/profile_continuation.py"
+      ],
+      "verdict": "move",
+      "coverage_ids": [
+        "profile_continuation"
+      ]
+    },
+    {
+      "old_path": null,
+      "new_paths": [
+        "examples/validation/gallery/plot_lorenz84.py"
+      ],
+      "verdict": "create",
+      "coverage_ids": [
+        "lorenz84.eq-f",
+        "lorenz84.fold-ft",
+        "lorenz84.hopf-ft",
+        "lorenz84.bt-ft"
+      ]
+    },
+    {
+      "old_path": null,
+      "new_paths": [
+        "examples/validation/gallery/plot_hopf_normal_form.py"
+      ],
+      "verdict": "create",
+      "coverage_ids": [
+        "hopf-normal-form.l1"
+      ]
+    },
+    {
+      "old_path": null,
+      "new_paths": [
+        "examples/validation/gallery/plot_catalytic.py"
+      ],
+      "verdict": "create",
+      "coverage_ids": [
+        "catalytic.fold-curve",
+        "catalytic.hopf-curve"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "legacy_id": "MC-EQ-001",
+      "canonical_id": "cubic.eq-fold"
+    },
+    {
+      "legacy_id": "MC-EQ-002",
+      "canonical_id": "vanderpol.eq-degenerate-hopf"
+    },
+    {
+      "legacy_id": "MC-EQ-003",
+      "canonical_id": "adaptx.eq-hopf"
+    },
+    {
+      "legacy_id": "MC-JAX-001",
+      "canonical_id": "jax.transforms"
+    },
+    {
+      "legacy_id": "MC-C2-001",
+      "canonical_id": "analytic.codim2"
+    },
+    {
+      "legacy_id": "MC-LC-001",
+      "canonical_id": "radial.cycle-floquet"
+    },
+    {
+      "legacy_id": "MC-LC-002",
+      "canonical_id": "torbpc.cycle-lpc-pd-ns"
+    },
+    {
+      "legacy_id": "MC-LC-003",
+      "canonical_id": "adaptx.cycle-pd-switch"
+    },
+    {
+      "legacy_id": "US-BP-001",
+      "canonical_id": "US-BP-001"
+    },
+    {
+      "legacy_id": "US-C2-LP-001",
+      "canonical_id": "catalytic.fold-curve"
+    },
+    {
+      "legacy_id": "US-C2-H-001",
+      "canonical_id": "catalytic.hopf-curve"
+    },
+    {
+      "legacy_id": "US-C2-PD-001",
+      "canonical_id": "US-C2-PD-001"
+    },
+    {
+      "legacy_id": "US-C2-LPC-001",
+      "canonical_id": "US-C2-LPC-001"
+    },
+    {
+      "legacy_id": "US-C2-NS-001",
+      "canonical_id": "US-C2-NS-001"
+    },
+    {
+      "legacy_id": "US-BVP-001",
+      "canonical_id": "US-BVP-001"
+    },
+    {
+      "legacy_id": "US-HOM-001",
+      "canonical_id": "US-HOM-001"
+    },
+    {
+      "legacy_id": "US-HET-001",
+      "canonical_id": "US-HET-001"
+    },
+    {
+      "legacy_id": "MC-PRC-001",
+      "canonical_id": "adaptx.prc"
+    }
+  ],
+  "canonical_ids": [
+    "adaptx.cycle-pd-switch",
+    "adaptx.eq-hopf",
+    "adaptx.prc",
+    "analytic.codim2",
+    "catalytic.fold-curve",
+    "catalytic.hopf-curve",
+    "cubic.eq-fold",
+    "hopf-normal-form.l1",
+    "jax.transforms",
+    "lorenz84.bt-ft",
+    "lorenz84.eq-f",
+    "lorenz84.fold-ft",
+    "lorenz84.hopf-ft",
+    "radial.cycle-floquet",
+    "shooting.prc-check",
+    "torbpc.cycle-lpc-pd-ns",
+    "vanderpol.eq-degenerate-hopf"
+  ],
+  "gallery_redirects": [
+    {
+      "old_url": "auto_examples/example_01_pitchfork.html",
+      "new_url": "auto_tutorials/plot_01_cubic_fold.html"
+    },
+    {
+      "old_url": "auto_examples/example_02_lorenz.html",
+      "new_url": "auto_tutorials/plot_03_lorenz84.html"
+    },
+    {
+      "old_url": "auto_examples/example_03_van_der_pol.html",
+      "new_url": "auto_tutorials/plot_04_vanderpol_equilibrium.html"
+    },
+    {
+      "old_url": "auto_examples/example_04_continuation_methods.html",
+      "new_url": "auto_tutorials/plot_01_cubic_fold.html"
+    },
+    {
+      "old_url": "auto_examples/example_05_neural_mass.html",
+      "new_url": "auto_tutorials/plot_05_neural_mass.html"
+    },
+    {
+      "old_url": "auto_examples/example_06_vmap_sweep.html",
+      "new_url": "auto_tutorials/plot_07_vmap_sweep.html"
+    },
+    {
+      "old_url": "auto_examples/example_07_differentiable.html",
+      "new_url": "auto_tutorials/plot_08_differentiable.html"
+    },
+    {
+      "old_url": "auto_examples/example_08_period_doubling.html",
+      "new_url": "auto_tutorials/plot_13_period_doubling.html"
+    },
+    {
+      "old_url": "auto_examples/example_09_neimark_sacker.html",
+      "new_url": "auto_tutorials/plot_15_neimark_sacker.html"
+    },
+    {
+      "old_url": "auto_examples/example_10_van_der_pol_limit_cycle.html",
+      "new_url": "auto_tutorials/plot_09_vanderpol_cycle.html"
+    },
+    {
+      "old_url": "auto_examples/example_11_brusselator_limit_cycle.html",
+      "new_url": "auto_tutorials/plot_10_brusselator_cycle.html"
+    },
+    {
+      "old_url": "auto_examples/example_12_fitzhugh_nagumo_phase_plane.html",
+      "new_url": "auto_tutorials/plot_11_phase_plane.html"
+    },
+    {
+      "old_url": "auto_examples/example_13_phase_response_curve.html",
+      "new_url": "auto_tutorials/plot_12_prc.html"
+    },
+    {
+      "old_url": "auto_examples/example_14_prc_shooting_validation.html",
+      "new_url": "auto_validation/plot_prc_shooting.html"
+    },
+    {
+      "old_url": "auto_examples/example_15_two_parameter_diagram.html",
+      "new_url": "auto_tutorials/plot_06_two_parameter.html"
+    },
+    {
+      "old_url": "auto_examples/example_16_matcont_cubic_overlay.html",
+      "new_url": "auto_validation/plot_cubic.html"
+    },
+    {
+      "old_url": "auto_examples/example_17_matcont_vanderpol_overlay.html",
+      "new_url": "auto_validation/plot_vanderpol.html"
+    },
+    {
+      "old_url": "auto_examples/example_18_matcont_adaptive_control_overlay.html",
+      "new_url": "auto_validation/plot_adaptx.html"
+    },
+    {
+      "old_url": "auto_examples/example_19_matcont_radial_cycle_overlay.html",
+      "new_url": "auto_validation/plot_radial.html"
+    },
+    {
+      "old_url": "auto_examples/example_20_matcont_torbpc_overlay.html",
+      "new_url": "auto_validation/plot_torbpc.html"
+    },
+    {
+      "old_url": "auto_examples/example_21_pitchfork_branch_switch.html",
+      "new_url": "auto_tutorials/plot_02_pitchfork_switch.html"
+    },
+    {
+      "old_url": "auto_examples/example_22_period_doubling_switch.html",
+      "new_url": "auto_tutorials/plot_14_pd_switch.html"
+    },
+    {
+      "old_url": "auto_examples/example_23_periodic_vmap_grad.html",
+      "new_url": "auto_tutorials/plot_16_periodic_transforms.html"
+    }
+  ]
+}

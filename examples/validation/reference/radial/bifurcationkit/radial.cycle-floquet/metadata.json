@@ -1,0 +1,80 @@
+{
+  "canonical_id": "radial.cycle-floquet",
+  "chart_status": "completed",
+  "command": [
+    "julia",
+    "--project=/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit",
+    "/home/ziaee/git/JaxCont/examples/validation/regenerate/bifurcationkit/radial_cycle.jl",
+    "--case",
+    "radial.cycle-floquet",
+    "--output-dir",
+    "/home/ziaee/git/JaxCont/examples/validation/generated/promotion/staging/bifurcationkit/radial.cycle-floquet/radial.cycle-floquet/bifurcationkit"
+  ],
+  "conventions": {
+    "floquet": "native FloquetGEV log multipliers exponentiated; trivial mode selected by eigenvector alignment with physical flow at phase zero",
+    "time": "original"
+  },
+  "conversion_chain": [],
+  "driver_hash": "sha256:e115fc4485e047fa6d142d7ab2e37441d1c583caef03c270f11bc50a403fbe97",
+  "equation_hash": "sha256:e115fc4485e047fa6d142d7ab2e37441d1c583caef03c270f11bc50a403fbe97",
+  "generated_utc": "2026-10-29T00:53:05Z",
+  "generator_revision": "3dd787c13a76e00e0e5552614ba1772d0259a84d",
+  "lock_hash": "sha256:134daaa75d8b8f9905b1c7afc9b4ae1fa3602dd6d03e4ec1600000bdddb3bb29",
+  "mesh": {
+    "ncol": 4,
+    "ntst": 10
+  },
+  "output_hashes": {
+    "branch.csv": "sha256:e1639978077adbc2537ee3be038e750a2e7d2de70a45f9ec9880dc7f8b638b79",
+    "events.csv": "sha256:e46fdaafaff80252360326b9f31bc2944c046765e830192497ac2cc90e54f452",
+    "orbits.csv": "sha256:4fb526656dc66ca5455d98cbd807fdc5cdc04748c170dc5a36291b4715faf7b4",
+    "spectra.csv": "sha256:d023fcb2a7c4b347fa82fef7ed46a0b00c352e7f606d7eeee5409c726cd6f63d"
+  },
+  "package_versions": {
+    "BifurcationKit": "0.8.8",
+    "CSV": "1.2.0",
+    "JSON": "1.13.0"
+  },
+  "parameter_order": [
+    "rho"
+  ],
+  "platform": {
+    "blas": "LBTConfig([ILP64] libopenblas64_.so)",
+    "cpu": "sapphirerapids",
+    "os": "Linux"
+  },
+  "precision": "float64",
+  "resolved_controls": {
+    "bounds": [
+      0.5,
+      1.5
+    ],
+    "ds": 0.05,
+    "ds_max": 0.08,
+    "max_steps": 35,
+    "newton_atol": 1e-12
+  },
+  "review_date": "2026-10-29",
+  "reviewed": true,
+  "reviewer": "Claude (review delegated by owner, 2026-10-28)",
+  "runtime_version": "1.13.3",
+  "scaling": {
+    "arclength": "BK PALC theta=0.5: state weight 0.5/n; parameter weight 0.5",
+    "time": "original"
+  },
+  "schema_version": 2,
+  "seeds": {
+    "orbit": "sqrt(rho)*(cos(t),sin(t))",
+    "period": 6.283185307179586,
+    "rho": 0.5
+  },
+  "solver_strategies": {
+    "event_selection": "type and parameter window",
+    "method": "BifurcationKit PALC"
+  },
+  "source_hashes": {
+    "export.jl": "sha256:c9d7f64f7e16e4829b8af9894b4449e56fbbb0c02403f028d749cdde77fe27b3",
+    "radial_cycle.jl": "sha256:e115fc4485e047fa6d142d7ab2e37441d1c583caef03c270f11bc50a403fbe97"
+  },
+  "tool": "bifurcationkit"
+}

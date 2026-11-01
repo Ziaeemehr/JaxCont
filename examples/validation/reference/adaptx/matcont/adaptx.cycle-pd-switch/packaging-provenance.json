@@ -1,0 +1,25 @@
+{
+  "source": "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/adaptx/matcont/adaptx.cycle-pd-switch",
+  "source_hashes": {
+    "adaptx-base_branch.csv": "sha256:ac75aa7c03df58e553d2be220bf288bd8445c4c13ed9421276f64b9ce84154d1",
+    "adaptx-base_events.csv": "sha256:d884676e0ba407288e557d59c62e57467d3bf84490458044ceed77daaa7ab067",
+    "adaptx-base_metadata.json": "sha256:854b81fd624d50518a045db2b9964536db2d08b2dfc242f0c3c8776b569800b6",
+    "adaptx-base_multipliers.csv": "sha256:a3afd80144ce39f5d396f59e204f15c59b511576dc5b82791e8ee7f3a26c77f7",
+    "adaptx-doubled_branch.csv": "sha256:c7c6fb780b1c44f3b6793f56f745c51b88b229a4379185842d31fee627395fc6",
+    "adaptx-doubled_events.csv": "sha256:c3d91a2598a4f9f31bd77b580de7ba8ef5a493e88ba7c57c36fddbd7229436c0",
+    "adaptx-doubled_metadata.json": "sha256:5763085e5577c26e3b051e1a12010513d46472a52e0b447f687becf1960814f2",
+    "adaptx-doubled_multipliers.csv": "sha256:ded6ed2e3e47dfc2eca66f1a52b3fc1acd1d7dd19c63ab41f94c56418d973716",
+    "branch.csv": "sha256:2511545437fb9fa28bc970ae82e85334bf008f3303c8fd461160db67d018b12e",
+    "events.csv": "sha256:43158d0db1ec11628c1bcd0c60d9bca095f53ea7400e4766a604b9a47533ee64",
+    "invocation.json": "sha256:813b6de8370b60738ebd402c9afa681d2714c7343be2560a4eff7b064d3caac2",
+    "metadata.json": "sha256:05de05fb34d087c2b0a6c7ae8e3f9b68009a4f9456c51644ff233e6420b57076",
+    "orbits.csv": "sha256:b2a3e96274ae7150013ce25c64f05c3142549e364afa02c5adff6f039873fda4",
+    "raw.json": "sha256:fd343c1cdb5cff6db8907d3ccc914bec8c81af0dd807dfdb2d087f45bc5c14bd",
+    "run_adaptx_pd.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "run_adaptx_pd.stdout.log": "sha256:b12be27563fdd2c3ad6a2896cb9bea832dce2d96d8c38d54c65c749f790068a3",
+    "spectra.csv": "sha256:40ba59dda791a23f6937e23dc623a771a380cca3e6101d26240f3cd90fd237bf"
+  },
+  "omitted": {
+    "raw.json": "Redundant native JSON export; numerical CSV tables and native logs retained byte for byte."
+  }
+}

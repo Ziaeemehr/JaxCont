@@ -1,0 +1,59 @@
+-------------------------------------------------------------------------------------------
+FieldTrip is developed by members and collaborators of the Donders Institute for Brain,
+Cognition and Behaviour at Radboud University, Nijmegen, the Netherlands.
+
+                          --------------------------
+                        /                            \
+                     ------------------------------------
+                    /                                    \
+          -------------------------------------------------
+         /                            /\/\/\/\/\ 
+         ---------------------------------------------------
+                  |        F  i  e  l  d  T  r  i  p       |
+                  ------------------------------------------
+                   \                                      /
+                     ------------------------------------
+                          \            /
+                            ----------
+
+Please cite the FieldTrip reference paper when you have used FieldTrip in your study.
+Robert Oostenveld, Pascal Fries, Eric Maris, and Jan-Mathijs Schoffelen. FieldTrip: Open
+Source Software for Advanced Analysis of MEG, EEG, and Invasive Electrophysiological Data.
+Computational Intelligence and Neuroscience, vol. 2011, Article ID 156869, 9 pages, 2011.
+doi:10.1155/2011/156869.
+-------------------------------------------------------------------------------------------
+[Warning: enabling online tracking of FieldTrip usage, see
+http://www.fieldtriptoolbox.org/faq/tracking] 
+ In '/home/ziaee/programms/toolboxes/fieldtrip/utilities/ft_trackusage.m' at line 97
+ In '/home/ziaee/programms/toolboxes/fieldtrip/ft_defaults.m' at line 407
+
+[Warning: Matrix is singular to working precision.] 
+[Warning: Matrix is singular to working precision.] 
+[Warning: Matrix is singular to working precision.] 
+first point found
+tangent vector to first point found
+label = H , x = ( 0.000000 0.000000 0.000000 1.000000 )
+First Lyapunov coefficient = -3.000000e-01
+
+elapsed time  = 0.1 secs
+npoints curve = 40
+first point found
+tangent vector to first point found
+Period Doubling (period = 6.364071e+00, parameter = 6.303020e-01)
+Normal form coefficient = -4.270718e-02
+Neutral Saddle Cycle (period = 6.433818e+00, parameter = 6.053339e-11)
+
+elapsed time  = 5.2 secs
+npoints curve = 500
+first point found
+tangent vector to first point found
+Period Doubling (period = 1.273437e+01, parameter = 5.796298e-01)
+Normal form coefficient = -5.580283e-02
+Neutral Saddle Cycle (period = 1.154609e+01, parameter = 5.340272e-11)
+Period Doubling (period = 1.106284e+01, parameter = -4.471966e-02)
+Normal form coefficient = 6.973027e-03
+Limit point cycle (period = 1.103169e+01, parameter = -4.494912e-02)
+Normal form coefficient = 1.310601e+02
+
+elapsed time  = 13.0 secs
+npoints curve = 500

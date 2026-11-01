@@ -99,6 +99,11 @@ A pass describes the tested fixture, not all problems or option combinations.
      - pass [10]
      - untested
      - pass [10]
+   * - fold_curve_problem / hopf_curve_problem seed
+     - untested
+     - untested
+     - untested
+     - pass [11]
 
 Evidence
 --------
@@ -144,3 +149,8 @@ Additional default-suite evidence:
 * **[10]** ``tests/test_branch_switch.py``:
     ``test_branch_switch_vmap_batches_over_a_second_parameter`` and
     ``test_branch_switch_is_differentiable_in_args``.
+* **[11]** ``tests/test_curves.py``:
+    ``test_fold_curve_seed_grad_wrt_start_parameter`` and
+    ``test_hopf_curve_seed_grad_wrt_start_parameter`` (reverse-mode gradient
+    of the corrected curve seed with respect to the start parameter, against
+    finite differences).

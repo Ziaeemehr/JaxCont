@@ -8,6 +8,9 @@ import pytest
 import jaxcont as jc
 from jaxcont.bifurcations.curves import fold_curve_problem, unpack_fold_curve
 
+_POINT_ATOL = 1e-9
+
+
 
 def _cusp_shifted(u, p, args):
     """u' = (p0-0.3) + (p1-1.2)*(u-0.7) - (u-0.7)**3.
@@ -84,8 +87,10 @@ def test_hopf_curve_traces_the_exact_parabola():
     for i in range(sol.branch.params.shape[0]):
         p1 = float(sol.branch.params[i])
         _, p0, _, _, omega = unpack_hopf_curve(sol.branch.states[i], n=2)
-        assert abs(float(p0) + p1**2 - 2.0) < 1e-3
-        assert abs(float(omega) - 1.0) < 1e-3
+        # Measured |error|: 1.25e-06; explicit Newton 1e-5, parameter constraint.
+        assert abs(float(p0) + p1 ** 2 - 2.0) < 2e-05
+        # Measured |error|: 0; explicit Newton 1e-5.
+        assert abs(float(omega) - 1.0) < 1e-05
 
 
 def test_fold_curve_continuation_under_jit():
@@ -152,7 +157,8 @@ def test_hopf_curve_continuation_under_jit():
         0.5,
     )
     assert valid.sum() > 10
-    assert max_residual < 1e-4
+    # Measured |error|: 9.32e-07; explicit Newton 1e-5.
+    assert max_residual < 1e-05
 
 
 def test_two_parameter_surface_is_exported_top_level():
@@ -185,47 +191,26 @@ def test_every_codim2_event_kind_has_a_plot_style():
 # from a point BifurcationKit.jl located far away on the SAME curve --
 # no guess anywhere near the BT is ever supplied.
 #
-# Seed values below are BifurcationKit.jl's own first fold-curve point
-# (`sn_codim2.sol[1]`), printed by examples/BifurcationKit/05_codim2.jl:
-#     first point x = [1.3117855253168738, -0.04287499818491644,
-#                      0.18038939415099514, -0.15702758496684757,
-#                      1.5466483725981275]     # (X, Y, Z, U, F)
-#     first point p = 0.04                     # T
-# The curve's augmented state there is (u, F) with T as the externally
-# continued parameter -- exactly jaxcont's fold_curve_problem(..., free=1)
-# convention, where p[0]=F is solved for (p_fixed) and p[1]=T is continued.
-#
-# P_TARGET_FREE is NOT BifurcationKit's full curve endpoint (T=-0.0735).
-# examples/BifurcationKit/05_codim2.jl's specialpoint list shows TWO BT
-# points on that curve (T=0.018390565929128334 and T=-0.023705593679238822,
-# from `sp.param`) -- the Lorenz-84 model here is exactly symmetric under
-# (U, T) -> (-U, -T) (U and T enter the RHS only as U**2 and as the U-row's
-# additive +T, so the second BT is this model's own mirror image of the
-# first, at u=(X,Y,Z,-U), p=(F,-T)). Continuing all the way to the
-# endpoint makes the detector correctly report BOTH real BT points (2
-# hits), which would defeat `len(hits) == 1` for reasons that have nothing
-# to do with detector correctness. P_TARGET_FREE = -0.01 stops well short
-# of the second BT (and of BifurcationKit's two ZH points at T ~= 0) while
-# clearing the first BT at T = 0.0209 by a wide margin -- verified
-# empirically to yield exactly one hit, landing on BK_BT_U/BK_BT_P.
-U_SEED = jnp.array([
-    1.3117855253168738, -0.04287499818491644,
-    0.18038939415099514, -0.15702758496684757,
-])
-P_SEED = jnp.array([1.5466483725981275, 0.04])  # (F, T) at the seed
-P_SEED_FREE = 0.04    # T at the seed (first curve point)
-P_TARGET_FREE = -0.01  # T target; see margin note above
+# Preserve the original independent seed from the historical v1 bundle.
+# Stop before the symmetry-related second BT point.
+from tests.reference_bundles import historical_values
+
+_fold_seed = historical_values("fold-seed")
+U_SEED = jnp.array(_fold_seed["U_SEED"])
+P_SEED = jnp.array(_fold_seed["P_SEED"])
+P_SEED_FREE = _fold_seed["P_SEED_FREE"]
+P_TARGET_FREE = -0.01
 
 
 def test_lorenz84_bt_matches_bifurcationkit():
     """Detection along a traced fold curve must land on the BT point
-    BifurcationKit.jl v0.5.2 finds independently (examples/BifurcationKit/
-    05_codim2.jl). tests/test_codim2.py asserts the direct SOLVER matches
+    BifurcationKit.jl v0.5.2 finds independently (examples/validation/regenerate/bifurcationkit/
+    lorenz84_codim2.jl). tests/test_codim2.py asserts the direct SOLVER matches
     these values; this asserts the DETECTOR finds them without a guess."""
     from tests.test_codim2 import BK_BT_P, BK_BT_U, _bk_model
 
     # Seed the fold curve at a fold point away from the BT, then continue
-    # toward it. Exact seed values come from 05_codim2.jl's printed output.
+    # toward it. Exact seed values come from lorenz84_codim2.jl's printed output.
     prob = jc.fold_curve_problem(
         _bk_model, U_SEED, P_SEED, formulation="extended", free=1,
     )
@@ -237,8 +222,10 @@ def test_lorenz84_bt_matches_bifurcationkit():
     hits = [h for h in sol.events if h.kind == "bogdanov_takens"]
     assert len(hits) == 1
     assert hits[0].info["converged"] is True
-    assert jnp.allclose(hits[0].u, jnp.array(BK_BT_U), atol=1e-3)
-    assert jnp.allclose(hits[0].info["p"], jnp.array(BK_BT_P), atol=1e-3)
+    # Measured |error|: 3.69e-13; reviewed BK BT reference, default refinement Newton budget.
+    assert jnp.allclose(hits[0].u, jnp.array(BK_BT_U), atol=_POINT_ATOL, rtol=0)
+    # Measured |error|: 4.78e-13; reviewed BK BT reference, default refinement Newton budget.
+    assert jnp.allclose(hits[0].info['p'], jnp.array(BK_BT_P), atol=_POINT_ATOL, rtol=0)
 
 
 # --------------------------------------------------------------------------
@@ -266,7 +253,8 @@ def test_fold_curve_events_do_not_eigendecompose_the_extended_jacobian():
     assert sol.branch.eigenvalues is None
     hits = [h for h in sol.events if h.kind == "cusp"]
     assert len(hits) == 1
-    assert abs(hits[0].p - 1.2) < 5e-2
+    # Measured |error|: 0; analytic event, default Newton budget.
+    assert abs(hits[0].p - 1.2) < _POINT_ATOL
 
 
 def test_hopf_curve_events_do_not_eigendecompose_the_extended_jacobian():
@@ -296,7 +284,8 @@ def test_hopf_curve_events_do_not_eigendecompose_the_extended_jacobian():
     assert sol.branch.eigenvalues is None
     hits = [h for h in sol.events if h.kind == "generalized_hopf"]
     assert len(hits) == 1
-    assert abs(hits[0].p - 0.4) < 5e-2
+    # Measured |error|: 0; analytic event, default Newton budget.
+    assert abs(hits[0].p - 0.4) < _POINT_ATOL
 
 
 _FLIP_CENTRE = jnp.array([0.5, -0.3, 0.2])
@@ -339,43 +328,45 @@ def test_hopf_curve_survives_eigenvector_rotation():
     for i in range(sol.branch.params.shape[0]):
         p1 = float(sol.branch.params[i])
         _, p0, _, _, omega = unpack_hopf_curve(sol.branch.states[i], n=3)
-        assert abs(float(p0) - p1) < 1e-3
-        assert abs(float(omega) - 1.0) < 1e-3
+        # Measured |error|: 3.56e-08; explicit Newton 1e-5.
+        assert abs(float(p0) - p1) < 1e-05
+        # Measured |error|: 3.22e-08; explicit Newton 1e-5.
+        assert abs(float(omega) - 1.0) < 1e-05
 
 
 def test_fold_curve_seed_grad_wrt_start_parameter():
-    with jax.enable_x64():
-        def f(u, p, args):
-            return jnp.array([(u[0] - p[1]) ** 2 + p[0] - p[1]])
+    def f(u, p, args):
+        return jnp.array([(u[0] - p[1]) ** 2 + p[0] - p[1]])
 
-        def seed(q):
-            return fold_curve_problem(
-                f, jnp.array([0.6]), jnp.array([0.6, q]), formulation="extended",
-            ).u0[0]
+    def seed(q):
+        return fold_curve_problem(
+            f, jnp.array([0.6]), jnp.array([0.6, q]), formulation="extended",
+        ).u0[0]
 
-        q = jnp.array(0.7)
-        derivative = jax.grad(seed)(q)
-        h = 1e-5
-        central = (seed(q + h) - seed(q - h)) / (2 * h)
-        assert jnp.isfinite(derivative)
-        assert jnp.allclose(derivative, central, rtol=1e-4, atol=1e-9)
+    q = jnp.array(0.7)
+    derivative = jax.grad(seed)(q)
+    h = 1e-5
+    central = (seed(q + h) - seed(q - h)) / (2 * h)
+    assert jnp.isfinite(derivative)
+    # Measured |error|: 4.55e-12; linear translated root; central difference cancellation at h=1e-5.
+    assert jnp.allclose(derivative, central, rtol=0, atol=1e-09)
 
 
 def test_hopf_curve_seed_grad_wrt_start_parameter():
-    with jax.enable_x64():
-        def f(u, p, args):
-            x, y = u - p[1]
-            mu = p[0] - p[1]
-            return jnp.array([mu * x - y, x + mu * y])
+    def f(u, p, args):
+        x, y = u - p[1]
+        mu = p[0] - p[1]
+        return jnp.array([mu * x - y, x + mu * y])
 
-        def seed(q):
-            return hopf_curve_problem(
-                f, jnp.array([0.6, 0.6]), jnp.array([0.6, q]), formulation="extended",
-            ).u0[0]
+    def seed(q):
+        return hopf_curve_problem(
+            f, jnp.array([0.6, 0.6]), jnp.array([0.6, q]), formulation="extended",
+        ).u0[0]
 
-        q = jnp.array(0.7)
-        derivative = jax.grad(seed)(q)
-        h = 1e-5
-        central = (seed(q + h) - seed(q - h)) / (2 * h)
-        assert jnp.isfinite(derivative)
-        assert jnp.allclose(derivative, central, rtol=1e-4, atol=1e-9)
+    q = jnp.array(0.7)
+    derivative = jax.grad(seed)(q)
+    h = 1e-5
+    central = (seed(q + h) - seed(q - h)) / (2 * h)
+    assert jnp.isfinite(derivative)
+    # Measured |error|: 4.55e-12; linear translated root; central difference cancellation at h=1e-5.
+    assert jnp.allclose(derivative, central, rtol=0, atol=1e-09)

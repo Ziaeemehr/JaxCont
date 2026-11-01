@@ -12,6 +12,7 @@ JaxCont requires:
 - NumPy >= 1.22.0
 - SciPy >= 1.7.0
 - Matplotlib >= 3.5.0
+- Equinox >= 0.11.0
 
 Installing from PyPI
 --------------------

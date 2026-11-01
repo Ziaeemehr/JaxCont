@@ -1,0 +1,188 @@
+{
+  "platform": {
+    "os": "Linux 6.17.0-1033-oem",
+    "cpu": "Intel(R) Xeon(R) w5-3525",
+    "blas": "Intel(R) oneAPI Math Kernel Library Version 2023.2-Product Build 20230613 for Intel(R) 64 architecture applications (CNR branch AVX512_E1)",
+    "lapack": "Intel(R) oneAPI Math Kernel Library Version 2023.2-Product Build 20230613 for Intel(R) 64 architecture applications (CNR branch AVX512_E1) supporting Linear Algebra PACKage (LAPACK 3.10.1)",
+    "architecture": "glnxa64",
+    "source": "MATLAB native runtime"
+  },
+  "precision": "float64",
+  "scaling": {
+    "time": "original",
+    "metric": "unweighted Euclidean state and active parameters"
+  },
+  "seeds": {
+    "F": 3,
+    "T": 0.04,
+    "correction": "Newton before continuation"
+  },
+  "mesh": {
+    "kind": "equilibrium"
+  },
+  "chart_status": "MatCont returned chart; inspect native events and logs",
+  "runtime_version": "24.1.0.2537033 (R2024a)",
+  "package_versions": {
+    "MatCont": "7.6"
+  },
+  "parameter_order": [
+    "F",
+    "T"
+  ],
+  "resolved_controls": {
+    "InitStepsize": 0.001,
+    "MinStepsize": 1e-05,
+    "MaxStepsize": 0.015,
+    "MaxCorrIters": [],
+    "MaxNewtonIters": [],
+    "MaxTestIters": [],
+    "MoorePenrose": [],
+    "SymDerivative": [],
+    "SymDerivativeP": [],
+    "Increment": [],
+    "FunTolerance": 1e-12,
+    "VarTolerance": 1e-12,
+    "TestTolerance": 1e-10,
+    "Singularities": 1,
+    "MaxNumPoints": 401,
+    "Backward": 1,
+    "CheckClosed": [],
+    "TestFunctions": [],
+    "WorkSpace": [],
+    "Locators": [],
+    "Adapt": [],
+    "IgnoreSingularity": [],
+    "ActiveParams": [],
+    "Multipliers": [],
+    "Eigenvalues": 1,
+    "Userfunctions": [],
+    "UserfunctionsInfo": [],
+    "PRC": [],
+    "dPRC": [],
+    "Input": [],
+    "ActiveUParams": [],
+    "ActiveSParams": [],
+    "ActiveSParam": [],
+    "TSearchOrder": []
+  },
+  "samples": [
+    {
+      "state": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "parameters": [
+        1.7,
+        0.04
+      ],
+      "rhs": [
+        0.425,
+        0.25,
+        0,
+        0.04
+      ],
+      "jacobian": [
+        [
+          -0.25,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          -1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          -1,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          -1.04
+        ]
+      ]
+    },
+    {
+      "state": [
+        1.2,
+        -0.3,
+        0.7,
+        -0.2
+      ],
+      "parameters": [
+        1.7,
+        0.04
+      ],
+      "rhs": [
+        -0.4944799999999999,
+        -0.6499999999999999,
+        -0.21999999999999997,
+        0.011120000000000012
+      ],
+      "jacobian": [
+        [
+          -0.25,
+          0.6,
+          -1.4,
+          0.39480000000000004
+        ],
+        [
+          -1,
+          0.19999999999999996,
+          -1.2,
+          0
+        ],
+        [
+          0.39999999999999997,
+          1.2,
+          0.19999999999999996,
+          0
+        ],
+        [
+          -0.19740000000000002,
+          0,
+          0,
+          0.14439999999999986
+        ]
+      ]
+    }
+  ],
+  "solver_strategies": {
+    "method": "MatCont pseudo-arclength",
+    "event_selection": "type and frozen parameter window"
+  },
+  "command": [
+    "/home/ziaee/programms/Matlab/R2024a/bin/matlab",
+    "-batch",
+    "addpath('/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/matcont','/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/matcont/capability_gaps'); run_lorenz84_codim2('/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/staging/matcont/lorenz84.bt-ft')"
+  ],
+  "source_hashes": {
+    "lorenz84_seed.m": "sha256:9ad4913b5af4335dfeee5d7dba7e2792754de68e8ed0e36d5aaeff27063d55fa",
+    "lorenz84_native.m": "sha256:27b5abc4fb7eae300594d6c5226d721a7bf870922962c831990c9cb1594e764a"
+  },
+  "schema_version": 2,
+  "canonical_id": "lorenz84.bt-ft",
+  "tool": "matcont",
+  "equation_hash": "sha256:f30f654940be20d991b45fa45fbdf4ddec3c4b7c17040eb30586685d3ed22d29",
+  "driver_hash": "sha256:34ff943d42d8ab19bb232c9e5b1b42c2d3dd519f791e39aed795beaecde1e164",
+  "lock_hash": "unknown",
+  "generated_utc": "2026-10-29T22:37:41.574609+00:00",
+  "generator_revision": "5c92ca020b4ca47700a698399740bb6649dbc88f",
+  "output_hashes": {
+    "branch.csv": "sha256:746671ef78a0228af938482873ca11a0f106700b6b8a3277d2147e62f031832c",
+    "events.csv": "sha256:74706b16bade15d0f8fd1614a2afaed0f8e508b96d63cccf2de60c81b8cfeb01",
+    "spectra.csv": "sha256:782eff81aeaeb6c37b78c0a424d3c4826aedc66b14d5524f5dcbf5d3da4aacdc"
+  },
+  "reviewed": true,
+  "reviewer": "Claude (review delegated by owner, 2026-10-30)",
+  "review_date": "2026-10-30",
+  "conversion_chain": []
+}

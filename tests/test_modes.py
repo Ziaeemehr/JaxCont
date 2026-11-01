@@ -33,9 +33,8 @@ def test_track_modes_handles_conjugate_pairs():
         # conjugate member keeps the sign of its imaginary part.
         assert np.max(np.abs(np.diff(col))) < 0.1
         assert np.all(np.sign(col.imag) == np.sign(col[0].imag))
-    np.testing.assert_allclose(
-        np.sort_complex(tracked[0]), np.sort_complex(spectra[0])
-    )
+    # Measured |error|: 0; tracking permutes the initial spectrum exactly.
+    np.testing.assert_allclose(np.sort_complex(tracked[0]), np.sort_complex(spectra[0]), atol=0, rtol=0)
 
 
 def test_crossings_sign_change_exact_zero_and_mask():

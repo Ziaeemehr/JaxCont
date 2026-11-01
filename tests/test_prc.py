@@ -16,6 +16,10 @@ from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
 from jaxcont.stability.prc import prc_curve
 
+def _eps_J():
+    return float(jnp.finfo(jnp.float64).eps)
+
+
 
 def _rhs(u, p, args):
     x, y = u[0], u[1]
@@ -51,8 +55,7 @@ def _expected_Z(prob, mesh, rho):
 
 def test_prc_curve_matches_closed_form_at_rho_1():
     prob, mesh = _circle_problem(rho=1.0)
-    with jax.default_matmul_precision("float32"):
-        Z = prc_curve(_rhs, mesh, prob.u0, prob.p0)
+    Z = prc_curve(_rhs, mesh, prob.u0, prob.p0)
     assert Z.shape == (mesh.ntst, 2)
     expected = _expected_Z(prob, mesh, rho=1.0)
     assert float(jnp.max(jnp.abs(np.asarray(Z) - expected))) < 1e-5
@@ -69,13 +72,12 @@ def test_prc_curve_periodicity_seed_matches_chain_endpoint():
     D_np, E_np, _, _ = collocation_matrices(ncol)
     D, E = jnp.asarray(D_np), jnp.asarray(E_np)
     mesh_states = prob.u0[: ntst * n].reshape(ntst, n)
-    coll_states = prob.u0[ntst * n : ntst * n + ntst * ncol * n].reshape(ntst, ncol, n)
+    coll_states = prob.u0[ntst * n: ntst * n + ntst * ncol * n].reshape(ntst, ncol, n)
     T = prob.u0[-1]
 
-    with jax.default_matmul_precision("float32"):
-        M_all = interval_propagators(_rhs, D, E, h, mesh_states, coll_states, T, prob.p0)
-        Phi, _ = jax.lax.scan(lambda c, M: (M @ c, None), jnp.eye(n), M_all)
-        Z = prc_curve(_rhs, mesh, prob.u0, prob.p0)
+    M_all = interval_propagators(_rhs, D, E, h, mesh_states, coll_states, T, prob.p0)
+    Phi, _ = jax.lax.scan(lambda c, M: (M @ c, None), jnp.eye(n), M_all)
+    Z = prc_curve(_rhs, mesh, prob.u0, prob.p0)
     # Z[0], as returned by prc_curve, is not literally the bordered-solve
     # seed Z0 before any propagation -- prc_curve's backward jax.lax.scan
     # starts at Z0 and chains M_i^T through every interval in reverse
@@ -97,16 +99,16 @@ def test_branch_prc_matches_per_point_calls():
     states = jnp.stack([prob1.u0, prob2.u0])
     params = jnp.stack([prob1.p0, prob2.p0])
 
-    with jax.default_matmul_precision("float32"):
-        batched = branch_prc(_rhs, mesh, states, params)
-        individual = jnp.stack(
-            [
-                prc_curve(_rhs, mesh, prob1.u0, prob1.p0),
-                prc_curve(_rhs, mesh, prob2.u0, prob2.p0),
-            ]
-        )
+    batched = branch_prc(_rhs, mesh, states, params)
+    individual = jnp.stack(
+        [
+            prc_curve(_rhs, mesh, prob1.u0, prob1.p0),
+            prc_curve(_rhs, mesh, prob2.u0, prob2.p0),
+        ]
+    )
     assert batched.shape == (2, mesh.ntst, 2)
-    assert jnp.max(jnp.abs(batched - individual)) < 1e-6
+    # Measured |error|: 0; batched/individual discrete adjoint consistency.
+    assert jnp.max(jnp.abs(batched - individual)) < 8 * _eps_J()
 
 
 def test_dprc_curve_matches_finite_difference_of_reconverged_orbits():
@@ -124,11 +126,11 @@ def test_dprc_curve_matches_finite_difference_of_reconverged_orbits():
     prob_hi, _ = _circle_problem(rho0 + eps)
     prob_lo, _ = _circle_problem(rho0 - eps)
 
-    with jax.default_matmul_precision("float32"):
-        dZ = dprc_curve(prob0)
-        Z_hi = prc_curve(_rhs, mesh, prob_hi.u0, prob_hi.p0)
-        Z_lo = prc_curve(_rhs, mesh, prob_lo.u0, prob_lo.p0)
+    dZ = dprc_curve(prob0)
+    Z_hi = prc_curve(_rhs, mesh, prob_hi.u0, prob_hi.p0)
+    Z_lo = prc_curve(_rhs, mesh, prob_lo.u0, prob_lo.p0)
 
     dZ_fd = (Z_hi - Z_lo) / (2 * eps)
     assert dZ.shape == (mesh.ntst, 2)
-    assert float(jnp.max(jnp.abs(np.asarray(dZ) - np.asarray(dZ_fd)))) < 0.01
+    # Measured |error|: 4.6e-05; central difference h=.01 truncation and Newton cancellation.
+    assert float(jnp.max(jnp.abs(np.asarray(dZ) - np.asarray(dZ_fd)))) < 0.002

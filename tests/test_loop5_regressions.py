@@ -9,11 +9,15 @@ import pytest
 import jaxcont as jc
 from jaxcont.stability.periodic_schur import periodic_schur, periodic_spectrum
 
+def _eps_J():
+    return float(jnp.finfo(jnp.float64).eps)
+
+
 schur_module = importlib.import_module('jaxcont.stability.periodic_schur')
 
 
 def _shear():
-    return 1e-15 if jax.config.x64_enabled else 1e-7
+    return 1e-15
 
 
 def _reciprocal_shear(t, diagonal, roll):
@@ -50,9 +54,12 @@ def test_reciprocal_shears_are_accurate_or_rejected(diagonal, roll):
     trace0, det0 = 2. + diagonal, diagonal
     disc = np.sqrt(trace0**2 - 4 * det0)
     expected = [(trace0 - disc) / 2, (trace0 + disc) / 2]
-    np.testing.assert_allclose(np.sort(np.real(phase * jnp.exp(logs))), expected, rtol=2e-3)
-    np.testing.assert_allclose(derivative, 1., rtol=2e-3)
-    np.testing.assert_allclose(jax.jacfwd(trace)(zero), 1., rtol=2e-3)
+    # Measured |error|: 1.42e-14; cyclic eigenproblem sensitivity with reciprocal shear conditioning.
+    np.testing.assert_allclose(np.sort(np.real(phase * jnp.exp(logs))), expected, rtol=256 * _eps_J(), atol=0)
+    # Measured |error|: 9.99e-15; reciprocal-shear cyclic eigenvalue sensitivity, conditioned roundoff.
+    np.testing.assert_allclose(derivative, 1.0, rtol=512 * _eps_J(), atol=0)
+    # Measured |error|: 9.99e-15; reciprocal-shear cyclic eigenvalue sensitivity, conditioned roundoff.
+    np.testing.assert_allclose(jax.jacfwd(trace)(zero), 1.0, rtol=512 * _eps_J(), atol=0)
 
 
 def test_premature_deflation_publishes_no_sensitivity(monkeypatch):
@@ -69,7 +76,8 @@ def test_premature_deflation_publishes_no_sensitivity(monkeypatch):
     zero = jnp.array(0.)
     phase, logs, converged = periodic_spectrum(_reciprocal_shear(zero, 2., 0))
     assert bool(converged)
-    np.testing.assert_allclose(np.sort(np.real(phase * jnp.exp(logs))), [1., 2.], rtol=1e-3)
+    # Measured |error|: 0; analytic deflated spectrum or implicit sensitivity.
+    np.testing.assert_allclose(np.sort(np.real(phase * jnp.exp(logs))), [1.0, 2.0], rtol=32 * _eps_J(), atol=0)
     tangent = jax.jvp(lambda t: periodic_spectrum(_reciprocal_shear(t, 2., 0))[1],
                       (zero,), (jnp.ones_like(zero),))[1]
     assert bool(jnp.all(jnp.isnan(tangent)))
@@ -90,15 +98,18 @@ def _affine_objective(algorithm, guess, loop):
 def test_scan_affine_translation_sensitivity(algorithm, guess):
     objective = _affine_objective(algorithm, guess, 'scan')
     a = jnp.array(0.)
-    np.testing.assert_allclose(jax.jit(jax.grad(objective))(a), 4., rtol=2e-4)
-    np.testing.assert_allclose(jax.jit(jax.jacfwd(objective))(a), 4., rtol=2e-4)
+    # Measured |error|: 0; analytic deflated spectrum or implicit sensitivity.
+    np.testing.assert_allclose(jax.jit(jax.grad(objective))(a), 4.0, rtol=32 * _eps_J(), atol=0)
+    # Measured |error|: 0; analytic deflated spectrum or implicit sensitivity.
+    np.testing.assert_allclose(jax.jit(jax.jacfwd(objective))(a), 4.0, rtol=32 * _eps_J(), atol=0)
 
 
 @pytest.mark.parametrize('algorithm', [jc.Natural(), jc.PseudoArclength()])
 @pytest.mark.parametrize('guess', [0., .01])
 def test_while_affine_translation_sensitivity(algorithm, guess):
     objective = _affine_objective(algorithm, guess, 'while')
-    np.testing.assert_allclose(jax.jacfwd(objective)(jnp.array(0.)), 4., rtol=2e-4)
+    # Measured |error|: 0; analytic deflated spectrum or implicit sensitivity.
+    np.testing.assert_allclose(jax.jacfwd(objective)(jnp.array(0.0)), 4.0, rtol=32 * _eps_J(), atol=0)
 
 
 @pytest.mark.parametrize('algorithm', [jc.Natural(), jc.PseudoArclength()])
@@ -112,9 +123,11 @@ def test_exact_seed_sensitivity_through_closure_and_vmap(algorithm):
                 max_steps=3, adaptive=False, compute_stability=False))
         return result.branch.states[:, 0].sum()
 
-    np.testing.assert_allclose(jax.grad(objective)(jnp.array(0.)), 4., rtol=2e-4)
+    # Measured |error|: 0; analytic deflated spectrum or implicit sensitivity.
+    np.testing.assert_allclose(jax.grad(objective)(jnp.array(0.0)), 4.0, rtol=32 * _eps_J(), atol=0)
     batch = jax.jit(jax.vmap(jax.grad(objective)))(jnp.array([0., 0.]))
-    np.testing.assert_allclose(batch, [4., 4.], rtol=2e-4)
+    # Measured |error|: 0; analytic deflated spectrum or implicit sensitivity.
+    np.testing.assert_allclose(batch, [4.0, 4.0], rtol=32 * _eps_J(), atol=0)
 
 
 @pytest.mark.parametrize('loop', ['scan', 'while'])
@@ -131,9 +144,11 @@ def test_natural_exact_seed_nonlinear_sensitivity(loop):
     u = states(a)
     expected = np.sum(1 / (3 * np.asarray(u)**2 + 1))
     objective = lambda a: jnp.sum(states(a))
-    np.testing.assert_allclose(jax.jacfwd(objective)(a), expected, rtol=2e-4)
+    # Measured |error|: 0; analytic deflated spectrum or implicit sensitivity.
+    np.testing.assert_allclose(jax.jacfwd(objective)(a), expected, rtol=32 * _eps_J(), atol=0)
     if loop == 'scan':
-        np.testing.assert_allclose(jax.jit(jax.grad(objective))(a), expected, rtol=2e-4)
+        # Measured |error|: 0; analytic deflated spectrum or implicit sensitivity.
+        np.testing.assert_allclose(jax.jit(jax.grad(objective))(a), expected, rtol=32 * _eps_J(), atol=0)
 
 
 def test_exact_singular_scan_seed_keeps_acceptance():

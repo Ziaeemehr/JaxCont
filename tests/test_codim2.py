@@ -27,6 +27,10 @@ from jaxcont.bifurcations.codim2 import (
 from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
 
 
+# Default Newton residual budget for these well-scaled extended normal forms.
+_POINT_ATOL = 1e-9
+
+
 def _cusp_shifted(u, p, args):
     # x' = b1 + b2*xi + k*xi^3   with   xi = x - 2, b1 = p0 - 1, b2 = p1 + 4
     # Cusp of x' = b1 + b2*x + k*x^3 is at x=0, (b1,b2)=(0,0), so this one
@@ -43,9 +47,12 @@ def test_cusp_point_recovers_exact_shifted_cusp():
         _cusp_shifted, jnp.array([2.2]), jnp.array([0.8, -3.7]),
     )
     assert bool(ok)
-    assert jnp.allclose(u, jnp.array([2.0]), atol=1e-4)
-    assert jnp.allclose(p, jnp.array([1.0, -4.0]), atol=1e-4)
-    assert jnp.isclose(float(jnp.linalg.norm(v)), 1.0, atol=1e-5)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(u, jnp.array([2.0]), rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(p, jnp.array([1.0, -4.0]), rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 0.
+    assert jnp.isclose(float(jnp.linalg.norm(v)), 1.0, rtol=0, atol=_POINT_ATOL)
 
 
 def test_cusp_point_does_not_merely_return_its_guess():
@@ -60,7 +67,8 @@ def test_cusp_point_does_not_merely_return_its_guess():
 def test_cusp_parameters_returns_bare_parameter_array():
     p = cusp_parameters(_cusp_shifted, jnp.array([2.2]), jnp.array([0.8, -3.7]))
     assert p.shape == (2,)
-    assert jnp.allclose(p, jnp.array([1.0, -4.0]), atol=1e-4)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(p, jnp.array([1.0, -4.0]), rtol=0, atol=_POINT_ATOL)
 
 
 def test_cusp_reports_not_converged_for_a_hopeless_guess():
@@ -111,7 +119,8 @@ def test_cusp_agrees_with_the_codim1_fold_solver_there():
         f_scalar, jnp.array([2.1]), float(p_c[0]) + 0.05, tol=1e-8,  # degenerate (cusp) fold converges slowly
     )
     assert jnp.allclose(u_f, u_c, atol=1e-3)
-    assert jnp.isclose(float(p_f), float(p_c[0]), atol=1e-3)
+    # Measured max absolute error: 4.66e-13.
+    assert jnp.isclose(float(p_f), float(p_c[0]), rtol=0, atol=2e-8)
 
 
 def _bt_shifted(u, p, args):
@@ -130,9 +139,12 @@ def test_bogdanov_takens_point_recovers_exact_shifted_bt():
         _bt_shifted, jnp.array([5.3, 1.7]), jnp.array([2.6, -0.8]),
     )
     assert bool(ok)
-    assert jnp.allclose(u, jnp.array([5.0, 2.0]), atol=1e-4)
-    assert jnp.allclose(p, jnp.array([3.0, -1.0]), atol=1e-4)
-    assert jnp.isclose(float(jnp.linalg.norm(v0)), 1.0, atol=1e-5)
+    # Measured max absolute error: 2.66e-15.
+    assert jnp.allclose(u, jnp.array([5.0, 2.0]), rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 2.56e-13.
+    assert jnp.allclose(p, jnp.array([3.0, -1.0]), rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 0.
+    assert jnp.isclose(float(jnp.linalg.norm(v0)), 1.0, rtol=0, atol=_POINT_ATOL)
 
 
 def test_bogdanov_takens_jacobian_has_a_genuine_jordan_block():
@@ -143,9 +155,12 @@ def test_bogdanov_takens_jacobian_has_a_genuine_jordan_block():
     )
     assert bool(ok)
     jac = jax.jacfwd(lambda uu: _bt_shifted(uu, p, None))(u)
-    assert jnp.allclose(jac @ v0, jnp.zeros(2), atol=1e-4)
-    assert jnp.allclose(jac @ v1, v0, atol=1e-4)
-    assert jnp.isclose(float(jnp.dot(v0, v1)), 0.0, atol=1e-5)
+    # Measured max absolute error: 2.22e-16.
+    assert jnp.allclose(jac @ v0, jnp.zeros(2), rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 2.66e-15.
+    assert jnp.allclose(jac @ v1, v0, rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 3.05e-16.
+    assert jnp.isclose(float(jnp.dot(v0, v1)), 0.0, rtol=0, atol=_POINT_ATOL)
 
 
 def test_bogdanov_takens_parameters_grad_matches_finite_difference():
@@ -185,9 +200,12 @@ def test_generalized_hopf_point_recovers_exact_shifted_gh():
         _gh_shifted, jnp.array([0.02, -0.03]), jnp.array([2.05, -2.90]),
     )
     assert bool(ok)
-    assert jnp.allclose(u, jnp.zeros(2), atol=1e-4)
-    assert jnp.allclose(p, jnp.array([2.0, -3.0]), atol=1e-4)
-    assert jnp.isclose(float(omega), 1.0, atol=1e-4)
+    # Measured max absolute error: 7.58e-14.
+    assert jnp.allclose(u, jnp.zeros(2), rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 5.64e-12.
+    assert jnp.allclose(p, jnp.array([2.0, -3.0]), rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 0.
+    assert jnp.isclose(float(omega), 1.0, rtol=0, atol=_POINT_ATOL)
 
 
 def test_generalized_hopf_omega_is_normalized_positive_from_either_seed():
@@ -213,7 +231,8 @@ def test_generalized_hopf_has_vanishing_lyapunov_coefficient():
     )
     assert bool(ok)
     l1 = lyapunov_coefficient(_gh_shifted, u, p, q1, q2, omega, None)
-    assert abs(float(l1)) < 1e-4
+    # Measured max absolute error: 1.13e-11.
+    assert abs(float(l1)) < _POINT_ATOL
 
 
 def test_generalized_hopf_parameters_grad_matches_finite_difference():
@@ -254,8 +273,10 @@ def test_generalized_hopf_agrees_with_the_codim1_hopf_solver_there():
     _, p_h, _, _, om_h, _converged = hopf_point(
         f_scalar, jnp.array([0.01, -0.01]), float(p_g[0]) + 0.02, tol=1e-6,
     )
-    assert jnp.isclose(float(p_h), float(p_g[0]), atol=1e-3)
-    assert jnp.isclose(abs(float(om_h)), float(om_g), atol=1e-3)
+    # Measured max absolute error: 5.66e-14.
+    assert jnp.isclose(float(p_h), float(p_g[0]), rtol=0, atol=2 * max(1e-6, _POINT_ATOL))
+    # Measured max absolute error: 0.
+    assert jnp.isclose(abs(float(om_h)), float(om_g), rtol=0, atol=2 * max(1e-6, _POINT_ATOL))
 
 
 def _zh_shifted(u, p, args):
@@ -274,9 +295,12 @@ def test_zero_hopf_point_recovers_exact_shifted_zh():
         _zh_shifted, jnp.array([1.05, 0.03, -0.02]), jnp.array([4.04, -1.94]),
     )
     assert bool(ok)
-    assert jnp.allclose(u, jnp.array([1.0, 0.0, 0.0]), atol=1e-4)
-    assert jnp.allclose(p, jnp.array([4.0, -2.0]), atol=1e-4)
-    assert jnp.isclose(float(omega), 1.0, atol=1e-4)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(u, jnp.array([1.0, 0.0, 0.0]), rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(p, jnp.array([4.0, -2.0]), rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 0.
+    assert jnp.isclose(float(omega), 1.0, rtol=0, atol=_POINT_ATOL)
     assert float(omega) > 0.0
 
 
@@ -287,11 +311,15 @@ def test_zero_hopf_has_both_a_zero_eigenvalue_and_an_imaginary_pair():
     assert bool(ok)
     jac = jax.jacfwd(lambda uu: _zh_shifted(uu, p, None))(u)
     # zero eigenvalue, witnessed by the null vector
-    assert jnp.allclose(jac @ v, jnp.zeros(3), atol=1e-4)
-    assert jnp.isclose(float(jnp.linalg.norm(v)), 1.0, atol=1e-5)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(jac @ v, jnp.zeros(3), rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 0.
+    assert jnp.isclose(float(jnp.linalg.norm(v)), 1.0, rtol=0, atol=_POINT_ATOL)
     # imaginary pair, witnessed by the eigenvector relations
-    assert jnp.allclose(jac @ q1 + omega * q2, jnp.zeros(3), atol=1e-4)
-    assert jnp.allclose(jac @ q2 - omega * q1, jnp.zeros(3), atol=1e-4)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(jac @ q1 + omega * q2, jnp.zeros(3), rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(jac @ q2 - omega * q1, jnp.zeros(3), rtol=0, atol=_POINT_ATOL)
 
 
 def test_zero_hopf_parameters_grad_matches_finite_difference():
@@ -337,12 +365,15 @@ def test_double_hopf_point_recovers_exact_shifted_hh():
         seed_b=jnp.array([0.0, 0.0, 1.0, 0.0]),
     )
     assert bool(ok)
-    assert jnp.allclose(p, jnp.array([5.0, -6.0]), atol=1e-4)
+    # Measured max absolute error: 1.19e-11.
+    assert jnp.allclose(p, jnp.array([5.0, -6.0]), rtol=0, atol=_POINT_ATOL)
     # both frequencies normalized positive, and the two distinct pairs found
     assert float(oa) > 0.0 and float(ob) > 0.0
     found = sorted([float(oa), float(ob)])
-    assert jnp.isclose(found[0], 1.0, atol=1e-3)
-    assert jnp.isclose(found[1], 2.0, atol=1e-3)
+    # Measured max absolute error: 0.
+    assert jnp.isclose(found[0], 1.0, rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 2.08e-13.
+    assert jnp.isclose(found[1], 2.0, rtol=0, atol=_POINT_ATOL)
 
     # Regression for the _normalize_omega phase-row bug (final whole-branch
     # review): block B's raw solve here actually flips (raw omega_b comes
@@ -353,10 +384,14 @@ def test_double_hopf_point_recovers_exact_shifted_hh():
     # what it broke was the phase row, which is covered separately by the
     # direct _normalize_omega unit tests below.
     jac = jax.jacfwd(lambda uu: _hh_shifted(uu, p, None))(u)
-    assert jnp.allclose(jac @ q1a + oa * q2a, 0.0, atol=1e-4)
-    assert jnp.allclose(jac @ q2a - oa * q1a, 0.0, atol=1e-4)
-    assert jnp.allclose(jac @ q1b + ob * q2b, 0.0, atol=1e-4)
-    assert jnp.allclose(jac @ q2b - ob * q1b, 0.0, atol=1e-4)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(jac @ q1a + oa * q2a, 0.0, rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(jac @ q2a - oa * q1a, 0.0, rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 8.44e-12.
+    assert jnp.allclose(jac @ q1b + ob * q2b, 0.0, rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 8.44e-12.
+    assert jnp.allclose(jac @ q2b - ob * q1b, 0.0, rtol=0, atol=_POINT_ATOL)
 
 
 def test_double_hopf_reports_not_converged_when_both_pairs_collapse():
@@ -418,10 +453,13 @@ def test_double_hopf_point_recovers_a_non_two_to_one_frequency_ratio():
         seed_b=jnp.array([0.0, 0.0, 1.0, 0.0]),
     )
     assert bool(ok)
-    assert jnp.allclose(p, jnp.array([5.0, -6.0]), atol=1e-4)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(p, jnp.array([5.0, -6.0]), rtol=0, atol=_POINT_ATOL)
     found = sorted([float(oa), float(ob)])
-    assert jnp.isclose(found[0], 1.0, atol=1e-3)
-    assert jnp.isclose(found[1], 3.0, atol=1e-3)
+    # Measured max absolute error: 0.
+    assert jnp.isclose(found[0], 1.0, rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 9.33e-15.
+    assert jnp.isclose(found[1], 3.0, rtol=0, atol=_POINT_ATOL)
 
 
 def test_normalize_omega_rephases_to_preserve_the_phase_condition():
@@ -436,8 +474,10 @@ def test_normalize_omega_rephases_to_preserve_the_phase_condition():
     q2_in = jnp.array([0.0, -1.0])
     norm = jnp.sqrt(jnp.dot(q1_in, q1_in) + jnp.dot(q2_in, q2_in))
     q1_in, q2_in = q1_in / norm, q2_in / norm
-    assert jnp.allclose(J @ q1_in + omega_in * q2_in, 0.0, atol=1e-6)
-    assert jnp.allclose(J @ q2_in - omega_in * q1_in, 0.0, atol=1e-6)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(J @ q1_in + omega_in * q2_in, 0.0, rtol=0, atol=8 * jnp.finfo(q1_in.dtype).eps)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(J @ q2_in - omega_in * q1_in, 0.0, rtol=0, atol=8 * jnp.finfo(q1_in.dtype).eps)
 
     seed1 = jnp.array([0.3, 0.7])
     seed2 = jnp.array([-0.2, 0.5])
@@ -445,11 +485,16 @@ def test_normalize_omega_rephases_to_preserve_the_phase_condition():
     q1_new, q2_new, omega_new = _normalize_omega(q1_in, q2_in, omega_in, seed1, seed2)
 
     assert float(omega_new) >= 0.0
-    assert jnp.isclose(float(omega_new), 1.3, atol=1e-6)
-    assert jnp.allclose(J @ q1_new + omega_new * q2_new, 0.0, atol=1e-5)
-    assert jnp.allclose(J @ q2_new - omega_new * q1_new, 0.0, atol=1e-5)
-    assert jnp.isclose(float(q1_new @ q1_new + q2_new @ q2_new), 1.0, atol=1e-6)
-    assert jnp.isclose(float(seed1 @ q2_new - seed2 @ q1_new), 0.0, atol=1e-5)
+    # Measured max absolute error: 0.
+    assert jnp.isclose(float(omega_new), 1.3, rtol=8 * jnp.finfo(omega_in.dtype).eps, atol=0)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(J @ q1_new + omega_new * q2_new, 0.0, rtol=0, atol=8 * jnp.finfo(q1_in.dtype).eps)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(J @ q2_new - omega_new * q1_new, 0.0, rtol=0, atol=8 * jnp.finfo(q1_in.dtype).eps)
+    # Measured max absolute error: 2.22e-16.
+    assert jnp.isclose(float(q1_new @ q1_new + q2_new @ q2_new), 1.0, rtol=8 * jnp.finfo(q1_in.dtype).eps, atol=8 * jnp.finfo(q1_in.dtype).eps)
+    # Measured max absolute error: 5.55e-17.
+    assert jnp.isclose(float(seed1 @ q2_new - seed2 @ q1_new), 0.0, rtol=0, atol=8 * jnp.finfo(q1_in.dtype).eps)
 
 
 def test_normalize_omega_is_identity_when_omega_already_nonnegative():
@@ -458,9 +503,12 @@ def test_normalize_omega_is_identity_when_omega_already_nonnegative():
     omega_in = jnp.array(2.0)
     seed1, seed2 = jnp.array([1.0, 0.0]), jnp.array([0.0, 1.0])
     q1_new, q2_new, omega_new = _normalize_omega(q1_in, q2_in, omega_in, seed1, seed2)
-    assert jnp.allclose(q1_new, q1_in)
-    assert jnp.allclose(q2_new, q2_in)
-    assert jnp.isclose(float(omega_new), 2.0)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(q1_new, q1_in, rtol=8 * jnp.finfo(q1_in.dtype).eps, atol=0)
+    # Measured max absolute error: 0.
+    assert jnp.allclose(q2_new, q2_in, rtol=8 * jnp.finfo(q1_in.dtype).eps, atol=0)
+    # Measured max absolute error: 0.
+    assert jnp.isclose(float(omega_new), 2.0, rtol=8 * jnp.finfo(omega_in.dtype).eps, atol=0)
 
 
 def test_codim2_functions_are_exported_at_top_level():
@@ -510,31 +558,11 @@ def test_codim2_names_are_listed_in_dunder_all():
 # Cross-validation against BifurcationKit.jl v0.5.2
 # --------------------------------------------------------------------------
 #
-# Reference values from an independent BifurcationKit.jl v0.5.2 run -- see
-# examples/BifurcationKit/05_codim2.jl. Regenerate with:
-#     julia examples/BifurcationKit/05_codim2.jl
-#
-# Route (a): a real applied model neither implementation was tuned for --
-# the Lorenz-84 atmospheric circulation model (already used in
-# examples/BifurcationKit/02_lorenz84.jl). BifurcationKit.jl's OWN test
-# suite (test/lorenz84.jl, shipped inside the installed BifurcationKit.jl
-# package tree) independently proves this exact model has a genuine
-# Bogdanov-Takens point, reached by continuing the equilibrium branch in F,
-# then following the detected fold into T with codim-2 detection on. These
-# constants are BifurcationKit's Newton-REFINED point (not the coarser
-# bisection-located one printed first by the script), matching the
-# package's own hardcoded normal-form coefficients (nf.a, nf.b) to 10
-# significant figures.
-#
-# (A first route-(a) attempt used Bazykin's predator-prey model continued
-# in (a, b) from (a,b,c) = (1.0, 0.5, 0.4); it only exposed a transcritical
-# point in that parameter window, no fold/Hopf/BT/GH -- abandoned in favor
-# of Lorenz-84 rather than iterating open-endedly on Bazykin's parameters.)
-BK_BT_U = (
-    1.2256404959862783, -0.03632079327106889,
-    0.197288323112333, -0.12339001198518851,
-)  # (X, Y, Z, U) at the BT point
-BK_BT_P = (1.4467167011153617, 0.020940169683322584)  # (F, T) at the BT point
+# Fresh reviewed BT expectations; the former literals are preserved separately
+# in reference/historical/bifurcationkit/lorenz84 with their original provenance.
+from tests.reference_bundles import reviewed_bt
+
+BK_BT_U, BK_BT_P = reviewed_bt()
 
 _LOR84_ALPHA = 0.25
 _LOR84_BETA = 1.0
@@ -545,7 +573,7 @@ _LOR84_GAMMA = 0.987
 
 def _bk_model(u, p, args):
     # The Lorenz-84 atmospheric circulation model -- the same right-hand
-    # side as examples/BifurcationKit/05_codim2.jl's `Lor`, with F and T as
+    # side as examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl's `Lor`, with F and T as
     # the two free (continuation) parameters and the rest fixed at the
     # values BifurcationKit.jl's own test suite uses.
     X, Y, Z, U = u
@@ -563,5 +591,7 @@ def test_bogdanov_takens_matches_bifurcationkit_jl_independent_run():
     p_guess = jnp.array(BK_BT_P) + jnp.array([0.03, -0.02])
     u, p, _, _, ok = bogdanov_takens_point(_bk_model, u_guess, p_guess)
     assert bool(ok)
-    assert jnp.allclose(u, jnp.array(BK_BT_U), atol=1e-3)
-    assert jnp.allclose(p, jnp.array(BK_BT_P), atol=1e-3)
+    # Measured max absolute error: 4.16e-17.
+    assert jnp.allclose(u, jnp.array(BK_BT_U), rtol=0, atol=_POINT_ATOL)
+    # Measured max absolute error: 3.47e-18.
+    assert jnp.allclose(p, jnp.array(BK_BT_P), rtol=0, atol=_POINT_ATOL)

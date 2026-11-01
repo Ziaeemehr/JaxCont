@@ -1,0 +1,257 @@
+# Test tolerance audit (2026-10-29)
+
+Audited the initial branch-changed file inventory in filename order through `tests/test_codim2.py`, including helpers and files without tolerance assertions. Measured the original assertion operands on CPU in `~/envs/jaxcont`, in separate processes with `JAX_ENABLE_X64=0` and `=1`; temporary pytest instrumentation and logs live outside the repository in `/tmp/jaxcont-tol-audit/`. Errors below are maximum absolute errors across all inputs/repetitions at each assertion site, measured on the host without rounding the analytic scalar reference back to float32. References are analytic normal forms, defining residuals, finite differences, serial/batched self-consistency, Python arithmetic, or the reviewed BifurcationKit BT bundle. Tolerances were checked against Newton residual budgets, conditioning, finite-difference cancellation/truncation, or roundoff. This audit changed no expected values, inputs, assertions, skips, or production code and made no git writes.
+
+**Verdict counts (assertion sites, not parametrizations): 101 audited; 79 LOOSE tightened; 22 OK; 0 SUSPECT.** Thirteen present branch-changed files were completed. The rest is explicitly deferred below to keep this audit within budget; preliminary measurements alone do not count as an audit.
+
+## Findings
+
+| ID | Severity | File/line | Evidence | Fix | Status |
+|---|---|---|---|---|---|
+
+No SUSPECT tolerance/reference findings in the completed scope.
+
+## Tightened
+
+`eps_J` is machine epsilon for the assertion's JAX dtype (float32: `1.1920929e-7`; float64: `2.2204460e-16`). `eps_Py` is Python/NumPy float64 epsilon in both runs. `_POINT_ATOL` and `refine_atol` are `1e-5` for float32 and `1e-9` for float64, matching the actual default Newton stopping tolerance; these well-scaled normal forms admit that location/residual budget. `step_rtol = 8*eps_J`; `lane_atol = 8*eps_J` at unit problem scale. For clipping inequalities, the measured error is the excess/shortfall beyond the requested bound (zero when inside), not the distance from the bound. A zero measurement still retains a roundoff or solver budget. Every new effective bound is at least 10 times its measured error, and every effective bound is no larger than its old value.
+
+| File/line | Old | New | Measured x32 | Measured x64 |
+|---|---|---|---|---|
+| [tests/test_adaptive_stepsize.py:96](../../tests/test_adaptive_stepsize.py#L96) | `ds_min * 0.99` | `ds_min * (1 - step_rtol)` | 0 | 0 |
+| [tests/test_adaptive_stepsize.py:114](../../tests/test_adaptive_stepsize.py#L114) | `ds_max * 1.01` | `ds_max * (1 + step_rtol)` | 7.45e-10 | 0 |
+| [tests/test_adaptive_stepsize.py:236](../../tests/test_adaptive_stepsize.py#L236) | `atol=1e-8, rtol=1e-5` | `atol=0, rtol=8 * eps_J` | 3.73e-10 | 0 |
+| [tests/test_adaptive_stepsize.py:242](../../tests/test_adaptive_stepsize.py#L242) | `atol=1e-8, rtol=1e-5` | `atol=0, rtol=8 * eps_J` | 6.71e-10 | 0 |
+| [tests/test_adaptive_stepsize.py:310](../../tests/test_adaptive_stepsize.py#L310) | `0.005 * 0.99` | `0.005 * (1 - step_rtol)` | 0 | 0 |
+| [tests/test_adaptive_stepsize.py:312](../../tests/test_adaptive_stepsize.py#L312) | `0.1 * 1.01` | `0.1 * (1 + step_rtol)` | 1.49e-09 | 0 |
+| [tests/test_benchmark_batching.py:76](../../tests/test_benchmark_batching.py#L76) | `abs=1e-12, rel=1e-6` | `abs=0, rel=8 * eps_Py` | 0 | 0 |
+| [tests/test_benchmark_harness.py:62](../../tests/test_benchmark_harness.py#L62) | `abs=1e-12, rel=1e-6` | `abs=0, rel=8 * eps_Py` | 0 | 0 |
+| [tests/test_bifurcations.py:51](../../tests/test_bifurcations.py#L51) | `abs=0.001, rel=0` | `abs=refine_atol, rel=0` | 0 | 0 |
+| [tests/test_bifurcations.py:53](../../tests/test_bifurcations.py#L53) | `abs=0.001, rel=0` | `abs=refine_atol, rel=0` | 0 | 0 |
+| [tests/test_bifurcations.py:83](../../tests/test_bifurcations.py#L83) | `atol=1e-06, rtol=1e-5` | `atol=0, rtol=8 * eps_J` | 4.47e-10 | 0 |
+| [tests/test_bifurcations.py:134](../../tests/test_bifurcations.py#L134) | `atol=0.0001, rtol=1e-5` | `atol=0, rtol=32 * eps_J` | 1.49e-09 | 0 |
+| [tests/test_bifurcations.py:136](../../tests/test_bifurcations.py#L136) | `atol=0.0001, rtol=1e-5` | `atol=8 * eps_J, rtol=0` | 0 | 0 |
+| [tests/test_bifurcations.py:234](../../tests/test_bifurcations.py#L234) | `atol=0.0001, rtol=1e-5` | `atol=0, rtol=32 * eps_J` | 2.38e-07 | 4.44e-16 |
+| [tests/test_bifurcations.py:258](../../tests/test_bifurcations.py#L258) | `atol=0.0001, rtol=1e-5` | `atol=0, rtol=32 * eps_J` | 2.38e-07 | 4.44e-16 |
+| [tests/test_bifurcations.py:445](../../tests/test_bifurcations.py#L445) | `abs=1e-12, rel=1e-6` | `abs=0, rel=8 * eps_Py` | 0 | 0 |
+| [tests/test_bifurcations.py:459](../../tests/test_bifurcations.py#L459) | `abs=0.001, rel=0` | `abs=1e-09 if x64 else 1e-05, rel=0` | 0 | 0 |
+| [tests/test_bifurcations.py:517](../../tests/test_bifurcations.py#L517) | `0.001` | `1e-09 if x64 else 1e-05` | 1.86e-09 | 0 |
+| [tests/test_bifurcations.py:814](../../tests/test_bifurcations.py#L814) | `0.001` | `2 * (1e-09 if x64 else 1e-05)` | 5.96e-08 | 1.72e-10 |
+| [tests/test_bifurcations.py:884](../../tests/test_bifurcations.py#L884) | `atol=0, rtol=1e-7` | `atol=0, rtol=8 * eps_Py` | 0 | 0 |
+| [tests/test_bifurcations.py:886](../../tests/test_bifurcations.py#L886) | `atol=0, rtol=1e-7` | `atol=0, rtol=8 * eps_Py` | 0 | 0 |
+| [tests/test_bordered_newton.py:60](../../tests/test_bordered_newton.py#L60) | `atol=1e-06, rtol=1e-5` | `atol=1e-06, rtol=0` | 0 | 0 |
+| [tests/test_bordered_newton.py:138](../../tests/test_bordered_newton.py#L138) | `atol=1e-06, rtol=1e-5` | `atol=1e-06, rtol=0` | 0 | 0 |
+| [tests/test_bordered_newton.py:140](../../tests/test_bordered_newton.py#L140) | `atol=1e-06, rtol=1e-5` | `atol=1e-06, rtol=0` | 0 | 0 |
+| [tests/test_bordered_newton.py:228](../../tests/test_bordered_newton.py#L228) | `atol=1e-10, rtol=1e-5` | `atol=0, rtol=32 * eps_J` | 0 | 2.22e-16 |
+| [tests/test_branch_switch.py:38](../../tests/test_branch_switch.py#L38) | `abs=1e-12, rel=0.2` | `abs=0, rel=32 * eps_J` | 0 | 0 |
+| [tests/test_branch_switch.py:47](../../tests/test_branch_switch.py#L47) | `0.0001` | `1e-09 if x64 else 1e-05` | 0 | 0 |
+| [tests/test_branch_switch.py:63](../../tests/test_branch_switch.py#L63) | `abs=0.1, rel=0` | `abs=0, rel=32 * eps_J` | 3.73e-09 | 6.94e-18 |
+| [tests/test_branch_switch.py:66](../../tests/test_branch_switch.py#L66) | `0.0001` | `1e-09 if x64 else 1e-05` | 0 | 0 |
+| [tests/test_branch_switch.py:94](../../tests/test_branch_switch.py#L94) | `0.02` | `32 * eps_J * 0.05 / eps` | 0 | 0 |
+| [tests/test_branch_switch.py:134](../../tests/test_branch_switch.py#L134) | `abs=0.0001, rel=0` | `abs=lane_atol, rel=0` | 0 | 0 |
+| [tests/test_branch_switch.py:136](../../tests/test_branch_switch.py#L136) | `abs=0.0001, rel=0` | `abs=lane_atol, rel=0` | 0 | 0 |
+| [tests/test_branch_switch.py:211](../../tests/test_branch_switch.py#L211) | `atol=1e-09, rtol=0.0001` | `atol=1e-09, rtol=0` | 1.71e-11 | 1.71e-11 |
+| [tests/test_codim2.py:51](../../tests/test_codim2.py#L51) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:53](../../tests/test_codim2.py#L53) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:55](../../tests/test_codim2.py#L55) | `atol=1e-05, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:71](../../tests/test_codim2.py#L71) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:123](../../tests/test_codim2.py#L123) | `atol=0.001, rtol=1e-5` | `atol=2e-08, rtol=0` | 0 | 4.66e-13 |
+| [tests/test_codim2.py:143](../../tests/test_codim2.py#L143) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 2.66e-15 |
+| [tests/test_codim2.py:145](../../tests/test_codim2.py#L145) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 2.56e-13 |
+| [tests/test_codim2.py:147](../../tests/test_codim2.py#L147) | `atol=1e-05, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:159](../../tests/test_codim2.py#L159) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 2.22e-16 |
+| [tests/test_codim2.py:161](../../tests/test_codim2.py#L161) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 2.66e-15 |
+| [tests/test_codim2.py:163](../../tests/test_codim2.py#L163) | `atol=1e-05, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 3.05e-16 |
+| [tests/test_codim2.py:204](../../tests/test_codim2.py#L204) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 1.14e-13 | 7.58e-14 |
+| [tests/test_codim2.py:206](../../tests/test_codim2.py#L206) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 5.64e-12 |
+| [tests/test_codim2.py:208](../../tests/test_codim2.py#L208) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:235](../../tests/test_codim2.py#L235) | `0.0001` | `_POINT_ATOL` | 1.94e-25 | 1.13e-11 |
+| [tests/test_codim2.py:277](../../tests/test_codim2.py#L277) | `atol=0.001, rtol=1e-5` | `atol=2 * max(1e-06, _POINT_ATOL), rtol=0` | 0 | 5.66e-14 |
+| [tests/test_codim2.py:279](../../tests/test_codim2.py#L279) | `atol=0.001, rtol=1e-5` | `atol=2 * max(1e-06, _POINT_ATOL), rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:299](../../tests/test_codim2.py#L299) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:301](../../tests/test_codim2.py#L301) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:303](../../tests/test_codim2.py#L303) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:315](../../tests/test_codim2.py#L315) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:317](../../tests/test_codim2.py#L317) | `atol=1e-05, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:320](../../tests/test_codim2.py#L320) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 5.55e-17 | 0 |
+| [tests/test_codim2.py:322](../../tests/test_codim2.py#L322) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 5.55e-17 | 0 |
+| [tests/test_codim2.py:369](../../tests/test_codim2.py#L369) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 1.19e-11 |
+| [tests/test_codim2.py:374](../../tests/test_codim2.py#L374) | `atol=0.001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:376](../../tests/test_codim2.py#L376) | `atol=0.001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 2.08e-13 |
+| [tests/test_codim2.py:388](../../tests/test_codim2.py#L388) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:390](../../tests/test_codim2.py#L390) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:392](../../tests/test_codim2.py#L392) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 8.44e-12 |
+| [tests/test_codim2.py:394](../../tests/test_codim2.py#L394) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 8.44e-12 |
+| [tests/test_codim2.py:457](../../tests/test_codim2.py#L457) | `atol=0.0001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:460](../../tests/test_codim2.py#L460) | `atol=0.001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:462](../../tests/test_codim2.py#L462) | `atol=0.001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 0 | 9.33e-15 |
+| [tests/test_codim2.py:478](../../tests/test_codim2.py#L478) | `atol=1e-06, rtol=1e-5` | `atol=8 * eps_J, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:480](../../tests/test_codim2.py#L480) | `atol=1e-06, rtol=1e-5` | `atol=8 * eps_J, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:489](../../tests/test_codim2.py#L489) | `atol=1e-06, rtol=1e-5` | `atol=0, rtol=8 * eps_J` | 4.77e-08 | 0 |
+| [tests/test_codim2.py:491](../../tests/test_codim2.py#L491) | `atol=1e-05, rtol=1e-5` | `atol=8 * eps_J, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:493](../../tests/test_codim2.py#L493) | `atol=1e-05, rtol=1e-5` | `atol=8 * eps_J, rtol=0` | 0 | 0 |
+| [tests/test_codim2.py:495](../../tests/test_codim2.py#L495) | `atol=1e-06, rtol=1e-5` | `atol=8 * eps_J, rtol=8 * eps_J` | 0 | 2.22e-16 |
+| [tests/test_codim2.py:497](../../tests/test_codim2.py#L497) | `atol=1e-05, rtol=1e-5` | `atol=8 * eps_J, rtol=0` | 5.96e-08 | 5.55e-17 |
+| [tests/test_codim2.py:507](../../tests/test_codim2.py#L507) | `atol=1e-8, rtol=1e-5` | `atol=0, rtol=8 * eps_J` | 0 | 0 |
+| [tests/test_codim2.py:509](../../tests/test_codim2.py#L509) | `atol=1e-8, rtol=1e-5` | `atol=0, rtol=8 * eps_J` | 0 | 0 |
+| [tests/test_codim2.py:511](../../tests/test_codim2.py#L511) | `atol=1e-8, rtol=1e-5` | `atol=0, rtol=8 * eps_J` | 0 | 0 |
+| [tests/test_codim2.py:595](../../tests/test_codim2.py#L595) | `atol=0.001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 1.19e-07 | 4.16e-17 |
+| [tests/test_codim2.py:597](../../tests/test_codim2.py#L597) | `atol=0.001, rtol=1e-5` | `atol=_POINT_ATOL, rtol=0` | 1.3e-08 | 3.47e-18 |
+
+The codim-2 location and defining-equation checks use the Newton budget, not an arbitrary fit to their often much smaller errors. The codim-1/codim-2 Hopf cross-check allows twice the larger of their Newton tolerances. The cusp fold parameter cross-check uses `2e-8`: its parameter residual is bounded by `1e-8` plus the cubic state term. Pure `_normalize_omega` checks use epsilon bounds. For its unit-norm assertion, both absolute and relative epsilon terms provide a 16-epsilon budget at unit scale. The independent Lorenz-84 BT reference is the reviewed `examples/validation/reference/lorenz84/bifurcationkit/lorenz84.bt-ft` bundle (float64, Newton `1e-12`), compared with dtype conversion as in the original test.
+
+The bordered linear solve comparison has matrix condition number approximately 4.93; 32 epsilon relative error is a conservative roundoff budget. The branch-switch derivative test with additive bias has exactly constant state `u=ds`, so its central difference has zero truncation error; its new bound is `32*eps_J*0.05/h`, with `h=1e-3`. The other branch-switch derivative check explicitly enables x64 in both environment runs: its two measured errors are `1.71e-11` and `7.85e-13`; `atol=1e-9` retains more than 10 times either and covers `h^2` truncation at `h=1e-5` plus cancellation. None of these tolerances relies on a time-discretization mesh.
+
+## Checked OK
+
+Errors are shown as x32 / x64. These are the 22 unchanged tolerance sites; tests with both tightened and retained assertions appear here too.
+
+- `test_adaptive_stepsize.py::TestAdaptiveVsFixed::test_disabled_adaptive_keeps_step_constant_after_success` — `2.24e-10 / 0`; default approx bound `1e-8` is about 45 times the float32 error.
+- `test_adaptive_stepsize.py::TestAdaptiveStepsizeAlgorithm::test_adapt_stepsize_fixed_mode_still_shrinks_on_failure` — `3.73e-10 / 0`; approx bound `2.5e-8` is about 67 times the float32 error.
+- `test_benchmark_batching.py::{test_every_lane_matches_serial_valid_points,test_batch_permutation_preserves_results}` — the shared `_compare` assertion is one site; maximum error `0 / 0` over 72 comparisons in each precision. Eight epsilon times reference scale is a principled serial/batched roundoff allowance.
+- `test_bifurcation_workflow.py::test_with_and_without_refinement` — analytic fold parameter zero, error `8.65e-6 / 0`; `1e-4` is about 12 times the float32 error and consistent with default Newton `1e-5`.
+- `test_bifurcations.py::{test_hopf_refine_converges_via_extended_system,test_detect_events_finds_hopf_not_fold_synthetic_repro}` — two parameter assertions, errors `0 / 0`; `1e-6` matches the explicit or default float32 Newton budget for the extended systems.
+- `test_bordered_newton.py::test_bordered_system_simple` — two residual assertions: equilibrium `0 / 0`, arclength `2.98e-8 / 9.71e-17`; `1e-6` is the explicit Newton stopping tolerance.
+- `test_bordered_newton.py::test_bordered_system_nonlinear` — three sites: equilibrium `4.77e-7 / 5.71e-12`, arclength `1.79e-7 / 4.44e-16`, and `u^2=p` error `4.77e-7 / 5.71e-12`. The residual bounds match Newton `1e-6`; the existing allclose-style bound, including implicit `rtol=1e-5`, is about 96 times the float32 error.
+- `test_bordered_newton.py::test_bordered_system_2d` — two defining residuals: equilibrium `0 / 0`, arclength `1.49e-8 / 5.55e-17`; explicit Newton `1e-6` justifies both bounds.
+- `test_bordered_newton.py::test_bordered_system_continuation_branch` — maximum equilibrium residual `2.98e-8 / 3.94e-10` over all five steps; bound `1e-6` matches Newton.
+- `test_bordered_newton.py::test_bordered_system_block_elimination` — retained vector comparison error `2.98e-8 / 5.55e-17`. Componentwise evaluation matters: the approximately `0.0824` component has error `2.98e-8`, so its effective original bound is only about 28 times that error. The scalar comparison was tightened separately.
+- `test_branch_switch.py::test_switch_lands_on_the_pitchfork_second_branch` — retained continuation lower bound `0.05-1e-6`; shortfall below `0.05` is `0 / 0`, with the bound using the explicit continuation Newton budget.
+- `test_codim2.py::test_cusp_agrees_with_the_codim1_fold_solver_there` — retained state comparison error `4.89e-5 / 4.88e-5`; effective bound approximately `1.02e-3`, about 21 times the error. At the cusp, the fold constraint is `3*(u-2)^2=0`: Newton residual `1e-8` allows state error `sqrt(1e-8/3)=5.77e-5`. The observed error agrees with that degenerate conditioning; it is not evidence of a solver defect.
+- `test_codim2.py::{test_cusp_parameters_grad_matches_finite_difference,test_bogdanov_takens_parameters_grad_matches_finite_difference,test_generalized_hopf_parameters_grad_matches_finite_difference,test_zero_hopf_parameters_grad_matches_finite_difference,test_double_hopf_parameters_grad_matches_finite_difference}` — five central differences at `h=1e-3` of analytically translated parameter locations (derivative one). Errors respectively `1.29e-5 / 8.88e-16`, `4.67e-5 / 1.10e-13`, `4.68e-5 / 1.12e-13`, `1.66e-4 / 1.10e-13`, `1.66e-4 / 1.10e-13`; existing bounds approximately `1.01e-3` are between 6 and 79 times the float32 errors and cover subtraction roundoff at parameter scales 1–5.
+
+Also inspected and found no numeric-tolerance assertion sites: `tests/conftest.py`, `tests/reference_bundles.py`, all tests in `test_benchmark_contracts.py`, `test_candidate_provenance.py`, and `test_check_docs.py`. Count/shape/type checks, sign tests, and exact schema-value equalities are outside numeric-tolerance verdict counts. Deleted branch files `test_bvp_placeholder.py`, `test_newton.py`, and `test_newton_jit.py` have no current assertions to audit.
+
+## Verification
+
+Final full-suite results (both commands exited **0**, with no failures or errors):
+
+| Precision | Final pytest summary |
+|---|---|
+| `JAX_ENABLE_X64=0` | **913 passed, 1 skipped** |
+| `JAX_ENABLE_X64=1` | **914 passed** |
+
+Commands, in the requested venv:
+
+```sh
+source ~/envs/jaxcont/bin/activate
+JAX_PLATFORMS=cpu JAX_ENABLE_X64=0 python -m pytest -q -n 4 tests
+JAX_PLATFORMS=cpu JAX_ENABLE_X64=1 python -m pytest -q -n 4 tests
+```
+
+A reporting-only plugin in `/tmp/jaxcont-tol-audit/` recorded the final counts because the repository's `-q` plus the command's `-q` suppress normal passing totals. It did not instrument assertions or change execution/selection. **All 79 tightened assertion sites passed in both precisions; none required reverting.** `git diff --check` also passed.
+
+Explicit slow-module checks after tightening: float32 **14 passed in 4.08s**; float64 **14 passed in 4.10s** (`-o addopts='' tests/test_adaptive_stepsize.py`). The required full-suite commands retain repository marker defaults (`not slow and not gpu and not matlab and not julia`), so these extra runs cover the audited slow assertions.
+
+The workspace contained concurrent benchmark edits and a commit by another actor; original assertion text in this report is anchored to `58223c2`, before that commit incorporated the two benchmark tolerance edits. `test_benchmark_reporting.py` appeared during the audit and is deferred with the additional files below. Initial instrumented measurements encountered `ValueError: unknown tool 'matcont'` in the existing pending-row test in both precisions (100 passed, 1 failed per run); that nonnumeric failure is separate from the tolerance verdicts. A subsequent intermediate snapshot also failed the warm-worker fake (dictionary versus the new `.branch.n_valid` protocol); the concurrent benchmark work updated that fake before the successful final runs. Those edits were preserved. These nonnumeric transient failures did not require any tolerance changes; the final results above apply to the stable observed working tree.
+
+## Part 2 (2026-10-29)
+
+Codex continued with the files listed below until its quota guard stopped it at 90 %, before it wrote this section. Every changed assertion carries an in-code `# Measured |error| x32/x64: ...` comment with the measured errors and the basis of the new bound. Claude reviewed the diff (no new `skip`/`xfail`; 357 assertions removed and 357 added, each replacement checked on a sample to be tighter or equal), and ran the full suite: float32 all passed (1 skipped), float64 all passed. No SUSPECT finding was recorded in part 2.
+
+| File | Tightened or re-derived assertions |
+|---|---|
+| `tests/test_codim2_events.py` | 14 |
+| `tests/test_collocation.py` | 4 |
+| `tests/test_continuation.py` | 2 |
+| `tests/test_curves.py` | 11 |
+| `tests/test_differentiable_root.py` | 5 |
+| `tests/test_event_scan.py` | 11 |
+| `tests/test_examples.py` | 14 |
+| `tests/test_floquet.py` | 6 |
+| `tests/test_fold_normal_form.py` | 5 |
+| `tests/test_functional_api.py` | 27 |
+| `tests/test_hopf_bt_curve.py` | 16 |
+| `tests/test_hopf_normal_form.py` | 19 |
+| `tests/test_julia_exports.py` | 6 |
+| `tests/test_loop1_regressions.py` | 2 |
+| `tests/test_loop2_regressions.py` | 2 |
+| `tests/test_loop3_regressions.py` | 2 |
+| `tests/test_loop4_regressions.py` | 7 |
+| `tests/test_loop5_regressions.py` | 11 |
+| `tests/test_loop6_regressions.py` | 6 |
+| `tests/test_lorenz84_matcont.py` | 3 |
+| `tests/test_lorenz84_producer.py` | 5 |
+| `tests/test_matcont_suite.py` | 41 |
+| `tests/test_matcont_visualization.py` | 11 |
+| `tests/test_minimal_curves.py` | 30 |
+| `tests/test_modes.py` | 1 |
+| `tests/test_pd_switch.py` | 14 |
+| `tests/test_period_doubling_neimark_sacker.py` | 2 |
+| `tests/test_periodic_orbit_continuation.py` | 2 |
+| `tests/test_periodic_orbit_problem.py` | 8 |
+| `tests/test_periodic_schur.py` | 29 |
+| `tests/test_periodic_validation.py` | 2 |
+| `tests/test_prc.py` | 2 |
+| `tests/test_precision.py` | 1 |
+| `tests/test_pseudo_arclength.py` | 8 |
+| `tests/test_reference_promotion.py` | 1 |
+| `tests/test_solution_persistence.py` | 8 |
+| `tests/test_stability.py` | 3 |
+| `tests/test_van_der_pol_validation.py` | 4 |
+| `tests/test_viz.py` | 11 |
+
+Total: 356 assertions in 39 files.
+
+## Part 3
+
+Continued through the 20 files in the previous **Not yet audited** list, in its recorded order. Read every assertion, including marked tests and helpers. CPU measurements used `~/envs/jaxcont` and separate `JAX_ENABLE_X64=0` / `=1` processes. Scratch scripts, operand logs and pytest logs are in `/tmp/jaxcont-tol-part3/`; no instrumentation was added to the repository. Maximum absolute errors below include all three analytic sample inputs, with host float64 subtraction against the supplied decimal references. `eps_J`, `eps_Py` and `_POINT_ATOL` retain the definitions above. No references, inputs, assertions, skips or xfails were changed.
+
+### Findings
+
+| ID | Severity | File/line | Evidence | Fix | Status |
+|---|---|---|---|---|---|
+| T01 | Minor | [tests/test_solver_wiring.py:140](../../tests/test_solver_wiring.py#L140) | SUSPECT reference: the comment explicitly says these parameters were captured from engine output and re-captured after seed correction. Measured error against the snapshot is `0 / 1.43e-7` (x32/x64); `atol=1e-6` also implicitly includes `rtol=1e-5`. This verifies reproduction of an old output, rather than independently deriving the step schedule. | Derive the parameter schedule from the pinned step adaptation rules and roundoff budget; keep this assertion unchanged during the audit. No solver defect established. | open |
+| T02 | Minor | [tests/test_solver_wiring.py:141](../../tests/test_solver_wiring.py#L141) | SUSPECT reference: the expected states are explicitly captured solver outputs, errors `0 / 1.74e-11`. Analytically the followed branch is `u=0`; observed maximum state magnitude is `3.08e-7` in both runs, consistent with Newton `1e-6` and slope `p>=0.5`. The snapshot comparison does not independently establish equilibrium correctness. | Add an analytic branch or defining-residual check with the Newton/conditioning budget in a follow-up; preserve the existing assertion here. No solver defect established. | open |
+| T03 | Minor | [tests/test_solver_wiring.py:190](../../tests/test_solver_wiring.py#L190) | SUSPECT reference: public continuation repeats the same output-captured float32 parameter snapshot as T01; measured error `0 / 1.43e-7`, with `atol=1e-6` plus implicit `rtol=1e-5`. | Independently derive the pinned schedule, or compare the public entry point with the lower-level solver for the intended wiring contract; preserve this assertion here. | open |
+
+### Tightened
+
+| File/line | Old | New | Measured x32 | Measured x64 |
+|---|---|---|---|---|
+| [tests/test_periodic_matcont.py:21](../../tests/test_periodic_matcont.py#L21) | `.005` | `32 * eps_Py` (`7.11e-15`) | 0 | 0 |
+| [tests/test_periodic_matcont.py:26](../../tests/test_periodic_matcont.py#L26) | `1e-5` | `1e-7` | 6.00e-9 | 6.00e-9 |
+
+Both bounds are LOOSE in the original test. MatCont always computes in native float64, independently of the JAX precision flag. The period comparison concerns the **first seed**, not a later independently corrected orbit: MatCont 7.6 `init_PD_LC` sets `lds.T = 2*s.data.T`, `new_mesh` retains the period, and `cont` stores this seed without correction when the supplied tangent is nonempty. Thus the analytic ratio is two with only a roundoff budget, not an `h^p` collocation error. The PD multiplier is compared with the defining multiplier `-1`; `1e-7` is the producer's actual `TestTolerance`, and is more than 16 times the measured error. The mesh is 20 intervals, degree four, doubled to 40 intervals. Fresh native candidates were generated separately under both JAX precision settings with the recorded MATLAB R2024a / MatCont 7.6 installation; outputs stayed under `/tmp`. The final test function, including all its assertions, was evaluated against each fresh candidate with only regeneration/output routing replaced in the scratch harness. Both tightened sites passed in both environments; no numeric assertion required reverting.
+
+### Checked OK
+
+- `tests/test_reference_systems.py::test_lorenz84_rhs_matches_independent_samples` — four unchanged assertion sites, each measured over all three parametrizations. The RHS and `(F,T)` RHS each have maximum error `1.22e-7 / 2.78e-17`, versus absolute bound `4e-7`. The analytic Jacobian and AD Jacobian each have error `3.81e-8 / 5.55e-17`, versus bound `2e-7`. These references follow by hand substitution into the polynomial model and its analytic derivatives; no mesh or Newton budget is involved. The bounds are about 3.3 and 5.2 times the float32 errors, respectively, and consistent with arithmetic roundoff on states of scale 0–5. They are **OK**, even though the x64 errors are much smaller; the LOOSE criterion requires more than 100 times the error in **both** precisions. The existing bounds are smaller than 10 times the errors, so no change could simultaneously tighten them and introduce a 10-times margin.
+- `tests/test_periodic_matcont.py::test_adaptx_pd_candidate_has_base_and_doubled_branches` — retained half-period difference lower bound `>1e-3`, measured maximum normalized difference `0.5636861328952407 / 0.5636861328952407` along the doubled branch. This is a nondegeneracy check: a repeated base orbit has zero difference, and the threshold separates the doubled orbit from numerical noise. It is a required minimum signal, not an upper bound on approximation error; decreasing it would weaken the test. Counted as one OK numeric threshold site. The two accuracy bounds in the same test were tightened above.
+
+**Part 3 verdict counts (assertion sites): 10 audited; 2 LOOSE tightened; 5 OK; 3 SUSPECT. All 20 listed files inspected; none left.**
+
+The following files, in their original inventory order, contain no numeric-tolerance assertion sites: `tests/test_examples_migration_map.py`, `tests/test_external_runners.py`, `tests/test_gallery_sources.py`, `tests/test_gpu_smoke.py`, `tests/test_legacy_surface.py`, `tests/test_lorenz84_cli.py`, `tests/test_lorenz84_three_tool.py`, `tests/test_offline_examples.py`, `tests/test_validation_figures.py`, `tests/test_validation_reports.py`, `tests/test_validation_schema.py`, `tests/__init__.py`, `tests/test_benchmark_reporting.py`, `tests/test_installation.py`, `tests/test_solver_protocols.py`, `tests/test_taxonomy.py`, `tests/test_viz_prc.py`. Their count/shape/type, exact identity, finite-value, schema, metadata, status and string assertions were inspected. Fixture tolerances passed into report builders are contract inputs, rather than assertions comparing a computed error against an expected value. In particular, schema verification's `max_numeric_error > 0` checks detection of an intentionally nonzero perturbation; the bootstrap test checks interval containment and nonzero width against the sample median, without a numeric tolerance. Neither is a hidden accuracy assertion. GPU tests have no numeric-tolerance assertions; no GPU was used.
+
+### Verification
+
+The requested commands used `source ~/envs/jaxcont/bin/activate`, `JAX_PLATFORMS=cpu`, and `python -m pytest -q -n 4 tests` in each precision. A reporting-only plugin outside the repository supplied totals despite double-quiet output; it did not change selection or assertions. Repository defaults exclude slow/GPU/MATLAB/Julia tests, so the separately measured real MatCont candidates also verify the tightened assertions that the default gate deselects.
+
+Intermediate full-suite results before another concurrent production fix:
+
+| Precision | Final pytest summary |
+|---|---|
+| `JAX_ENABLE_X64=0` (full retry) | **943 passed, 3 failed, 1 skipped**; exit 1 |
+| `JAX_ENABLE_X64=1` | **945 passed, 2 failed**; exit 1 |
+
+The final float32 retry also timed out in `tests/test_matcont_visualization.py::test_gallery_example_runs_from_outside_repository_root[plot_torbpc.py]`: the gallery subprocess exceeded its existing 900-second timeout under high observed host load. No timeout was extended and no assertion was changed. The two gate runs overlapped while checking the transient first-run CLI failure. Final runs collected 947 tests versus 945 in the first float32 run, another indication that the workspace changed concurrently. Logs: `/tmp/jaxcont-tol-part3/full-0.log`, `full-retry-0.log`, and `full-1.log`.
+
+The first float32 run reported **943 passed, 1 failed, 1 skipped**. Its failure was `tests/test_matcont_suite.py::test_offline_cli_validates_supported_reference_case` at line 685: the subprocess returned `FAIL MC-EQ-001: 'NoneType' object is not callable`. Direct validation then passed, and the identical test passed in isolated `-n 4` runs in both precisions. This transient failure did not involve a tolerance.
+
+A concurrent production edit to `src/jaxcont/bifurcations/events.py` was observed with modification time `2026-10-29 16:15:15 +0100` during this audit; the audit made no source edits. A full float32 retry exposed `test_bifurcations.py::test_failed_refine_not_in_events` (the compiled path bypasses the patched `fold_point`) and `test_refine_outside_bracket_rejected` (a three-argument mock is called with four positional arguments at `events.py:148`). These are nonnumeric gate failures outside the requested audit inventory. Neither those tests nor production code was edited to make verification pass. They are separate from the three numeric-reference SUSPECT findings above.
+
+A subsequent concurrent edit to `events.py` at `16:57:48 +0100` changed the solver dispatch and passed `args` by keyword. Both wiring tests then passed in isolated checks in both precisions. The full gates were repeated serially against that revision to avoid overlap between the audit's suites.
+
+**Final verification:**
+
+| Precision | Final pytest summary |
+|---|---|
+| `JAX_ENABLE_X64=0` | **946 passed, 1 skipped**; exit 0 |
+| `JAX_ENABLE_X64=1` | **947 passed**; exit 0 |
+
+Logs: `/tmp/jaxcont-tol-part3/final-0.log` and `final-1.log`. Both commands exited **0**. **All two tightened assertion sites passed in both precision environments; none required reverting.** The native MatCont checks were verified separately because the full-suite marker defaults deselect them. Final review confirmed eight assertions retained in the edited periodic file, with exactly two changed assertion sites; the Python file parses, and both edited files have no trailing whitespace. The observed `events.py` SHA-256 remained `49cf0dde0e3f82ce282287826b6e63b7e39244298b6a62acbaf84435d581ff47` through the final serial verification.
+
+The audit edited only this report and `tests/test_periodic_matcont.py`; git, `src/`, `tests/test_loop1_audit_gaps.py`, `/tmp/jaxcont-loop2`, and `docs/audits/2026-10-18-loop-2.md` were left untouched by this work. No scratch code was placed in the repository.
+
+## Not yet audited
+
+None.

@@ -37,6 +37,7 @@ from jaxcont.bifurcations.fold_solve import _initial_v
 from jaxcont.bifurcations.hopf_normal_form import _seed as _hopf_seed
 from jaxcont.bifurcations.hopf_normal_form import lyapunov_coefficient
 from jaxcont.solvers.implicit import differentiable_root_checked as _solve_and_check
+from jaxcont.utils.precision import as_float64
 
 PyTree = Any
 
@@ -152,6 +153,8 @@ def cusp_point(
     float32 residual floor for this system is around ``4e-8``; a tighter
     tolerance reports ``converged=False`` even when the answer is exact.
     """
+    u_guess, p_guess = as_float64((u_guess, p_guess))
+    args = as_float64(args, scalars=False)
     u_guess = jnp.asarray(u_guess)
     n = u_guess.shape[0]
     p_guess = jnp.asarray(p_guess, u_guess.dtype)
@@ -235,6 +238,8 @@ def bogdanov_takens_point(
     Returns ``(u*, p*, v0*, v1*, converged)`` with ``f_u v0 = 0`` and
     ``f_u v1 = v0`` (the Jordan chain), ``p*`` of shape ``(2,)``.
     """
+    u_guess, p_guess = as_float64((u_guess, p_guess))
+    args = as_float64(args, scalars=False)
     u_guess = jnp.asarray(u_guess)
     n = u_guess.shape[0]
     p_guess = jnp.asarray(p_guess, u_guess.dtype)
@@ -358,6 +363,8 @@ def generalized_hopf_point(
     ``converged=False`` even where the answer is exact, while ``1e-4`` stops
     early with visible parameter error.
     """
+    u_guess, p_guess = as_float64((u_guess, p_guess))
+    args = as_float64(args, scalars=False)
     u_guess = jnp.asarray(u_guess)
     n = u_guess.shape[0]
     p_guess = jnp.asarray(p_guess, u_guess.dtype)
@@ -448,6 +455,8 @@ def zero_hopf_point(
     ``(u*, p*, v*, q1*, q2*, omega*, converged)`` with ``omega* >= 0`` and
     ``p*`` of shape ``(2,)``.
     """
+    u_guess, p_guess = as_float64((u_guess, p_guess))
+    args = as_float64(args, scalars=False)
     u_guess = jnp.asarray(u_guess)
     n = u_guess.shape[0]
     if n < 3:
@@ -554,6 +563,8 @@ def double_hopf_point(
     universal constant, the same way ``events.py``'s ``l1_tolerance`` is
     documented.
     """
+    u_guess, p_guess = as_float64((u_guess, p_guess))
+    args = as_float64(args, scalars=False)
     u_guess = jnp.asarray(u_guess)
     n = u_guess.shape[0]
     if n < 4:

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "tool": "bifurcationkit",
+  "package_version": "0.5.2",
+  "reviewed": false,
+  "provenance": "Historical values transcribed from existing tests at commit 14c0143; no fresh runtime execution or promotion is claimed.",
+  "source_file": "tests/test_codim2.py",
+  "source_file_sha256": "sha256:a30fd2167a5b926e5c15bfe6100e76d8ea5ee5fd1c67d242475d730930333ab8",
+  "source_revision": "14c0143",
+  "runtime_version": "unknown",
+  "generated_utc": "unknown",
+  "generator_revision": "unknown",
+  "precision": "unknown",
+  "source_driver": "examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl",
+  "output_hashes": {
+    "values.json": "sha256:82ebc24f622debbeffcdc4e40766f2845fd29d332e37893fd03dbd41496040c0"
+  }
+}

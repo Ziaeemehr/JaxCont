@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "tool": "bifurcationkit",
+  "package_version": "0.5.2",
+  "reviewed": false,
+  "provenance": "Historical values transcribed from existing tests at commit 14c0143; no fresh runtime execution or promotion is claimed.",
+  "source_file": "tests/test_hopf_normal_form.py",
+  "source_file_sha256": "sha256:746061dc1ad48fb5bdfd18592b08ded8cda410a1187635b06a6ad13000926497",
+  "source_revision": "14c0143",
+  "runtime_version": "unknown",
+  "generated_utc": "unknown",
+  "generator_revision": "unknown",
+  "precision": "unknown",
+  "source_driver": "examples/validation/regenerate/bifurcationkit/hopf_normal_form.jl",
+  "output_hashes": {
+    "values.json": "sha256:bd235a395a307acb0df59a01bb7c1a166dda1bceb5456ec716840cee62c11f72"
+  }
+}

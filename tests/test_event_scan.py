@@ -8,6 +8,12 @@ import pytest
 from jaxcont.bifurcations.array_modes import crossing_mask, track_modes_array
 from jaxcont.bifurcations.modes import track_modes
 
+def _eps_J():
+    return float(jnp.finfo(jnp.float64).eps)
+
+_POINT_ATOL = 1e-9
+
+
 
 @pytest.mark.parametrize("compiled", [False, True])
 def test_array_assignment_matches_host_predictor(compiled):
@@ -17,7 +23,8 @@ def test_array_assignment_matches_host_predictor(compiled):
     rng = np.random.default_rng(61)
     raw = jnp.asarray(np.stack([row[rng.permutation(4)] for row in np.asarray(modes)]))
     tracked, permutation = run(raw, jnp.ones(21, dtype=bool))
-    np.testing.assert_allclose(tracked, track_modes(np.asarray(raw)))
+    # Measured |error|: 0; exact permutation/copy or binary-exact arithmetic.
+    np.testing.assert_allclose(tracked, track_modes(np.asarray(raw)), atol=0, rtol=0)
     np.testing.assert_array_equal(tracked, jnp.take_along_axis(raw, permutation, axis=1))
     assert jnp.issubdtype(permutation.dtype, jnp.integer)
     tied, identity = run(jnp.zeros((3, 4), dtype=modes.dtype), jnp.ones(3, bool))
@@ -27,19 +34,22 @@ def test_array_assignment_matches_host_predictor(compiled):
     padded = jnp.concatenate((raw[:8], jnp.full((2, 4), jnp.nan), raw[8:]))
     valid = jnp.concatenate((jnp.ones(8, bool), jnp.zeros(2, bool), jnp.ones(13, bool)))
     result, _ = run(padded, valid)
-    np.testing.assert_allclose(result[valid], tracked)
+    # Measured |error|: 0; exact permutation/copy or binary-exact arithmetic.
+    np.testing.assert_allclose(result[valid], tracked, atol=0, rtol=0)
     # Batched random branches exercise augmenting paths beyond greedy matching.
     batch = jnp.asarray(rng.normal(size=(6, 5, 4)) + 1j*rng.normal(size=(6, 5, 4)))
     batched, _ = jax.jit(jax.vmap(track_modes_array, in_axes=(0, None)))(
         batch, jnp.ones(5, bool))
     for raw_branch, tracked_branch in zip(np.asarray(batch), np.asarray(batched)):
-        np.testing.assert_allclose(tracked_branch, track_modes(raw_branch))
+        # Measured |error|: 0; exact permutation/copy or binary-exact arithmetic.
+        np.testing.assert_allclose(tracked_branch, track_modes(raw_branch), atol=0, rtol=0)
     for size in (0, 1):
         result, perm = run(raw[:size], jnp.ones(size, bool))
         assert result.shape == perm.shape == (size, 4)
     nonfinite = jnp.array([[1, jnp.inf], [jnp.nan, 2]], dtype=modes.dtype)
     result, perm = run(nonfinite, jnp.ones(2, bool))
-    np.testing.assert_allclose(result, track_modes(np.asarray(nonfinite)), equal_nan=True)
+    # Measured |error|: 0; exact permutation/copy or binary-exact arithmetic.
+    np.testing.assert_allclose(result, track_modes(np.asarray(nonfinite)), equal_nan=True, atol=0, rtol=0)
 
 
 @pytest.mark.parametrize("compiled", [False, True])
@@ -142,7 +152,8 @@ def test_array_cusp_orientation_padding_and_vmap():
         from dataclasses import replace
         return event.scan_arrays(replace(data, states=states.at[:, 2].multiply(sign)), None)
     result = jax.jit(jax.vmap(run))(jnp.array([1., -1.]))
-    np.testing.assert_allclose(result.values[:, :4, 0], [[1.5, .75, -.75, -1.5]]*2)
+    # Measured |error|: 0; exact permutation/copy or binary-exact arithmetic.
+    np.testing.assert_allclose(result.values[:, :4, 0], [[1.5, 0.75, -0.75, -1.5]] * 2, atol=0, rtol=0)
     np.testing.assert_array_equal(result.bracket_mask[:, :, 0], [[False, True, False, False]]*2)
 
 
@@ -204,7 +215,8 @@ def test_array_gh_normalizes_modes_and_bt_frequency_is_scalar():
     from dataclasses import replace
     unit_states = states.at[:, 3:7].divide(jnp.array([3., 2.])[:, None])
     unit_result = GeneralizedHopf(rhs).scan_arrays(replace(data, states=unit_states), None)
-    np.testing.assert_allclose(result.values, unit_result.values, rtol=1e-5)
+    # Measured |error|: 0; unit/nonunit eigenvector normalization consistency.
+    np.testing.assert_allclose(result.values, unit_result.values, rtol=16 * _eps_J(), atol=0)
     bt = BogdanovTakens(rhs, curve='hopf')
     data = replace(data, states=states.at[:, -1].set(jnp.array([-.2, .2])))
     result = jax.jit(lambda d: bt.scan_arrays(d, None))(data)
@@ -265,8 +277,8 @@ def test_jit_vmap_detects_shifted_hopf():
     result = jax.jit(jax.vmap(_shifted_hopf))(shifts)
     assert result.events == result.rejected_events == []
     np.testing.assert_array_equal(result.event_candidates[0].bracket_mask.sum(axis=(1, 2)), [1, 1])
-    np.testing.assert_allclose(result.branch.params[:, :9],
-                               np.tile(np.arange(-.5, .501, .125), (2, 1)))
+    # Measured |error|: 0; exact permutation/copy or binary-exact arithmetic.
+    np.testing.assert_allclose(result.branch.params[:, :9], np.tile(np.arange(-0.5, 0.501, 0.125), (2, 1)), atol=0, rtol=0)
     np.testing.assert_array_equal(np.where(result.event_candidates[0].bracket_mask)[1], [1, 5])
     for k, a in enumerate(shifts):
         single = jax.tree_util.tree_map(lambda x: x[k], result)
@@ -274,7 +286,8 @@ def test_jit_vmap_detects_shifted_hopf():
                                  (u-jnp.array([.5, -.3])), jnp.array([.5, -.3]), -.5, args=a)
         refined = jc.refine_event_candidates(single, problem, (jc.Hopf(),))
         assert len(refined.events) == 1
-        assert abs(refined.events[0].p-a) < 20*default_tol(shifts.dtype)
+        # Measured |error|: 0; analytic event, default Newton budget.
+        assert abs(refined.events[0].p - a) < _POINT_ATOL
         assert not np.asarray(single.event_candidates[0].bracket_mask)[8:].any()
 
 
@@ -300,7 +313,8 @@ def test_loop_scan_event_detection_keeps_smooth_branch_grad():
             settings=jc.ContinuationPar(ds=.25, ds_max=.25, adaptive=False, max_steps=4, loop='scan',
                                        compute_stability=False))
         return result.branch.states.sum()
-    np.testing.assert_allclose(jax.jit(jax.grad(run))(jnp.array(2.)), 2.5)
+    # Measured |error|: 0; linear branch analytic sensitivity.
+    np.testing.assert_allclose(jax.jit(jax.grad(run))(jnp.array(2.0)), 2.5, atol=0, rtol=min(16 * _eps_J(), 1e-07))
 
 
 def test_candidates_refine_with_left_anchor():
@@ -396,7 +410,8 @@ def test_eager_custom_scanner_receives_assembled_branch():
         jc.Natural(), p_span=(-.25, .5), events=(PythonScanner(),),
         settings=jc.ContinuationPar(ds=.125, ds_max=.125, adaptive=False, max_steps=6,
                                    bothside=True, compute_stability=False))
-    np.testing.assert_allclose(seen, np.arange(-.25, .501, .125))
+    # Measured |error|: 0; exact permutation/copy or binary-exact arithmetic.
+    np.testing.assert_allclose(seen, np.arange(-0.25, 0.501, 0.125), atol=0, rtol=0)
     assert result.event_candidates == (None,)
     assert len(result.events) == 1
 
@@ -423,7 +438,8 @@ def test_eager_python_scalar_event_falls_back_to_pointwise_tests(bothside):
     assert result.event_candidates == (None,)
     assert len(result.events) == 1
     assert result.events[0].p == .5
-    np.testing.assert_allclose(result.events[0].u, [.5])
+    # Measured |error|: 0; exact permutation/copy or binary-exact arithmetic.
+    np.testing.assert_allclose(result.events[0].u, [0.5], atol=0, rtol=0)
     assert result.rejected_events == []
 
 
@@ -441,3 +457,56 @@ def test_python_scalar_event_rejected_under_jit():
 
     with pytest.raises(TypeError, match='array-pure'):
         jax.jit(run)(jnp.zeros(1))
+
+
+@pytest.mark.parametrize('rows, crosses', [
+    # torBPC at ntst=25, newton_tol=1e-8, points 177/178: a complex pair
+    # inside the unit circle turns real and one member passes -1 in one step.
+    ([[-.7137 - .1654j, -.7137 + .1654j, 1.], [-1.0143, -.5183, 1.]], True),
+    # The same step reversed.
+    ([[-1.0143, -.5183, 1.], [-.7137 - .1654j, -.7137 + .1654j, 1.]], True),
+    # A pair outside the circle turning real below -1 passed no real -1.
+    ([[-.9 - .6j, -.9 + .6j, 1.], [-1.3, -.95, 1.]], False),
+])
+def test_period_doubling_through_a_complex_pair_turning_real(rows, crosses):
+    from jaxcont.bifurcations import events
+    from jaxcont.bifurcations.event_scan import EventScanInput, scan_event_candidates
+    raw = jnp.array(rows, dtype=jnp.result_type(1j))
+    data = EventScanInput(jnp.array([0., 1.]), jnp.zeros((2, 1)), None, raw,
+                          jnp.array([2, 2]), jnp.ones(2, bool))
+    points = [events.BranchPoint(data.params[i], data.states[i], eigenvalues=raw[i],
+                                 trivial_index=data.trivial_index[i]) for i in range(2)]
+    eager = events.PeriodDoubling().scan(points)
+    candidate, = jax.jit(lambda d: scan_event_candidates((events.PeriodDoubling(),), d, None))(data)
+    assert len(eager) == int(crosses)
+    assert int(np.sum(candidate.bracket_mask)) == int(crosses)
+
+
+def test_period_doubling_refinement_rejects_a_complex_crossing_of_minus_one():
+    """Review R1-01: the pair -(.5+p) +/- sqrt(.25p - .15) starts inside the
+    unit circle, crosses Re mu = -1 while complex and turns real below -1;
+    no multiplier equals -1 on [0, 1]. The widened PD mask opens brackets,
+    so refinement must check the tracked mode, not any real mode near -1."""
+    from unittest.mock import patch
+    from jaxcont.bifurcations.events import BranchPoint, PeriodDoubling
+    from jaxcont.core.collocation import Collocation
+    from jaxcont.problems.periodic_args import PeriodicArgs
+
+    def spectrum(p):
+        a, d = .5 + float(p), .25 * float(p) - .15
+        s = np.sqrt(complex(d))
+        return np.array([-a + s, -a - s, -.95, -.8, 1.])
+
+    points = [BranchPoint(float(p), jnp.zeros(1), eigenvalues=spectrum(p), trivial_index=4)
+              for p in (0., 1.)]
+    event = PeriodDoubling()
+    brackets = event.scan(points)
+    assert brackets
+    args = PeriodicArgs(jnp.zeros((1, 1, 1)), jnp.zeros((1, 1, 1)), None,
+                        lambda u, p, a: u, Collocation(ntst=1, ncol=1))
+    with patch.object(PeriodDoubling, '_multipliers', lambda self, u, p, args: (spectrum(p), 4)):
+        for i, j, mode in brackets:
+            hit = event.refine(points[i], points[j], (i, j), lambda u, p: u,
+                               tolerance=1e-8, max_iterations=60, mode=mode, args=args)
+            assert hit.status == "failed"
+            assert hit.info["reason"] == "spectral_check_failed"

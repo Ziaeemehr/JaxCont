@@ -1,7 +1,9 @@
 API reference
 =============
 
-The functional equilibrium API is the supported v0.1 surface.
+The public 0.5.0 API: equilibrium and periodic-orbit continuation, events,
+Floquet analysis, phase response curves, branch switching and two-parameter
+curves. Breaking changes since 0.4 are listed in the changelog.
 
 Problem and continuation
 ------------------------
@@ -128,8 +130,15 @@ Codim-2 events
 --------------
 
 ``Event`` implementations usable via ``continuation(..., events=[...])`` on a
-fold or Hopf curve (see "Two-parameter continuation" below): each is a test
-function built on the matching direct solver above.
+fold or Hopf curve (see "Two-parameter continuation" below), each refined
+with the matching direct solver above. ``Cusp`` and ``GeneralizedHopf`` detect
+a sign change of a scalar test function (the fold or Lyapunov coefficient).
+``BogdanovTakens``, ``ZeroHopf`` and ``DoubleHopf`` are spectral: they follow
+continuously tracked modes (``scan(points)``), report a bracket only where one
+mode meets its condition at both ends, refine along that mode
+(``refine(..., mode=mode)``) and re-check the refined point's spectrum. Their
+``tolerance`` separates real from complex eigenvalues and defaults to the
+square root of the dtype's default tolerance.
 
 .. autoclass:: jaxcont.Cusp
 
@@ -240,6 +249,32 @@ event's ``floquet_solver``):
 .. autoclass:: jaxcont.FloquetSpectrum
 
 .. autofunction:: jaxcont.stability.floquet_spectrum
+
+.. autofunction:: jaxcont.stability.floquet.floquet_multipliers
+
+.. autofunction:: jaxcont.stability.floquet.branch_floquet_multipliers
+
+.. autofunction:: jaxcont.stability.floquet.floquet_stable
+
+Periodic orbits and phase response
+----------------------------------
+
+A periodic-orbit problem continues a limit cycle discretized by orthogonal
+collocation. Its ``args`` is a ``PeriodicArgs`` module whose ``user_args``
+holds the caller's data; ``raw_f`` is always called as
+``raw_f(u, p, user_args)``.
+
+.. autofunction:: jaxcont.periodic_orbit_problem
+
+.. autoclass:: jaxcont.Collocation
+
+.. autoclass:: jaxcont.problems.periodic_args.PeriodicArgs
+
+.. autofunction:: jaxcont.prc_curve
+
+.. autofunction:: jaxcont.branch_prc
+
+.. autofunction:: jaxcont.dprc_curve
 
 Lower-level problem and solver infrastructure
 -----------------------------------------------

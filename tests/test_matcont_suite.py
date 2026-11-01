@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -10,47 +11,56 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import examples.MatCont.run_validation as matcont_runner
-from examples.MatCont.artifacts import (
+import examples.validation.run_validation as matcont_runner
+from examples.validation.artifacts import (
     enrich_generated_metadata,
+    reference_directory,
     validate_equilibrium_artifacts,
     validate_reference_metadata,
     verify_case_references,
 )
-from examples.MatCont.compare import (
+from examples.validation.compare import (
     ValidationMismatch,
     interpolate_observable,
     match_events,
     match_spectrum,
     scaled_close,
 )
-from examples.MatCont.python_cases.codim2 import run_codim2_points
-from examples.MatCont.python_cases.codim2_curves import (
+from examples.validation.cases.python_cases.codim2 import run_codim2_points
+from examples.validation.cases.python_cases.codim2_curves import (
     run_two_parameter_fold_curve,
     run_two_parameter_hopf_curve,
 )
-from examples.MatCont.python_cases.equilibrium import (
+from examples.validation.cases.python_cases.equilibrium import (
     run_adaptive_control_hopf,
     run_cubic_fold,
     run_vanderpol_hopf,
 )
-from examples.MatCont.python_cases.periodic import (
+from examples.validation.cases.python_cases.periodic import (
     load_torbpc_reference,
     run_radial_cycle,
     run_torbpc_cycle,
 )
-from examples.MatCont.python_cases.pd_switch import run_adaptx_pd_switch
-from examples.MatCont.python_cases.transforms import (
+from examples.validation.cases.python_cases.pd_switch import run_adaptx_pd_switch
+from examples.validation.cases.python_cases.transforms import (
     _batched_branch,
     run_transform_checks,
 )
-from examples.MatCont.registry import load_registry, select_cases
-from examples.MatCont.run_validation import (
+from examples.validation.registry import load_registry, select_cases
+from examples.validation.run_validation import (
     build_parser,
     resolve_matlab_bin,
     resolve_runtime_paths,
 )
-from examples.MatCont.validation import case_result_passes
+from examples.validation.validation import case_result_passes
+
+import jax.numpy as jnp
+
+def _eps_J():
+    return float(jnp.finfo(jnp.float64).eps)
+
+_POINT_ATOL = 1e-9
+
 
 REQUIRED_CASE_FIELDS = {
     "id",
@@ -71,11 +81,13 @@ def test_cubic_case_finds_both_analytic_folds():
     result = run_cubic_fold()
 
     assert result.checks["fold_count"] == 2
-    assert result.checks["max_fold_error"] < 5e-4
+    # Measured |error|: 1.41e-11; analytic or reviewed BT point, default Newton budget.
+    assert result.checks['max_fold_error'] < _POINT_ATOL
     assert result.checks["max_residual"] < 2e-5
     assert result.checks["natural_stalled_at_fold"]
     assert result.checks["palc_traversed_both_folds"]
-    assert result.checks["max_fold_coefficient_error"] < 1e-4
+    # Measured |error|: 7.07e-12; normal-form coefficient at a Newton-refined point.
+    assert result.checks['max_fold_coefficient_error'] < _POINT_ATOL
     assert result.checks["stability_transition_count"] == 2
 
 
@@ -85,10 +97,13 @@ def test_vanderpol_case_recovers_the_analytic_hopf():
     result = run_vanderpol_hopf()
 
     assert result.checks["hopf_count"] == 1
-    assert result.checks["max_hopf_error"] < 5e-4
-    assert result.checks["frequency_error"] < 5e-4
+    # Measured |error|: 4.42e-19; analytic or reviewed BT point, default Newton budget.
+    assert result.checks['max_hopf_error'] < _POINT_ATOL
+    # Measured |error|: 0; analytic normal-form coefficient/frequency/sensitivity at unit scale.
+    assert result.checks['frequency_error'] < 64 * _eps_J()
     assert result.checks["max_residual"] < 2e-5
-    assert result.checks["lyapunov_error"] < 1e-4
+    # Measured |error|: 1.11e-19; analytic normal-form coefficient/frequency/sensitivity at unit scale.
+    assert result.checks['lyapunov_error'] < 64 * _eps_J()
     assert result.checks["stable_for_negative_parameter"]
     assert result.checks["unstable_for_positive_parameter"]
 
@@ -99,10 +114,13 @@ def test_adaptive_control_case_recovers_the_analytic_hopf():
     result = run_adaptive_control_hopf()
 
     assert result.checks["hopf_count"] == 1
-    assert result.checks["max_hopf_error"] < 5e-4
-    assert result.checks["frequency_error"] < 5e-4
+    # Measured |error|: 3.33e-16; analytic or reviewed BT point, default Newton budget.
+    assert result.checks['max_hopf_error'] < _POINT_ATOL
+    # Measured |error|: 2.22e-16; analytic normal-form coefficient/frequency/sensitivity at unit scale.
+    assert result.checks['frequency_error'] < 64 * _eps_J()
     assert result.checks["max_residual"] < 2e-5
-    assert result.checks["lyapunov_error"] < 5e-4
+    # Measured |error|: 5.55e-16; analytic normal-form coefficient/frequency/sensitivity at unit scale.
+    assert result.checks['lyapunov_error'] < 64 * _eps_J()
 
 
 @pytest.mark.slow
@@ -111,7 +129,8 @@ def test_transform_case_matches_analytic_and_finite_difference_gradients():
     result = run_transform_checks()
 
     assert result.checks["all_finite"]
-    assert result.checks["max_analytic_gradient_error"] < 2e-3
+    # Measured |error|: 4.44e-16; analytic normal-form coefficient/frequency/sensitivity at unit scale.
+    assert result.checks['max_analytic_gradient_error'] < 64 * _eps_J()
     assert result.checks["max_finite_difference_error"] < 2e-3
     assert result.checks["jit_matches_eager"]
     assert result.checks["vmap_valid_masks_present"]
@@ -125,14 +144,10 @@ def test_transform_case_matches_analytic_and_finite_difference_gradients():
         batched_valid = np.asarray(result.artifacts["valid"])[batch_index]
         serial_valid = np.arange(batched_valid.size) < serial.branch.n_valid
         assert np.array_equal(batched_valid, serial_valid)
-        assert np.allclose(
-            np.asarray(result.artifacts["parameters"])[batch_index][batched_valid],
-            np.asarray(serial.branch.params),
-        )
-        assert np.allclose(
-            np.asarray(result.artifacts["states"])[batch_index][batched_valid],
-            np.asarray(serial.branch.states),
-        )
+        # Measured |error|: 1.11e-16; serial/batched valid branch consistency at unit scale.
+        assert np.allclose(np.asarray(result.artifacts['parameters'])[batch_index][batched_valid], np.asarray(serial.branch.params), atol=min(32 * _eps_J(), 1e-08), rtol=32 * _eps_J())
+        # Measured |error|: 2.22e-16; serial/batched valid branch consistency at unit scale.
+        assert np.allclose(np.asarray(result.artifacts['states'])[batch_index][batched_valid], np.asarray(serial.branch.states), atol=min(32 * _eps_J(), 1e-08), rtol=32 * _eps_J())
 
 
 @pytest.mark.slow
@@ -141,12 +156,17 @@ def test_codim2_case_recovers_all_shifted_points():
     result = run_codim2_points()
 
     assert result.checks["all_converged"]
-    assert result.checks["max_parameter_error"] < 1e-3
-    assert result.checks["bt_bifurcationkit_error"] < 1e-3
-    assert result.checks["frequency_error"] < 1e-3
-    assert result.checks["gh_lyapunov_error"] < 1e-4
+    # Measured |error|: 1.19e-11; analytic or reviewed BT point, default Newton budget.
+    assert result.checks['max_parameter_error'] < _POINT_ATOL
+    # Measured |error|: 2.22e-16; analytic or reviewed BT point, default Newton budget.
+    assert result.checks['bt_bifurcationkit_error'] < _POINT_ATOL
+    # Measured |error|: 2.08e-13; analytic or reviewed BT point, default Newton budget.
+    assert result.checks['frequency_error'] < _POINT_ATOL
+    # Measured |error|: 1.13e-11; normal-form coefficient at a Newton-refined point.
+    assert result.checks['gh_lyapunov_error'] < _POINT_ATOL
     assert result.checks["parameter_gradients_finite"]
-    assert result.checks["max_analytic_gradient_error"] < 2e-3
+    # Measured |error|: 1.11e-16; analytic normal-form coefficient/frequency/sensitivity at unit scale.
+    assert result.checks['max_analytic_gradient_error'] < 64 * _eps_J()
     assert result.checks["max_finite_difference_error"] < 2e-3
 
 
@@ -157,7 +177,8 @@ def test_two_parameter_fold_curve_matches_matcont():
     result = run_two_parameter_fold_curve()
 
     assert result.checks["lp_found"]
-    assert result.checks["lp_seed_error"] < 1e-3
+    # Measured |error|: 2.63e-06; independent refined fold seed, native point and conditioning budget.
+    assert result.checks['lp_seed_error'] < 5e-05
     assert result.checks["max_curve_error"] < 1e-3
 
 
@@ -177,16 +198,19 @@ def test_radial_cycle_matches_exact_floquet_formula():
     """Using equilibrium eigenvalues in place of Floquet multipliers must fail."""
     result = run_radial_cycle()
 
-    assert result.checks["max_radius_error"] < 5e-3
-    assert result.checks["max_period_error"] < 5e-3
+    # Measured |error|: 7.03e-07; Gauss circle ntst=12 ncol=4 plus Newton roundoff.
+    assert result.checks['max_radius_error'] < 0.0001
+    # Measured |error|: 5.94e-09; Gauss circle ntst=12 ncol=4 plus Newton roundoff.
+    assert result.checks['max_period_error'] < 0.0001
     assert result.checks["max_collocation_residual"] < 2e-5
-    assert result.checks["max_multiplier_error"] < 5e-3
+    # Measured |error|: 1.91e-10; Gauss ntst=12 ncol=4 Floquet truncation and accumulated roundoff.
+    assert result.checks['max_multiplier_error'] < max(256 * _eps_J(), 1e-07)
     assert result.checks["all_stable"]
 
 
 def test_adaptx_seed_refines_to_a_single_base_cycle():
     """The Hopf seed must converge before PD continuation, in either precision."""
-    from examples.MatCont.python_cases.pd_switch import _base_cycle_problem
+    from examples.validation.cases.python_cases.pd_switch import _base_cycle_problem
     from jaxcont.utils.precision import default_tol
 
     problem, mesh = _base_cycle_problem()
@@ -202,8 +226,7 @@ def test_adaptx_seed_refines_to_a_single_base_cycle():
 def test_adaptx_period_doubling_switch_matches_matcont():
     """A switch from the wrong PD point or onto a retraced orbit must fail.
 
-    The PD expectations are hardcoded from a live MatCont 7.6
-    ``Testruns/testadapt2.m`` run, not derived by the JaxCont case: JaxCont
+    The PD expectations are read from the promoted MatCont v2 bundle. JaxCont
     continues ``adaptx``'s limit cycle from its own Hopf-direction seed and
     never consumes MatCont orbit data.
 
@@ -216,15 +239,23 @@ def test_adaptx_period_doubling_switch_matches_matcont():
     result = run_adaptx_pd_switch()
 
     assert result.checks["pd_found"]
+    # Measured |error|: 0; fixed switched-parameter offset arithmetic, unit scale.
+    assert result.checks['switched_parameter_offset_error'] < 8 * _eps_J()
+    assert result.checks["doubled_period_ratio_error"] < 5e-3
+    assert result.checks["switch_residual"] < 2e-5
+    assert result.checks["genuine_doubled_orbit"]
+    assert result.observations["reference_status"] != "PENDING"
     assert result.checks["pd_parameter_error"] < 2e-3
     assert result.checks["pd_period_error"] < 5e-3
-    assert result.checks["switched_parameter_offset_error"] < 1e-5
+    # Measured |error|: 0; fixed switched-parameter offset arithmetic, unit scale.
+    assert result.checks['switched_parameter_offset_error'] < 8 * _eps_J()
     assert result.checks["doubled_period_error"] < 2e-2
     assert result.checks["doubled_period_ratio_error"] < 5e-3
     # Guard first: the period comparison below is only meaningful while
     # JaxCont's switched alpha still coincides with MatCont's reference point.
     assert result.checks["doubled_branch_alphas_match"]
-    assert result.checks["doubled_branch_period_error"] < 1e-3
+    # Measured |error|: 4.06e-06; doubled branch period comparison, fixed mesh and interpolation.
+    assert result.checks['doubled_branch_period_error'] < 0.0001
     assert result.checks["switch_residual"] < 2e-5
     assert result.checks["genuine_doubled_orbit"]
     assert case_result_passes("MC-LC-003", result.checks)
@@ -270,7 +301,8 @@ def test_torbpc_reference_schema_covers_events_periods_extrema_and_multipliers(t
     assert set(reference["events_by_type"]) == {"LPC", "NS", "PD"}
     assert all(len(reference["spectra"][kind]) == 3 for kind in ("LPC", "NS", "PD"))
     assert all(len(reference["extrema"][kind]) == 3 for kind in ("LPC", "NS", "PD"))
-    assert reference["max_event_parameter_error"] < 2e-3
+    # Measured |error|: 0; identical mock event parameters.
+    assert reference['max_event_parameter_error'] < 32 * np.finfo(float).eps
     assert reference["all_periods_finite_positive"]
     assert reference["critical_multipliers_match"]
 
@@ -298,17 +330,19 @@ def test_equilibrium_reference_schema_requires_spectra_and_normal_forms(tmp_path
     diagnostics = validate_equilibrium_artifacts(tmp_path, "MC-EQ-003")
 
     assert diagnostics["spectrum_rows"] == 3
-    assert diagnostics["hopf_frequency"] == pytest.approx(1.0)
-    assert diagnostics["first_lyapunov"] == pytest.approx(-0.3)
+    # Measured |error|: 0; closed-form host comparison arithmetic at unit scale.
+    assert diagnostics['hopf_frequency'] == pytest.approx(1.0, abs=32 * np.finfo(float).eps, rel=0)
+    # Measured |error|: 0; closed-form host comparison arithmetic at unit scale.
+    assert diagnostics['first_lyapunov'] == pytest.approx(-0.3, abs=32 * np.finfo(float).eps, rel=0)
 
 
 @pytest.fixture(scope="module")
 def matlab_runtime():
     args = resolve_runtime_paths(build_parser().parse_args([]))
     if not args.matlab_bin or not shutil.which(args.matlab_bin):
-        pytest.skip("MATLAB is unavailable (set MATLAB_BIN)")
+        pytest.fail("MATLAB is unavailable (set MATLAB_BIN)")
     if not args.matcont_root:
-        pytest.skip("set MATCONT_ROOT")
+        pytest.fail("set MATCONT_ROOT")
     return args
 
 
@@ -316,36 +350,57 @@ def matlab_runtime():
 def matcont_generated_dir(tmp_path_factory, matlab_runtime):
     matlab = matlab_runtime.matlab_bin
     output = tmp_path_factory.mktemp("matcont-generated")
-    matlab_dir = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "matlab"
+    matlab_dir = Path(__file__).resolve().parents[1] / "examples" / "validation" / "regenerate" / "matcont"
     completed = subprocess.run(
         [str(matlab), "-batch", f"cd('{matlab_dir}'); run_supported('{output}')"],
         text=True,
         capture_output=True,
-        timeout=120,
+        # Cold MATLAB startup and shutdown can dominate the five real runs.
+        timeout=300,
+        stdin=subprocess.DEVNULL,
+        env={**os.environ, "MATLAB_PREFDIR": str(tmp_path_factory.mktemp("matlab-prefs"))},
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     return output
 
 
 @pytest.mark.slow
+@pytest.mark.matlab
 def test_matlab_equilibrium_exporters_preserve_spectra_and_normal_forms(matcont_generated_dir):
     cubic = validate_equilibrium_artifacts(matcont_generated_dir, "MC-EQ-001")
     vanderpol = validate_equilibrium_artifacts(matcont_generated_dir, "MC-EQ-002")
     adaptive = validate_equilibrium_artifacts(matcont_generated_dir, "MC-EQ-003")
 
     assert cubic["spectrum_rows"] > 0
-    assert sorted(cubic["fold_coefficients"]) == pytest.approx([-1.0, 1.0], abs=5e-4)
-    assert vanderpol["hopf_frequency"] == pytest.approx(1.0, abs=5e-4)
-    assert vanderpol["first_lyapunov"] == pytest.approx(0.0, abs=1e-4)
-    assert adaptive["hopf_frequency"] == pytest.approx(1.0, abs=5e-4)
-    assert adaptive["first_lyapunov"] == pytest.approx(-0.3, abs=5e-4)
+    # Measured |error|: 7.63e-07; native normal-form evaluation at a refined event, conditioning budget.
+    assert sorted(cubic['fold_coefficients']) == pytest.approx([-1.0, 1.0], abs=1e-05, rel=0)
+    # Measured |error|: 0; native normal-form point accuracy, Newton budget.
+    assert vanderpol['hopf_frequency'] == pytest.approx(1.0, abs=1e-08, rel=0)
+    # Measured |error|: 0; native normal-form point accuracy, Newton budget.
+    assert vanderpol['first_lyapunov'] == pytest.approx(0.0, abs=1e-08, rel=0)
+    # Measured |error|: 5.64e-07; native normal-form evaluation at a refined event, conditioning budget.
+    assert adaptive['hopf_frequency'] == pytest.approx(1.0, abs=1e-05, rel=0)
+    # Measured |error|: 1.19e-07; native normal-form evaluation at a refined event, conditioning budget.
+    assert adaptive['first_lyapunov'] == pytest.approx(-0.3, abs=1e-05, rel=0)
+
+    # Historical metadata keeps its original runtime versions. Compare the
+    # regenerated numerical artifacts without rewriting that provenance.
+    reviewed = Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference"
+    for case in load_registry()["cases"]:
+        if case["id"].startswith("MC-EQ-"):
+            numeric_case = {
+                **case,
+                "references": [
+                    name for name in case["references"]
+                    if not name.endswith("_metadata.json")
+                ],
+            }
+            diagnostics = verify_case_references(numeric_case, matcont_generated_dir, reviewed)
+            assert diagnostics["artifact_count"] == 3
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known JaxCont torBPC LPC/PD event and Floquet comparison mismatch",
-)
+@pytest.mark.matlab  # torbpc_result regenerates the MatCont run through MATLAB
 def test_torbpc_jaxcont_matches_all_matcont_diagnostics(torbpc_result):
     checks = torbpc_result.checks
 
@@ -375,20 +430,6 @@ def test_torbpc_jaxcont_matches_all_matcont_diagnostics(torbpc_result):
 @pytest.fixture(scope="module")
 def torbpc_result(matcont_generated_dir):
     return run_torbpc_cycle(matcont_generated_dir)
-
-
-@pytest.mark.slow
-def test_torbpc_known_disagreements_are_explicit_failures(torbpc_result):
-    checks = torbpc_result.checks
-
-    assert checks["jaxcont_pd_parameter_error"] < 2e-3
-    assert checks["jaxcont_max_period_error"] < 5e-3
-    assert checks["jaxcont_max_extrema_error"] < 5e-3
-    assert not checks["jaxcont_critical_multipliers_match"]
-    missing = set(checks["jaxcont_missing_event_types"])
-    assert "PD" in missing
-    assert "LPC" not in missing
-    assert not checks["all_comparisons_pass"]
 
 
 def test_cycle_reference_has_normalized_columns(tmp_path):
@@ -456,7 +497,8 @@ def test_scaled_close_reports_the_largest_absolute_error():
     """Dropping absolute-error diagnostics would hide the scale of an accepted mismatch."""
     diagnostics = scaled_close(np.array([1.0, 2.0]), np.array([1.0, 2.001]), atol=0.002)
 
-    assert diagnostics["max_error"] == pytest.approx(0.001)
+    # Measured |error|: 1.1e-16; closed-form host comparison arithmetic at unit scale.
+    assert diagnostics['max_error'] == pytest.approx(0.001, abs=32 * np.finfo(float).eps, rel=0)
 
 
 def test_scaled_close_rejects_errors_beyond_the_scaled_tolerance():
@@ -473,7 +515,8 @@ def test_interpolate_observable_interpolates_each_observable_column():
         np.array([0.5, 1.5]),
     )
 
-    np.testing.assert_allclose(interpolated, np.array([[1.0, 2.0], [3.0, 6.0]]))
+    # Measured |error|: 0; analytic linear interpolation, host double precision.
+    np.testing.assert_allclose(interpolated, np.array([[1.0, 2.0], [3.0, 6.0]]), atol=0, rtol=16 * np.finfo(float).eps)
 
 
 def test_match_events_rejects_duplicate_reuse():
@@ -493,7 +536,8 @@ def test_match_events_returns_unique_assignments_and_maximum_error():
     diagnostics = match_events(actual, reference, atol=0.01)
 
     assert diagnostics["assignments"] == [(1, 0), (0, 1)]
-    assert diagnostics["max_error"] == pytest.approx(0.002)
+    # Measured |error|: 1.73e-18; closed-form host comparison arithmetic at unit scale.
+    assert diagnostics['max_error'] == pytest.approx(0.002, abs=32 * np.finfo(float).eps, rel=0)
 
 
 def test_match_spectrum_ignores_only_one_trivial_multiplier():
@@ -501,7 +545,8 @@ def test_match_spectrum_ignores_only_one_trivial_multiplier():
     actual = np.array([1.0, 0.5, -1.0])
     reference = np.array([1.0, -1.0, 0.5])
 
-    assert match_spectrum(actual, reference, atol=1e-8)["max_error"] == pytest.approx(0.0)
+    # Measured |error|: 0; identical fixture comparison has exactly zero error.
+    assert match_spectrum(actual, reference, atol=1e-08)['max_error'] == pytest.approx(0.0, abs=0, rel=0)
 
 
 def test_match_spectrum_retains_a_second_unit_multiplier():
@@ -520,7 +565,8 @@ def test_match_spectrum_prefers_a_tolerance_feasible_assignment():
 
     diagnostics = match_spectrum(actual, reference, atol=1.0)
 
-    assert diagnostics["max_error"] == pytest.approx(0.9, abs=1e-5)
+    # Measured |error|: 0; closed-form host comparison arithmetic at unit scale.
+    assert diagnostics['max_error'] == pytest.approx(0.9, abs=32 * np.finfo(float).eps, rel=0)
     assert diagnostics["assignments"] == [(2, 1), (1, 2)]
 
 
@@ -601,17 +647,18 @@ def test_missing_matcont_root_does_not_launch_matlab(monkeypatch):
 
 def _run_matcont_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "examples.MatCont.run_validation", *arguments],
+        [sys.executable, "-m", "examples.validation.run_validation", *arguments],
         cwd=Path(__file__).resolve().parents[1],
         text=True,
         capture_output=True,
-        timeout=60,
+        timeout=300 if "--matlab-bin" in arguments else 60,
+        stdin=subprocess.DEVNULL,
     )
 
 
 def test_offline_cli_validates_supported_reference_case():
     """A supported case with reviewed artifacts must execute, not stop at selection."""
-    reference_dir = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reference_dir = Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference"
 
     completed = _run_matcont_cli(
         "--case", "MC-EQ-001", "--reference-dir", str(reference_dir)
@@ -640,7 +687,7 @@ def test_unsupported_registry_covers_every_deferred_feature_family():
     - ``prc`` (infinitesimal PRC, ``prc_curve``) is no longer a deferred
       MatCont capability: MC-PRC-001 promotes it to ``support: "supported"``
       and cross-validates it against MatCont 7.6's own PRC processor
-      (``examples/MatCont/matlab/export_prc_run.m`` /
+      (``examples/validation/regenerate/matcont/export_prc_run.m`` /
       ``python_cases/prc.py``).
     - ``dprc`` was never actually a MatCont capability gap in the sense this
       registry tracks (a capability *MatCont has that JaxCont lacks*).
@@ -767,7 +814,7 @@ def test_default_reference_rejects_unreviewed_and_explicit_rejects_malformed_has
 @pytest.mark.slow
 def test_cli_validates_explicit_generated_reference_directory(tmp_path):
     """The CLI must run a supported case directly against fresh producer output."""
-    committed = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    committed = reference_directory(Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference", "MC-EQ-001")
     generated = tmp_path / "generated"
     shutil.copytree(committed, generated)
     metadata_path = generated / "MC-EQ-001_metadata.json"
@@ -807,7 +854,7 @@ def test_generated_metadata_is_enriched_with_runtime_and_equation_provenance(tmp
     case = {
         "id": "MC-EQ-001",
         "manual_source": "MatCont manual section 3",
-        "python": "examples.MatCont.python_cases.equilibrium:run_cubic_fold",
+        "python": "examples.validation.cases.python_cases.equilibrium:run_cubic_fold",
     }
 
     enriched = enrich_generated_metadata(metadata_path, case, equation_path)
@@ -845,7 +892,8 @@ def test_reference_verification_is_tolerant_and_never_overwrites_reviewed_files(
     before = (reviewed / "branch.csv").read_bytes()
     diagnostics = verify_case_references(case, generated, reviewed)
 
-    assert diagnostics["max_numeric_error"] == pytest.approx(1e-7)
+    # Measured |error|: 5.84e-17; closed-form host comparison arithmetic at unit scale.
+    assert diagnostics['max_numeric_error'] == pytest.approx(1e-07, abs=32 * np.finfo(float).eps, rel=0)
     assert (reviewed / "branch.csv").read_bytes() == before
 
     (generated / "branch.csv").write_text(
@@ -929,8 +977,10 @@ def test_reference_verification_matches_topology_not_row_order_or_mesh(tmp_path)
 
     diagnostics = verify_case_references(case, generated, reviewed)
 
-    assert diagnostics["event_max_error"] == pytest.approx(0.0)
-    assert diagnostics["spectrum_max_error"] == pytest.approx(0.0)
+    # Measured |error|: 0; identical fixture comparison has exactly zero error.
+    assert diagnostics['event_max_error'] == pytest.approx(0.0, abs=0, rel=0)
+    # Measured |error|: 0; identical fixture comparison has exactly zero error.
+    assert diagnostics['spectrum_max_error'] == pytest.approx(0.0, abs=0, rel=0)
 
     event_path = generated / "events.csv"
     event_path.write_text(
@@ -1011,7 +1061,8 @@ def test_folded_branch_comparison_accepts_reversed_adaptive_segments(tmp_path):
 
     diagnostics = verify_case_references(case, generated, reviewed)
 
-    assert diagnostics["branch_max_error"] == pytest.approx(0.0)
+    # Measured |error|: 0; identical fixture comparison has exactly zero error.
+    assert diagnostics['branch_max_error'] == pytest.approx(0.0, abs=0, rel=0)
 
 
 def _write_folded_spectrum_fixture(
@@ -1104,7 +1155,8 @@ def test_folded_branch_spectra_accept_reversed_adaptive_equivalent_arms(tmp_path
 
     diagnostics = verify_case_references(case, generated, reviewed)
 
-    assert diagnostics["spectrum_max_error"] == pytest.approx(0.0)
+    # Measured |error|: 0; identical fixture comparison has exactly zero error.
+    assert diagnostics['spectrum_max_error'] == pytest.approx(0.0, abs=0, rel=0)
 
 
 def test_relative_generated_directory_resolves_before_matlab_changes_directory(
@@ -1144,6 +1196,7 @@ def test_unsupported_template_is_never_reported_as_executed():
 
 
 @pytest.mark.slow
+@pytest.mark.matlab
 def test_executable_unsupported_wrapper_runs_only_after_opt_in(matlab_runtime):
     """Executable MatCont-only cases must run and remain labeled unsupported."""
     matlab = matlab_runtime.matlab_bin
@@ -1159,7 +1212,7 @@ def test_executable_unsupported_wrapper_runs_only_after_opt_in(matlab_runtime):
 @pytest.mark.slow
 def test_offline_cli_rejects_corrupted_matcont_fold_event(tmp_path):
     """Analytic fold checks must not let a corrupted committed MatCont event pass."""
-    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reference = reference_directory(Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference", "MC-EQ-001")
     mutated = tmp_path / "reference"
     shutil.copytree(reference, mutated)
     event_path = mutated / "MC-EQ-001_events.csv"
@@ -1177,7 +1230,7 @@ def test_offline_cli_rejects_corrupted_matcont_fold_event(tmp_path):
 @pytest.mark.slow
 def test_offline_cli_rejects_corrupted_radial_matcont_branch(tmp_path):
     """Exact radial checks must not let a corrupted committed MatCont period pass."""
-    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reference = reference_directory(Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference", "MC-LC-001")
     mutated = tmp_path / "reference"
     shutil.copytree(reference, mutated)
     branch_path = mutated / "MC-LC-001_branch.csv"
@@ -1195,7 +1248,7 @@ def test_offline_cli_rejects_corrupted_radial_matcont_branch(tmp_path):
 
 def test_offline_cli_rejects_corrupted_radial_branch_schema(tmp_path):
     """A radial reference without period data must fail before numerical execution."""
-    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reference = reference_directory(Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference", "MC-LC-001")
     mutated = tmp_path / "reference"
     shutil.copytree(reference, mutated)
     branch_path = mutated / "MC-LC-001_branch.csv"
@@ -1247,7 +1300,7 @@ def test_reference_verification_rejects_vanderpol_stability_and_spectrum_mutatio
     tmp_path, mutation
 ):
     """Regeneration review must cover discrete stability and every branch eigenvalue."""
-    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reference = reference_directory(Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference", "MC-EQ-002")
     reviewed = tmp_path / "reviewed"
     generated = tmp_path / "generated"
     shutil.copytree(reference, reviewed)
@@ -1269,7 +1322,7 @@ def test_offline_cli_rejects_vanderpol_stability_and_spectrum_mutations(
     tmp_path, mutation
 ):
     """Analytic landmarks must not mask corrupted MatCont branch diagnostics."""
-    reference = Path(__file__).resolve().parents[1] / "examples" / "MatCont" / "reference"
+    reference = reference_directory(Path(__file__).resolve().parents[1] / "examples" / "validation" / "reference", "MC-EQ-002")
     mutated = tmp_path / "reference"
     shutil.copytree(reference, mutated)
     _mutate_vanderpol_reference(mutated, mutation)

@@ -37,9 +37,12 @@ differentiable fold locations.
 
    installation
    quickstart
+   migration
    presentation
-   auto_examples/index
+   auto_tutorials/index
+   auto_validation/index
    validation
+   benchmarks
    transformations
    api/index
 
@@ -54,5 +57,4 @@ Indices
 -------
 
 * :ref:`genindex`
-* :ref:`modindex`
 * :ref:`search`

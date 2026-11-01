@@ -117,10 +117,24 @@ def differentiable_root_checked(
     callers in eager code should call ``bool(converged)`` themselves.
     """
     x_star = differentiable_root(G, x0, theta, tol=tol, max_iter=max_iter)
-    residual = jnp.linalg.norm(G(x_star, theta))
-    tol_ = default_tol(x_star.dtype) if tol is None else tol
+    r = G(x_star, theta)
+    if tol is None:
+        # The default tolerance is absolute, but even the correctly rounded
+        # root of a badly scaled equation has residual ~ eps * sum_j |J_ij| |x_j|;
+        # each equation may use its own rounding floor (from the coordinates
+        # it depends on, small safety factor), and only the excess over it must
+        # meet the default tolerance, so neither a huge row nor a huge unrelated
+        # coordinate can relax another equation (review A-01, R2-01). With zero
+        # floors this is the plain criterion. An explicit tol stays strict.
+        jacobian = jax.lax.stop_gradient(jax.jacfwd(lambda x: G(x, theta))(x_star))
+        floor = 16 * jnp.finfo(x_star.dtype).eps * (jnp.abs(jacobian) @ (1 + jnp.abs(x_star)))
+        residual = jnp.linalg.norm(jnp.maximum(jnp.abs(r) - floor, 0))
+        tol_ = default_tol(x_star.dtype)
+    else:
+        residual = jnp.linalg.norm(r)
+        tol_ = tol
     converged = (
-        jnp.isfinite(residual)
+        jnp.all(jnp.isfinite(r))
         & (residual < tol_)
         & jnp.all(jnp.isfinite(x_star))
     )

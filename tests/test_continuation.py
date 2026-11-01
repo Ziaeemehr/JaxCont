@@ -8,6 +8,11 @@ import pytest
 from jaxcont.core.continuation import ContinuationProblem, ContinuationSolution
 
 
+def _eps_J():
+    return float(jnp.finfo(jnp.float64).eps)
+
+
+
 def simple_rhs(state, params):
     """Simple test RHS: dx/dt = r*x - x^2"""
     x = state[0]
@@ -65,8 +70,10 @@ def test_continuation_solution_get_point():
     )
     
     state, param = solution.get_point(1)
-    assert jnp.allclose(state, jnp.array([0.5]))
-    assert jnp.isclose(param, 0.5)
+    # Measured |error|: 0; linear scalar root half, unit conditioning.
+    assert jnp.allclose(state, jnp.array([0.5]), atol=0, rtol=16 * _eps_J())
+    # Measured |error|: 0; linear scalar root half, unit conditioning.
+    assert jnp.isclose(param, 0.5, atol=0, rtol=16 * _eps_J())
 
 
 if __name__ == "__main__":

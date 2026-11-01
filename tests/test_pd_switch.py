@@ -23,7 +23,6 @@ the first crossing). For alpha > 0 the exact doubled orbit is w = sqrt(alpha/c) 
 with period 2T = 4*pi.
 """
 
-from jax import enable_x64
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -34,6 +33,12 @@ from jaxcont.bifurcations.pd_switch import _doubling_measure, _pd_eigenvector
 from jaxcont.bifurcations.pd_switch import branch_switch_pd
 from jaxcont.core.collocation import Collocation
 from jaxcont.problems.periodic import periodic_orbit_problem
+
+def _eps_J():
+    return float(jnp.finfo(jnp.float64).eps)
+
+_POINT_ATOL = 1e-9
+
 
 T_EXACT = 2 * np.pi
 BETA = np.pi / T_EXACT
@@ -72,10 +77,14 @@ def test_pd_eigenvector_is_supported_on_the_transverse_block():
     v = _pd_eigenvector(rhs, prob.u0, prob.p0, mesh)
     v = np.asarray(v)
     assert v.shape == (N_STATE,)
-    assert np.isclose(np.linalg.norm(v), 1.0, atol=1e-5)
-    assert abs(v[0]) < 1e-3
-    assert abs(v[1]) < 1e-3
-    assert np.linalg.norm(v[2:]) > 0.99
+    # Measured |error|: 0; host normalized eigenvector.
+    assert np.isclose(np.linalg.norm(v), 1.0, atol=0, rtol=32 * np.finfo(float).eps)
+    # Measured |error|: 0; decoupled transverse eigenvector components.
+    assert abs(v[0]) < 32 * np.finfo(float).eps
+    # Measured |error|: 0; decoupled transverse eigenvector components.
+    assert abs(v[1]) < 32 * np.finfo(float).eps
+    # Measured |error|: 0; normalized decoupled transverse vector, host float64 arithmetic.
+    assert np.linalg.norm(v[2:]) > 1 - 32 * np.finfo(float).eps
 
 
 def test_pd_eigenvector_rejects_a_point_that_is_not_period_doubling():
@@ -111,7 +120,8 @@ def test_doubling_measure_separates_a_doubled_orbit_from_a_retraced_one():
     d_retraced = _doubling_measure(
         _pack_mesh_only(retraced, mesh, N_STATE), mesh, N_STATE
     )
-    assert d_retraced < 1e-3
+    # Measured |error|: 2.99e-16; repeated analytic circle traversals, host double arithmetic.
+    assert d_retraced < 128 * np.finfo(float).eps
 
     # A genuine doubled orbit: w rotates by pi per period, so w(t+T) = -w(t).
     amp = np.sqrt(0.05 / C_SAT)
@@ -123,7 +133,8 @@ def test_doubling_measure_separates_a_doubled_orbit_from_a_retraced_one():
         _pack_mesh_only(doubled, mesh, N_STATE), mesh, N_STATE
     )
     # Closed form: d = 2*amp, scale = sqrt(1 + amp^2)  ->  ~0.436
-    assert d_doubled == pytest.approx(2 * amp / np.sqrt(1 + amp**2), abs=1e-3)
+    # Measured |error|: 0; closed-form half-period shape, unit scale.
+    assert d_doubled == pytest.approx(2 * amp / np.sqrt(1 + amp ** 2), abs=32 * _eps_J(), rel=0)
     assert d_doubled > 0.4
 
 
@@ -153,11 +164,12 @@ def test_switch_lands_on_the_period_doubled_branch():
 
     doubled_mesh = Collocation(ntst=2 * mesh.ntst, ncol=mesh.ncol)
     # Closed-form ground truth: |w| = sqrt(alpha/c), period = 2T.
-    assert transverse_amplitude(switched, doubled_mesh) == pytest.approx(
-        np.sqrt(dp / C_SAT), abs=1e-3
-    )
-    assert float(switched.u0[-1]) == pytest.approx(2 * T_EXACT, abs=1e-3)
-    assert float(switched.p0) == pytest.approx(dp, abs=1e-6)
+    # Measured |error|: 2.59e-10; collocation radial amplitude plus Newton budget.
+    assert transverse_amplitude(switched, doubled_mesh) == pytest.approx(np.sqrt(dp / C_SAT), abs=max(_POINT_ATOL, 1e-06), rel=0)
+    # Measured |error|: 1.19e-08; Gauss ntst=20 ncol=4 period error plus accumulation.
+    assert float(switched.u0[-1]) == pytest.approx(2 * T_EXACT, abs=max(32 * _eps_J() * (2 * T_EXACT), 2e-07), rel=0)
+    # Measured |error|: 0; parameter offset assignment.
+    assert float(switched.p0) == pytest.approx(dp, abs=0, rel=8 * _eps_J())
     assert switched.kind == "periodic"
 
 
@@ -205,7 +217,7 @@ def test_detect_then_switch_end_to_end():
     switch on the detected event.
 
     Continuing the switched branch is covered by
-    examples/example_22_period_doubling_switch.py rather than here, to keep this
+    examples/tutorials/plot_14_pd_switch.py rather than here, to keep this
     test's runtime down -- the switch itself is what this file is testing."""
     prob, mesh = base_problem(-0.1)
     result = jc.continuation(
@@ -220,7 +232,8 @@ def test_detect_then_switch_end_to_end():
     assert pd_events, "no period-doubling event detected on the base branch"
 
     event = pd_events[0]
-    assert event.p == pytest.approx(0.0, abs=2e-2)
+    # Measured |error|: 2.14e-10; analytic PD event with collocation/Newton error.
+    assert event.p == pytest.approx(0.0, abs=0.0001, rel=0)
 
     dp = 0.05
     switched = jc.branch_switch_pd(rhs, event, mesh, dp=dp)
@@ -229,11 +242,12 @@ def test_detect_then_switch_end_to_end():
     # Ground truth is sqrt((p_switched - p_bif)/c); the detected p_bif carries
     # the event's own bisection error, so this is looser than the exact-point test.
     expected = np.sqrt(max(float(switched.p0) - event.p, 0.0) / C_SAT)
-    assert amp == pytest.approx(expected, abs=2e-2)
-    assert float(switched.u0[-1]) == pytest.approx(2 * T_EXACT, abs=1e-2)
+    # Measured |error|: 2.2e-10; PD location error propagated to transverse amplitude.
+    assert amp == pytest.approx(expected, abs=0.0001, rel=0)
+    # Measured |error|: 1.19e-08; Gauss ntst=20 ncol=4 period error plus accumulation.
+    assert float(switched.u0[-1]) == pytest.approx(2 * T_EXACT, abs=max(32 * _eps_J() * (2 * T_EXACT), 2e-07), rel=0)
 
 
-@enable_x64()
 def test_pd_switch_invariant_under_translation():
     event, mesh, _ = pd_event_at_origin()
     offset = jnp.full((N_STATE,), 1e4)
@@ -250,8 +264,10 @@ def test_pd_switch_invariant_under_translation():
     doubled_mesh = Collocation(ntst=2 * mesh.ntst, ncol=mesh.ncol)
     states = np.asarray(switched.u0[:-1]).reshape(-1, N_STATE) - np.asarray(offset)
     amplitude = np.max(np.linalg.norm(states[:doubled_mesh.ntst, 2:], axis=1))
-    assert amplitude == pytest.approx(np.sqrt(0.05 / C_SAT), abs=2e-2)
-    assert float(switched.u0[-1]) == pytest.approx(2 * T_EXACT, abs=2e-2)
+    # Measured |error|: 2.6e-10; float64 translated circle, collocation and offset cancellation budget.
+    assert amplitude == pytest.approx(np.sqrt(0.05 / C_SAT), abs=1e-06, rel=0)
+    # Measured |error|: 1.19e-08; Gauss ntst=20 ncol=4 period error plus accumulation.
+    assert float(switched.u0[-1]) == pytest.approx(2 * T_EXACT, abs=max(32 * _eps_J() * (2 * T_EXACT), 2e-07), rel=0)
     assert _doubling_measure(switched.u0, doubled_mesh, N_STATE) > 0.4
 
 

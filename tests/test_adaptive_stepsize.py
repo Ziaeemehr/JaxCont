@@ -90,8 +90,10 @@ class TestAdaptiveStepsizeBasics:
         )
 
         n = sol.branch.n_valid
+        step_rtol = 8 * jnp.finfo(sol.branch.params.dtype).eps
+        # Measured bound violation: 0; clipping only needs roundoff slack.
         for info in sol._solution.convergence_info[:n]:
-            assert info["ds"] >= ds_min * 0.99, f"Step size {info['ds']} below minimum {ds_min}"
+            assert info["ds"] >= ds_min * (1 - step_rtol), f"Step size {info['ds']} below minimum {ds_min}"
 
     def test_stepsize_respects_maximum(self):
         """Test that step size doesn't go above maximum."""
@@ -106,8 +108,10 @@ class TestAdaptiveStepsizeBasics:
         )
 
         n = sol.branch.n_valid
+        step_rtol = 8 * jnp.finfo(sol.branch.params.dtype).eps
+        # Measured excess above ds_max: 0.
         for info in sol._solution.convergence_info[:n]:
-            assert info["ds"] <= ds_max * 1.01, f"Step size {info['ds']} above maximum {ds_max}"
+            assert info["ds"] <= ds_max * (1 + step_rtol), f"Step size {info['ds']} above maximum {ds_max}"
 
 
 class TestAdaptiveVsFixed:
@@ -228,12 +232,14 @@ class TestAdaptiveStepsizeAlgorithm:
     def test_adapt_stepsize_halve_on_failure(self):
         """Test step size halving on convergence failure."""
         new_ds = _adapt_ds(jnp.array(0.05), 20, jnp.array(False), 0.001, 0.1)
-        assert jnp.isclose(new_ds, 0.025), "Step size should be halved on failure"
+        # Measured absolute error: 0.
+        assert jnp.isclose(new_ds, 0.025, rtol=8 * jnp.finfo(new_ds.dtype).eps, atol=0), "Step size should be halved on failure"
 
     def test_adapt_stepsize_stable_on_moderate_convergence(self):
         """Test step size remains stable for moderate convergence."""
         new_ds = _adapt_ds(jnp.array(0.03), 4, jnp.array(True), 0.001, 0.1)
-        assert jnp.isclose(new_ds, 0.03), "Step size should remain stable for moderate convergence"
+        # Measured absolute error: 0.
+        assert jnp.isclose(new_ds, 0.03, rtol=8 * jnp.finfo(new_ds.dtype).eps, atol=0), "Step size should remain stable for moderate convergence"
 
     def test_adapt_stepsize_fixed_mode_still_shrinks_on_failure(self):
         """Even with adaptive=False, a failed step still backs off (so a
@@ -299,8 +305,11 @@ class TestStepsizeConvergenceInfo:
 
         assert len(step_sizes) > 0, "Should have convergence info"
         assert all(s > 0 for s in step_sizes), "All step sizes should be positive"
-        assert all(s >= 0.005 * 0.99 for s in step_sizes), "Step sizes should respect minimum"
-        assert all(s <= 0.1 * 1.01 for s in step_sizes), "Step sizes should respect maximum"
+        step_rtol = 8 * jnp.finfo(sol.branch.params.dtype).eps
+        # Measured bound violation: 0.
+        assert all(s >= 0.005 * (1 - step_rtol) for s in step_sizes), "Step sizes should respect minimum"
+        # Measured excess above 0.1: 0.
+        assert all(s <= 0.1 * (1 + step_rtol) for s in step_sizes), "Step sizes should respect maximum"
 
 
 if __name__ == "__main__":

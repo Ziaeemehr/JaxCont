@@ -1,0 +1,1492 @@
+{
+  "schema_version": 1,
+  "canonical_id": "lorenz84.fold-ft",
+  "system": "lorenz84",
+  "reviewer": "Claude (review delegated by owner, 2026-10-30)",
+  "review_date": "2026-10-30",
+  "expected_status": "PASS",
+  "registry_case": {
+    "id": "lorenz84.fold-ft",
+    "canonical_id": "lorenz84.fold-ft",
+    "state_dimension": 4,
+    "comparison_passage": "first",
+    "aliases": [],
+    "system": "lorenz84",
+    "title": "Extended Lorenz-84 fold-ft",
+    "support": "supported",
+    "features": [
+      "codim2"
+    ],
+    "python": "examples.validation.cases.python_cases.lorenz84:run_fold",
+    "matlab": "run_lorenz84_codim2",
+    "references": [],
+    "manual_source": "Reviewed three-tool promotion, Claude (review delegated by owner, 2026-10-28), 2026-10-29",
+    "tolerances": {
+      "parameter_atol": 0.0005,
+      "state_atol": 0.0002,
+      "residual_atol": 1e-07,
+      "spectrum_atol": 0.0005,
+      "frequency_atol": 0.0005
+    },
+    "tool_coverage": {
+      "jaxcont": "PASS",
+      "matcont": "PASS",
+      "bifurcationkit": "PASS"
+    },
+    "required_tools": [
+      "jaxcont",
+      "matcont",
+      "bifurcationkit"
+    ],
+    "evidence_status": "PASS",
+    "expected_domain": [
+      -0.01,
+      0.04
+    ],
+    "expected_events": [
+      "BT"
+    ],
+    "model_contract": {
+      "state_order": [
+        "X",
+        "Y",
+        "Z",
+        "U"
+      ],
+      "parameter_order": [
+        "F",
+        "T"
+      ],
+      "time": "original nondimensional time; no time rescaling",
+      "jacobian": "rows are RHS components; columns follow X,Y,Z,U",
+      "frequency": "angular frequency in radians per original time unit",
+      "fold_label": "LP (BK fold aliases normalized by the exporter)",
+      "hopf_label": "H (BK hopf aliases normalized by the exporter)",
+      "bt_label": "BT; two small eigenvalues and geometric nullity one",
+      "normal_forms": "record tool-native definition and eigenvector normalization; no implicit l1 conversion",
+      "arclength": "record physical metric and state/parameter weights per tool",
+      "chart_boundary": "Hopf chart termination near BT is a boundary, not a BT detection",
+      "symmetry": "(U,T) -> (-U,-T); select positive-T BT by window",
+      "review_status": "REVIEWED (Claude review 1, 2026-10-28)",
+      "constants": {
+        "alpha": 0.25,
+        "beta": 1.0,
+        "gamma": 0.987,
+        "delta": 1.04,
+        "G": 0.25
+      },
+      "f_sweep": {
+        "fixed_T": 0.04,
+        "bounds": [
+          -1.5,
+          3.0
+        ],
+        "seed_F": 3.0,
+        "seed_state": [
+          2.9787004394953343,
+          -0.03868302503393752,
+          0.058232737694740085,
+          -0.02105288273117459
+        ],
+        "seed_policy": "Newton-correct at F=3,T=0.04 before continuation",
+        "both_directions": true,
+        "ds": 0.002,
+        "ds_max": 0.05,
+        "max_steps_per_direction": 200,
+        "newton_atol": 1e-12,
+        "source": "historical lorenz84_equilibria.jl (Julia 02)",
+        "comparison_domain": "clip each sheet to bounds before matching",
+        "expected_events": [
+          {
+            "kind": "LP",
+            "window": {
+              "F": [
+                1.5,
+                1.58
+              ]
+            }
+          },
+          {
+            "kind": "H",
+            "window": {
+              "F": [
+                1.59,
+                1.65
+              ]
+            }
+          },
+          {
+            "kind": "H",
+            "window": {
+              "F": [
+                2.4,
+                2.55
+              ]
+            }
+          },
+          {
+            "kind": "H",
+            "window": {
+              "F": [
+                2.8,
+                2.95
+              ]
+            }
+          }
+        ]
+      },
+      "codim2": {
+        "parameter_order": [
+          "F",
+          "T"
+        ],
+        "free_parameter": "T",
+        "T_bounds": [
+          -0.1,
+          3.2
+        ],
+        "ds": -0.001,
+        "ds_min": 1e-05,
+        "ds_max": 0.015,
+        "max_steps": 30,
+        "expected_T_domain": [
+          -0.01,
+          0.04
+        ],
+        "source": "historical lorenz84_codim2.jl; shared positive-T BT chart"
+      },
+      "event_windows": {
+        "fold_seed": {
+          "F": [
+            1.5,
+            1.58
+          ],
+          "T": [
+            0.039,
+            0.041
+          ]
+        },
+        "hopf_seed": {
+          "F": [
+            1.59,
+            1.65
+          ],
+          "T": [
+            0.039,
+            0.041
+          ]
+        },
+        "bt_positive_T": {
+          "F": [
+            1.4,
+            1.5
+          ],
+          "T": [
+            0.01,
+            0.03
+          ]
+        }
+      },
+      "domain_coordinate": "T",
+      "coverage_note": "BT is a refined point selected in a window; Hopf may terminate at a chart boundary, which cannot pass full-domain publication"
+    },
+    "metric_limits": {
+      "parameter_atol": 0.0005,
+      "state_atol": 0.0002,
+      "residual_atol": 1e-07,
+      "spectrum_atol": 0.0005,
+      "frequency_atol": 0.0005
+    },
+    "bifurcationkit": "lorenz84_codim2.jl",
+    "comparison_window": [
+      -0.01,
+      0.04
+    ],
+    "comparison_window_comment": "Shared positive-T fold chart including ZH, CP and BT.",
+    "refined_events_elsewhere": {
+      "BT": "lorenz84.bt-ft"
+    },
+    "refined_events_elsewhere_justification": "BifurcationKit reports the BT on the fold curve as an unrefined guess; the Newton-refined BT is compared in all three tools in lorenz84.bt-ft."
+  },
+  "candidates": {
+    "jaxcont": {
+      "path": "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/lorenz84/jaxcont/lorenz84.fold-ft",
+      "hashes": {
+        "branch.csv": "sha256:1ba273153eb527ca847963286ac120e4decad1cb410c5886337dcc25544a06d7",
+        "events.csv": "sha256:cfe98b979361a0a80972d2e6b101a7e1a32e052c6b18f88f861f81c77797fe9d",
+        "jaxcont.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "jaxcont.stdout.log": "sha256:2821addb16bd37dd4399ac4725be2494981b1e226fd8ff53a0fbd14b93fa22a7",
+        "metadata.json": "sha256:308eeecba39b2137fd7f91b5620ee400fd6ffa595d46cec918fdf1ddfec14dd8",
+        "spectra.csv": "sha256:982c0af57f93088bafb3ee2463019fd57c3d7253d6f4afbff44eabf89a2da41a"
+      },
+      "promotable": true,
+      "command": [
+        "/home/ziaee/envs/jaxcont/bin/python",
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/jax_one.py",
+        "lorenz84.fold-ft",
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/lorenz84/jaxcont/lorenz84.fold-ft",
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt"
+      ],
+      "logs": {
+        "jaxcont.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "jaxcont.stdout.log": "sha256:2821addb16bd37dd4399ac4725be2494981b1e226fd8ff53a0fbd14b93fa22a7"
+      },
+      "coverage": "COMPLETE"
+    },
+    "matcont": {
+      "path": "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/lorenz84/matcont/lorenz84.fold-ft",
+      "hashes": {
+        "branch.csv": "sha256:39e2948f9e72ca6be2604972a99626d30b277741df843ce57837154aa8d947fa",
+        "events.csv": "sha256:7d29261069255f9f335e0384ad4ef91b96bdab7a94b84e4ae9ef233253a9f447",
+        "invocation.json": "sha256:2a38cc414fa634edb7f893a530c17196247eca2df45704d9db9e824e3b60f2e7",
+        "metadata.json": "sha256:c9d2a47189dbe833290bf962f8757a8c15d01eb02af38e9e107c10c1be6e2ee6",
+        "native.json": "sha256:779a57ec0b561973ec5cdeb5281835943411db8a7db14b68e1c4ec8602f57dd7",
+        "raw.json": "sha256:7ec6f9206b204d181ac6e3754630b2a05663fd54bd004d9792c7355766ca5ba0",
+        "run_lorenz84_codim2.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "run_lorenz84_codim2.stdout.log": "sha256:d18f3463b4d4732f342c9cb4d80e6bc5c2cafbb6baeee012e54de596a4d074ed",
+        "spectra.csv": "sha256:24a4de04cae2434e8370963c2c39e8d14d8745e233dbe0953f37721b702eec6e"
+      },
+      "promotable": true,
+      "command": [
+        "/home/ziaee/programms/Matlab/R2024a/bin/matlab",
+        "-batch",
+        "addpath('/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/matcont','/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/matcont/capability_gaps'); run_lorenz84_codim2('/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/staging/matcont/lorenz84.fold-ft')"
+      ],
+      "logs": {
+        "run_lorenz84_codim2.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "run_lorenz84_codim2.stdout.log": "sha256:d18f3463b4d4732f342c9cb4d80e6bc5c2cafbb6baeee012e54de596a4d074ed"
+      },
+      "coverage": "COMPLETE"
+    },
+    "bifurcationkit": {
+      "path": "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/candidates/lorenz84/bifurcationkit/lorenz84.fold-ft",
+      "hashes": {
+        "branch.csv": "sha256:245d6ffca9910c060b91094d9377e466cf436f49f517822b41680a6444210e8c",
+        "events.csv": "sha256:3415ccf36361102bda91e2679ce8f3c249d84eed850d5e5eff4fcffbd8a039f8",
+        "invocation.json": "sha256:35d83828268cb50ca819575b79329f6abc341692261eb0715f9c2fbfe311d894",
+        "lorenz84_codim2.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "lorenz84_codim2.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "metadata.json": "sha256:e860c005eaf1a755f246df5e4c0ccc14f4618dd022db444e606c39fd5edb04a0",
+        "spectra.csv": "sha256:d27af1fdcd2f1b19fa4486d00aa4c3d50640d881ad714b80e5e25c14acd58ba3"
+      },
+      "promotable": true,
+      "command": [
+        "julia",
+        "--project=/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/bifurcationkit",
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl",
+        "--case",
+        "lorenz84.fold-ft",
+        "--output-dir",
+        "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/staging/bk/lorenz84.fold-ft/lorenz84.fold-ft/bifurcationkit"
+      ],
+      "logs": {
+        "lorenz84_codim2.stderr.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "lorenz84_codim2.stdout.log": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "coverage": "COMPLETE"
+    }
+  },
+  "independent": {
+    "jaxcont": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 8.383918559395909e-14,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "event_residual": {
+        "value": 2.814776189907775e-12,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "matcont": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "residual": {
+        "value": 1.1102230246251565e-16,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "event_residual": {
+        "value": 5.551115123125783e-17,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      }
+    },
+    "bifurcationkit": {
+      "unresolved_points": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "domain.endpoint_gap": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "missing_expected_events": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "unrefined_detections": {
+        "value": 1.0,
+        "limit": null,
+        "verdict": "PENDING",
+        "reason": "unrefined BT detection excluded; refined BT is compared in lorenz84.bt-ft"
+      },
+      "residual": {
+        "value": 7.34412530789541e-14,
+        "limit": 1e-07,
+        "verdict": "PASS",
+        "reason": null
+      }
+    }
+  },
+  "pairwise": {
+    "jaxcont--matcont": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.F": {
+        "value": 7.825329273458692e-10,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.F.dense_nodes": {
+        "value": 2.430535430697489e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "F at native nodes between the query nodes; interpolation allowance up to 1.43e-06"
+      },
+      "sheet_0.T": {
+        "value": 1.1140464419023832e-10,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.T.dense_nodes": {
+        "value": 6.584357026500584e-08,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "T at native nodes between the query nodes; interpolation allowance up to 3.44e-07"
+      },
+      "sheet_0.parameter": {
+        "value": 1.1140464419023832e-10,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.parameter.dense_nodes": {
+        "value": 6.584357026500584e-08,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "parameter at native nodes between the query nodes; interpolation allowance up to 3.44e-07"
+      },
+      "sheet_0.state_0": {
+        "value": 2.139801891232196e-09,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_0.dense_nodes": {
+        "value": 8.861608393750942e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": "state_0 at native nodes between the query nodes; interpolation allowance up to 5.2e-06"
+      },
+      "sheet_0.state_1": {
+        "value": 8.473999557612188e-10,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_1.dense_nodes": {
+        "value": 3.844731024695014e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": "state_1 at native nodes between the query nodes; interpolation allowance up to 2.27e-06"
+      },
+      "sheet_0.state_2": {
+        "value": 5.098696742589226e-10,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_2.dense_nodes": {
+        "value": 2.586341935895131e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": "state_2 at native nodes between the query nodes; interpolation allowance up to 1.5e-06"
+      },
+      "sheet_0.state_3": {
+        "value": 5.551115123125783e-17,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_3.dense_nodes": {
+        "value": 5.551115123125783e-17,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": "state_3 at native nodes between the query nodes; interpolation allowance up to 5.55e-17"
+      },
+      "sheet_0.spectrum.dense_nodes": {
+        "value": 1.4201148166859382e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "spectrum at native nodes between the query nodes; interpolation allowance up to 8.25e-06"
+      },
+      "sheet_0.spectrum": {
+        "value": 6.631763891230379e-09,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "BT.count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "BT_0.F": {
+        "value": 1.0440093234365122e-11,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "BT_0.T": {
+        "value": 1.8186147032750455e-12,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "BT_0.parameter": {
+        "value": 1.8186147032750455e-12,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "BT_0.state_0": {
+        "value": 9.408918089093277e-12,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "BT_0.state_1": {
+        "value": 8.757577996121313e-13,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "BT_0.state_2": {
+        "value": 1.954769679457513e-12,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "BT_0.state_3": {
+        "value": 3.964106820575353e-12,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "BT_0.spectrum": {
+        "value": 2.4461795728531908e-08,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all modes, including flow mode"
+      }
+    },
+    "jaxcont--bifurcationkit": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.F": {
+        "value": 2.2751667216880378e-10,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.F.dense_nodes": {
+        "value": 2.984499210656466e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "F at native nodes between the query nodes; interpolation allowance up to 5.87e-05"
+      },
+      "sheet_0.T": {
+        "value": 4.030469707982931e-11,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.T.dense_nodes": {
+        "value": 2.3010878493238615e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "T at native nodes between the query nodes; interpolation allowance up to 2.08e-05"
+      },
+      "sheet_0.parameter": {
+        "value": 4.030469707982931e-11,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.parameter.dense_nodes": {
+        "value": 2.3010878493238615e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "parameter at native nodes between the query nodes; interpolation allowance up to 2.08e-05"
+      },
+      "sheet_0.state_0": {
+        "value": 6.140488117978293e-10,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_0.dense_nodes": {
+        "value": 1.0516110937608403e-05,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": "state_0 at native nodes between the query nodes; interpolation allowance up to 0.000207"
+      },
+      "sheet_0.state_1": {
+        "value": 2.3355629930055244e-10,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_1.dense_nodes": {
+        "value": 4.7063067146538295e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": "state_1 at native nodes between the query nodes; interpolation allowance up to 9.28e-05"
+      },
+      "sheet_0.state_2": {
+        "value": 1.5297602073971461e-10,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_2.dense_nodes": {
+        "value": 2.8304967367165368e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": "state_2 at native nodes between the query nodes; interpolation allowance up to 5.59e-05"
+      },
+      "sheet_0.state_3": {
+        "value": 5.551115123125783e-17,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_3.dense_nodes": {
+        "value": 5.551115123125783e-17,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": "state_3 at native nodes between the query nodes; interpolation allowance up to 6.94e-17"
+      },
+      "sheet_0.spectrum.dense_nodes": {
+        "value": 1.537345555142006e-05,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "spectrum at native nodes between the query nodes; interpolation allowance up to 0.000305"
+      },
+      "sheet_0.spectrum": {
+        "value": 1.5131593131267884e-09,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "BT.count_difference": {
+        "value": 1.0,
+        "limit": null,
+        "verdict": "PENDING",
+        "reason": "unrefined BT detection excluded; refined BT is compared in lorenz84.bt-ft"
+      }
+    },
+    "matcont--bifurcationkit": {
+      "sheet_count_difference": {
+        "value": 0.0,
+        "limit": 0,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.endpoint_difference": {
+        "value": 0.0,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.F": {
+        "value": 4.616005511159926e-08,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.F.dense_nodes": {
+        "value": 1.8375711023921326e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "F at native nodes between the query nodes; interpolation allowance up to 5.84e-05"
+      },
+      "sheet_0.T": {
+        "value": 2.5636540344103117e-08,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.T.dense_nodes": {
+        "value": 2.2693549439881024e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "T at native nodes between the query nodes; interpolation allowance up to 2.06e-05"
+      },
+      "sheet_0.parameter": {
+        "value": 2.5636540344103117e-08,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.parameter.dense_nodes": {
+        "value": 2.2693549439881024e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "parameter at native nodes between the query nodes; interpolation allowance up to 2.06e-05"
+      },
+      "sheet_0.state_0": {
+        "value": 1.7211444758302719e-07,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_0.dense_nodes": {
+        "value": 6.5013262167124e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": "state_0 at native nodes between the query nodes; interpolation allowance up to 0.000206"
+      },
+      "sheet_0.state_1": {
+        "value": 7.237918837020574e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_1.dense_nodes": {
+        "value": 2.8999510633884173e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": "state_1 at native nodes between the query nodes; interpolation allowance up to 9.23e-05"
+      },
+      "sheet_0.state_2": {
+        "value": 5.3575203412536965e-08,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_2.dense_nodes": {
+        "value": 1.7638040402667698e-06,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": "state_2 at native nodes between the query nodes; interpolation allowance up to 5.57e-05"
+      },
+      "sheet_0.state_3": {
+        "value": 5.551115123125783e-17,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": null
+      },
+      "sheet_0.state_3.dense_nodes": {
+        "value": 5.551115123125783e-17,
+        "limit": 0.0002,
+        "verdict": "PASS",
+        "reason": "state_3 at native nodes between the query nodes; interpolation allowance up to 5.55e-17"
+      },
+      "sheet_0.spectrum.dense_nodes": {
+        "value": 9.586516597536835e-06,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "spectrum at native nodes between the query nodes; interpolation allowance up to 0.000303"
+      },
+      "sheet_0.spectrum": {
+        "value": 2.943803033259366e-07,
+        "limit": 0.0005,
+        "verdict": "PASS",
+        "reason": "all native modes; no failed modes omitted"
+      },
+      "BT.count_difference": {
+        "value": 1.0,
+        "limit": null,
+        "verdict": "PENDING",
+        "reason": "unrefined BT detection excluded; refined BT is compared in lorenz84.bt-ft"
+      }
+    }
+  },
+  "event_information": {
+    "jaxcont": {
+      "outside_window": [],
+      "unrefined_detections": []
+    },
+    "matcont": {
+      "outside_window": [
+        {
+          "F": "1.446716701113151",
+          "T": "-0.020940169682937534",
+          "bracket_lower": "",
+          "bracket_status": "unknown",
+          "bracket_upper": "",
+          "coefficient_convention": "MatCont 7.6 native normal form, original time, tool-native eigenvector normalization",
+          "event_id": "event_4",
+          "event_type": "BT",
+          "first_lyapunov": "",
+          "fold_coefficient": "",
+          "frequency": "",
+          "kind": "BT",
+          "parameter": "-0.020940169682937534",
+          "point_id": "60",
+          "residual_norm": "2.7755575615628914e-17",
+          "segment_id": "1",
+          "state_0": "1.2256404959842864",
+          "state_1": "-0.03632079327088347",
+          "state_2": "0.1972883231127468",
+          "state_3": "0.12339001198434904",
+          "status": "REFINED"
+        }
+      ],
+      "unrefined_detections": []
+    },
+    "bifurcationkit": {
+      "outside_window": [
+        {
+          "F": "1.4623352205098785",
+          "T": "-0.02370559367923864",
+          "bracket_lower": "-0.02370559367923864",
+          "bracket_upper": "-0.018078012154315388",
+          "event_id": "e4",
+          "event_type": "BT",
+          "kind": "BT",
+          "native_label": "bt",
+          "native_status": "guess",
+          "order": "23",
+          "parameter": "-0.02370559367923864",
+          "point_id": "23",
+          "residual_norm": "2.7755575615628914e-17",
+          "segment_id": "LP",
+          "state_0": "1.2396033934136212",
+          "state_1": "-0.03757832987611646",
+          "state_2": "0.1944138794096156",
+          "state_3": "0.12919385852562468",
+          "status": "GUESS",
+          "unstable_dimension": "3"
+        }
+      ],
+      "unrefined_detections": [
+        {
+          "F": "1.4318342443608147",
+          "T": "0.018390565929128366",
+          "bracket_lower": "0.018390565929128366",
+          "bracket_upper": "0.024044246043467457",
+          "event_id": "e1",
+          "event_type": "BT",
+          "kind": "BT",
+          "native_label": "bt",
+          "native_status": "guess",
+          "order": "9",
+          "parameter": "0.018390565929128366",
+          "point_id": "9",
+          "residual_norm": "3.642919299551295e-17",
+          "segment_id": "LP",
+          "state_0": "1.2121236314306418",
+          "state_1": "-0.03502146502791537",
+          "state_2": "0.20012077429259933",
+          "state_3": "-0.1176122883511658",
+          "status": "GUESS",
+          "unstable_dimension": "2",
+          "refinement_status": "UNREFINED_DETECTION"
+        },
+        {
+          "F": "1.2782833690071065",
+          "T": "-4.96775489995898e-12",
+          "bracket_lower": "-4.96775489995898e-12",
+          "bracket_upper": "0.00020858381865119718",
+          "event_id": "e2",
+          "event_type": "ZH",
+          "kind": "ZH",
+          "native_label": "zh",
+          "native_status": "guess",
+          "order": "15",
+          "parameter": "-4.96775489995898e-12",
+          "point_id": "15",
+          "residual_norm": "3.0191687196849676e-15",
+          "segment_id": "LP",
+          "state_0": "1.0536981462331942",
+          "state_1": "-0.01205980907601529",
+          "state_2": "0.23664501214136846",
+          "state_3": "7.065436451727965e-5",
+          "status": "GUESS",
+          "unstable_dimension": "0",
+          "refinement_status": "UNREFINED_DETECTION"
+        },
+        {
+          "F": "1.2840003275365022",
+          "T": "-0.00014852119186186942",
+          "bracket_lower": "-0.00014852119186186942",
+          "bracket_upper": "-4.96775489995898e-12",
+          "event_id": "e3",
+          "event_type": "ZH",
+          "kind": "ZH",
+          "native_label": "zh",
+          "native_status": "guess",
+          "order": "16",
+          "parameter": "-0.00014852119186186942",
+          "point_id": "16",
+          "residual_norm": "2.7755575615628914e-17",
+          "segment_id": "LP",
+          "state_0": "1.0605337238591326",
+          "state_1": "-0.013411452605180497",
+          "state_2": "0.23496485705771583",
+          "state_3": "0.022013623078035897",
+          "status": "GUESS",
+          "unstable_dimension": "2",
+          "refinement_status": "UNREFINED_DETECTION"
+        }
+      ]
+    }
+  },
+  "comparison_coordinates": {
+    "jaxcont--matcont": {
+      "sheet_0": "state_3"
+    },
+    "jaxcont--bifurcationkit": {
+      "sheet_0": "state_3"
+    },
+    "matcont--bifurcationkit": {
+      "sheet_0": "state_3"
+    }
+  },
+  "passage_information": {
+    "jaxcont": {
+      "policy": "first",
+      "later_reentries": []
+    },
+    "matcont": {
+      "policy": "first",
+      "later_reentries": []
+    },
+    "bifurcationkit": {
+      "policy": "first",
+      "later_reentries": []
+    }
+  },
+  "validation_report": {
+    "canonical_id": "lorenz84.fold-ft",
+    "coverage": {
+      "jaxcont": "PASS",
+      "matcont": "PASS",
+      "bifurcationkit": "PASS"
+    },
+    "pairwise": {
+      "jaxcont--matcont": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.F": {
+          "value": 7.825329273458692e-10,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.F.dense_nodes": {
+          "value": 2.430535430697489e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "F at native nodes between the query nodes; interpolation allowance up to 1.43e-06"
+        },
+        "sheet_0.T": {
+          "value": 1.1140464419023832e-10,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.T.dense_nodes": {
+          "value": 6.584357026500584e-08,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "T at native nodes between the query nodes; interpolation allowance up to 3.44e-07"
+        },
+        "sheet_0.parameter": {
+          "value": 1.1140464419023832e-10,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.parameter.dense_nodes": {
+          "value": 6.584357026500584e-08,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "parameter at native nodes between the query nodes; interpolation allowance up to 3.44e-07"
+        },
+        "sheet_0.state_0": {
+          "value": 2.139801891232196e-09,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_0.dense_nodes": {
+          "value": 8.861608393750942e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": "state_0 at native nodes between the query nodes; interpolation allowance up to 5.2e-06"
+        },
+        "sheet_0.state_1": {
+          "value": 8.473999557612188e-10,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_1.dense_nodes": {
+          "value": 3.844731024695014e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": "state_1 at native nodes between the query nodes; interpolation allowance up to 2.27e-06"
+        },
+        "sheet_0.state_2": {
+          "value": 5.098696742589226e-10,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_2.dense_nodes": {
+          "value": 2.586341935895131e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": "state_2 at native nodes between the query nodes; interpolation allowance up to 1.5e-06"
+        },
+        "sheet_0.state_3": {
+          "value": 5.551115123125783e-17,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_3.dense_nodes": {
+          "value": 5.551115123125783e-17,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": "state_3 at native nodes between the query nodes; interpolation allowance up to 5.55e-17"
+        },
+        "sheet_0.spectrum.dense_nodes": {
+          "value": 1.4201148166859382e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "spectrum at native nodes between the query nodes; interpolation allowance up to 8.25e-06"
+        },
+        "sheet_0.spectrum": {
+          "value": 6.631763891230379e-09,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "BT.count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "BT_0.F": {
+          "value": 1.0440093234365122e-11,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "BT_0.T": {
+          "value": 1.8186147032750455e-12,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "BT_0.parameter": {
+          "value": 1.8186147032750455e-12,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "BT_0.state_0": {
+          "value": 9.408918089093277e-12,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "BT_0.state_1": {
+          "value": 8.757577996121313e-13,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "BT_0.state_2": {
+          "value": 1.954769679457513e-12,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "BT_0.state_3": {
+          "value": 3.964106820575353e-12,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "BT_0.spectrum": {
+          "value": 2.4461795728531908e-08,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all modes, including flow mode"
+        }
+      },
+      "jaxcont--bifurcationkit": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.F": {
+          "value": 2.2751667216880378e-10,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.F.dense_nodes": {
+          "value": 2.984499210656466e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "F at native nodes between the query nodes; interpolation allowance up to 5.87e-05"
+        },
+        "sheet_0.T": {
+          "value": 4.030469707982931e-11,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.T.dense_nodes": {
+          "value": 2.3010878493238615e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "T at native nodes between the query nodes; interpolation allowance up to 2.08e-05"
+        },
+        "sheet_0.parameter": {
+          "value": 4.030469707982931e-11,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.parameter.dense_nodes": {
+          "value": 2.3010878493238615e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "parameter at native nodes between the query nodes; interpolation allowance up to 2.08e-05"
+        },
+        "sheet_0.state_0": {
+          "value": 6.140488117978293e-10,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_0.dense_nodes": {
+          "value": 1.0516110937608403e-05,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": "state_0 at native nodes between the query nodes; interpolation allowance up to 0.000207"
+        },
+        "sheet_0.state_1": {
+          "value": 2.3355629930055244e-10,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_1.dense_nodes": {
+          "value": 4.7063067146538295e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": "state_1 at native nodes between the query nodes; interpolation allowance up to 9.28e-05"
+        },
+        "sheet_0.state_2": {
+          "value": 1.5297602073971461e-10,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_2.dense_nodes": {
+          "value": 2.8304967367165368e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": "state_2 at native nodes between the query nodes; interpolation allowance up to 5.59e-05"
+        },
+        "sheet_0.state_3": {
+          "value": 5.551115123125783e-17,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_3.dense_nodes": {
+          "value": 5.551115123125783e-17,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": "state_3 at native nodes between the query nodes; interpolation allowance up to 6.94e-17"
+        },
+        "sheet_0.spectrum.dense_nodes": {
+          "value": 1.537345555142006e-05,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "spectrum at native nodes between the query nodes; interpolation allowance up to 0.000305"
+        },
+        "sheet_0.spectrum": {
+          "value": 1.5131593131267884e-09,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "BT.count_difference": {
+          "value": 1.0,
+          "limit": null,
+          "verdict": "PENDING",
+          "reason": "unrefined BT detection excluded; refined BT is compared in lorenz84.bt-ft"
+        }
+      },
+      "matcont--bifurcationkit": {
+        "sheet_count_difference": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.endpoint_difference": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.F": {
+          "value": 4.616005511159926e-08,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.F.dense_nodes": {
+          "value": 1.8375711023921326e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "F at native nodes between the query nodes; interpolation allowance up to 5.84e-05"
+        },
+        "sheet_0.T": {
+          "value": 2.5636540344103117e-08,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.T.dense_nodes": {
+          "value": 2.2693549439881024e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "T at native nodes between the query nodes; interpolation allowance up to 2.06e-05"
+        },
+        "sheet_0.parameter": {
+          "value": 2.5636540344103117e-08,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.parameter.dense_nodes": {
+          "value": 2.2693549439881024e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "parameter at native nodes between the query nodes; interpolation allowance up to 2.06e-05"
+        },
+        "sheet_0.state_0": {
+          "value": 1.7211444758302719e-07,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_0.dense_nodes": {
+          "value": 6.5013262167124e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": "state_0 at native nodes between the query nodes; interpolation allowance up to 0.000206"
+        },
+        "sheet_0.state_1": {
+          "value": 7.237918837020574e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_1.dense_nodes": {
+          "value": 2.8999510633884173e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": "state_1 at native nodes between the query nodes; interpolation allowance up to 9.23e-05"
+        },
+        "sheet_0.state_2": {
+          "value": 5.3575203412536965e-08,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_2.dense_nodes": {
+          "value": 1.7638040402667698e-06,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": "state_2 at native nodes between the query nodes; interpolation allowance up to 5.57e-05"
+        },
+        "sheet_0.state_3": {
+          "value": 5.551115123125783e-17,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "sheet_0.state_3.dense_nodes": {
+          "value": 5.551115123125783e-17,
+          "limit": 0.0002,
+          "verdict": "PASS",
+          "reason": "state_3 at native nodes between the query nodes; interpolation allowance up to 5.55e-17"
+        },
+        "sheet_0.spectrum.dense_nodes": {
+          "value": 9.586516597536835e-06,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "spectrum at native nodes between the query nodes; interpolation allowance up to 0.000303"
+        },
+        "sheet_0.spectrum": {
+          "value": 2.943803033259366e-07,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": "all native modes; no failed modes omitted"
+        },
+        "BT.count_difference": {
+          "value": 1.0,
+          "limit": null,
+          "verdict": "PENDING",
+          "reason": "unrefined BT detection excluded; refined BT is compared in lorenz84.bt-ft"
+        }
+      }
+    },
+    "independent": {
+      "jaxcont": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 8.383918559395909e-14,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "event_residual": {
+          "value": 2.814776189907775e-12,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "matcont": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "residual": {
+          "value": 1.1102230246251565e-16,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "event_residual": {
+          "value": 5.551115123125783e-17,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        }
+      },
+      "bifurcationkit": {
+        "unresolved_points": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "domain.endpoint_gap": {
+          "value": 0.0,
+          "limit": 0.0005,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "missing_expected_events": {
+          "value": 0.0,
+          "limit": 0,
+          "verdict": "PASS",
+          "reason": null
+        },
+        "unrefined_detections": {
+          "value": 1.0,
+          "limit": null,
+          "verdict": "PENDING",
+          "reason": "unrefined BT detection excluded; refined BT is compared in lorenz84.bt-ft"
+        },
+        "residual": {
+          "value": 7.34412530789541e-14,
+          "limit": 1e-07,
+          "verdict": "PASS",
+          "reason": null
+        }
+      }
+    },
+    "source_hashes": {
+      "jaxcont": {
+        "branch.csv": "sha256:1ba273153eb527ca847963286ac120e4decad1cb410c5886337dcc25544a06d7",
+        "events.csv": "sha256:cfe98b979361a0a80972d2e6b101a7e1a32e052c6b18f88f861f81c77797fe9d",
+        "spectra.csv": "sha256:982c0af57f93088bafb3ee2463019fd57c3d7253d6f4afbff44eabf89a2da41a"
+      },
+      "matcont": {
+        "branch.csv": "sha256:39e2948f9e72ca6be2604972a99626d30b277741df843ce57837154aa8d947fa",
+        "events.csv": "sha256:7d29261069255f9f335e0384ad4ef91b96bdab7a94b84e4ae9ef233253a9f447",
+        "spectra.csv": "sha256:24a4de04cae2434e8370963c2c39e8d14d8745e233dbe0953f37721b702eec6e"
+      },
+      "bifurcationkit": {
+        "branch.csv": "sha256:245d6ffca9910c060b91094d9377e466cf436f49f517822b41680a6444210e8c",
+        "events.csv": "sha256:3415ccf36361102bda91e2679ce8f3c249d84eed850d5e5eff4fcffbd8a039f8",
+        "spectra.csv": "sha256:d27af1fdcd2f1b19fa4486d00aa4c3d50640d881ad714b80e5e25c14acd58ba3"
+      }
+    },
+    "status": "PASS",
+    "information": {
+      "passages": {
+        "jaxcont": {
+          "policy": "first",
+          "later_reentries": []
+        },
+        "matcont": {
+          "policy": "first",
+          "later_reentries": []
+        },
+        "bifurcationkit": {
+          "policy": "first",
+          "later_reentries": []
+        }
+      },
+      "coordinates": {
+        "jaxcont--matcont": {
+          "sheet_0": "state_3"
+        },
+        "jaxcont--bifurcationkit": {
+          "sheet_0": "state_3"
+        },
+        "matcont--bifurcationkit": {
+          "sheet_0": "state_3"
+        }
+      }
+    },
+    "report_hash": "sha256:9ed64790e38bea602ac843e8a3898a317abb54bc5435c8fad20ce501b7533411"
+  },
+  "verdict": "PASS"
+}

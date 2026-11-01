@@ -45,6 +45,7 @@ import jax.numpy as jnp
 from jax import Array, jacfwd, jvp, lax
 
 from jaxcont.solvers.implicit import differentiable_root_checked
+from jaxcont.utils.precision import as_float64
 
 PyTree = Any
 
@@ -160,6 +161,8 @@ def hopf_point(
     system residual actually reached ``tol`` -- see
     :func:`jaxcont.solvers.implicit.differentiable_root_checked`.
     """
+    u_guess, p_guess = as_float64((u_guess, p_guess))
+    args = as_float64(args, scalars=False)
     u_guess = jnp.asarray(u_guess)
     n = u_guess.shape[0]
     p_guess = jnp.asarray(p_guess, u_guess.dtype)
@@ -230,7 +233,7 @@ def lyapunov_coefficient(
     Verified: the standard supercritical textbook example (f = (-y + x(mu -
     x^2 - y^2), x + y(mu - x^2 - y^2)), exact l1 = -2 at the origin) and an
     independent BifurcationKit.jl v0.5.2 cross-check on a less-symmetric
-    example -- see examples/BifurcationKit/04_hopf_normal_form.jl.
+    example -- see examples/validation/regenerate/bifurcationkit/hopf_normal_form.jl.
     """
     n = u.shape[0]
     complex_dtype = jnp.complex128 if u.dtype == jnp.float64 else jnp.complex64

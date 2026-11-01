@@ -1,0 +1,78 @@
+{
+  "canonical_id": "cubic.eq-fold",
+  "chart_status": "completed",
+  "command": [
+    "julia",
+    "--project=/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/bifurcationkit",
+    "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/wt/examples/validation/regenerate/bifurcationkit/cubic_fold.jl",
+    "--case",
+    "cubic.eq-fold",
+    "--output-dir",
+    "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/staging/bk/cubic.eq-fold/cubic.eq-fold/bifurcationkit"
+  ],
+  "conventions": {
+    "time": "original"
+  },
+  "conversion_chain": [],
+  "driver_hash": "sha256:d0a6a77223b9d77ff11911476400917f0699db55aeeefea97da1fcf30d8a45fc",
+  "equation_hash": "sha256:d0a6a77223b9d77ff11911476400917f0699db55aeeefea97da1fcf30d8a45fc",
+  "generated_utc": "2026-10-29T22:38:20Z",
+  "generator_revision": "5c92ca020b4ca47700a698399740bb6649dbc88f",
+  "lock_hash": "sha256:134daaa75d8b8f9905b1c7afc9b4ae1fa3602dd6d03e4ec1600000bdddb3bb29",
+  "mesh": {
+    "kind": "equilibrium"
+  },
+  "output_hashes": {
+    "branch.csv": "sha256:0ffe137440c5af723bb9c1de0047cb4f699d0907347f2e2fc815deda81735e96",
+    "events.csv": "sha256:391284888a7ccc135db480be1ac5dea6669b6c4dad33127d488ada5cf7092deb",
+    "spectra.csv": "sha256:c24ec7b1d4bb944b56d6abd76553d723c9bd119a27ba6f2089a408ee45b5f026"
+  },
+  "package_versions": {
+    "BifurcationKit": "0.8.8",
+    "CSV": "1.2.0",
+    "JSON": "1.13.0"
+  },
+  "parameter_order": [
+    "p"
+  ],
+  "platform": {
+    "blas": "LBTConfig([ILP64] libopenblas64_.so)",
+    "cpu": "sapphirerapids",
+    "os": "Linux"
+  },
+  "precision": "float64",
+  "resolved_controls": {
+    "bounds": [
+      -1.0,
+      1.0
+    ],
+    "ds": 0.01,
+    "ds_max": 0.05,
+    "max_steps": 300,
+    "newton_atol": 1e-12
+  },
+  "review_date": "2026-10-30",
+  "reviewed": true,
+  "reviewer": "Claude (review delegated by owner, 2026-10-30)",
+  "runtime_version": "1.13.3",
+  "scaling": {
+    "arclength": "BK PALC theta=0.5: state weight 0.5/n; parameter weight 0.5",
+    "time": "original"
+  },
+  "schema_version": 2,
+  "seeds": {
+    "p": -1.0,
+    "state": [
+      -2.1038034027355366
+    ]
+  },
+  "solver_strategies": {
+    "event_selection": "type and parameter window",
+    "method": "BifurcationKit PALC"
+  },
+  "source_hashes": {
+    "cubic_fold.jl": "sha256:d0a6a77223b9d77ff11911476400917f0699db55aeeefea97da1fcf30d8a45fc",
+    "export.jl": "sha256:c9d7f64f7e16e4829b8af9894b4449e56fbbb0c02403f028d749cdde77fe27b3"
+  },
+  "tool": "bifurcationkit"
+}

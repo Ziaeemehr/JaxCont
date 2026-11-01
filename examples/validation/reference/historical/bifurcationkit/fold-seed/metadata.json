@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "tool": "bifurcationkit",
+  "package_version": "0.5.2",
+  "reviewed": false,
+  "provenance": "Historical values transcribed from existing tests at commit 14c0143; no fresh runtime execution or promotion is claimed.",
+  "source_file": "tests/test_curves.py",
+  "source_file_sha256": "sha256:a3af553b272639e9ca27c22e31445d8260ec4a806ddd37af6d73956fb73e2d93",
+  "source_revision": "14c0143",
+  "runtime_version": "unknown",
+  "generated_utc": "unknown",
+  "generator_revision": "unknown",
+  "precision": "unknown",
+  "source_driver": "examples/validation/regenerate/bifurcationkit/lorenz84_codim2.jl",
+  "output_hashes": {
+    "values.json": "sha256:ed632ada5462408d0a2d5561d84ad0216e997944678ec2858d41f1685fa5b99c"
+  }
+}

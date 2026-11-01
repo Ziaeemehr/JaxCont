@@ -76,6 +76,8 @@ Docstring Format
 
 Use NumPy-style docstrings:
 
+.. illustrative
+
 .. code-block:: python
 
    def my_function(param1: Array, param2: float) -> Array:
@@ -113,6 +115,8 @@ Testing
 
 Test Structure
 ^^^^^^^^^^^^^^
+
+.. illustrative
 
 .. code-block:: python
 

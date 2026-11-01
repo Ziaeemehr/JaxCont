@@ -81,7 +81,7 @@ python_functions = ["test_*"]
 # them here keeps `pytest` quiet-by-default on GPU dev machines too -- see
 # tests/test_gpu_smoke.py). Run everything with `make test-all`; coverage
 # with `make test-cov`; GPU smoke tests explicitly with `pytest -m gpu`.
-addopts = "-q -m 'not slow and not gpu'"
+addopts = "-q -m 'not slow and not gpu and not matlab and not julia'"
 
 [tool.black]
 line-length = 100

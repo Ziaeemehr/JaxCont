@@ -1,0 +1,20 @@
+{
+  "source_hashes": {
+    "run_radial_cycle.stderr.log": "sha256:1df8f62f6dddb6290eb74ac822199e88b77ef53eb664c77a7cdc85ec9f3a3065",
+    "regeneration.log": "sha256:b21a89ccfba20f6d1354bcab5ec010d6e5285806ff89191e2cc6015a60789cac",
+    "MC-LC-001_branch.csv": "sha256:e3f15451fbe026c847c32b32efe51b255cddc0a6ba404da06b1d3f773fb96081",
+    "MC-LC-001_multipliers.csv": "sha256:e9a08a1317c388f7ddb50c9d3a9a03436b5b26cf4367093200a21f2fce256ee8",
+    "MC-LC-001_metadata.json": "sha256:c880623d708682f33ae48196b8dde8b313af9451e14446242e1e2331ef5ebaa1",
+    "run_radial_cycle.stdout.log": "sha256:e40954ce08ed051bb83789ef319631b98f6e145186c060974c29873b7228bf91",
+    "invocation.json": "sha256:8fe5fef8e186d8c579a9c7650a044e2b1211caf0a9a553edc5dbad05b94c068c",
+    "MC-LC-001_events.csv": "sha256:a9a3de577ffdcd725d081ac1ddf81f1e3c5c11d062e8cfa54efa788db22a3d6b"
+  },
+  "output_hashes": {
+    "events.csv": "sha256:96a9e5d088f13c9f89e1e4ac1f2432ec8f11a508dc88dbf406fc12df72a56eb0",
+    "spectra.csv": "sha256:a61c70f59b380781c0966f2030a3a65e4774fd92d8eba602f184a516a07d237d",
+    "branch.csv": "sha256:154dc42df62d9eb84eb92ec240b04c8a0512a33243cafd3e3af81857d112bca1"
+  },
+  "source_schema": 1,
+  "target_schema": 2,
+  "canonical_id": "radial.cycle-floquet"
+}

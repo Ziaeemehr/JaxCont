@@ -12,6 +12,9 @@ import jaxcont as jc
 from jaxcont.bifurcations.events import Fold, Hopf, detect_events
 from jaxcont.core.collocation import Collocation
 
+_POINT_ATOL = 1e-9
+
+
 
 def test_bothside_preserves_hopf_in_first_backward_bracket():
     def rhs(u, p, args):
@@ -23,7 +26,8 @@ def test_bothside_preserves_hopf_in_first_backward_bracket():
         events=[Hopf()],
     )
     assert len(result.events) == 1
-    assert result.events[0].p == pytest.approx(-.005, abs=2e-5)
+    # Measured |error|: 8.67e-19; analytic event, default Newton budget.
+    assert result.events[0].p == pytest.approx(-0.005, abs=_POINT_ATOL, rel=0)
 
 
 def test_adjacent_distinct_folds_survive_dedup():
@@ -33,7 +37,8 @@ def test_adjacent_distinct_folds_survive_dedup():
         lambda u, p: u**3 - u - p, ds=1.,
     )
     good = sorted(h.p for h in hits if h.status == 'validated')
-    assert good == pytest.approx([-.38490018, .38490018], abs=2e-5)
+    # Measured |error|: 5.4e-10; analytic cubic folds, reference rounded to eight decimal places.
+    assert good == pytest.approx([-0.38490018, 0.38490018], abs=max(_POINT_ATOL, 1e-08), rel=0)
 
 
 @pytest.mark.parametrize('algorithm', [jc.Natural(), jc.PseudoArclength()])
@@ -90,7 +95,8 @@ def test_example14_completes_in_scratch(tmp_path):
     scratch = tmp_path / 'examples'
     shutil.copytree(source, scratch)
     run = subprocess.run(
-        [sys.executable, str(scratch / 'example_14_prc_shooting_validation.py')],
+        [sys.executable, str(scratch / 'validation/gallery/plot_prc_shooting.py'),
+         '--output-dir', str(tmp_path / 'generated')],
         cwd=scratch, env={**os.environ, 'MPLBACKEND': 'Agg'},
         capture_output=True, text=True,
     )

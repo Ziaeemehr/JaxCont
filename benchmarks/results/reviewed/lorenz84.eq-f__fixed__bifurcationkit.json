@@ -1,0 +1,29 @@
+{
+  "benchmark_id": "lorenz84.eq-f/fixed",
+  "canonical_id": "lorenz84.eq-f",
+  "tool": "bifurcationkit",
+  "generated_utc": "2026-10-29T11:33:50.423879+00:00",
+  "platform": "Linux-6.17.0-1033-oem-x86_64-with-glibc2.39",
+  "cpu": {
+    "model": "Intel(R) Xeon(R) w5-3525",
+    "logical_cores": 32
+  },
+  "python": "3.12.3",
+  "timer": "time.perf_counter",
+  "accuracy_limits": {
+    "parameter_atol": 0.0005,
+    "state_atol": 0.0002,
+    "residual_atol": 1e-07,
+    "spectrum_atol": 0.0005,
+    "frequency_atol": 0.0005
+  },
+  "status": "PENDING",
+  "reason": "NotImplementedError: lorenz84.eq-f: BifurcationKit benchmark worker covers cubic.eq-fold only",
+  "tool_order": [
+    "matcont",
+    "jaxcont",
+    "bifurcationkit"
+  ],
+  "order_seed": 20261029,
+  "order_position": 2
+}

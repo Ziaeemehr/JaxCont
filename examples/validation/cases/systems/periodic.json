@@ -1,0 +1,65 @@
+{
+  "adaptx": {
+    "base_domain": [
+      0.55,
+      0.9
+    ],
+    "doubled_domain": [
+      0.57,
+      0.63
+    ],
+    "pd_window": [
+      0.62,
+      0.64
+    ],
+    "doubled_pd_window": [
+      0.57,
+      0.59
+    ],
+    "hopf_window": [
+      0.99,
+      1.01
+    ],
+    "ntst": 20,
+    "ncol": 4,
+    "ds": 0.01,
+    "ds_min": 1e-05,
+    "ds_max": 0.02,
+    "max_steps": 300,
+    "verification_comment": "Computed before producers, 2026-10-29: independent MatCont testadapt1/2 probe gave H=1, base PD alpha=0.63030202310037 T=6.3640713357497, doubled start T=12.728142671499 and doubled PD alpha=0.57962986032678 T=12.73436554085. Julia 0.8.8 Collocation/FloquetColl probe with tol_bisection_eigenvalue=0 gave PD=0.6303020048703702 and genuine doubled cycles down to 0.57. Logs: generated/candidates/periodic-probe/{matcont/probe2.log,julia-zero.log}. These windows contain the computed positive-alpha PDs; the base domain preserves the existing JaxCont sweep, and doubled domain includes its alpha~0.58 switched point. No negative-alpha events are claimed. MatCont unweighted collocation coordinates need a separate 1200-point budget: the first driver computation at ds_max=0.02 exhausted 300 points before reaching PD. This increases the budget, without changing the domain or tolerances. The successful 1200-budget computation required 359 base points and 134 doubled points to cross the complete windows; the final frozen per-branch budget is 500, retaining margin over both measured requirements and avoiding continuation far outside the contract.",
+    "matcont_max_steps": 500
+  },
+  "torbpc": {
+    "domain": [
+      -0.747263543778405,
+      -0.584492842421877
+    ],
+    "continuation_bounds": [
+      -0.75,
+      -0.57
+    ],
+    "lpc_window": [
+      -0.586,
+      -0.583
+    ],
+    "pd_window": [
+      -0.617,
+      -0.612
+    ],
+    "ns_window": [
+      -0.598,
+      -0.593
+    ],
+    "hopf_window": [
+      -0.591,
+      -0.587
+    ],
+    "ntst": 25,
+    "ncol": 4,
+    "ds": 0.005,
+    "ds_min": 1e-05,
+    "ds_max": 0.02,
+    "max_steps": 300,
+    "verification_comment": "Computed before producers, 2026-10-29: real MatCont run_torbpc_cycle gives LPC=-0.584492842421877 T=8.41186621425809, NS=-0.595750403989607 T=8.86109929893306, PD=-0.614681653707091 T=9.25684575645854. Julia 0.8.8 Collocation(25,4)/FloquetColl gives LPC native :bp=-0.5844928424736489 (parameter turning point), NS=-0.5957509225794261, PD=-0.6146816775356398, and reaches -0.75. Logs: generated/candidates/periodic-probe/{matcont-torbpc,tor-julia-zero.log}. Domain is the unchanged full registry domain; none of LPC/PD/NS is omitted."
+  }
+}

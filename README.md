@@ -34,18 +34,27 @@ The current surface supports equilibrium and periodic-orbit continuation,
 their principal codimension-one events, direct codimension-two point
 solvers, two-parameter continuation (fold/Hopf curves with their own
 codimension-two events), and infinitesimal phase response curves (iPRC,
-`prc_curve`, cross-validated against MatCont) plus their parameter-derivative
-sensitivity (dPRC, `dprc_curve`, validated independently -- MatCont does not
-compute this quantity). Equilibrium branch switching (`BP`, `branch_switch`)
-and period-doubling switching (`branch_switch_pd`) are shipped. General
-connecting-orbit/BVP workflows remain future work.
+`prc_curve`) plus their parameter-derivative sensitivity (dPRC, `dprc_curve`,
+validated independently -- MatCont does not compute this quantity).
+Equilibrium branch switching (`BP`, `branch_switch`) and period-doubling
+switching (`branch_switch_pd`) are shipped. General connecting-orbit/BVP
+workflows remain future work.
+
+Validation is per case against committed MatCont 7.6 and BifurcationKit 0.8.8
+references; the [validation page](docs/source/validation.md) lists every case
+with its status. Known limitations:
+
+- Near a Hopf seed, periodic branches can report spurious folds at very small
+  amplitude.
+- The iPRC agrees with MatCont's historical PRC output; its current
+  reference evidence is PENDING.
 
 <p align="center">
   <img src="docs/images/matcont_cubic_overlay.png" width="500" alt="Cubic S-curve: JaxCont vs MatCont 7.6, folds overlaid">
 </p>
 
 <p align="center"><sub>JaxCont's branch (blue) traced independently over MatCont 7.6's reference (orange) —
-more cases, including known limitations, in the <a href="examples/MatCont/README.md">MatCont validation suite</a>.</sub></p>
+more cases, including known limitations, on the <a href="docs/source/validation.md">validation page</a>.</sub></p>
 
 ## Installation
 
@@ -59,7 +68,7 @@ See the [JAX installation guide](https://docs.jax.dev/en/latest/installation.htm
 when selecting CPU, GPU, or TPU support.
 
 > **Using on Google Colab:** `!pip install jaxcont`, then upload a notebook
-> from the [example gallery](https://jaxcont.readthedocs.io/en/latest/auto_examples/index.html)
+> from the [example gallery](https://jaxcont.readthedocs.io/en/latest/auto_tutorials/index.html)
 > and run it. pip may also print a dependency conflict warning about
 > `numba` needing an older `numpy` than the one JAX pulls in - this is
 > expected and safe to ignore unless your notebook separately uses numba.
@@ -108,15 +117,18 @@ plot_eigenvalues(result, shade_stability=True)
 
 - [Documentation home](https://jaxcont.readthedocs.io/en/latest/)
 - [Quickstart](https://jaxcont.readthedocs.io/en/latest/quickstart.html)
-- [Example gallery](https://jaxcont.readthedocs.io/en/latest/auto_examples/index.html)
-- [`example_03_van_der_pol.py`](examples/example_03_van_der_pol.py) — Hopf
-  crossing with JaxCont and MatCont markers
-- [`example_06_vmap_sweep.py`](examples/example_06_vmap_sweep.py) — batched
+- [Example gallery](https://jaxcont.readthedocs.io/en/latest/auto_tutorials/index.html)
+- [`plot_04_vanderpol_equilibrium.py`](examples/tutorials/plot_04_vanderpol_equilibrium.py) — Hopf
+  crossing and the degenerate Hopf caveat
+- [`plot_07_vmap_sweep.py`](examples/tutorials/plot_07_vmap_sweep.py) — batched
   continuation with `vmap`
-- [`example_07_differentiable.py`](examples/example_07_differentiable.py) —
+- [`plot_08_differentiable.py`](examples/tutorials/plot_08_differentiable.py) —
   differentiable bifurcation analysis
-- [`examples/MatCont`](examples/MatCont/README.md) — reproducible analytic,
-  MATLAB/MatCont and JaxCont validation cases
+- [Comparison gallery](https://jaxcont.readthedocs.io/en/latest/auto_validation/index.html)
+- [`examples/validation`](examples/validation/README.md) — reproducible analytic,
+  MatCont and BifurcationKit validation cases. The pages and tests read the
+  committed references; regenerating them is opt-in and needs `MATLAB_BIN` and
+  `MATCONT_ROOT` (MatCont) or `JULIA_BIN` (BifurcationKit).
 
 ## Development
 
@@ -129,7 +141,7 @@ python -m pytest
 
 Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md), the
 [roadmap](notes/ROADMAP.md), and the
-[MatCont validation suite](examples/MatCont/README.md).
+[MatCont validation suite](examples/validation/README.md).
 
 ## Citation
 

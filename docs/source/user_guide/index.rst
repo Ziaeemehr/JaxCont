@@ -3,17 +3,6 @@ User Guide
 
 Complete guide to using JaxCont for continuation and bifurcation analysis.
 
-.. toctree::
-   :maxdepth: 2
-
-   introduction
-   continuation_methods
-   bifurcation_analysis
-   periodic_orbits
-   stability_analysis
-   visualization
-   advanced_topics
-
 Introduction
 ------------
 
@@ -54,6 +43,8 @@ Basic Workflow
 
 Example workflow:
 
+.. illustrative
+
 .. code-block:: python
 
    import jaxcont as jc
@@ -75,10 +66,10 @@ Example workflow:
        events=[jc.Fold(), jc.Hopf()],
    )
 
-   # 5. Analyze
-   solution = result._solution
-   bifurcations = solution.bifurcations
+   # 5. Analyze: validated events, run status and the branch
+   for event in result.events:
+       print(event.kind, event.p)
+   print(result.status, result.branch.n_valid)
 
    # 6. Visualize
-   from jaxcont.viz import plot_continuation
-   plot_continuation(solution)
+   result.plot()

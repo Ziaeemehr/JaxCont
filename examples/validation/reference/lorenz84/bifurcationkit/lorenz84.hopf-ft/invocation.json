@@ -1,0 +1,14 @@
+{
+  "command": [
+    "/home/ziaee/envs/jaxcont/bin/python",
+    "-m",
+    "examples.validation.run_validation",
+    "--regenerate",
+    "bifurcationkit",
+    "--case",
+    "lorenz84.hopf-ft",
+    "--output-dir",
+    "/tmp/claude-1000/-home-ziaee-git-JaxCont/3318b589-0422-47bf-b52e-448d6bd651ae/scratchpad/evidence/staging/bk/lorenz84.hopf-ft"
+  ],
+  "returncode": 0
+}

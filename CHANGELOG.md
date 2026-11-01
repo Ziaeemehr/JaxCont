@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- JaxCont is float64 only. `import jaxcont` turns on `jax_enable_x64` when
+  it is off and warns once (`jaxcont.PrecisionWarning`); the setting is
+  global. `JAXCONT_NO_AUTO_X64=1` keeps it off, and entry points then raise
+  `RuntimeError`. Float32 inputs are converted to float64 at the entry
+  points. Tests and CI run in float64 only.
+
 - `floquet_multipliers` and `branch_floquet_multipliers` take a Floquet
   strategy `floquet_solver` in place of the positional matrix `eigen_solver`;
   pass `ProductFloquet(eigen_solver)` to keep a custom solver and its order.
@@ -65,14 +71,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty legs. Collocation meshes require positive `ntst` and raise `ValueError`
   for zero intervals.
 - Event deduplication requires adjacent brackets and refined state/parameter
-  agreement within dtype-derived refinement accuracy. Bothside stitching drops
-  a seed-touching backward event only when a matching forward event exists.
+  agreement within dtype-derived refinement accuracy.
 - PD/NS refinement rejects unfinished or unresolved event brackets with
   `reason="not_converged"`. The default event refinement budget is now 50
   iterations to resolve float64 brackets. Direct refinement requires `PeriodicArgs` and
   raises `ValueError` when it is missing.
-- Shared-seed events in `bothside` continuation belong to the forward leg.
-  Spectral scans preserve distinct crossing modes within a single bracket;
+- `bothside` continuation detects events once, on the assembled branch
+  (backward leg reversed, then the forward leg), so an event at the shared
+  seed is reported once. Spectral scans preserve distinct crossing modes
+  within a single bracket;
   Hopf refinement follows each candidate's mode.
 - Both continuation engines report `nonfinite` for nonfinite corrector
   trials while retaining only finite accepted branch points.
@@ -148,9 +155,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (the `|Im|` threshold between real and complex) defaults to `None`, resolved to
   `sqrt(default_tol)` of the spectrum's dtype. PD/NS refinement re-corrects the final
   bracket midpoint onto the collocation residual and stores the critical multiplier in
-  `info["multiplier"]`. A Hopf curve that ends with `|omega| < 10 * default_tol` and no
-  sign change records a `BogdanovTakens` entry with `reason="curve_terminated"` in
-  `rejected_events`.
+  `info["multiplier"]`. A Hopf curve that stops early (not `reached_end`) with
+  `|omega|` below the chart's termination threshold and no sign change records a
+  `BogdanovTakens` entry with `reason="curve_terminated"` in `rejected_events` (threshold
+  in the Fixed entry below).
 - Event deduplication no longer merges on parameter distance alone. Two validated hits of
   one kind merge only when their brackets are adjacent and their joint `(u, p)` distance is
   at most `sqrt(default_tol(dtype)) * (1 + max(norm(x_i), norm(x_j)))`,
@@ -267,12 +275,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   existing single-direction scan engine twice and stitches the two legs into one branch; no
   changes to `core/scan_continuation.py`. Eager-only (raises `NotImplementedError` under
   `jax.vmap`/`jax.jit`).
-- MatCont cross-validation for two-parameter fold/Hopf curves: `examples/MatCont/cases.json`'s
-  `US-C2-LP-001`/`US-C2-H-001` promoted to `supported`, cross-checked against a live MatCont 7.6
-  run of the catalytic-oscillator LP/Hopf curves (`examples/MatCont/python_cases/codim2_curves.py`).
+- Two-parameter fold/Hopf curve validation cases: `US-C2-LP-001`/`US-C2-H-001`
+  (`catalytic.fold-curve`, `catalytic.hopf-curve` in `examples/validation/cases/cases.json`)
+  are `supported`, with JaxCont producers in
+  `examples/validation/cases/python_cases/codim2_curves.py`. Their evidence is PENDING: native
+  MatCont 7.6 results exist, but no complete reference bundle has been promoted.
 - `jc.BP`/`jc.branch_switch`: detect equilibrium branch points (pitchfork/transcritical
   crossings) and compute the crossing branch's tangent, closing the last v0.3.0+ roadmap
-  item. Period-doubling switching remains a separate future item.
+  item.
 - `jc.branch_switch_pd`: switch from a detected period-doubling bifurcation onto the
   period-doubled cycle, completing the branch-switching feature. Verifies the switched
   orbit is genuinely period-doubled rather than the original orbit traversed twice, and
@@ -286,6 +296,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   candidates, curve layouts and decoders, and the `natural_scan` / `*_lax_scan` engines.
 
 ### Fixed
+
+- The Floquet trivial multiplier is identified next to a Hopf point: when
+  the flow lies in the plane of two eigenvectors whose multipliers are both 1
+  to tolerance (the monodromy is nearly the identity there), the trivial index
+  is the pair member nearest 1 instead of an unresolved spectrum (NaN).
+
+- `PeriodDoubling` detects a crossing of `-1` in a step where a complex pair
+  inside the unit circle turns real; such brackets were skipped because the
+  mode was not real at both ends.
+
+- Repeated `continuation` calls with the same `f` no longer retrace it for
+  event refinement: Fold/Hopf point solvers, the Jacobian for spectra and
+  branch eigenvalues are compiled once per `f` (a warm cubic run with
+  stability and `Fold()` drops from 0.22 s to 0.009 s).
+
+- The torBPC validation case passes against MatCont on the external tools'
+  mesh (`ntst=25`), comparing at JaxCont's refined events.
 
 - MatCont validation resolves MATLAB from `MATLAB_BIN` or `PATH` and MatCont
   from `MATCONT_ROOT`, removing machine-specific installation defaults.
@@ -344,7 +371,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Natural continuation lands its final step exactly on `p_end` (a remainder of at most
   `ds_min` is absorbed into the last step), so round-off no longer adds a step beyond the
   span or turns `reached_end` into `nonfinite`.
-- `examples/example_06_vmap_sweep.py` no longer says events are unsupported under `vmap`.
+- The `vmap` sweep tutorial (now `examples/tutorials/plot_07_vmap_sweep.py`) no longer says
+  events are unsupported under `vmap`.
 
 ### Known limitations
 

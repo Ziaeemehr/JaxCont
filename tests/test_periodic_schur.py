@@ -14,13 +14,13 @@ import pytest
 
 from jaxcont.utils.precision import default_tol
 
+def _eps_J():
+    return float(jnp.finfo(jnp.float64).eps)
 
-def _real_dtype():
-    return jnp.asarray(0.0).dtype
 
 
 def _eps():
-    return float(jnp.finfo(_real_dtype()).eps)
+    return float(jnp.finfo(jnp.float64).eps)
 
 
 def _rotation13(angle):
@@ -33,7 +33,7 @@ def _rotation13(angle):
 def _rotating_scaled_factors(a=2.0, m=32):
     """``M_i = Q_(i+1) diag(exp(-a), 1, exp(2)) Q_i.T`` with ``Q_i`` rotations
     by ``2*pi*i/m``; the cyclic product is ``diag(exp(-m*a), 1, exp(2*m))``."""
-    a = jnp.asarray(a, dtype=_real_dtype())
+    a = jnp.asarray(a, dtype=jnp.float64)
     diag = jnp.diag(jnp.stack([jnp.exp(-a), jnp.ones_like(a), jnp.exp(2.0 * jnp.ones_like(a))]))
     rotations = [_rotation13(2.0 * jnp.pi * i / m) for i in range(m + 1)]
     return jnp.stack([rotations[i + 1] @ diag @ rotations[i].T for i in range(m)])
@@ -41,12 +41,12 @@ def _rotating_scaled_factors(a=2.0, m=32):
 
 def _general_factors():
     """Nonnormal, nontriangular ``(4, 3, 3)`` fixture."""
-    raw = jnp.sin(jnp.arange(36, dtype=_real_dtype()).reshape(4, 3, 3) + 1.0)
-    return raw + 2.0 * jnp.eye(3, dtype=_real_dtype())
+    raw = jnp.sin(jnp.arange(36, dtype=jnp.float64).reshape(4, 3, 3) + 1.0)
+    return raw + 2.0 * jnp.eye(3, dtype=jnp.float64)
 
 
 def _rel_fro(x, ref):
-    return float(jnp.linalg.norm(x) / jnp.maximum(jnp.linalg.norm(ref), jnp.finfo(_real_dtype()).tiny))
+    return float(jnp.linalg.norm(x) / jnp.maximum(jnp.linalg.norm(ref), jnp.finfo(jnp.float64).tiny))
 
 
 def _assert_cyclic_reconstruction(factors, H, Q):
@@ -90,7 +90,7 @@ def test_periodic_hessenberg_factor_reconstruction(fixture, mode):
         _assert_cyclic_reconstruction(batch[1], Hb[1], Qb[1])
         _assert_periodic_hessenberg_structure(Hb[1])
         H, Q = Hb[0], Qb[0]
-    complex_dtype = jnp.result_type(factors.dtype, jnp.complex64)
+    complex_dtype = jnp.complex128
     assert H.dtype == complex_dtype and Q.dtype == complex_dtype
     assert H.shape == factors.shape and Q.shape == factors.shape
     _assert_cyclic_reconstruction(factors, H, Q)
@@ -108,7 +108,7 @@ def test_periodic_hessenberg_single_factor():
 
 def _err():
     """Exact-factor log/phase acceptance tolerance of spec 6.3."""
-    return 200 * default_tol(_real_dtype())
+    return 200 * default_tol(jnp.float64)
 
 
 def _rotation2(angle):
@@ -146,36 +146,42 @@ def test_periodic_schur_rotating_scaled_factors():
     _assert_schur_form(factors, T, Q)
     expected = np.array([-64.0, 0.0, 64.0])
     order = _match(expected, logabs)
-    np.testing.assert_array_less(np.abs(np.asarray(logabs)[order] - expected), _err())
-    np.testing.assert_array_less(np.abs(np.asarray(phase) - 1.0), _err())
+    # Measured |error|: 1.42e-14; sum of 32 exact-factor logarithms, total scale 64.
+    np.testing.assert_array_less(np.abs(np.asarray(logabs)[order] - expected), 1024 * _eps_J())
+    # Measured |error|: 0; exact-factor spectral phase/log algebra, moderate matrix conditioning.
+    np.testing.assert_array_less(np.abs(np.asarray(phase) - 1.0), 128 * _eps_J())
     values = phase * jnp.exp(logabs)
     smallest = values[order[0]]
     assert float(jnp.abs(smallest)) > 0.0
-    assert abs(float(jnp.log(jnp.abs(smallest))) + 64.0) < _err()
+    # Measured |error|: 1.42e-14; sum of up to 32 log factors with total scale 64.
+    assert abs(float(jnp.log(jnp.abs(smallest))) + 64.0) < 1024 * _eps_J()
 
 
 def test_periodic_schur_complex_equal_modulus():
     from jaxcont.stability.periodic_schur import periodic_schur
 
-    block = 0.9 * _rotation2(jnp.asarray(0.2, dtype=_real_dtype()))
+    block = 0.9 * _rotation2(jnp.asarray(0.2, dtype=jnp.float64))
     factors = jnp.stack([block] * 16)
     T, Q, phase, logabs, converged = periodic_schur(factors)
     assert bool(converged)
     _assert_schur_form(factors, T, Q)
-    np.testing.assert_array_less(np.abs(np.asarray(logabs) - 16 * np.log(0.9)), _err())
+    # Measured |error|: 4.44e-16; sixteen exact rotation factors, accumulated log roundoff.
+    np.testing.assert_array_less(np.abs(np.asarray(logabs) - 16 * np.log(0.9)), 128 * _eps_J())
     expected = np.exp(np.array([3.2j, -3.2j]))
     order = _match(expected, phase)
-    np.testing.assert_array_less(np.abs(np.asarray(phase)[order] - expected), _err())
+    # Measured |error|: 3.91e-16; exact-factor spectral phase/log algebra, moderate matrix conditioning.
+    np.testing.assert_array_less(np.abs(np.asarray(phase)[order] - expected), 128 * _eps_J())
 
 
 def test_periodic_schur_zero_and_budget_status():
     from jaxcont.stability.periodic_schur import periodic_schur
 
-    factors = jnp.diag(jnp.array([0.0, 1.0, 2.0], dtype=_real_dtype()))[None]
+    factors = jnp.diag(jnp.array([0.0, 1.0, 2.0], dtype=jnp.float64))[None]
     T, Q, phase, logabs, converged = periodic_schur(factors)
     assert bool(converged)
     np.testing.assert_array_equal(np.asarray(logabs)[0], -np.inf)
-    np.testing.assert_array_less(np.abs(np.asarray(logabs)[1:] - [0.0, np.log(2.0)]), _err())
+    # Measured |error|: 0; exact-factor spectral phase/log algebra, moderate matrix conditioning.
+    np.testing.assert_array_less(np.abs(np.asarray(logabs)[1:] - [0.0, np.log(2.0)]), 128 * _eps_J())
     np.testing.assert_array_equal(np.asarray(phase), [0.0, 1.0, 1.0])
 
     general = _general_factors()
@@ -200,9 +206,8 @@ def test_periodic_schur_general_matches_product_eigenvalues():
         assert bool(converged)
         values = np.asarray(phase * jnp.exp(logabs))
         order = _match(expected, values)
-        np.testing.assert_array_less(
-            np.abs(values[order] - expected), _err() * np.max(np.abs(expected))
-        )
+        # Measured |error|: 9.77e-14; host product eigenvalue reference, nonnormal eigenvalue conditioning.
+        np.testing.assert_array_less(np.abs(values[order] - expected), 512 * _eps_J() * np.max(np.abs(expected)))
 
 
 def test_periodic_schur_jit_vmap():
@@ -215,11 +220,8 @@ def test_periodic_schur_jit_vmap():
         _assert_schur_form(batch[lane], T[lane], Q[lane])
         _, _, phase1, logabs1, _ = periodic_schur(batch[lane])
         order = _match(phase1 * jnp.exp(logabs1), phase[lane] * jnp.exp(logabs[lane]))
-        np.testing.assert_allclose(np.asarray(logabs[lane])[order], logabs1, atol=_err())
-
-
-def _complex_dtype():
-    return jnp.result_type(_real_dtype(), jnp.complex64)
+        # Measured |error|: 6.22e-15; conditioned batched/serial spectral log consistency.
+        np.testing.assert_allclose(np.asarray(logabs[lane])[order], logabs1, atol=512 * _eps_J(), rtol=0)
 
 
 def _rel_scalar(got, expected):
@@ -253,14 +255,15 @@ def _assert_periodic_eigenvectors(factors, right, left, values):
             assert abs(complex(jnp.vdot(l, r)) - 1.0) < 500 * eps, (i, j)
     products = jnp.prod(d, axis=0)
     for j in range(n):
-        assert _rel_scalar(products[j], values[j]) < _err() * max(1.0, 1.0 / abs(complex(values[j])))
+        # Measured |error|: 3.33e-15; reconstructed cyclic mode product and backward-error conditioning.
+        assert _rel_scalar(products[j], values[j]) < 512 * _eps_J() * max(1.0, 1.0 / abs(complex(values[j])))
 
 
 def _conjugated_triangular_factors(m=8):
     """``M_i = R_(i+1) U R_i.T`` with ``U = [[1, 2], [0, .5]]`` and rotations
     ``R_i`` by ``2*pi*i/m``: product ``U^m`` with nonorthogonal eigenvectors."""
-    U = jnp.array([[1.0, 2.0], [0.0, 0.5]], dtype=_real_dtype())
-    R = [_rotation2(jnp.asarray(2.0 * np.pi * i / m, dtype=_real_dtype())) for i in range(m + 1)]
+    U = jnp.array([[1.0, 2.0], [0.0, 0.5]], dtype=jnp.float64)
+    R = [_rotation2(jnp.asarray(2.0 * np.pi * i / m, dtype=jnp.float64)) for i in range(m + 1)]
     return jnp.stack([R[i + 1] @ U @ R[i].T for i in range(m)])
 
 
@@ -271,7 +274,7 @@ def test_periodic_eigenvectors_are_not_schur_columns():
     T, Q, phase, logabs, converged = periodic_schur(factors)
     assert bool(converged)
     right, left = periodic_eigenvectors(factors, T, Q, phase, logabs)
-    product = jnp.eye(2, dtype=_complex_dtype())
+    product = jnp.eye(2, dtype=jnp.complex128)
     for M in factors:
         product = M.astype(product.dtype) @ product
     values = phase * jnp.exp(logabs)
@@ -296,16 +299,21 @@ def test_periodic_schur_jvp_log_multiplier():
         k = jnp.argmin(logabs)
         return logabs[k], jnp.real(phase[k] * jnp.exp(logabs[k]))
 
-    a = jnp.asarray(1.0, dtype=_real_dtype())
+    a = jnp.asarray(1.0, dtype=jnp.float64)
     (log_value, value), (dlog, dvalue) = jax.jvp(contracting, (a,), (jnp.ones_like(a),))
     expected_value = -32.0 * np.exp(-32.0)
-    assert abs(float(log_value) + 32.0) < _err()
-    assert _rel_scalar(dlog, -32.0) < 20 * _err()
-    assert abs(float(dvalue) - expected_value) < 20 * _err() * abs(expected_value)
+    # Measured |error|: 7.11e-15; sum of up to 32 log factors with total scale 64.
+    assert abs(float(log_value) + 32.0) < 1024 * _eps_J()
+    # Measured |error|: 1.11e-16; analytic simple log-multiplier sensitivity, 32-factor accumulation.
+    assert _rel_scalar(dlog, -32.0) < 256 * _eps_J()
+    # Measured |error|: 2.93e-27; small multiplier sensitivity, accumulated relative roundoff.
+    assert abs(float(dvalue) - expected_value) < 1024 * _eps_J() * abs(expected_value)
     grad_log = jax.grad(lambda a: contracting(a)[0])(a)
     grad_value = jax.grad(lambda a: contracting(a)[1])(a)
-    assert _rel_scalar(grad_log, -32.0) < 20 * _err()
-    assert abs(float(grad_value) - expected_value) < 20 * _err() * abs(expected_value)
+    # Measured |error|: 3.33e-16; analytic simple log-multiplier sensitivity, 32-factor accumulation.
+    assert _rel_scalar(grad_log, -32.0) < 256 * _eps_J()
+    # Measured |error|: 2.93e-27; small multiplier sensitivity, accumulated relative roundoff.
+    assert abs(float(grad_value) - expected_value) < 1024 * _eps_J() * abs(expected_value)
 
 
 _NONNORMAL_RATES = (-0.3 + 0.2j, 0.1 - 0.4j)
@@ -317,7 +325,7 @@ def _nonnormal_complex_factors(a, variant="spec"):
     ``variant="spec"`` is the spec 6.3 fixture, whose first ``S_i`` column does
     not depend on ``a``; ``"both_columns"`` also moves that column, so the
     Schur basis rotates with ``a`` and Schur columns give wrong derivatives."""
-    cdt = _complex_dtype()
+    cdt = jnp.complex128
     a = jnp.asarray(a).astype(cdt)
     lower = 0.1j + (a * (0.1 - 0.03j) if variant == "both_columns" else 0.0)
 
@@ -346,13 +354,14 @@ def test_periodic_schur_nonnormal_complex_derivatives(variant):
     d_phase = 4j * rates.imag * exact_phase
     d_values = 4 * rates * exact_values
 
-    a = jnp.asarray(a0, dtype=_real_dtype())
+    a = jnp.asarray(a0, dtype=jnp.float64)
     factors = _nonnormal_complex_factors(a, variant)
     T, Q, phase, logabs, converged = periodic_schur(factors)
     assert bool(converged)
     values = phase * jnp.exp(logabs)
     order = _match(exact_values, values)
-    np.testing.assert_array_less(np.abs(np.asarray(values)[order] - exact_values), _err())
+    # Measured |error|: 1.94e-15; exact-factor spectral phase/log algebra, moderate matrix conditioning.
+    np.testing.assert_array_less(np.abs(np.asarray(values)[order] - exact_values), 128 * _eps_J())
     right, left = periodic_eigenvectors(factors, T, Q, phase, logabs)
     _assert_periodic_eigenvectors(factors, right, left, values)
 
@@ -363,9 +372,12 @@ def test_periodic_schur_nonnormal_complex_derivatives(variant):
 
     _, (t_phase, t_logabs, t_values) = jax.jvp(spectrum, (a,), (jnp.ones_like(a),))
     for k in range(2):
-        assert _rel_scalar(t_logabs[k], d_logabs[k]) < 20 * _err(), k
-        assert _rel_scalar(t_phase[k], d_phase[k]) < 20 * _err(), k
-        assert _rel_scalar(t_values[k], d_values[k]) < 20 * _err(), k
+        # Measured |error|: 1.85e-16; closed-form complex cyclic eigenvalue sensitivity.
+        assert _rel_scalar(t_logabs[k], d_logabs[k]) < 512 * _eps_J(), k
+        # Measured |error|: 2.99e-16; closed-form complex cyclic eigenvalue sensitivity.
+        assert _rel_scalar(t_phase[k], d_phase[k]) < 512 * _eps_J(), k
+        # Measured |error|: 1.3e-15; closed-form complex cyclic eigenvalue sensitivity.
+        assert _rel_scalar(t_values[k], d_values[k]) < 512 * _eps_J(), k
 
     objectives = {
         "logabs": (lambda s, k: s[1][k], lambda k: d_logabs[k]),
@@ -378,7 +390,8 @@ def test_periodic_schur_nonnormal_complex_derivatives(variant):
         for k in range(2):
             g = jax.grad(lambda a: objective(spectrum(a), k))(a)
             scale = max(abs(d_values[k]), abs(d_phase[k]), abs(d_logabs[k]))
-            assert abs(float(g) - expected(k)) < 20 * _err() * scale, (name, k)
+            # Measured |error|: 2.22e-15; closed-form complex cyclic eigenvalue sensitivity, component scale.
+            assert abs(float(g) - expected(k)) < 512 * _eps_J() * scale, (name, k)
 
 
 def test_periodic_schur_mixed_status_batch():
@@ -394,15 +407,18 @@ def test_periodic_schur_mixed_status_batch():
     def batch(params):
         return jax.vmap(lambda f: periodic_spectrum(f, max_sweeps=0))(lanes(params))
 
-    params = jnp.asarray([0.5, 1.0], dtype=_real_dtype())
+    params = jnp.asarray([0.5, 1.0], dtype=jnp.float64)
     phase, logabs, converged = jax.jit(batch)(params)
     np.testing.assert_array_equal(np.asarray(converged), [True, False])
     expected = [-2.0, 0.0, 4 * np.log(2.0)]
-    np.testing.assert_array_less(np.abs(np.sort(np.asarray(logabs[0])) - expected), _err())
-    np.testing.assert_array_less(np.abs(np.asarray(phase[0]) - 1.0), _err())
+    # Measured |error|: 0; exact-factor spectral phase/log algebra, moderate matrix conditioning.
+    np.testing.assert_array_less(np.abs(np.sort(np.asarray(logabs[0])) - expected), 128 * _eps_J())
+    # Measured |error|: 0; exact-factor spectral phase/log algebra, moderate matrix conditioning.
+    np.testing.assert_array_less(np.abs(np.asarray(phase[0]) - 1.0), 128 * _eps_J())
 
     grad_good = jax.jit(jax.grad(lambda p: jnp.min(batch(p)[1][0])))(params)
-    np.testing.assert_allclose(np.asarray(grad_good), [-4.0, 0.0], atol=20 * _err() * 4.0)
+    # Measured |error|: 0; analytic simple/failed lane derivative.
+    np.testing.assert_allclose(np.asarray(grad_good), [-4.0, 0.0], atol=128 * _eps_J(), rtol=0)
     grad_bad = jax.jit(jax.grad(lambda p: jnp.sum(batch(p)[1][1])))(params)
     assert bool(jnp.all(jnp.isfinite(grad_bad)))
     np.testing.assert_array_equal(np.asarray(grad_bad), 0.0)
@@ -416,22 +432,24 @@ def test_periodic_schur_repeated_modes_have_no_derivative():
     def factors(a):
         return jnp.stack([jnp.diag(jnp.stack([jnp.exp(a), jnp.exp(a), jnp.exp(2.0 * a)]))] * 4)
 
-    a = jnp.asarray(0.3, dtype=_real_dtype())
+    a = jnp.asarray(0.3, dtype=jnp.float64)
     (_, logabs, converged), (_, t_logabs, _) = jax.jvp(
         lambda a: periodic_spectrum(factors(a)), (a,), (jnp.ones_like(a),)
     )
     assert bool(converged)
     simple = int(jnp.argmax(logabs))
     assert bool(jnp.all(jnp.isnan(jnp.delete(t_logabs, simple))))
-    assert _rel_scalar(t_logabs[simple], 8.0) < 20 * _err()
+    # Measured |error|: 0; analytic simple log-multiplier sensitivity, 32-factor accumulation.
+    assert _rel_scalar(t_logabs[simple], 8.0) < 256 * _eps_J()
     grad = jax.grad(lambda a: periodic_spectrum(factors(a))[1][simple])(a)
-    assert _rel_scalar(grad, 8.0) < 20 * _err()
+    # Measured |error|: 0; analytic simple log-multiplier sensitivity, 32-factor accumulation.
+    assert _rel_scalar(grad, 8.0) < 256 * _eps_J()
 
 
 def test_periodic_schur_zero_underflow_overflow():
     from jaxcont.stability.periodic_schur import periodic_spectrum
 
-    rdt = _real_dtype()
+    rdt = jnp.float64
     zero = jnp.zeros((3, 3), dtype=rdt)
     diagonal_chain = jnp.stack(
         [jnp.diag(jnp.array([1.0, 2.0, 3.0], dtype=rdt)), zero, jnp.diag(jnp.array([2.0, 1.0, 0.5], dtype=rdt))]
@@ -453,14 +471,17 @@ def test_periodic_schur_zero_underflow_overflow():
     assert bool(converged)
     assert not bool(jnp.any(jnp.isnan(logabs))) and not bool(jnp.any(jnp.isnan(phase)))
     order = np.argsort(np.asarray(logabs))
-    np.testing.assert_array_less(np.abs(np.asarray(logabs)[order] - [-960.0, 960.0]), 960 * _err())
-    np.testing.assert_array_less(np.abs(np.asarray(phase) - 1.0), _err())
+    # Measured |error|: 0; 32 exact diagonal log factors, scale 960.
+    np.testing.assert_array_less(np.abs(np.asarray(logabs)[order] - [-960.0, 960.0]), 128 * _eps_J() * 960)
+    # Measured |error|: 0; exact-factor spectral phase/log algebra, moderate matrix conditioning.
+    np.testing.assert_array_less(np.abs(np.asarray(phase) - 1.0), 128 * _eps_J())
     values = np.asarray(phase * jnp.exp(logabs))[order]
     assert values[0] == 0.0 and np.isinf(values[1])
     # An underflowed zero keeps a finite logabs; an exact zero has -inf.
     assert np.isfinite(np.asarray(logabs)).all()
     _, (_, t_logabs, _) = jax.jvp(lambda a: periodic_spectrum(extreme(a)), (a,), (jnp.ones_like(a),))
-    np.testing.assert_allclose(np.asarray(t_logabs)[order], [-960.0, 960.0], rtol=20 * _err())
+    # Measured |error|: 1.14e-13; sum of 32 log factors, derivative scale 960.
+    np.testing.assert_allclose(np.asarray(t_logabs)[order], [-960.0, 960.0], rtol=128 * _eps_J(), atol=0)
 
 
 @pytest.mark.parametrize("position", range(4))
@@ -483,16 +504,18 @@ def test_periodic_eigenvectors_highly_nonnormal_finite(n, coupling):
     from jaxcont.stability.periodic_schur import periodic_eigenvectors, periodic_schur
 
     factors = (
-        jnp.diag(jnp.arange(1, n + 1, dtype=_real_dtype()))
-        + coupling * jnp.eye(n, k=1, dtype=_real_dtype())
+        jnp.diag(jnp.arange(1, n + 1, dtype=jnp.float64))
+        + coupling * jnp.eye(n, k=1, dtype=jnp.float64)
     )[None]
     T, Q, phase, logabs, converged = periodic_schur(factors)
     assert bool(converged)
     right, left = jax.jit(periodic_eigenvectors)(factors, T, Q, phase, logabs)
     assert bool(jnp.all(jnp.isfinite(right)))
     assert bool(jnp.all(jnp.isfinite(left)))
-    np.testing.assert_allclose(jnp.sum(jnp.abs(right) ** 2, axis=1), 1, atol=500 * _eps())
-    np.testing.assert_allclose(jnp.sum(jnp.conj(left) * right, axis=1), 1, atol=500 * _eps())
+    # Measured |error|: 0; unit/dual eigenvector normalization roundoff.
+    np.testing.assert_allclose(jnp.sum(jnp.abs(right) ** 2, axis=1), 1, atol=32 * _eps_J(), rtol=0)
+    # Measured |error|: 0; unit/dual eigenvector normalization roundoff.
+    np.testing.assert_allclose(jnp.sum(jnp.conj(left) * right, axis=1), 1, atol=32 * _eps_J(), rtol=0)
     values = phase * jnp.exp(logabs)
     for vectors, matrix, eigenvalues in [
         (right, factors, values),
