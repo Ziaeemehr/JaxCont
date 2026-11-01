@@ -10,6 +10,7 @@
   <a href="https://pypi.org/project/jaxcont/"><img src="https://img.shields.io/pypi/v/jaxcont.svg" alt="PyPI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <a href="https://doi.org/10.5281/zenodo.21812716"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.21812716.svg" alt="DOI"></a>
+  <a href="https://github.com/sponsors/Ziaeemehr"><img src="https://img.shields.io/github/sponsors/Ziaeemehr?logo=githubsponsors&label=Sponsor&color=ea4aaa" alt="Sponsor"></a>
 </p>
 
 JaxCont turns an equilibrium continuation sweep into a JAX program. Follow
