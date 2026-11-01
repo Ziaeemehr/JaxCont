@@ -123,3 +123,7 @@ docs/source/auto_validation/
 
 # Raw benchmark records (only reviewed records are committed)
 benchmarks/results/raw/
+
+# Local agent tooling
+.omc/
+.clinerules
