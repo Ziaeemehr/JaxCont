@@ -90,7 +90,7 @@ def test_examples_tutorials_and_validation_gallery_run_without_matlab_or_julia(t
             assert record["metrics"] and record["report_hash"]
         if entry.stem == "plot_torbpc":
             assert all(
-                json.loads(i.with_suffix(".checks.json").read_text())["status"] == "FAIL"
+                json.loads(i.with_suffix(".checks.json").read_text())["status"] == "PASS"
                 for i in images
             )
 
